@@ -1,8 +1,10 @@
-import { icon, faviconLetter } from "./shared/icons.js";
+import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
 import { resolveInput, hostOf } from "./shared/api.js";
+import { siteIcon, alignToChrome, injectRefractionFilter, watchCustomWallpaper } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
 
 function go(url) {
   window.location.href = url;
@@ -18,38 +20,41 @@ function tick() {
   });
 }
 
-function tile(label, url, onClick) {
+function tile(label, url) {
   const el = document.createElement("div");
   el.className = "tile";
-  el.innerHTML = `<span class="tile-icon">${faviconLetter(url)}</span><span class="tile-label"></span>`;
-  el.querySelector(".tile-label").textContent = label;
-  el.addEventListener("click", onClick ?? (() => go(url)));
+  el.title = url;
+  const text = document.createElement("span");
+  text.className = "tile-label";
+  text.textContent = label;
+  el.append(siteIcon(url, { label }), text);
+  el.addEventListener("click", () => go(url));
   return el;
 }
 
-async function renderPinned() {
-  const pinned = await invoke("get_pinned");
+function renderPinned(pinned) {
   const el = document.getElementById("pinned-grid");
   el.innerHTML = "";
   for (const p of pinned) el.appendChild(tile(p.title || hostOf(p.url), p.url));
   const add = document.createElement("div");
-  add.className = "tile add-tile";
-  add.innerHTML = `<span class="tile-icon">${icon("plus", 15)}</span><span class="tile-label">Pin a site</span>`;
+  add.className = "tile";
+  add.innerHTML = `<span class="add-glyph">${icon("plus", 22)}</span><span class="tile-label">Pin a site</span>`;
   add.addEventListener("click", () => document.getElementById("omnibox").focus());
   el.appendChild(add);
 }
 
-async function renderBookmarks() {
-  const bookmarks = await invoke("get_bookmarks");
+function renderBookmarks(bookmarks) {
   const el = document.getElementById("bookmarks-grid");
   el.innerHTML = bookmarks.length ? "" : `<div class="empty">No bookmarks yet — click the star in the toolbar on any page.</div>`;
-  for (const b of bookmarks) el.appendChild(tile(b.title || b.url, b.url));
+  for (const b of bookmarks) el.appendChild(tile(b.title || hostOf(b.url), b.url));
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  alignToChrome(document.getElementById("wallpaper"));
   await initTheme();
-  document.getElementById("logo-mark").innerHTML = icon("logo", 17);
-  document.getElementById("omnibox-icon").innerHTML = icon("search", 16);
+  injectRefractionFilter();
+  watchCustomWallpaper(currentSettings);
+  document.getElementById("omnibox-icon").innerHTML = icon("search", 18);
 
   tick();
   setInterval(tick, 15000);
@@ -61,5 +66,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     go(resolveInput(raw, currentSettings()?.search_engine || "google"));
   });
 
-  await Promise.all([renderPinned(), renderBookmarks()]);
+  const [pinned, bookmarks] = await Promise.all([invoke("get_pinned"), invoke("get_bookmarks")]);
+  renderPinned(pinned);
+  renderBookmarks(bookmarks);
+  listen("pinned-changed", (event) => renderPinned(event.payload));
+  listen("bookmarks-changed", (event) => renderBookmarks(event.payload));
 });

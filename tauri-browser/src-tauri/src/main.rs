@@ -8,7 +8,7 @@ mod vault;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, HistoryEntry, PinnedSite, Settings, Store};
 use tauri::webview::{DownloadEvent, PageLoadEvent};
@@ -18,13 +18,25 @@ use tauri::{
 };
 use vault::{TotpSetup, Vault, VaultItem, VaultStatus};
 
-// Must equal the real rendered height of #tab-bar + #nav-bar in style.css
-// (40px + 52px) -- the content webview is positioned starting at this y and
-// sits on top of the toolbar webview, so any mismatch clips the bottom of
-// the tab strip/nav bar under the content webview instead of leaving it
-// visible chrome. Also used by panel.rs to dock the control-panel window
-// below the toolbar chrome rather than over it.
-pub(crate) const TOOLBAR_HEIGHT: f64 = 92.0;
+// Where content webviews (tabs, the side panel) start: x = the left rail's
+// width, y = the top chrome's height. These used to be hardcoded constants
+// that had to match style.css by hand; now the toolbar measures its own
+// rendered chrome and reports it via `set_chrome_insets`, so the Liquid
+// Glass layout, the optional bookmarks bar and the interface-size setting
+// can all change it without touching Rust. Stored as f64 bits in atomics so
+// every bounds helper can read them without threading state through.
+// The initial values are only used until the toolbar's first report.
+static CHROME_LEFT: AtomicU64 = AtomicU64::new(f64::to_bits(60.0));
+static CHROME_TOP: AtomicU64 = AtomicU64::new(f64::to_bits(118.0));
+
+fn chrome_left() -> f64 {
+    f64::from_bits(CHROME_LEFT.load(Ordering::Relaxed))
+}
+
+fn chrome_top() -> f64 {
+    f64::from_bits(CHROME_TOP.load(Ordering::Relaxed))
+}
+
 const TOOLBAR_LABEL: &str = "toolbar";
 // Inactive tab webviews get parked far off-screen rather than resized to
 // zero -- some WebView2 versions behave oddly at a literal 0x0 size, and
@@ -32,9 +44,6 @@ const TOOLBAR_LABEL: &str = "toolbar";
 // destroyed on close (see close_tab) -- parking is only for the
 // currently-open-but-not-active case.
 const OFFSCREEN_X: f64 = -100000.0;
-// Slim icon-only rail, drawn by the toolbar webview itself (Opera-GX
-// style) -- pinned sites / shield / downloads / passwords / settings.
-const RAIL_WIDTH: f64 = 52.0;
 // The hover panel that overlays on top of the active tab to show a pinned
 // site's actual page (or downloads/passwords/settings). Sized big by
 // default (see Settings::default) so most sites have room to render
@@ -94,6 +103,10 @@ pub(crate) struct BrowserState {
     side_panel: Mutex<Option<Webview>>,
     side_panel_kind: Mutex<Option<String>>,
     side_panel_url: Mutex<Option<String>>,
+    // Torn-off pop-out windows, keyed by the id their content script reports
+    // titles/favicons under (drawn from the same counter as tab ids, so the
+    // two can never collide). See create_popout_internal.
+    popouts: Mutex<HashMap<u32, Popout>>,
 }
 
 // The active tab always gets the full window width (minus the rail) --
@@ -104,8 +117,8 @@ fn content_bounds(window: &Window, left_offset: f64) -> tauri::Result<(LogicalPo
     let scale = window.scale_factor()?;
     let logical = size.to_logical::<f64>(scale);
     Ok((
-        LogicalPosition::new(left_offset, TOOLBAR_HEIGHT),
-        LogicalSize::new((logical.width - left_offset).max(0.0), (logical.height - TOOLBAR_HEIGHT).max(0.0)),
+        LogicalPosition::new(left_offset, chrome_top()),
+        LogicalSize::new((logical.width - left_offset).max(0.0), (logical.height - chrome_top()).max(0.0)),
     ))
 }
 
@@ -114,7 +127,7 @@ fn content_bounds(window: &Window, left_offset: f64) -> tauri::Result<(LogicalPo
 // so unlike an earlier version of this feature, opening/resizing the panel
 // never moves or resizes the tab underneath.
 fn left_offset(_state: &BrowserState) -> f64 {
-    RAIL_WIDTH
+    chrome_left()
 }
 
 // However big you've dragged the panel (or its size-by-default), it's
@@ -133,7 +146,7 @@ fn effective_panel_width(window: &Window, preferred: f64) -> f64 {
         .zip(window.scale_factor().ok())
         .map(|(size, scale)| {
             let logical_width = size.to_logical::<f64>(scale).width;
-            (logical_width - RAIL_WIDTH - OVERLAY_EDGE_MARGIN).max(0.0)
+            (logical_width - chrome_left() - OVERLAY_EDGE_MARGIN).max(0.0)
         })
         .unwrap_or(preferred);
     preferred.min(max_allowed).max(0.0)
@@ -145,8 +158,8 @@ fn side_panel_bounds(window: &Window, preferred_width: f64) -> tauri::Result<(Lo
     let logical = size.to_logical::<f64>(scale);
     let effective = effective_panel_width(window, preferred_width);
     Ok((
-        LogicalPosition::new(RAIL_WIDTH, TOOLBAR_HEIGHT),
-        LogicalSize::new(effective, (logical.height - TOOLBAR_HEIGHT).max(0.0)),
+        LogicalPosition::new(chrome_left(), chrome_top()),
+        LogicalSize::new(effective, (logical.height - chrome_top()).max(0.0)),
     ))
 }
 
@@ -557,6 +570,175 @@ fn reraise_side_panel(app: &tauri::AppHandle, state: &BrowserState) {
     }
 }
 
+// --- Pop-out windows (tear-off) ----------------------------------------------
+//
+// Dragging a tab out of the toolbar, or a pinned site off the rail, opens it
+// in its own small frameless window: a glass title bar (popout.html, its own
+// webview) above a content webview -- the same multiwebview layout as the
+// main window. Tracked separately from tabs: pop-outs don't take part in tab
+// cycling or session restore, and "back to tabs" (dock_popout) turns one
+// into a regular tab again.
+
+// Must match #bar's height in popout.html.
+const POPOUT_BAR_HEIGHT: f64 = 40.0;
+const POPOUT_WIDTH: f64 = 520.0;
+const POPOUT_HEIGHT: f64 = 720.0;
+
+pub(crate) struct Popout {
+    window: Window,
+    // The logical url (kessel://... for internal pages), kept current on
+    // navigation -- the content webview's own url() is the raw asset URL for
+    // internal pages, which create_tab_internal can't take back.
+    url: String,
+}
+
+fn is_internal_nav(nav_url: &tauri::Url) -> bool {
+    let scheme = nav_url.scheme();
+    let host = nav_url.host_str().unwrap_or("");
+    scheme != "http" && scheme != "https"
+        || host == "localhost"
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host.ends_with(".localhost")
+}
+
+fn create_popout_internal(
+    app: &tauri::AppHandle,
+    state: &BrowserState,
+    url: String,
+    title: String,
+    x: f64,
+    y: f64,
+) -> Result<u32, String> {
+    let id = state.next_id.fetch_add(1, Ordering::SeqCst);
+    let webview_url = if let Some(route) = internal_route(&url) {
+        WebviewUrl::App(route.into())
+    } else {
+        let normalized = normalize_url(&url);
+        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+    };
+    let (adblock_enabled, autofill_enabled) = {
+        let settings = state.store.settings.lock().unwrap();
+        (settings.adblock_enabled, settings.vault_autofill_enabled)
+    };
+
+    let window = tauri::window::WindowBuilder::new(app, format!("popout-{}", id))
+        .title(if title.is_empty() { "Kessel" } else { title.as_str() })
+        .inner_size(POPOUT_WIDTH, POPOUT_HEIGHT)
+        .min_inner_size(300.0, 220.0)
+        .position(x, y)
+        .decorations(false)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    // The bar learns which pop-out it belongs to before any of its own
+    // scripts run.
+    let bar_init = format!(
+        "window.__KESSEL_POPOUT__ = {{ id: {}, url: {}, title: {} }};",
+        id,
+        serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".into()),
+        serde_json::to_string(&title).unwrap_or_else(|_| "\"\"".into())
+    );
+    let bar_label = format!("popout-bar-{}", id);
+    let bar = window
+        .add_child(
+            WebviewBuilder::new(&bar_label, WebviewUrl::App("popout.html".into())).initialization_script(&bar_init),
+            LogicalPosition::new(0.0, 0.0),
+            LogicalSize::new(POPOUT_WIDTH, POPOUT_BAR_HEIGHT),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let app_for_nav = app.clone();
+    let bar_label_for_nav = bar_label.clone();
+    let content_builder = WebviewBuilder::new(format!("popout-content-{}", id), webview_url)
+        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+        .on_navigation(move |nav_url| {
+            if is_internal_nav(nav_url) {
+                return true;
+            }
+            let st = app_for_nav.state::<BrowserState>();
+            let (custom, allow) = {
+                let lists = st.store.adblock_lists.lock().unwrap();
+                (lists.custom.clone(), lists.allow.clone())
+            };
+            let enabled = st.store.settings.lock().unwrap().adblock_enabled;
+            let host = nav_url.host_str().unwrap_or("");
+            if enabled && adblock::is_blocked(host, nav_url.as_str(), &custom, &allow) {
+                st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
+                let count = st.store.blocked_count.load(Ordering::SeqCst);
+                let _ = app_for_nav.emit("adblock-count-changed", count);
+                return false;
+            }
+            st.store.record_history(nav_url.as_str(), nav_url.as_str());
+            if let Some(p) = st.popouts.lock().unwrap().get_mut(&id) {
+                p.url = nav_url.to_string();
+            }
+            let _ = app_for_nav.emit_to(bar_label_for_nav.as_str(), "popout-navigated", nav_url.to_string());
+            true
+        });
+    let content = window
+        .add_child(
+            content_builder,
+            LogicalPosition::new(0.0, POPOUT_BAR_HEIGHT),
+            LogicalSize::new(POPOUT_WIDTH, POPOUT_HEIGHT - POPOUT_BAR_HEIGHT),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let window_for_events = window.clone();
+    let app_for_events = app.clone();
+    window.on_window_event(move |event| match event {
+        WindowEvent::Resized(_) => {
+            if let (Ok(size), Ok(scale)) = (window_for_events.inner_size(), window_for_events.scale_factor()) {
+                let logical = size.to_logical::<f64>(scale);
+                let _ = bar.set_size(LogicalSize::new(logical.width, POPOUT_BAR_HEIGHT));
+                let _ = content.set_position(LogicalPosition::new(0.0, POPOUT_BAR_HEIGHT));
+                let _ = content.set_size(LogicalSize::new(logical.width, (logical.height - POPOUT_BAR_HEIGHT).max(0.0)));
+            }
+        }
+        WindowEvent::Destroyed => {
+            app_for_events.state::<BrowserState>().popouts.lock().unwrap().remove(&id);
+        }
+        _ => {}
+    });
+
+    state.popouts.lock().unwrap().insert(id, Popout { window, url });
+    Ok(id)
+}
+
+#[tauri::command]
+async fn pop_out(app: tauri::AppHandle, url: String, title: Option<String>, x: f64, y: f64) -> Result<u32, String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        create_popout_internal(&app2, &state, url, title.unwrap_or_default(), x, y)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// "Back to tabs": closes the pop-out and reopens whatever it was showing as
+// the active tab in the main window.
+#[tauri::command]
+async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        // Taken out (and the lock released) before closing, since the
+        // window's Destroyed handler locks `popouts` too.
+        let popout = state.popouts.lock().unwrap().remove(&id);
+        let popout = popout.ok_or_else(|| "pop-out window not found".to_string())?;
+        let _ = popout.window.close();
+        let tab_id = create_tab_internal(&app2, &state, Some(popout.url.clone()))?;
+        switch_tab_internal(&state, tab_id)?;
+        let payload = serde_json::json!({ "id": tab_id, "url": popout.url, "activate": true });
+        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+        let _ = state.window.set_focus();
+        Ok(tab_id)
+    })
+    .await
+    .and_then(|r| r)
+}
+
 // --- Threading bridge --------------------------------------------------
 //
 // IMPORTANT: creating/moving/navigating webviews must happen on the main
@@ -856,14 +1038,20 @@ async fn reload(app: tauri::AppHandle, id: u32) -> Result<(), String> {
     .and_then(|r| r)
 }
 
+// Also forwarded to the matching pop-out's title bar, if `id` is a pop-out
+// rather than a tab (emit_to a label that doesn't exist is a no-op).
 #[tauri::command]
 fn report_title(app: tauri::AppHandle, id: u32, title: String) {
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", serde_json::json!({ "id": id, "title": title }));
+    let payload = serde_json::json!({ "id": id, "title": title });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", payload.clone());
+    let _ = app.emit_to(format!("popout-bar-{}", id).as_str(), "tab-title-changed", payload);
 }
 
 #[tauri::command]
 fn report_favicon(app: tauri::AppHandle, id: u32, url: String) {
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", serde_json::json!({ "id": id, "url": url }));
+    let payload = serde_json::json!({ "id": id, "url": url });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", payload.clone());
+    let _ = app.emit_to(format!("popout-bar-{}", id).as_str(), "tab-favicon-changed", payload);
 }
 
 #[tauri::command]
@@ -894,14 +1082,18 @@ fn get_bookmarks(state: tauri::State<BrowserState>) -> Vec<Bookmark> {
     state.store.get_bookmarks()
 }
 
+// Broadcast so the toolbar's bookmarks bar stays current no matter which
+// page (toolbar star, Settings -> Bookmarks) made the change.
 #[tauri::command]
-fn add_bookmark(state: tauri::State<BrowserState>, url: String, title: String) {
+fn add_bookmark(app: tauri::AppHandle, state: tauri::State<BrowserState>, url: String, title: String) {
     state.store.add_bookmark(url, title);
+    let _ = app.emit("bookmarks-changed", state.store.get_bookmarks());
 }
 
 #[tauri::command]
-fn remove_bookmark(state: tauri::State<BrowserState>, url: String) {
+fn remove_bookmark(app: tauri::AppHandle, state: tauri::State<BrowserState>, url: String) {
     state.store.remove_bookmark(&url);
+    let _ = app.emit("bookmarks-changed", state.store.get_bookmarks());
 }
 
 // --- Pinned sites ----------------------------------------------------------
@@ -1329,12 +1521,40 @@ fn commit_side_panel_width(app: tauri::AppHandle, state: tauri::State<BrowserSta
 // only signal the tab-side hand-off (see adblock::build_content_script)
 // trusts to decide whether a mousemove is a resize continuation. Deliberately
 // not a clientX-proximity guess: both the panel and every tab share the same
-// left-edge origin (RAIL_WIDTH), so a pure position heuristic would also
+// left-edge origin (chrome_left()), so a pure position heuristic would also
 // fire on ordinary clicks/drags near the tab's own left margin whenever the
 // panel is simply closed, silently overwriting the saved width.
 #[tauri::command]
 fn notify_side_panel_drag(app: tauri::AppHandle, dragging: bool) {
     let _ = app.emit("side-panel-drag", dragging);
+}
+
+// The toolbar reports its real rendered chrome size here (a ResizeObserver
+// in main.js) whenever it changes -- first paint, bookmarks bar toggled,
+// interface size changed, Liquid Glass switched on/off. Re-lays out the
+// active tab and the side panel so they start exactly where the chrome ends.
+#[tauri::command]
+async fn set_chrome_insets(app: tauri::AppHandle, left: f64, top: f64) -> Result<(), String> {
+    if !left.is_finite() || !top.is_finite() {
+        return Err("invalid chrome insets".into());
+    }
+    CHROME_LEFT.store(left.clamp(0.0, 400.0).to_bits(), Ordering::Relaxed);
+    CHROME_TOP.store(top.clamp(0.0, 400.0).to_bits(), Ordering::Relaxed);
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<(), String> {
+        let state = app2.state::<BrowserState>();
+        resize_active_tab(&state)?;
+        if let Some(w) = state.side_panel.lock().unwrap().as_ref() {
+            let width = state.store.settings.lock().unwrap().side_panel_width;
+            if let Ok((position, size)) = side_panel_bounds(&state.window, width) {
+                let _ = w.set_position(position);
+                let _ = w.set_size(size);
+            }
+        }
+        Ok(())
+    })
+    .await
+    .and_then(|r| r)
 }
 
 // --- Session restore -------------------------------------------------------
@@ -1422,16 +1642,23 @@ fn main() {
             close_side_panel,
             resize_side_panel_live,
             commit_side_panel_width,
-            notify_side_panel_drag
+            notify_side_panel_drag,
+            set_chrome_insets,
+            pop_out,
+            dock_popout
         ])
         .setup(|app| {
             let width = 1280.0;
             let height = 820.0;
 
+            // Frameless: the toolbar draws its own glass title bar (drag
+            // region + minimize/maximize/close in index.html) so the native
+            // Windows caption doesn't sit on top of the Liquid Glass chrome.
             let window = tauri::window::WindowBuilder::new(app, "main")
                 .title("Kessel")
                 .inner_size(width, height)
                 .min_inner_size(680.0, 420.0)
+                .decorations(false)
                 .build()?;
 
             let toolbar = window.add_child(
@@ -1473,6 +1700,7 @@ fn main() {
                 side_panel: Mutex::new(None),
                 side_panel_kind: Mutex::new(None),
                 side_panel_url: Mutex::new(None),
+                popouts: Mutex::new(HashMap::new()),
             };
             app.manage(state);
             app.manage(Vault::new(data_dir));
@@ -1481,6 +1709,12 @@ fn main() {
             // side panel (if one's open) on window resize.
             let app_handle = app.handle().clone();
             window.on_window_event(move |event| {
+                // Pop-out windows are satellites of the main window -- closing
+                // Kessel closes them too rather than leaving them orphaned.
+                if let WindowEvent::Destroyed = event {
+                    app_handle.exit(0);
+                    return;
+                }
                 if let WindowEvent::Resized(_) = event {
                     let state = app_handle.state::<BrowserState>();
                     let _ = resize_active_tab(&state);

@@ -1,6 +1,7 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf } from "./shared/api.js";
+import { WALLPAPERS, setCustomWallpaper, clearCustomWallpaper, hasCustomWallpaper, wallpaperCss } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -46,6 +47,17 @@ function appearancePanel(settings) {
 
     <div class="setting-card">
       <div class="accent-row" id="accent-row"></div>
+    </div>
+
+    <div class="setting-card">
+      ${settingRow({ title: "Liquid Glass", desc: "Translucent iOS-style toolbar and new tab page over a wallpaper", controlHtml: switchHtml("glass-toggle", settings.glass_enabled) })}
+      <div id="glass-options">
+        <div class="wallpaper-row" id="wallpaper-row"></div>
+        ${settingRow({ title: "Frost", desc: "How much the glass blurs what's behind it", controlHtml: `<input type="range" id="glass-blur" min="0" max="40" step="1" /><span class="mono faint" id="glass-blur-value"></span>` })}
+        ${settingRow({ title: "Refraction", desc: "Bend the background at the edges of buttons and tabs, like real glass", controlHtml: switchHtml("glass-refraction", settings.glass_refraction) })}
+      </div>
+      ${settingRow({ title: "Bookmarks bar", desc: "Show bookmarks under the address bar", controlHtml: switchHtml("bookmarks-bar-toggle", settings.bookmarks_bar) })}
+      <input type="file" id="wallpaper-file" accept="image/*" hidden />
     </div>
 
     <div class="setting-card" id="custom-colors-card" style="display:none">
@@ -108,6 +120,8 @@ function appearancePanel(settings) {
   });
   fontScale.addEventListener("change", () => saveSettings({ font_scale: parseFloat(fontScale.value) }));
 
+  wireGlassSettings(p, settings);
+
   const reduceMotion = p.querySelector("#reduce-motion");
   reduceMotion.addEventListener("click", async () => {
     const next = await saveSettings({ reduce_motion: !reduceMotion.classList.contains("on") });
@@ -115,6 +129,88 @@ function appearancePanel(settings) {
   });
 
   return p;
+}
+
+function wireToggle(p, id, key) {
+  const btn = p.querySelector(`#${id}`);
+  btn.addEventListener("click", async () => {
+    const next = await saveSettings({ [key]: !btn.classList.contains("on") });
+    btn.classList.toggle("on", !!next[key]);
+    refreshAppearance(next);
+  });
+}
+
+function renderWallpapers(p, settings) {
+  const row = p.querySelector("#wallpaper-row");
+  row.innerHTML = "";
+  for (const [id, wp] of Object.entries(WALLPAPERS)) {
+    const sw = el(`<div class="wallpaper-swatch ${settings.wallpaper === id ? "selected" : ""}" title="${wp.name}"><div class="wp-preview"></div><span>${wp.name}</span></div>`);
+    sw.querySelector(".wp-preview").style.background = wp.css;
+    sw.addEventListener("click", async () => {
+      const next = await saveSettings({ wallpaper: id });
+      renderWallpapers(p, next);
+    });
+    row.appendChild(sw);
+  }
+
+  // Your own image: click to pick one, click again (once chosen) to use it.
+  const hasCustom = hasCustomWallpaper();
+  const custom = el(`<div class="wallpaper-swatch ${settings.wallpaper === "custom" ? "selected" : ""}" title="Use your own image">
+    <div class="wp-preview custom">${hasCustom ? "" : icon("plus", 16)}</div><span>${hasCustom ? "Your image" : "Choose…"}</span></div>`);
+  if (hasCustom) custom.querySelector(".wp-preview").style.background = wallpaperCss({ wallpaper: "custom" });
+  custom.addEventListener("click", async () => {
+    if (hasCustom && settings.wallpaper !== "custom") {
+      const next = await saveSettings({ wallpaper: "custom" });
+      renderWallpapers(p, next);
+    } else {
+      p.querySelector("#wallpaper-file").click();
+    }
+  });
+  row.appendChild(custom);
+
+  if (hasCustom) {
+    const remove = el(`<button class="btn ghost sm" title="Remove your image">${icon("trash", 14)}</button>`);
+    remove.addEventListener("click", async () => {
+      clearCustomWallpaper();
+      const next = settings.wallpaper === "custom" ? await saveSettings({ wallpaper: "nightfall" }) : settings;
+      renderWallpapers(p, next);
+    });
+    row.appendChild(remove);
+  }
+}
+
+function wireGlassSettings(p, settings) {
+  renderWallpapers(p, settings);
+
+  p.querySelector("#wallpaper-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      await setCustomWallpaper(file);
+      // Always re-save, even if "custom" was already selected, so every
+      // open page repaints with the new image.
+      const next = await saveSettings({ wallpaper: "custom" });
+      renderWallpapers(p, next);
+      toast("Wallpaper updated");
+    } catch (err) {
+      toast(err.message || String(err));
+    }
+  });
+
+  const blur = p.querySelector("#glass-blur");
+  const blurValue = p.querySelector("#glass-blur-value");
+  blur.value = settings.glass_blur;
+  blurValue.textContent = `${Math.round(settings.glass_blur)}px`;
+  blur.addEventListener("input", () => {
+    blurValue.textContent = `${blur.value}px`;
+  });
+  blur.addEventListener("change", () => saveSettings({ glass_blur: parseFloat(blur.value) }));
+
+  wireToggle(p, "glass-toggle", "glass_enabled");
+  wireToggle(p, "glass-refraction", "glass_refraction");
+  wireToggle(p, "bookmarks-bar-toggle", "bookmarks_bar");
+  p.querySelector("#glass-options").style.display = settings.glass_enabled ? "block" : "none";
 }
 
 function refreshAppearance(settings) {
@@ -125,6 +221,7 @@ function refreshAppearance(settings) {
     sw.classList.toggle("selected", (sw.dataset.color || "").toLowerCase() === settings.accent.toLowerCase());
   });
   p.querySelector("#custom-colors-card").style.display = settings.theme === "custom" ? "block" : "none";
+  p.querySelector("#glass-options").style.display = settings.glass_enabled ? "block" : "none";
 }
 
 function searchPanel(settings) {

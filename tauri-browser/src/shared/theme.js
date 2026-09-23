@@ -3,6 +3,8 @@
 // passwords are each a separate webview/document) in sync live via the
 // "settings-changed" event the backend broadcasts on every save.
 
+import { applyGlass } from "./glass.js";
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -27,6 +29,7 @@ function applyTheme(settings) {
   root.style.setProperty("--accent", settings.accent);
   root.style.setProperty("--font-scale", settings.font_scale ?? 1);
   root.classList.toggle("reduce-motion", !!settings.reduce_motion);
+  applyGlass(settings);
   window.__kesselSettings = settings;
   window.dispatchEvent(new CustomEvent("kessel-settings", { detail: settings }));
 }

@@ -13,12 +13,21 @@ html, body { overflow: hidden; user-select: none; }
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  align-items: center;
   padding: 10px 0 12px;
-  gap: 6px;
   position: relative;
   z-index: 2;
 }
+#rail-capsule {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Only painted in Liquid Glass mode (shared/glass.css). */
+#wallpaper { display: none; }
 
 .rail-logo {
   width: 34px;
@@ -88,6 +97,8 @@ html, body { overflow: hidden; user-select: none; }
   line-height: 1;
   box-shadow: 0 0 0 2px var(--surface);
 }
+
+.rail-badge[hidden] { display: none; }
 
 .rail-spacer { flex: 1; min-height: 8px; }
 
@@ -188,7 +199,7 @@ html, body { overflow: hidden; user-select: none; }
 #tabs {
   display: flex;
   gap: 3px;
-  flex: 1;
+  flex: 0 1 auto;
   overflow-x: auto;
   scrollbar-width: none;
   min-width: 0;
@@ -295,7 +306,9 @@ html, body { overflow: hidden; user-select: none; }
   background: var(--bg);
 }
 
-#nav-bar > button {
+#nav-cluster { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+#nav-cluster > button {
   background: transparent;
   border: none;
   color: var(--text-dim);
@@ -309,8 +322,8 @@ html, body { overflow: hidden; user-select: none; }
   justify-content: center;
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
-#nav-bar > button:hover { background: var(--surface-hover); color: var(--text); }
-#nav-bar > button:disabled { opacity: 0.35; pointer-events: none; }
+#nav-cluster > button:hover { background: var(--surface-hover); color: var(--text); }
+#nav-cluster > button:disabled { opacity: 0.35; pointer-events: none; }
 
 #address-wrap {
   flex: 1;
@@ -385,3 +398,56 @@ html, body { overflow: hidden; user-select: none; }
 }
 .menu-item:hover { background: var(--surface-hover); }
 .menu-item.selected { color: var(--accent); font-weight: 600; }
+
+/* --- Frameless window: drag space + window controls --- */
+#drag-space { flex: 1; min-width: 48px; align-self: stretch; }
+#window-controls {
+  display: flex;
+  align-self: stretch;
+  margin: -7px -8px 0 0;
+}
+#window-controls button {
+  width: 46px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+#window-controls button:hover { background: var(--surface-hover); color: var(--text); }
+#window-controls #win-close:hover { background: #e81123; color: #fff; }
+
+/* --- Bookmarks bar --- */
+#bookmarks-bar {
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px 4px;
+  background: var(--bg);
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+#bookmarks-bar[hidden] { display: none; }
+#bookmarks-bar .bm-empty { font-size: 11.5px; color: var(--text-faint); padding: 0 6px; }
+.bm-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px 0 5px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 180px;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.bm-chip:hover { background: var(--surface-hover); color: var(--text); }
+.bm-chip .bm-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-chip .app-icon { width: 16px; height: 16px; font-size: 9px; }

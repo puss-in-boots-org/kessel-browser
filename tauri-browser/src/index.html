@@ -5,41 +5,58 @@
   <title>Kessel</title>
   <link rel="stylesheet" href="shared/theme.css" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
 </head>
 <body>
+  <!-- Liquid Glass backdrop: the same wallpaper the new-tab page paints,
+       aligned so the two read as one continuous background. -->
+  <div id="wallpaper" data-wallpaper></div>
+
   <div id="app">
     <!-- Slim icon-only rail (Opera-GX style): clicking an icon slides a
          panel out beside the active tab rather than opening a new tab. -->
     <div id="rail">
-      <button class="rail-logo" id="rail-home" title="Home / New tab (Ctrl+T)"></button>
+      <div id="rail-capsule">
+        <button class="rail-logo" id="rail-home" title="Home / New tab (Ctrl+T)"></button>
 
-      <div id="pinned-list"></div>
-      <button class="rail-btn ghost-btn" id="rail-add-pin" title="Pin the current page"></button>
+        <div id="pinned-list"></div>
+        <button class="rail-btn ghost-btn" id="rail-add-pin" title="Pin the current page"></button>
 
-      <div class="rail-spacer"></div>
+        <div class="rail-spacer"></div>
 
-      <button class="rail-btn" id="rail-shield" title="Ad &amp; tracker blocking">
-        <span class="rail-badge" id="shield-badge" hidden>0</span>
-      </button>
-      <button class="rail-btn" id="rail-downloads" title="Downloads">
-        <span class="rail-badge" id="downloads-badge" hidden>0</span>
-      </button>
-      <button class="rail-btn" id="rail-passwords" title="Passwords (Ctrl+Shift+L)"></button>
-      <button class="rail-btn" id="rail-settings" title="Settings"></button>
+        <button class="rail-btn" id="rail-shield" title="Ad &amp; tracker blocking">
+          <span class="rail-badge" id="shield-badge" hidden>0</span>
+        </button>
+        <button class="rail-btn" id="rail-downloads" title="Downloads">
+          <span class="rail-badge" id="downloads-badge" hidden>0</span>
+        </button>
+        <button class="rail-btn" id="rail-passwords" title="Passwords (Ctrl+Shift+L)"></button>
+        <button class="rail-btn" id="rail-settings" title="Settings"></button>
+      </div>
     </div>
 
     <div id="main-col">
       <div id="progress-bar"><div id="progress-fill"></div></div>
 
+      <!-- Also the window's title bar (the window is frameless): empty
+           space here drags the window, double-click maximizes. -->
       <div id="tab-bar">
         <div id="tabs"></div>
         <button id="new-tab-btn" title="New tab (Ctrl+T)"></button>
+        <div id="drag-space"></div>
+        <div id="window-controls">
+          <button id="win-min" title="Minimize"></button>
+          <button id="win-max" title="Maximize"></button>
+          <button id="win-close" title="Close"></button>
+        </div>
       </div>
 
       <div id="nav-bar">
-        <button id="back-btn" title="Back (Alt+Left)"></button>
-        <button id="forward-btn" title="Forward (Alt+Right)"></button>
-        <button id="reload-btn" title="Reload (Ctrl+R)"></button>
+        <div id="nav-cluster">
+          <button id="back-btn" title="Back (Alt+Left)"></button>
+          <button id="forward-btn" title="Forward (Alt+Right)"></button>
+          <button id="reload-btn" title="Reload (Ctrl+R)"></button>
+        </div>
 
         <div id="address-wrap">
           <span id="lock-icon"></span>
@@ -50,6 +67,8 @@
 
         <div id="engine-menu" class="menu" hidden></div>
       </div>
+
+      <div id="bookmarks-bar"></div>
     </div>
   </div>
 

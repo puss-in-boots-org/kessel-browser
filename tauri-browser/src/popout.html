@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pop-out</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* Title bar of a torn-off pop-out window. The content webview sits right
+       below it -- #bar's height must match POPOUT_BAR_HEIGHT in main.rs. */
+    html, body { overflow: hidden; user-select: none; }
+    #bar {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 5px 0 8px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    html.glass #bar { background: transparent; border: none; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: 0; pointer-events: none; }
+
+    #site {
+      flex: 1;
+      min-width: 0;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px 0 6px;
+      border-radius: 15px;
+    }
+    #site .app-icon { width: 18px; height: 18px; font-size: 10px; }
+    #title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    html.glass #title { color: var(--lg-text); text-shadow: var(--lg-legibility); }
+
+    #controls { display: flex; align-items: center; gap: 1px; height: 30px; padding: 0 3px; border-radius: 15px; }
+    #controls button {
+      width: 28px;
+      height: 24px;
+      border: none;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+    }
+    html.glass #controls button { color: var(--lg-text-dim); }
+    #controls button:hover { background: var(--surface-hover); color: var(--text); }
+    html.glass #controls button:hover { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); }
+    #controls button.on { color: var(--accent); }
+    html.glass #controls button.on { color: #ffd60a; }
+    #controls #pop-close:hover { background: #ff453a; color: #fff; }
+    #controls .sep { width: 1px; height: 14px; margin: 0 3px; background: currentColor; opacity: 0.2; }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="bar">
+    <div id="site" class="lg"><span id="site-icon"></span><span id="title"></span></div>
+    <div id="controls" class="lg lg-refract">
+      <button id="pop-pin" title="Keep on top"></button>
+      <button id="pop-dock" title="Move back to a tab"></button>
+      <span class="sep"></span>
+      <button id="pop-min" title="Minimize"></button>
+      <button id="pop-max" title="Maximize"></button>
+      <button id="pop-close" title="Close"></button>
+    </div>
+  </div>
+  <script type="module" src="popout.js"></script>
+</body>
+</html>

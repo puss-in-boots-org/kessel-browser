@@ -7,9 +7,11 @@
 import { icon, faviconLetter } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { ENGINES, resolveInput, toast, hostOf } from "./shared/api.js";
+import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
+const appWindow = window.__TAURI__.window.getCurrentWindow();
 
 // --- Tab state -----------------------------------------------------------
 // Each tab maps to a real native webview created by Rust. This module only
@@ -65,6 +67,67 @@ function paintStaticIcons() {
   iconFor("lock-icon", icon("lock", 13));
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
+  iconFor("win-min", icon("winMin", 14));
+  iconFor("win-max", icon("winMax", 13));
+  iconFor("win-close", icon("close", 14));
+}
+
+// --- Frameless window: title-bar dragging + window controls -------------------
+
+function wireWindowControls() {
+  document.getElementById("win-min").addEventListener("click", () => appWindow.minimize());
+  document.getElementById("win-max").addEventListener("click", () => appWindow.toggleMaximize());
+  document.getElementById("win-close").addEventListener("click", () => appWindow.close());
+
+  // Only the bar's own empty space drags -- never a tab, button or input.
+  const isDragSurface = (target) => target.id === "tab-bar" || target.id === "drag-space" || target.id === "tabs";
+  const tabBar = document.getElementById("tab-bar");
+  tabBar.addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || !isDragSurface(e.target)) return;
+    if (e.detail === 2) {
+      appWindow.toggleMaximize();
+      return;
+    }
+    appWindow.startDragging();
+  });
+
+  const syncMaxIcon = async () => {
+    const maximized = await appWindow.isMaximized().catch(() => false);
+    const btn = document.getElementById("win-max");
+    btn.innerHTML = icon(maximized ? "winRestore" : "winMax", 13);
+    btn.title = maximized ? "Restore" : "Maximize";
+  };
+  syncMaxIcon();
+  appWindow.onResized(syncMaxIcon);
+}
+
+// --- Chrome geometry -> Rust ----------------------------------------------------
+// Content webviews are placed by Rust at (left, top). Rather than a
+// hardcoded constant that has to match this CSS by hand, measure the real
+// rendered rail width / top-chrome height and report it whenever it changes
+// (first paint, bookmarks bar toggled, interface size, glass on/off). Also
+// shared with the new-tab page so its wallpaper lines up with ours.
+
+let reportedInsets = { left: -1, top: -1 };
+
+function reportChromeInsets() {
+  const left = Math.ceil(document.getElementById("rail").getBoundingClientRect().right);
+  const bm = document.getElementById("bookmarks-bar");
+  const lastChrome = bm.hidden ? document.getElementById("nav-bar") : bm;
+  const top = Math.ceil(lastChrome.getBoundingClientRect().bottom);
+  writeChromeGeometry({ left, top, w: window.innerWidth, h: window.innerHeight });
+  if (left === reportedInsets.left && top === reportedInsets.top) return Promise.resolve();
+  reportedInsets = { left, top };
+  return invoke("set_chrome_insets", { left, top }).catch(() => {});
+}
+
+function wireChromeInsets() {
+  const observer = new ResizeObserver(() => reportChromeInsets());
+  for (const id of ["rail", "tab-bar", "nav-bar", "bookmarks-bar"]) {
+    observer.observe(document.getElementById(id));
+  }
+  window.addEventListener("resize", reportChromeInsets);
+  return reportChromeInsets();
 }
 
 // --- Tab strip rendering ---------------------------------------------------
@@ -150,9 +213,13 @@ document.addEventListener(
 let draggedTabId = null;
 
 function wireTabDrag(el, tab) {
-  el.addEventListener("dragstart", () => {
+  el.addEventListener("dragstart", (e) => {
     draggedTabId = tab.id;
     el.classList.add("dragging");
+    // A private type only, so web pages under the cursor ignore the drag
+    // instead of e.g. navigating to a dropped URL.
+    e.dataTransfer.setData("application/x-kessel-tab", String(tab.id));
+    e.dataTransfer.effectAllowed = "move";
   });
   el.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -164,14 +231,52 @@ function wireTabDrag(el, tab) {
     const before = e.clientX - rect.left < rect.width / 2;
     container.insertBefore(draggedEl, before ? el : el.nextSibling);
   });
-  el.addEventListener("dragend", () => {
+  el.addEventListener("dragend", (e) => {
     el.classList.remove("dragging");
     draggedTabId = null;
     const newOrderIds = Array.from(document.getElementById("tabs").children).map((c) => parseInt(c.dataset.tabId, 10));
     tabs.sort((a, b) => newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id));
     invoke("set_tab_order", { ids: tabs.map((t) => t.id) }).catch(() => {});
     persistSession();
+    // Dropped somewhere that isn't the tab strip -- below the toolbar (over
+    // the page) or outside the window entirely: tear it off.
+    if (e.dataTransfer.dropEffect === "none" && (e.clientY > reportedInsets.top || isOutsideWindow(e))) {
+      tearOffTab(tab, e);
+    }
   });
+}
+
+// --- Tear-off pop-out windows (see pop_out / dock_popout in main.rs) --------
+
+function isOutsideWindow(e) {
+  return e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight;
+}
+
+// Where the dragged thing was let go, in screen coordinates, nudged so the
+// pop-out's title bar lands under the cursor. Falls back to a cascade near
+// the main window if the drag didn't report a usable position.
+function popOutPosition(e) {
+  if (e.screenX || e.screenY) return { x: e.screenX - 90, y: e.screenY - 18 };
+  return { x: window.screenX + 120, y: window.screenY + 120 };
+}
+
+async function tearOffTab(tab, e) {
+  if (!tab.url) return;
+  const title = tab.title && tab.title !== "New Tab" ? tab.title : "";
+  try {
+    await invoke("pop_out", { url: tab.url, title, ...popOutPosition(e) });
+  } catch (err) {
+    toast(`Couldn't pop out: ${err}`);
+    return;
+  }
+  // Moved, not copied -- and not a "recently closed" tab either.
+  await closeTab(tab.id, { remember: false });
+}
+
+async function popOutPinned(p, e) {
+  await invoke("pop_out", { url: p.url, title: p.title || "", ...popOutPosition(e) }).catch((err) =>
+    toast(`Couldn't pop out: ${err}`)
+  );
 }
 
 // --- Per-tab right-click context menu --------------------------------------
@@ -310,7 +415,7 @@ function addPlaceholderTab(url) {
   return id;
 }
 
-async function closeTab(id) {
+async function closeTab(id, { remember = true } = {}) {
   const tab = tabs.find((t) => t.id === id);
   if (!tab) return;
   if (!tab.neverCreated) {
@@ -318,7 +423,7 @@ async function closeTab(id) {
     // once knew (close_tab just no-ops if it's already gone) -- only a
     // never-created placeholder's negative synthetic id can't be sent to a
     // u32-typed command at all.
-    const closedUrl = tab.discarded ? null : tab.url;
+    const closedUrl = tab.discarded || !remember ? null : tab.url;
     await invoke("close_tab", { id, url: closedUrl || null });
   }
   // Recompute the index at removal time by identity, not from a value
@@ -418,6 +523,48 @@ function persistSession() {
 async function refreshBookmarks() {
   bookmarks = await invoke("get_bookmarks");
   updateStarButton();
+  renderBookmarksBar();
+}
+
+// Opera-style bookmarks bar under the omnibox. Click opens in the current
+// tab, middle-click (or Ctrl-click) in a new one.
+function renderBookmarksBar() {
+  const bar = document.getElementById("bookmarks-bar");
+  bar.hidden = currentSettings()?.bookmarks_bar === false;
+  bar.innerHTML = "";
+  if (!bookmarks.length) {
+    bar.innerHTML = `<span class="bm-empty">Bookmarks you star show up here</span>`;
+    return;
+  }
+  for (const b of bookmarks) {
+    const chip = document.createElement("div");
+    chip.className = "bm-chip";
+    chip.title = `${b.title}\n${b.url}`;
+    const title = document.createElement("span");
+    title.className = "bm-title";
+    title.textContent = b.title || hostOf(b.url);
+    chip.append(siteIcon(b.url, { label: b.title }), title);
+    chip.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey) createTab(b.url);
+      else openInActiveTab(b.url);
+    });
+    chip.addEventListener("auxclick", (e) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        createTab(b.url);
+      }
+    });
+    bar.appendChild(chip);
+  }
+}
+
+async function openInActiveTab(url) {
+  const tab = findTab(activeTabId);
+  if (!tab || tab.discarded || url.startsWith("kessel://")) {
+    await createTab(url);
+    return;
+  }
+  await invoke("navigate", { id: tab.id, url });
 }
 
 function updateStarButton() {
@@ -458,7 +605,18 @@ function renderPinned() {
     el.className = "pin-item" + (openPanelKind === kind ? " panel-open" : "");
     el.title = p.title || p.url;
     el.dataset.kind = kind;
-    el.innerHTML = `<span>${faviconLetter(p.url)}</span><span class="pin-remove">${icon("close", 9)}</span>`;
+    // Drag a pin off the rail to open that site in its own floating window.
+    el.draggable = true;
+    el.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("application/x-kessel-pin", p.id);
+      e.dataTransfer.effectAllowed = "copy";
+    });
+    el.addEventListener("dragend", (e) => {
+      const railRight = document.getElementById("rail").getBoundingClientRect().right;
+      if (e.dataTransfer.dropEffect === "none" && (e.clientX > railRight + 16 || isOutsideWindow(e))) popOutPinned(p, e);
+    });
+    el.append(siteIcon(p.url, { label: p.title }));
+    el.insertAdjacentHTML("beforeend", `<span class="pin-remove">${icon("close", 9)}</span>`);
     el.addEventListener("click", (e) => {
       if (e.target.closest(".pin-remove")) {
         e.stopPropagation();
@@ -562,7 +720,10 @@ function renderEngineMenu() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
+  injectRefractionFilter();
+  watchCustomWallpaper(currentSettings);
   paintStaticIcons();
+  wireWindowControls();
   renderEngineMenu();
 
   await refreshBookmarks();
@@ -570,6 +731,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   blockedCount = await invoke("get_blocked_count").catch(() => 0);
   updateShield();
   updateDownloadsBadge();
+
+  // Before the first tab exists, so Rust places it below the real chrome.
+  await wireChromeInsets();
 
   // Restore last session's tabs if enabled, else open the homepage. Only
   // the tab you're actually looking at gets a real webview -- the rest
@@ -696,6 +860,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const tab = findTab(id);
     if (tab) {
       tab.favicon = url;
+      rememberSiteFavicon(tab.url, url);
       renderTabs();
     }
   });
@@ -752,6 +917,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderPinned();
   });
 
+  await listen("bookmarks-changed", (event) => {
+    bookmarks = event.payload;
+    updateStarButton();
+    renderBookmarksBar();
+  });
+
   await listen("side-panel-changed", (event) => {
     openPanelKind = event.payload;
     updatePanelHighlights();
@@ -777,6 +948,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   window.addEventListener("kessel-settings", () => {
     updateShield();
     renderEngineMenu();
+    renderBookmarksBar();
   });
 });
 

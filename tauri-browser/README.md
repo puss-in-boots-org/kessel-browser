@@ -19,6 +19,48 @@ first real compile" gap significantly, but a GUI app still can't be fully
 exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
+## Liquid Glass (unreleased, on top of v0.6)
+**Not compiled yet** — unlike the rest of this README's claims, the Rust
+half of this change was written on a machine without the Rust/MSVC
+toolchain. The frontend was checked in a Chromium preview with a mocked
+`window.__TAURI__`; run `cargo build` before trusting the Rust side.
+
+- **iOS 26-style Liquid Glass UI** (Settings → Appearance, on by default):
+  the tab strip, nav bar, bookmarks bar and rail become floating glass
+  capsules over a wallpaper — blur + saturation, a specular rim, and real
+  edge **refraction** via an SVG displacement filter in `backdrop-filter`
+  (WebView2/Chromium supports this). Styles live in `src/shared/glass.css`,
+  scoped to `html.glass`, so switching it off restores the solid theme.
+- **Wallpapers**: five built-in gradient presets or your own image
+  (downscaled to ≤2560px JPEG and kept in the pages' shared localStorage,
+  not settings.json). The new-tab page paints the same wallpaper offset by
+  the chrome size so toolbar + new tab read as one continuous background.
+- **iOS-style squircle site icons** on the rail, bookmarks bar and new-tab
+  page: the site's own `apple-touch-icon.png` (the iOS home-screen icon),
+  then its favicon, then the favicon a tab reported when you visited it,
+  else a colored letter tile.
+- **Redesigned new-tab page**: lock-screen clock, glass search capsule,
+  Speed Dial + Bookmarks as app-icon grids on glass panels.
+- **Bookmarks bar** under the omnibox (toggle in Appearance). Click opens
+  in the current tab, middle/Ctrl-click in a new one.
+- **Frameless window**: the tab strip is the title bar (drag empty space,
+  double-click to maximize) with its own minimize/maximize/close. Those
+  window permissions are granted only to the toolbar webview
+  (`capabilities/toolbar-window.json`), never to tab content.
+- `TOOLBAR_HEIGHT` / `RAIL_WIDTH` are gone: the toolbar measures its real
+  chrome and reports it via the new `set_chrome_insets` command, so any
+  CSS/layout change positions tabs correctly without touching Rust.
+- `add_bookmark` / `remove_bookmark` now broadcast `bookmarks-changed`.
+- **Glass text adapts to the wallpaper, not the theme**: white text over
+  dark backdrops, dark over light ones. Your own image's brightness is
+  measured separately behind the toolbar (top/left edges) and behind the
+  new-tab page (centre), like iOS does.
+- **Tear-off pop-out windows**: drag a tab below the toolbar or out of the
+  window and it *moves* into its own floating window; drag a pinned site
+  off the rail to open a copy. Each pop-out has a glass title bar with keep
+  on top, back to tabs (`dock_popout`), minimize/maximize/close. Closing the
+  main window closes them too.
+
 ## What's new in v0.6
 - **The left rail and side panel are now Opera-GX-style**, replacing the
   v0.5 detachable floating-window control panel:
@@ -226,6 +268,7 @@ src/
   downloads.html / downloads.js      downloads list (shown in the side panel)
   shared/theme.css                   design tokens + shared components
   shared/theme.js                    applies + live-syncs appearance settings
+  shared/glass.css / glass.js        Liquid Glass material, wallpapers, refraction, site icons
   shared/icons.js                    inline SVG icon set
   shared/api.js                      search engines, URL heuristics, toast
 ```

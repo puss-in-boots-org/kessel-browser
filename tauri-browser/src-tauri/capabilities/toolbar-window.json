@@ -1,0 +1,15 @@
+{
+  "identifier": "toolbar-window",
+  "description": "Lets only Kessel's own frameless title bars -- the main window's toolbar webview and each pop-out window's glass bar -- drag, minimize, maximize, pin on top, retitle and close their window. Never granted to tab/pop-out content webviews, which load arbitrary websites.",
+  "webviews": ["toolbar", "popout-bar-*"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-title",
+    "core:window:allow-close"
+  ]
+}

@@ -95,6 +95,16 @@ pub struct Settings {
     // settings). Big by default so most sites have room to render properly;
     // resizable by dragging its edge, and whatever you leave it at sticks.
     pub side_panel_width: f64,
+
+    // Liquid Glass look (src/shared/glass.css + glass.js). `wallpaper` is a
+    // preset id from glass.js, or "custom" for the user's own image -- that
+    // image itself lives in the pages' shared localStorage, not here, so a
+    // multi-megabyte data URL isn't rebroadcast on every settings-changed.
+    pub glass_enabled: bool,
+    pub glass_blur: f32,
+    pub glass_refraction: bool,
+    pub wallpaper: String,
+    pub bookmarks_bar: bool,
 }
 
 impl Default for Settings {
@@ -115,6 +125,11 @@ impl Default for Settings {
             discard_tabs_after_minutes: 10,
             vault_autofill_enabled: true,
             side_panel_width: 900.0,
+            glass_enabled: true,
+            glass_blur: 14.0,
+            glass_refraction: true,
+            wallpaper: "nightfall".into(),
+            bookmarks_bar: true,
         }
     }
 }
