@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Grants core permissions to every window and webview in this app, including the toolbar and each tab's content webview.",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "opener:default"
+  ]
+}

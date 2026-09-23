@@ -1,0 +1,300 @@
+/* Kessel design system -- shared by every page (toolbar, new tab, settings,
+   passwords). One file so the look stays consistent and there is exactly
+   one place to tune it. Loaded before each page's own <style>. */
+
+* { box-sizing: border-box; }
+*::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+:root {
+  /* Dark theme (default) */
+  --bg: #0b0c10;
+  --surface: #15161c;
+  --surface-2: #1b1d25;
+  --surface-hover: #22242e;
+  --border: #262834;
+  --text: #eceef4;
+  --text-dim: #9498a8;
+  --text-faint: #5c6072;
+  --accent: #7c5cff;
+  --accent-text: #ffffff;
+  --danger: #ff5c73;
+  --success: #34d399;
+  --warning: #ffb454;
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 0.12s;
+  --dur: 0.2s;
+  --dur-slow: 0.36s;
+  --font: -apple-system, "Segoe UI", "Inter", Roboto, sans-serif;
+  --font-scale: 1;
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --surface-2: #f0f1f5;
+  --surface-hover: #e8e9ee;
+  --border: #e2e3ea;
+  --text: #191a23;
+  --text-dim: #6b6e7d;
+  --text-faint: #a4a7b3;
+  --accent: #6d4dfa;
+  --accent-text: #ffffff;
+  --shadow: 0 8px 30px rgba(30, 30, 50, 0.1);
+}
+
+html.reduce-motion, html.reduce-motion * {
+  animation-duration: 0.001s !important;
+  transition-duration: 0.001s !important;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: calc(13.5px * var(--font-scale));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+
+a { color: var(--accent); }
+
+button, input, select, textarea { font-family: inherit; color: inherit; }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 9px 15px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+.btn:hover { background: var(--surface-hover); border-color: var(--text-faint); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: default; pointer-events: none; }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { background: transparent; border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); color: var(--danger); }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { background: var(--surface-hover); }
+.btn.icon-only { padding: 8px; width: 34px; height: 34px; }
+.btn.sm { padding: 6px 10px; font-size: 12px; }
+.btn.block { width: 100%; }
+
+/* --- Inputs --- */
+.field {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.field::placeholder { color: var(--text-faint); }
+
+label.label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 7px;
+}
+
+/* --- Cards / surfaces --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* --- Toggle switch --- */
+.switch {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+  border: none;
+  padding: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform var(--dur) var(--ease);
+}
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(16px); }
+
+/* --- Chips / tags --- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* --- Badge --- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* --- Toast --- */
+#toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+  align-items: center;
+}
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12.5px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast.visible { opacity: 1; transform: translateY(0) scale(1); }
+
+/* --- Modal --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, black 55%, transparent);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease);
+}
+.modal-backdrop.open { opacity: 1; pointer-events: auto; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  width: min(440px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  transform: scale(0.95) translateY(6px);
+  transition: transform var(--dur) var(--ease);
+}
+.modal-backdrop.open .modal { transform: scale(1) translateY(0); }
+
+/* --- Empty state --- */
+.empty {
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+  padding: 28px 12px;
+}
+
+/* --- Utility --- */
+.row { display: flex; align-items: center; }
+.spread { display: flex; align-items: center; justify-content: space-between; }
+.stack { display: flex; flex-direction: column; }
+.muted { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.mono { font-variant-numeric: tabular-nums; }
+.scroll-y { overflow-y: auto; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text) 20%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}

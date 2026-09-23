@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kessel</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Slim icon-only rail (Opera-GX style): clicking an icon slides a
+         panel out beside the active tab rather than opening a new tab. -->
+    <div id="rail">
+      <button class="rail-logo" id="rail-home" title="Home / New tab (Ctrl+T)"></button>
+
+      <div id="pinned-list"></div>
+      <button class="rail-btn ghost-btn" id="rail-add-pin" title="Pin the current page"></button>
+
+      <div class="rail-spacer"></div>
+
+      <button class="rail-btn" id="rail-shield" title="Ad &amp; tracker blocking">
+        <span class="rail-badge" id="shield-badge" hidden>0</span>
+      </button>
+      <button class="rail-btn" id="rail-downloads" title="Downloads">
+        <span class="rail-badge" id="downloads-badge" hidden>0</span>
+      </button>
+      <button class="rail-btn" id="rail-passwords" title="Passwords (Ctrl+Shift+L)"></button>
+      <button class="rail-btn" id="rail-settings" title="Settings"></button>
+    </div>
+
+    <div id="main-col">
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+
+      <div id="tab-bar">
+        <div id="tabs"></div>
+        <button id="new-tab-btn" title="New tab (Ctrl+T)"></button>
+      </div>
+
+      <div id="nav-bar">
+        <button id="back-btn" title="Back (Alt+Left)"></button>
+        <button id="forward-btn" title="Forward (Alt+Right)"></button>
+        <button id="reload-btn" title="Reload (Ctrl+R)"></button>
+
+        <div id="address-wrap">
+          <span id="lock-icon"></span>
+          <input id="url-input" type="text" placeholder="Search or enter address" spellcheck="false" autocomplete="off" />
+          <button id="engine-btn" title="Search engine"></button>
+          <button id="star-btn" title="Bookmark this page (Ctrl+D)"></button>
+        </div>
+
+        <div id="engine-menu" class="menu" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

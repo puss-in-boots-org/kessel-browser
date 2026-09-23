@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>New Tab</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 10vh;
+      overflow-y: auto;
+    }
+    #logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 22px;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    #logo .mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #6bd2ff));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+    #clock {
+      font-size: 52px;
+      font-weight: 200;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+      font-variant-numeric: tabular-nums;
+      animation: fadeUp 0.4s var(--ease);
+    }
+    #date { font-size: 13px; color: var(--text-faint); margin-bottom: 30px; }
+
+    #omnibox-wrap {
+      width: min(560px, 86vw);
+      margin-bottom: 46px;
+      position: relative;
+    }
+    #omnibox {
+      width: 100%;
+      height: 48px;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      padding: 0 20px 0 46px;
+      font-size: 14.5px;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+    }
+    #omnibox:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent); }
+    #omnibox-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-faint); pointer-events: none; }
+
+    .section { width: min(760px, 92vw); margin-bottom: 30px; }
+    .section h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.1px;
+      color: var(--text-faint);
+      margin: 0 0 12px;
+      font-weight: 700;
+    }
+    .grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .tile {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 12.5px;
+      width: 128px;
+      cursor: pointer;
+      transition: border-color var(--dur-fast) ease, transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 9px;
+      text-align: center;
+    }
+    .tile:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+    .tile .tile-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--surface-2);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .tile .tile-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+    .tile.add-tile { color: var(--text-faint); border-style: dashed; }
+    .tile.add-tile:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div id="logo"><span class="mark" id="logo-mark"></span>Kessel</div>
+  <div id="clock">--:--</div>
+  <div id="date"></div>
+
+  <div id="omnibox-wrap">
+    <span id="omnibox-icon"></span>
+    <input id="omnibox" type="text" placeholder="Search or enter address" autofocus autocomplete="off" spellcheck="false" />
+  </div>
+
+  <div class="section">
+    <h2>Pinned</h2>
+    <div class="grid" id="pinned-grid"></div>
+  </div>
+
+  <div class="section">
+    <h2>Bookmarks</h2>
+    <div class="grid" id="bookmarks-grid"></div>
+  </div>
+
+  <script type="module" src="newtab.js"></script>
+</body>
+</html>

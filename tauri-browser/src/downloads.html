@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Downloads</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    body { padding: 18px 14px 30px; }
+    h1 { font-size: 15px; margin: 4px 4px 16px; }
+    .toolbar-row { display: flex; gap: 8px; margin-bottom: 14px; padding: 0 4px; }
+    #list { display: flex; flex-direction: column; gap: 4px; }
+    .dl-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 8px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+    .dl-row:hover { background: var(--surface-hover); }
+    .dl-row .dl-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .dl-row .dl-meta { min-width: 0; flex: 1; }
+    .dl-row .dl-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dl-row .dl-sub { font-size: 11px; color: var(--text-faint); }
+  </style>
+</head>
+<body>
+  <h1>Downloads</h1>
+  <div class="toolbar-row">
+    <button class="btn sm" id="open-folder-btn">Open folder</button>
+    <button class="btn danger sm" id="clear-btn">Clear list</button>
+  </div>
+  <div id="list"></div>
+
+  <script type="module" src="downloads.js"></script>
+</body>
+</html>

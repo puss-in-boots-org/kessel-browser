@@ -1,0 +1,24 @@
+[package]
+name = "kessel"
+version = "0.6.0"
+description = "Kessel — a custom browser built with Tauri"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["unstable"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+argon2 = "0.6.0"
+aes-gcm = "0.11.1"
+hmac = "0.13.0"
+sha1 = "0.11.0"
+rand = "0.10.2"
+tauri-plugin-opener = "2.5.5"
+base64 = "0.23.1"
+
+[[bin]]
+name = "kessel"
+path = "src/main.rs"
