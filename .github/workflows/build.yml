@@ -10,16 +10,20 @@
 
 name: Build
 
+# One build per change: pushes to main, and pull requests (which cover their
+# branch's pushes). A branch without a PR can still be built on demand from
+# the Actions tab (workflow_dispatch). Triggering on every branch push as
+# well used to build each PR commit twice.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
-# A newer push to the same branch supersedes an in-flight build -- private
-# repos pay for Windows runner minutes at 2x.
+# A newer push to the same branch or PR supersedes an in-flight build --
+# private repos pay for Windows runner minutes at 2x.
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
