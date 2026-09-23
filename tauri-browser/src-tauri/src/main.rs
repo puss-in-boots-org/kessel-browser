@@ -9,7 +9,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, HistoryEntry, PinnedSite, Settings, Store};
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{
@@ -107,6 +108,19 @@ pub(crate) struct BrowserState {
     // titles/favicons under (drawn from the same counter as tab ids, so the
     // two can never collide). See create_popout_internal.
     popouts: Mutex<HashMap<u32, Popout>>,
+    // Last title/favicon each tab reported, so a toolbar that had to be
+    // reloaded (see the toolbar watchdog) can redraw its tab strip without
+    // waiting for every page to report again.
+    tab_meta: Mutex<HashMap<u32, TabMeta>>,
+    // The toolbar's own copy of its tab list (incl. sleeping tabs that only
+    // exist in the UI), pushed on every change -- also for that recovery.
+    toolbar_snapshot: Mutex<Option<String>>,
+}
+
+#[derive(Default, Clone)]
+struct TabMeta {
+    title: Option<String>,
+    favicon: Option<String>,
 }
 
 // The active tab always gets the full window width (minus the rail) --
@@ -245,6 +259,9 @@ fn create_tab_internal(
                     return false;
                 }
                 st.store.record_history(nav_url.as_str(), nav_url.as_str());
+                if let Some(meta) = st.tab_meta.lock().unwrap().get_mut(&id) {
+                    *meta = TabMeta::default(); // the new page reports its own
+                }
                 let payload = serde_json::json!({ "id": id, "url": nav_url.to_string() });
                 let _ = app_for_nav.emit_to(TOOLBAR_LABEL, "tab-navigated", payload);
             }
@@ -739,6 +756,150 @@ async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
     .and_then(|r| r)
 }
 
+// --- Toolbar watchdog -----------------------------------------------------
+//
+// The toolbar is its own WebView2 renderer process, separate from every tab.
+// If that process dies (crash, or killed in Task Manager) the tabs keep
+// running but the chrome goes blank for good -- nothing else notices. So the
+// toolbar sends a heartbeat every second (main.js), and a background thread
+// reloads it when the heartbeats stop. On reload, main.js rebuilds its tab
+// strip from get_open_tabs + its own last snapshot instead of starting over.
+//
+// Only judged while the main window is focused and not minimized: Chromium
+// throttles timers in hidden/covered pages (down to once a minute), which
+// would otherwise look exactly like a dead toolbar.
+
+static APP_START: OnceLock<Instant> = OnceLock::new();
+// Milliseconds since APP_START of the last heartbeat -- or of a grace
+// deadline, which is why it can be ahead of "now".
+static TOOLBAR_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
+const TOOLBAR_HEARTBEAT_TIMEOUT_MS: u64 = 4_000;
+// Startup and a fresh reload need time to load index.html before the first
+// heartbeat can arrive.
+const TOOLBAR_LOAD_GRACE_MS: u64 = 10_000;
+const TOOLBAR_MAX_RECOVERIES_PER_MINUTE: usize = 3;
+
+fn millis_since_start() -> u64 {
+    APP_START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+fn grant_toolbar_grace(ms: u64) {
+    TOOLBAR_HEARTBEAT.store(millis_since_start() + ms, Ordering::Relaxed);
+}
+
+fn toolbar_watchdog(app: tauri::AppHandle) {
+    grant_toolbar_grace(TOOLBAR_LOAD_GRACE_MS);
+    let mut last_tick = millis_since_start();
+    let mut recent_recoveries: Vec<u64> = Vec::new();
+    loop {
+        std::thread::sleep(Duration::from_millis(1_000));
+        let now = millis_since_start();
+        // A tick far later than scheduled means the PC slept or this thread
+        // was starved -- the toolbar couldn't have heartbeated either.
+        if now.saturating_sub(last_tick) > 3_000 {
+            grant_toolbar_grace(TOOLBAR_HEARTBEAT_TIMEOUT_MS);
+        }
+        last_tick = now;
+
+        let Some(state) = app.try_state::<BrowserState>() else { continue };
+        let focused = state.window.is_focused().unwrap_or(false);
+        let minimized = state.window.is_minimized().unwrap_or(true);
+        if !focused || minimized {
+            // Re-armed from scratch once you come back to the window.
+            grant_toolbar_grace(TOOLBAR_HEARTBEAT_TIMEOUT_MS);
+            continue;
+        }
+        if now.saturating_sub(TOOLBAR_HEARTBEAT.load(Ordering::Relaxed)) < TOOLBAR_HEARTBEAT_TIMEOUT_MS {
+            continue;
+        }
+
+        // Stop after a few tries rather than reload-looping on a toolbar
+        // that dies again right away (e.g. a broken build).
+        recent_recoveries.retain(|&t| now.saturating_sub(t) < 60_000);
+        if recent_recoveries.len() >= TOOLBAR_MAX_RECOVERIES_PER_MINUTE {
+            continue;
+        }
+        recent_recoveries.push(now);
+        grant_toolbar_grace(TOOLBAR_LOAD_GRACE_MS);
+
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Some(toolbar) = app2.get_webview(TOOLBAR_LABEL) {
+                // WebView2 keeps the page's URL after its renderer is gone;
+                // navigating to it starts a fresh renderer process.
+                if let Ok(url) = toolbar.url() {
+                    let _ = toolbar.navigate(url);
+                }
+            }
+        });
+    }
+}
+
+// Heartbeats only count from the toolbar itself -- a web page calling this
+// can't keep a dead toolbar from being recovered.
+#[tauri::command]
+fn toolbar_heartbeat(webview: Webview) {
+    if webview.label() == TOOLBAR_LABEL {
+        TOOLBAR_HEARTBEAT.store(millis_since_start(), Ordering::Relaxed);
+    }
+}
+
+// kessel:// pages load from the app's own asset URL; map that back to the
+// logical url the toolbar knows them by.
+fn logical_tab_url(url: &tauri::Url) -> String {
+    if is_internal_nav(url) {
+        let page = url.path().trim_start_matches('/');
+        for (route, file) in [
+            ("kessel://newtab", "newtab.html"),
+            ("kessel://settings", "settings.html"),
+            ("kessel://passwords", "passwords.html"),
+            ("kessel://downloads", "downloads.html"),
+        ] {
+            if page == file {
+                return route.to_string();
+            }
+        }
+    }
+    url.to_string()
+}
+
+// Every live tab in tab-cycling order, with what Rust knows about it -- for
+// a reloaded toolbar to rebuild its tab strip from.
+#[tauri::command]
+fn get_open_tabs(state: tauri::State<BrowserState>) -> serde_json::Value {
+    let tabs = state.tabs.lock().unwrap();
+    let order = state.order.lock().unwrap().clone();
+    let meta = state.tab_meta.lock().unwrap();
+    let list: Vec<serde_json::Value> = order
+        .iter()
+        .filter_map(|id| {
+            let webview = tabs.get(id)?;
+            let url = webview.url().map(|u| logical_tab_url(&u)).unwrap_or_default();
+            let m = meta.get(id).cloned().unwrap_or_default();
+            Some(serde_json::json!({ "id": id, "url": url, "title": m.title, "favicon": m.favicon }))
+        })
+        .collect();
+    drop(meta);
+    drop(tabs);
+    serde_json::json!({
+        "tabs": list,
+        "active": *state.active.lock().unwrap(),
+        "panel": state.side_panel_kind.lock().unwrap().clone(),
+    })
+}
+
+#[tauri::command]
+fn set_toolbar_snapshot(webview: Webview, state: tauri::State<BrowserState>, snapshot: String) {
+    if webview.label() == TOOLBAR_LABEL && snapshot.len() <= 1_000_000 {
+        *state.toolbar_snapshot.lock().unwrap() = Some(snapshot);
+    }
+}
+
+#[tauri::command]
+fn get_toolbar_snapshot(state: tauri::State<BrowserState>) -> Option<String> {
+    state.toolbar_snapshot.lock().unwrap().clone()
+}
+
 // --- Threading bridge --------------------------------------------------
 //
 // IMPORTANT: creating/moving/navigating webviews must happen on the main
@@ -855,6 +1016,7 @@ async fn close_tab(app: tauri::AppHandle, id: u32, url: Option<String>) -> Resul
         drop(active);
 
         state.singleton_tabs.lock().unwrap().retain(|_, &mut v| v != id);
+        state.tab_meta.lock().unwrap().remove(&id);
         Ok(())
     })
     .await
@@ -1038,17 +1200,28 @@ async fn reload(app: tauri::AppHandle, id: u32) -> Result<(), String> {
     .and_then(|r| r)
 }
 
+// Remembered in tab_meta for real tabs only (pop-out ids share the counter
+// but aren't tabs), for toolbar recovery.
+fn update_tab_meta(state: &BrowserState, id: u32, f: impl FnOnce(&mut TabMeta)) {
+    if !state.tabs.lock().unwrap().contains_key(&id) {
+        return;
+    }
+    f(state.tab_meta.lock().unwrap().entry(id).or_default());
+}
+
 // Also forwarded to the matching pop-out's title bar, if `id` is a pop-out
 // rather than a tab (emit_to a label that doesn't exist is a no-op).
 #[tauri::command]
-fn report_title(app: tauri::AppHandle, id: u32, title: String) {
+fn report_title(app: tauri::AppHandle, state: tauri::State<BrowserState>, id: u32, title: String) {
+    update_tab_meta(&state, id, |m| m.title = Some(title.clone()));
     let payload = serde_json::json!({ "id": id, "title": title });
     let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", payload.clone());
     let _ = app.emit_to(format!("popout-bar-{}", id).as_str(), "tab-title-changed", payload);
 }
 
 #[tauri::command]
-fn report_favicon(app: tauri::AppHandle, id: u32, url: String) {
+fn report_favicon(app: tauri::AppHandle, state: tauri::State<BrowserState>, id: u32, url: String) {
+    update_tab_meta(&state, id, |m| m.favicon = Some(url.clone()));
     let payload = serde_json::json!({ "id": id, "url": url });
     let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", payload.clone());
     let _ = app.emit_to(format!("popout-bar-{}", id).as_str(), "tab-favicon-changed", payload);
@@ -1645,7 +1818,11 @@ fn main() {
             notify_side_panel_drag,
             set_chrome_insets,
             pop_out,
-            dock_popout
+            dock_popout,
+            toolbar_heartbeat,
+            get_open_tabs,
+            set_toolbar_snapshot,
+            get_toolbar_snapshot
         ])
         .setup(|app| {
             let width = 1280.0;
@@ -1701,9 +1878,14 @@ fn main() {
                 side_panel_kind: Mutex::new(None),
                 side_panel_url: Mutex::new(None),
                 popouts: Mutex::new(HashMap::new()),
+                tab_meta: Mutex::new(HashMap::new()),
+                toolbar_snapshot: Mutex::new(None),
             };
             app.manage(state);
             app.manage(Vault::new(data_dir));
+
+            let app_for_watchdog = app.handle().clone();
+            std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
 
             // Re-run the resize handler for the active content tab and the
             // side panel (if one's open) on window resize.

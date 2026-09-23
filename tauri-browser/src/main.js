@@ -13,6 +13,13 @@ const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const appWindow = window.__TAURI__.window.getCurrentWindow();
 
+// Tells Rust's toolbar watchdog this page is alive. If this renderer
+// process dies (crash, or killed in Task Manager) the heartbeats stop and
+// Rust reloads the toolbar -- see restoreAfterToolbarReload. Started before
+// anything else so a slow init can't be mistaken for a dead toolbar.
+invoke("toolbar_heartbeat").catch(() => {});
+setInterval(() => invoke("toolbar_heartbeat").catch(() => {}), 1000);
+
 // --- Tab state -----------------------------------------------------------
 // Each tab maps to a real native webview created by Rust. This module only
 // tracks id/url/title/loading for the tab-strip UI and forwards actions.
@@ -132,7 +139,67 @@ function wireChromeInsets() {
 
 // --- Tab strip rendering ---------------------------------------------------
 
+// Every tab-strip change goes through renderTabs, so that's where the
+// toolbar hands Rust a copy of its state -- the one thing a reloaded
+// toolbar can't ask the tabs themselves (sleeping tabs have no webview).
+let snapshotTimer = null;
+function pushToolbarSnapshot() {
+  clearTimeout(snapshotTimer);
+  snapshotTimer = setTimeout(() => {
+    const snapshot = {
+      tabs: tabs.map(({ id, url, title, favicon, discarded, neverCreated, userTitled }) => ({ id, url, title, favicon, discarded, neverCreated, userTitled })),
+      activeTabId,
+      placeholderCounter,
+    };
+    invoke("set_toolbar_snapshot", { snapshot: JSON.stringify(snapshot) }).catch(() => {});
+  }, 250);
+}
+
+// Rebuilds the tab strip after Rust had to reload a dead toolbar: live tabs
+// come from Rust (current url + last reported title/favicon), sleeping ones
+// and the strip's order from our own last snapshot. Tabs closed in the
+// meantime drop out; tabs opened meanwhile (e.g. a middle-clicked link,
+// whose "tab-created" event had nobody listening) get appended. Returns
+// false on a normal startup, where Rust has no tabs yet.
+async function restoreAfterToolbarReload() {
+  const live = await invoke("get_open_tabs").catch(() => null);
+  if (!live || !live.tabs.length) return false;
+  let snapshot = null;
+  try {
+    snapshot = JSON.parse((await invoke("get_toolbar_snapshot")) || "null");
+  } catch {}
+
+  const liveById = new Map(live.tabs.map((t) => [t.id, t]));
+  const now = Date.now();
+  const restored = [];
+  for (const saved of snapshot?.tabs || []) {
+    if (saved.discarded) {
+      restored.push({ ...saved, loading: false, lastActiveAt: now });
+      continue;
+    }
+    const tab = liveById.get(saved.id);
+    if (!tab) continue; // closed while the toolbar was down
+    liveById.delete(saved.id);
+    restored.push({ ...saved, url: tab.url, title: tab.title || saved.title, favicon: tab.favicon ?? saved.favicon, loading: false, lastActiveAt: now });
+  }
+  for (const tab of liveById.values()) {
+    const title = tab.title || INTERNAL_TITLES[tab.url] || hostOf(tab.url);
+    restored.push({ id: tab.id, url: tab.url, title, favicon: tab.favicon, userTitled: !!tab.title, loading: false, lastActiveAt: now });
+  }
+
+  tabs = restored;
+  activeTabId = live.active ?? restored.find((t) => !t.discarded)?.id ?? null;
+  placeholderCounter = Math.min(snapshot?.placeholderCounter ?? 0, ...restored.map((t) => t.id), 0);
+  openPanelKind = live.panel ?? null;
+  renderTabs();
+  updateAddressBarForActiveTab();
+  updatePanelHighlights();
+  invoke("set_tab_order", { ids: tabs.map((t) => t.id) }).catch(() => {});
+  return true;
+}
+
 function renderTabs() {
+  pushToolbarSnapshot();
   const container = document.getElementById("tabs");
   container.innerHTML = "";
   for (const tab of tabs) {
@@ -742,8 +809,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   // tab from last time on every launch is exactly the kind of waste this
   // whole feature exists to avoid.
   const settings = currentSettings();
-  let restored = false;
-  if (settings?.restore_tabs) {
+  // A reload after the toolbar's process died picks up the tabs that are
+  // still running instead of opening a fresh one.
+  let restored = await restoreAfterToolbarReload();
+  if (!restored && settings?.restore_tabs) {
     const urls = await invoke("get_session").catch(() => []);
     if (urls && urls.length) {
       await createTab(urls[0]);

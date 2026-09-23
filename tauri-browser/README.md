@@ -19,6 +19,21 @@ first real compile" gap significantly, but a GUI app still can't be fully
 exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
+## Unreleased
+- **Toolbar auto-recovery**: the toolbar is its own WebView2 renderer
+  process. If it dies (crash, or killed in Task Manager) your tabs keep
+  running but the chrome used to go blank for good. Now it sends Rust a
+  heartbeat every second; a watchdog reloads it after 4s of silence while
+  the window is focused, and the reloaded toolbar rebuilds the tab strip
+  from the still-running tabs plus its last snapshot (incl. sleeping tabs).
+  Gives up after 3 reloads a minute so a broken build can't loop.
+- **`scripts/kessel-memory.ps1`** (repo root): Kessel's real memory use.
+  `kessel.exe` is only the small Rust host -- pages, the GPU process and
+  WebView2's helpers are separate `msedgewebview2.exe` processes, which this
+  adds up per role, using Task Manager's own Memory figure:
+  `powershell -ExecutionPolicy Bypass -File scripts\kessel-memory.ps1`
+  (add `-Watch 5` to refresh every 5 s).
+
 ## What's new in v0.7 -- Liquid Glass
 **Builds in CI, not locally on SAC machines** -- compiles with zero warnings
 on GitHub Actions (`.github/workflows/build.yml`), which produces the MSI and
