@@ -1,6 +1,6 @@
 [package]
 name = "kessel"
-version = "0.6.0"
+version = "0.7.0"
 description = "Kessel — a custom browser built with Tauri"
 edition = "2021"
 license = "GPL-3.0-only"

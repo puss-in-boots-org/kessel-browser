@@ -1,4 +1,4 @@
-# Kessel (v0.6)
+# Kessel (v0.7)
 
 A real, working custom browser: tabs (each backed by its own native
 webview) that are properly destroyed on close and idle-discarded to save
@@ -19,7 +19,7 @@ first real compile" gap significantly, but a GUI app still can't be fully
 exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
-## Liquid Glass (unreleased, on top of v0.6)
+## What's new in v0.7 -- Liquid Glass
 **Builds in CI, not locally on SAC machines** -- compiles with zero warnings
 on GitHub Actions (`.github/workflows/build.yml`), which produces the MSI and
 NSIS installers. With Windows Smart App Control on, cargo can't build it
