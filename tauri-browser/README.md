@@ -20,10 +20,13 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Liquid Glass (unreleased, on top of v0.6)
-**Not compiled yet** — unlike the rest of this README's claims, the Rust
-half of this change was written on a machine without the Rust/MSVC
-toolchain. The frontend was checked in a Chromium preview with a mocked
-`window.__TAURI__`; run `cargo build` before trusting the Rust side.
+**Builds in CI, not locally on SAC machines** -- compiles with zero warnings
+on GitHub Actions (`.github/workflows/build.yml`), which produces the MSI and
+NSIS installers. With Windows Smart App Control on, cargo can't build it
+locally at all: SAC blocks cargo's freshly compiled build scripts (os error
+4551). The installers are unsigned until a code-signing step is added, so
+they won't run on SAC-protected PCs yet. Tear-off windows haven't been
+click-tested in a running build yet.
 
 - **iOS 26-style Liquid Glass UI** (Settings → Appearance, on by default):
   the tab strip, nav bar, bookmarks bar and rail become floating glass
