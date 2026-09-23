@@ -3,6 +3,7 @@ name = "kessel"
 version = "0.6.0"
 description = "Kessel — a custom browser built with Tauri"
 edition = "2021"
+license = "GPL-3.0-only"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
