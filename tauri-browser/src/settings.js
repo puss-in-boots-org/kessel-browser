@@ -319,7 +319,7 @@ async function privacyPanel(settings) {
   wireSetting("adblock-toggle", "adblock_enabled", (on) => (on ? "Shields are on" : "Shields are off"));
   wireSetting("https-toggle", "shields_https_upgrade");
   wireSetting("strip-toggle", "shields_strip_tracking");
-  wireSetting("fp-toggle", "shields_fingerprinting", () => "Applies to pages you open from now on");
+  wireSetting("fp-toggle", "shields_fingerprinting", () => "Applies from the next page load");
   const tp = p.querySelector("#tp-select");
   tp.value = settings.shields_tracking_prevention || "balanced";
   tp.addEventListener("change", () => saveSettings({ shields_tracking_prevention: tp.value }).then(() => toast("Applies to tabs you open from now on")));

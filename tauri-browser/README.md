@@ -20,6 +20,31 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Everything Kessel does inside pages now works on websites.** The page
+  script reached Kessel through Tauri's IPC, which Tauri refuses to
+  websites -- so on every website these silently failed: keyboard
+  shortcuts (worse: F5, Ctrl+R and Alt+arrows were swallowed and did
+  nothing), Ctrl/middle-click background tabs (Ctrl-click did nothing at
+  all), element hiding, password autofill, the side panel's resize
+  hand-off -- and, because the page script read the failed Shields reply
+  as "Shields off", fingerprinting protection was switched off on every
+  site. Now:
+  - Shortcuts are WebView2's own accelerator keys, taken by Kessel before
+    the page sees them (and F5/Ctrl+R/Alt+arrows are WebView2's own
+    again). Tab switching goes by the tab strip, so it no longer leaves
+    the strip showing the wrong tab or skips sleeping ones.
+  - Element hiding, scriptlets and fingerprinting protection are one
+    **Shields page script** Rust builds for each page as it starts
+    loading (`shields::page_script`) -- only on sites with Shields up, so
+    there's no longer an off switch inside the page that a site could
+    flip itself.
+  - What pages still report goes through a function Kessel adds to each
+    page (a DevTools binding -- not postMessage, which Tauri claims, nor
+    a request CSP would block; DevTools' Runtime domain stays off, since
+    bot checks look for it), and only carries reports Kessel checks for
+    itself or that are harmless if a page fakes them.
+  - Autofill moved to a key in the address bar: the page can say "I have
+    a login form", but only your click on Kessel's own button fills it.
 - **Tab titles, icons and addresses stay current** (`watch_page` in
   `main.rs`). Tabs on websites used to keep saying "New Tab" or the host
   name: the page script reported titles and icons through IPC, which Tauri
@@ -212,16 +237,18 @@ click-tested in a running build yet.
   only the one you were last looking at gets a real webview on launch,
   the rest come back as zero-cost placeholders until clicked. Neither
   checks whether a tab is playing audio/video before discarding it.
-- **Password autofill**: a small "fill saved password" chip appears near
-  a detected login field when there's a saved credential for that page.
-  Nothing fills without you clicking it. The match is decided entirely by
-  Rust reading the webview's own real, current URL server-side — never
-  from a value the page's JS supplies — so a look-alike domain can't
-  successfully ask for credentials belonging to the real one. Toggle it
-  off in Settings → Passwords.
-- **Real favicons** in the tab strip, reported back from each page's
-  `<link rel="icon">` (falling back to `/favicon.ico`), replacing the
-  first-letter avatar. Falls back automatically if the icon 404s.
+- **Password autofill**: when a page shows a login form and the (unlocked)
+  vault has a login for that site, a key appears in the address bar;
+  clicking it fills the form in. Nothing fills without that click, and
+  the page never gets the password any other way -- it can only say "I
+  have a login form", while the button it would need is Kessel's own. The
+  match is decided entirely by Rust from the webview's own real, current
+  address -- never from anything the page says -- so a look-alike domain
+  can't get credentials belonging to the real one. Toggle it off in
+  Settings → Passwords.
+- **Real favicons** in the tab strip, straight from WebView2 (the page's
+  `<link rel="icon">`, else `/favicon.ico`), replacing the first-letter
+  avatar. Falls back automatically if the icon 404s.
 - **Drag-to-reorder tabs**, and a right-click tab context menu (duplicate,
   close, close others, pin).
 - **Recently-closed tabs list** in Settings → History — browse and reopen
@@ -283,18 +310,20 @@ click-tested in a running build yet.
 - Popup blocking, working zoom controls (Ctrl/Cmd + `+`/`-`/`0`).
 - Search engine picker (Google / Bing / DuckDuckGo / Brave / Ecosia /
   Startpage), remembered and used as the omnibox's "not a URL" fallback.
-- The full shortcut set, including ones that work from *inside* a loaded
-  page (injected per-tab), not just the toolbar:
+- The full shortcut set, working the same whether the toolbar or a page
+  has focus (in a page they're WebView2's accelerator keys, which Kessel
+  takes before the page sees them -- see `page_shortcut` in `main.rs`):
   - Middle-click / Ctrl-click a link → open in a new background tab
   - Middle-click a tab → close it
-  - Ctrl/Cmd+Tab / Ctrl/Cmd+Shift+Tab → cycle tabs
-  - Ctrl/Cmd+1..8 → jump to that tab; Ctrl/Cmd+9 → last tab
-  - Ctrl/Cmd+Shift+T → reopen the most recently closed tab (up to 20)
-  - Ctrl/Cmd+Shift+L → open the password manager
-  - Alt+Left / Alt+Right → back / forward; F5 / Ctrl/Cmd+R → reload
-  - Ctrl/Cmd+T / W / L / D → new tab / close tab / focus address bar /
-    bookmark (these four are toolbar-only, since e.g. "focus the address
-    bar" isn't meaningful from inside a page)
+  - Ctrl+T / Ctrl+W → new tab / close tab (in a pop-out: close it; in the
+    side panel: close the panel)
+  - Ctrl+Tab / Ctrl+Shift+Tab → cycle tabs (sleeping tabs included)
+  - Ctrl+1..8 → jump to that tab; Ctrl+9 → last tab
+  - Ctrl+Shift+T → reopen the most recently closed tab (up to 20)
+  - Ctrl+L → address bar; Ctrl+D → bookmark; Ctrl+Shift+L → passwords
+  - Alt+Left / Alt+Right → back / forward; F5 / Ctrl+R → reload
+  - Ctrl with AltGr (Ctrl+Alt) is left alone, so AltGr+digit still types
+    its character on layouts like Hungarian
 - Bookmarks and history, persisted to JSON in the OS app-data directory.
 
 ## Known limitations (honest, not hidden)
@@ -307,19 +336,14 @@ click-tested in a running build yet.
   protects saved credentials from casual disk access and other apps, via
   real authenticated encryption, not from a compromised OS or a
   keylogger while the vault is unlocked. No local-only vault can do that.
-- **Every page can technically call this app's Rust commands** — since
-  `withGlobalTauri` exposes `window.__TAURI__` to every webview (needed
-  for the shortcuts/link-handling to work from inside pages), a malicious
-  website could in theory also call those same commands. The ones that
-  change protection or read other data -- settings, the Shields allow and
-  block lists, importing, the Shields popup -- now check the caller is one
-  of Kessel's own pages (`require_internal_page`); the rest still don't. Autofill's match-lookup command is
-  hardened against the specific worst case this enables (a page can't
-  spoof which site it is — see `vault_autofill_match` in `main.rs`), but
-  a page can still ask "is there a saved credential for the site I'm
-  actually on" and get a yes/no, an inherent property of doing autofill
-  detection in page-reachable JS at all, not something this toggle-off
-  setting fully closes on its own.
+- **Websites can tell they're in Kessel** — every page sees Tauri's
+  `window.__TAURI__` (though Tauri refuses all of its commands to
+  websites) and Kessel's report function `window.__kesselPage`. That
+  function only takes reports Kessel checks for itself or that are
+  harmless if faked (see `page_message` in `main.rs`): a page can't read
+  settings, get a password, or even learn whether you have one saved for
+  it. The sensitive commands Kessel's own pages use also check their
+  caller (`require_internal_page`).
 - **Idle tab discarding doesn't know about audio/video** — a tab quietly
   playing music can still be discarded and interrupted if it's not the
   active tab. Turn the timeout to 0 in Settings → Performance if that's

@@ -11,7 +11,7 @@ mod vault;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, HistoryEntry, PinnedSite, Settings, Store};
@@ -143,6 +143,12 @@ struct PageState {
     favicon: String,
     // The history entry still waiting for this page's title.
     history: Option<HistoryWait>,
+    // The page's exceptions to generic element hiding (its page script asks
+    // for selectors as its DOM changes; see page_message).
+    cosmetic_exceptions: HashSet<String>,
+    // A link you Ctrl/middle-clicked here, and when: the new-window request
+    // it causes opens it in a background tab (see open_new_window).
+    background_link: Option<(String, Instant)>,
 }
 
 struct HistoryWait {
@@ -315,21 +321,18 @@ fn create_tab_internal(
         WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
     };
 
-    let (adblock_enabled, autofill_enabled) = {
-        let settings = state.store.settings.lock().unwrap();
-        (settings.adblock_enabled, settings.vault_autofill_enabled)
-    };
+    let autofill_enabled = state.store.settings.lock().unwrap().vault_autofill_enabled;
     let app_for_nav = app.clone();
     let label_for_nav = label.clone();
     let app_for_load = app.clone();
     let app_for_download = app.clone();
     let data_dir = state.data_dir.clone();
 
-    let builder = with_account(app, with_farbling(app, WebviewBuilder::new(&label, webview_url)), account.as_deref())
-        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+    let builder = with_account(app, WebviewBuilder::new(&label, webview_url), account.as_deref())
+        .initialization_script(&adblock::build_content_script(autofill_enabled))
         .on_new_window({
             let (app, account) = (app.clone(), account.clone());
-            move |url, features| open_new_window(&app, url, features, account.clone())
+            move |url, features| open_new_window(&app, url, features, id, account.clone())
         })
         .on_navigation(move |nav_url| {
             // Kessel's own pages (newtab/settings/passwords) load through
@@ -530,9 +533,9 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
         WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
     };
 
-    let (adblock_enabled, autofill_enabled, panel_width) = {
+    let (autofill_enabled, panel_width) = {
         let settings = state.store.settings.lock().unwrap();
-        (settings.adblock_enabled, settings.vault_autofill_enabled, settings.side_panel_width)
+        (settings.vault_autofill_enabled, settings.side_panel_width)
     };
     let (position, size) = side_panel_bounds(&state.window, panel_width).map_err(|e| e.to_string())?;
 
@@ -552,18 +555,10 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
         )
         .map_err(|e| e.to_string())?;
 
-    // The regular per-tab script (ad block, shortcuts, title/favicon
-    // reporting under id 0, which the frame listens for) plus the panel's
-    // half of the resize hand-off.
-    let script = format!(
-        "{}\n{}",
-        adblock::build_content_script(0, adblock_enabled, autofill_enabled),
-        SIDE_PANEL_RESIZE_HANDOFF_SCRIPT
-    );
     let app_for_nav = app.clone();
-    let builder = with_farbling(app, WebviewBuilder::new("side-panel", webview_url))
-        .initialization_script(&script)
-        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features, None) })
+    let builder = WebviewBuilder::new("side-panel", webview_url)
+        .initialization_script(&adblock::build_content_script(autofill_enabled))
+        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features, 0, None) })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
@@ -615,40 +610,6 @@ fn side_panel_current_url(state: &BrowserState) -> Option<String> {
         .map(|u| u.to_string());
     live.or_else(|| state.side_panel_url.lock().unwrap().clone())
 }
-
-// The panel's half of the resize hand-off. The drag itself starts on the
-// frame's grip (panel-frame.js); WebView2 stops delivering mouse events once
-// the cursor leaves the webview it pressed in, so every webview the cursor
-// can cross during the drag -- the frame, this page, the active tab (see
-// adblock::build_content_script) -- continues it from its own mousemove,
-// armed by the broadcast `side-panel-drag` event. Each reports the pointer's
-// x relative to the panel's left edge; Rust turns that into a width (see
-// resize_side_panel_live). This page sits PANEL_INSET px right of that edge.
-const SIDE_PANEL_RESIZE_HANDOFF_SCRIPT: &str = r#"
-(function () {
-  var PANEL_INSET = 8;
-  var armed = false;
-  function invoke(cmd, args) {
-    if (window.__TAURI__ && window.__TAURI__.core) {
-      return window.__TAURI__.core.invoke(cmd, args).catch(function () {});
-    }
-  }
-  if (window.__TAURI__ && window.__TAURI__.event) {
-    window.__TAURI__.event.listen('side-panel-drag', function (e) { armed = !!e.payload; });
-  }
-  document.addEventListener('mousemove', function (e) {
-    if (!armed) return;
-    var x = e.clientX + PANEL_INSET;
-    if (!(e.buttons & 1)) {
-      armed = false;
-      invoke('commit_side_panel_width', { width: x });
-      invoke('notify_side_panel_drag', { dragging: false });
-      return;
-    }
-    invoke('resize_side_panel_live', { width: x });
-  }, true);
-})();
-"#;
 
 // Tauri has no API to bring an existing webview to the front of its
 // siblings, and webviews stack in creation order -- so the only way to
@@ -733,10 +694,7 @@ fn create_popout_internal(
         let normalized = normalize_url(&url);
         WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
     };
-    let (adblock_enabled, autofill_enabled) = {
-        let settings = state.store.settings.lock().unwrap();
-        (settings.adblock_enabled, settings.vault_autofill_enabled)
-    };
+    let autofill_enabled = state.store.settings.lock().unwrap().vault_autofill_enabled;
 
     let window = tauri::window::WindowBuilder::new(app, format!("popout-{}", id))
         .title(if title.is_empty() { "Kessel" } else { title.as_str() })
@@ -770,11 +728,11 @@ fn create_popout_internal(
     let bar_label_for_nav = bar_label.clone();
     let content_label = format!("popout-content-{}", id);
     let content_label_for_nav = content_label.clone();
-    let content_builder = with_account(app, with_farbling(app, WebviewBuilder::new(&content_label, webview_url)), account.as_deref())
-        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+    let content_builder = with_account(app, WebviewBuilder::new(&content_label, webview_url), account.as_deref())
+        .initialization_script(&adblock::build_content_script(autofill_enabled))
         .on_new_window({
             let (app, account) = (app.clone(), account.clone());
-            move |url, features| open_new_window(&app, url, features, account.clone())
+            move |url, features| open_new_window(&app, url, features, id, account.clone())
         })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
@@ -1367,10 +1325,12 @@ fn emit_shields_stats(app: &tauri::AppHandle, id: u32, stats: &shields::TabStats
 // separate tab can't provide.
 static NEXT_WEB_POPUP_ID: AtomicU32 = AtomicU32::new(1);
 
+// `source`: the page asking (tab/pop-out id, 0 = side panel).
 fn open_new_window(
     app: &tauri::AppHandle,
     url: tauri::Url,
     features: tauri::webview::NewWindowFeatures,
+    source: u32,
     account: Option<String>,
 ) -> tauri::webview::NewWindowResponse<tauri::Wry> {
     use tauri::webview::NewWindowResponse;
@@ -1378,9 +1338,24 @@ fn open_new_window(
     if web && features.size().is_none() {
         let app2 = app.clone();
         let url = url.to_string();
+        // A link you Ctrl/middle-clicked (its page said so just before):
+        // a background tab, like in any browser.
+        let background = app
+            .state::<BrowserState>()
+            .pages
+            .lock()
+            .unwrap()
+            .get_mut(&source)
+            .and_then(|p| p.background_link.take())
+            .map(|(link, at)| at.elapsed() < Duration::from_secs(3) && link.trim_end_matches('/') == url.trim_end_matches('/'))
+            .unwrap_or(false);
         // After WebView2's event has returned: creating a tab re-enters it.
         let _ = app.run_on_main_thread(move || {
-            let _ = open_tab_in_front(&app2, Some(url), account);
+            let _ = if background {
+                open_tab_in_background(&app2, url, account)
+            } else {
+                open_tab_in_front(&app2, Some(url), account)
+            };
         });
         return NewWindowResponse::Deny;
     }
@@ -1397,12 +1372,23 @@ fn open_new_window(
         })
         // The popup shares its opener's WebView2 environment (through
         // window_features), so it's signed in as the same account.
-        .on_new_window(move |url, features| open_new_window(&app2, url, features, account.clone()))
+        .on_new_window(move |url, features| open_new_window(&app2, url, features, u32::MAX, account.clone()))
         .build();
     match built {
         Ok(window) => NewWindowResponse::Create { window },
         Err(_) => NewWindowResponse::Deny,
     }
+}
+
+// Opens a new tab in `account` without switching to it, and tells the
+// toolbar.
+fn open_tab_in_background(app: &tauri::AppHandle, url: String, account: Option<String>) -> Result<u32, String> {
+    let state = app.state::<BrowserState>();
+    let id = create_tab_internal(app, &state, Some(url.clone()), account)?;
+    let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+    let payload = serde_json::json!({ "id": id, "url": url, "account": account });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+    Ok(id)
 }
 
 // Opens a new tab in `account`, switches to it and tells the toolbar.
@@ -1493,10 +1479,11 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
         shields.reset_tab(id, &host);
     }
     shields.nav_targets.lock().unwrap().insert(label.to_string(), nav_url.to_string());
-    // This page's `+js(...)` scriptlets, registered before its document
-    // exists so they run ahead of the page's own scripts.
-    let scriptlets = if shields_up_for(&st, &host) { shields.scriptlets_for(nav_url.as_str()) } else { None };
-    set_page_scriptlets(app, label, scriptlets);
+    // This page's Shields script (scriptlets, element hiding, fingerprinting
+    // protection), registered before its document exists so it runs ahead
+    // of the page's own scripts.
+    let page_script = shields_page_script(&st, &shields, nav_url);
+    set_page_script(app, label, page_script.script);
     st.store.record_history(nav_url.as_str(), nav_url.as_str());
     // A new page: it sends its own title and icon as it loads (like the
     // toolbar, forget the old ones), and its history entry gets the title
@@ -1506,6 +1493,7 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     *page = PageState {
         url: nav_url.to_string(),
         history: Some(HistoryWait { url: nav_url.to_string(), same_document: false, stale_title: String::new() }),
+        cosmetic_exceptions: page_script.exceptions,
         ..Default::default()
     };
     true
@@ -1537,8 +1525,11 @@ fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
 #[cfg(windows)]
 unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webview::PlatformWebview, id: u32) -> windows::core::Result<()> {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
-    use webview2_com::{DocumentTitleChangedEventHandler, FaviconChangedEventHandler, NavigationCompletedEventHandler, SourceChangedEventHandler};
-    use windows::core::Interface;
+    use webview2_com::{
+        AcceleratorKeyPressedEventHandler, DOMContentLoadedEventHandler, DevToolsProtocolEventReceivedEventHandler,
+        DocumentTitleChangedEventHandler, FaviconChangedEventHandler, NavigationCompletedEventHandler, SourceChangedEventHandler,
+    };
+    use windows::core::{Interface, HSTRING};
 
     let core = platform.controller().CoreWebView2()?;
     let mut token = 0i64;
@@ -1597,7 +1588,102 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
         })),
         &mut token,
     )?;
+
+    // The page channel (see page_message). Pages report through a DevTools
+    // binding -- window.__kesselPage(json) in the page, Runtime.bindingCalled
+    // here -- rather than postMessage, which wry hands to Tauri's IPC first
+    // (Tauri answers anything else with an error logged into the page); and
+    // rather than a request to some made-up address, which a site's CSP
+    // would block. Kessel's replies go back as web messages.
+    //
+    // Chromium only adds a binding to documents created later if DevTools'
+    // Runtime domain is on -- which sites' bot checks can detect (Google
+    // sign-in, Cloudflare...) -- so it stays off, and the binding is added
+    // again to each document once its DOM is ready. The page scripts hold
+    // their reports until then.
+    if let Ok(core2) = core.cast::<ICoreWebView2_2>() {
+        core2.add_DOMContentLoaded(
+            &DOMContentLoadedEventHandler::create(Box::new(|sender, _| {
+                if let Some(core) = sender {
+                    add_page_binding(&core);
+                }
+                Ok(())
+            })),
+            &mut token,
+        )?;
+    }
+    let app_message = app.clone();
+    core.GetDevToolsProtocolEventReceiver(&HSTRING::from("Runtime.bindingCalled"))?.add_DevToolsProtocolEventReceived(
+        &DevToolsProtocolEventReceivedEventHandler::create(Box::new(move |sender, args| {
+            #[derive(serde::Deserialize)]
+            struct BindingCall {
+                name: String,
+                payload: String,
+            }
+            let (Some(core), Some(args)) = (sender, args) else { return Ok(()) };
+            let mut json = windows::core::PWSTR::null();
+            args.ParameterObjectAsJson(&mut json)?;
+            let Ok(call) = serde_json::from_str::<BindingCall>(&webview2_com::take_pwstr(json)) else { return Ok(()) };
+            let Ok(message) = serde_json::from_str::<PageMessage>(&call.payload) else { return Ok(()) };
+            if call.name != PAGE_BINDING {
+                return Ok(());
+            }
+            if let Some(reply) = page_message(&app_message, id, &webview_source(&core)?, message) {
+                core.PostWebMessageAsJson(&HSTRING::from(reply))?;
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    // Browser shortcuts while the page has focus (see page_shortcut).
+    let app_keys = app.clone();
+    platform.controller().add_AcceleratorKeyPressed(
+        &AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
+            use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT};
+            let Some(args) = args else { return Ok(()) };
+            let mut kind = COREWEBVIEW2_KEY_EVENT_KIND::default();
+            args.KeyEventKind(&mut kind)?;
+            if kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN {
+                return Ok(());
+            }
+            let mut key = 0u32;
+            args.VirtualKey(&mut key)?;
+            let down = |vk: VIRTUAL_KEY| GetKeyState(vk.0 as i32) < 0;
+            let Some(action) = page_shortcut(key, down(VK_CONTROL), down(VK_SHIFT), down(VK_MENU)) else { return Ok(()) };
+            if !page_takes_shortcut(&app_keys.state::<BrowserState>(), id, action) {
+                return Ok(());
+            }
+            args.SetHandled(true)?;
+            // Held down, only tab cycling repeats -- not closing tab after tab.
+            let mut status = COREWEBVIEW2_PHYSICAL_KEY_STATUS::default();
+            args.PhysicalKeyStatus(&mut status)?;
+            if status.WasKeyDown.as_bool() && !matches!(action, "next-tab" | "prev-tab") {
+                return Ok(());
+            }
+            // After this event has returned: closing the page's own webview
+            // (Ctrl+W in the side panel) mustn't happen inside it.
+            let app2 = app_keys.clone();
+            let _ = app_keys.run_on_main_thread(move || run_page_shortcut(&app2, id, action));
+            Ok(())
+        })),
+        &mut token,
+    )?;
     Ok(())
+}
+
+// Adds window.__kesselPage to the page's current documents (see
+// install_page_watchers). Chromium ignores a name it already has, even for
+// documents that came after -- hence removing it first.
+#[cfg(windows)]
+unsafe fn add_page_binding(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2) {
+    use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
+    use windows::core::HSTRING;
+    let params = HSTRING::from(format!(r#"{{"name":"{}"}}"#, PAGE_BINDING));
+    for method in ["Runtime.removeBinding", "Runtime.addBinding"] {
+        let done = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(())));
+        let _ = core.CallDevToolsProtocolMethod(&HSTRING::from(method), &params, &done);
+    }
 }
 
 #[cfg(windows)]
@@ -1613,6 +1699,207 @@ unsafe fn webview_title(core: &webview2_com::Microsoft::Web::WebView2::Win32::IC
     core.DocumentTitle(&mut title)?;
     Ok(webview2_com::take_pwstr(title))
 }
+
+// --- The page channel ---------------------------------------------------------
+//
+// Kessel's page script (adblock::build_content_script) and the Shields page
+// script (shields::page_script) talk to Kessel through a function Kessel adds
+// to every page (PAGE_BINDING; see install_page_watchers), and Kessel answers
+// with web messages -- not Tauri's IPC, which websites don't get. A page's
+// own scripts can call it too, so each message is either checked
+// by Kessel itself or harmless if faked: a hint that a link should open in
+// the background, the classes/ids a page uses, "this page has a login form"
+// (the password only ever goes into a page when you click the offer in the
+// address bar -- see autofill_tab), and the pointer during a side panel
+// drag that Kessel's own frame started.
+
+// The page's report function: window.__kesselPage(json).
+const PAGE_BINDING: &str = "__kesselPage";
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "kessel", rename_all = "kebab-case")]
+enum PageMessage {
+    OpenInBackground {
+        url: String,
+    },
+    CosmeticIds {
+        #[serde(default)]
+        classes: Vec<String>,
+        #[serde(default)]
+        ids: Vec<String>,
+    },
+    LoginForm,
+    PanelDrag {
+        x: f64,
+        buttons: u32,
+    },
+}
+
+// One message from page `id`, whose address is `source` (from WebView2, not
+// the message). Returns the reply to post back to it, if any.
+fn page_message(app: &tauri::AppHandle, id: u32, source: &str, message: PageMessage) -> Option<String> {
+    let st = app.state::<BrowserState>();
+    match message {
+        PageMessage::OpenInBackground { url } => {
+            st.pages.lock().unwrap().entry(id).or_default().background_link = Some((url, Instant::now()));
+            None
+        }
+        PageMessage::CosmeticIds { classes, ids } => {
+            let url = tauri::Url::parse(source).ok()?;
+            if is_internal_nav(&url) || !shields_up_for(&st, url.host_str().unwrap_or("")) {
+                return None;
+            }
+            let exceptions = st.pages.lock().unwrap().get(&id).map(|p| p.cosmetic_exceptions.clone()).unwrap_or_default();
+            let classes: Vec<String> = classes.into_iter().take(5_000).collect();
+            let ids: Vec<String> = ids.into_iter().take(5_000).collect();
+            let selectors = app.state::<shields::Shields>().hidden_selectors(&classes, &ids, &exceptions);
+            (!selectors.is_empty()).then(|| serde_json::json!({ "kessel": "hide", "selectors": selectors }).to_string())
+        }
+        PageMessage::LoginForm => {
+            offer_autofill(app, id, source);
+            None
+        }
+        PageMessage::PanelDrag { x, buttons } => {
+            side_panel_drag_moved(app, id, x, buttons);
+            None
+        }
+    }
+}
+
+fn post_to_page(webview: &Webview, json: String) {
+    #[cfg(windows)]
+    let _ = webview.with_webview(move |platform| unsafe {
+        if let Ok(core) = platform.controller().CoreWebView2() {
+            let _ = core.PostWebMessageAsJson(&windows::core::HSTRING::from(json));
+        }
+    });
+    #[cfg(not(windows))]
+    let _ = (webview, json);
+}
+
+// --- Keyboard shortcuts in pages ------------------------------------------------
+//
+// From WebView2's accelerator-key event, which a page can neither fake nor
+// see once Kessel takes the key. (Reload, back and forward -- F5, Ctrl+R,
+// Alt+arrows -- WebView2 already does itself.) Ctrl without Alt only: AltGr
+// is Ctrl+Alt, and on many layouts, Hungarian among them, AltGr+digit types
+// a character.
+fn page_shortcut(key: u32, ctrl: bool, shift: bool, alt: bool) -> Option<&'static str> {
+    const TABS: [&str; 8] = ["tab-1", "tab-2", "tab-3", "tab-4", "tab-5", "tab-6", "tab-7", "tab-8"];
+    if !ctrl || alt {
+        return None;
+    }
+    Some(match (key, shift) {
+        (0x54, false) => "new-tab", // T
+        (0x54, true) => "reopen-tab",
+        (0x57, false) => "close-tab", // W
+        (0x09, false) => "next-tab",  // Tab
+        (0x09, true) => "prev-tab",
+        (0x4C, false) => "focus-address", // L
+        (0x4C, true) => "passwords",
+        (0x44, false) => "bookmark", // D
+        (0x31..=0x38, false) => TABS[(key - 0x31) as usize],
+        (0x39, false) => "last-tab",
+        _ => return None,
+    })
+}
+
+// Whether page `id` hands `action` to Kessel. A pop-out is its own window:
+// only closing it and opening a tab (in the main window) apply there. The
+// side panel's page isn't the tab the toolbar would bookmark.
+fn page_takes_shortcut(state: &BrowserState, id: u32, action: &str) -> bool {
+    if state.popouts.lock().unwrap().contains_key(&id) {
+        return matches!(action, "close-tab" | "new-tab");
+    }
+    !(id == 0 && action == "bookmark")
+}
+
+// The toolbar runs the shortcut, as if pressed there (runShortcut in
+// main.js) -- except closing a pop-out or the side panel.
+fn run_page_shortcut(app: &tauri::AppHandle, id: u32, action: &str) {
+    let state = app.state::<BrowserState>();
+    let popout = state.popouts.lock().unwrap().get(&id).map(|p| p.window.clone());
+    if let Some(window) = popout {
+        if action == "close-tab" {
+            let _ = window.close();
+            return;
+        }
+        let _ = state.window.set_focus(); // a new tab: in the main window
+    } else if id == 0 && action == "close-tab" {
+        let _ = close_side_panel_internal(app, &state);
+        return;
+    }
+    if action == "focus-address" {
+        if let Some(toolbar) = app.get_webview(TOOLBAR_LABEL) {
+            let _ = toolbar.set_focus();
+        }
+    }
+    let _ = app.emit_to(TOOLBAR_LABEL, "page-shortcut", action);
+}
+
+// --- Password autofill ----------------------------------------------------------
+
+// A page has a login form: if the vault is unlocked and has a login for the
+// page's site, the address bar offers it. Only the username leaves Rust here.
+fn offer_autofill(app: &tauri::AppHandle, id: u32, source: &str) {
+    let st = app.state::<BrowserState>();
+    if !st.store.settings.lock().unwrap().vault_autofill_enabled || !st.tabs.lock().unwrap().contains_key(&id) {
+        return;
+    }
+    let Some(host) = tauri::Url::parse(source).ok().and_then(|u| u.host_str().map(str::to_string)) else { return };
+    let Some(item) = app.state::<Vault>().find_for_host(vault_timeout(&st), &host) else { return };
+    let _ = app.emit_to(TOOLBAR_LABEL, "autofill-offer", serde_json::json!({ "id": id, "username": item.username }));
+}
+
+// The address bar's key: fills the saved login for the tab's current site
+// into its form. Only the toolbar may ask -- a page can report a login
+// form, but can never make Kessel hand it a password.
+#[tauri::command]
+async fn autofill_tab(app: tauri::AppHandle, webview: Webview, id: u32) -> Result<(), String> {
+    if webview.label() != TOOLBAR_LABEL {
+        return Err("only Kessel's toolbar can fill in a login".into());
+    }
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<(), String> {
+        let state = app2.state::<BrowserState>();
+        if !state.store.settings.lock().unwrap().vault_autofill_enabled {
+            return Err("autofill is turned off".into());
+        }
+        let tab = state.tabs.lock().unwrap().get(&id).cloned().ok_or("that tab is gone")?;
+        // The site it's on now, not whatever it was when the form showed up.
+        let host = tab.url().ok().and_then(|u| u.host_str().map(str::to_string)).ok_or("no site to fill in for")?;
+        let item = app2
+            .state::<Vault>()
+            .find_for_host(vault_timeout(&state), &host)
+            .ok_or("no saved login for this site (or the password vault is locked)")?;
+        let args = serde_json::to_string(&[&item.username, &item.password]).map_err(|e| e.to_string())?;
+        tab.eval(format!("({}).apply(null, {});", AUTOFILL_SCRIPT, args)).map_err(|e| e.to_string())
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// Fills a login form: the first visible password field, and the visible
+// username/e-mail field of the same form.
+const AUTOFILL_SCRIPT: &str = r#"function (username, password) {
+  function visible(el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); }
+  var pw = Array.prototype.filter.call(document.querySelectorAll('input[type="password"]'), visible)[0];
+  if (!pw) return;
+  function set(el, value) {
+    var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    if (desc && desc.set) desc.set.call(el, value); else el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  var scope = pw.form || document;
+  var fields = scope.querySelectorAll('input[type="email"], input[type="text"], input[autocomplete="username"], ' +
+    'input[name*="user" i], input[name*="email" i], input[id*="user" i], input[id*="email" i]');
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i] !== pw && visible(fields[i])) { set(fields[i], username); break; }
+  }
+  set(pw, password);
+  pw.focus();
+}"#;
 
 // The page's icon, as WebView2 found it (its <link rel=icon>, else the
 // site's /favicon.ico). Kessel's own pages keep their built-in glyph.
@@ -1706,16 +1993,17 @@ fn page_url_changed(app: &tauri::AppHandle, id: u32, source: &str, same_document
     let _ = app.emit_to(page_header_label(id).as_str(), "tab-url-changed", payload);
 }
 
-// Replaces the document-start scriptlet script registered for a webview's
-// page (there's at most one per webview; None just removes the old one).
-fn set_page_scriptlets(app: &tauri::AppHandle, label: &str, script: Option<String>) {
+// Replaces the document-start page script (shields::page_script) registered
+// for a webview's page -- there's at most one per webview; None just removes
+// the old one.
+fn set_page_script(app: &tauri::AppHandle, label: &str, script: Option<String>) {
     #[cfg(windows)]
     {
         let Some(webview) = app.get_webview(label) else { return };
         let (app2, label2) = (app.clone(), label.to_string());
         let _ = webview.with_webview(move |platform| unsafe {
             if let Ok(core) = platform.controller().CoreWebView2() {
-                register_scriptlets(&app2, &core, label2, script);
+                register_page_script(&app2, &core, label2, script);
             }
         });
     }
@@ -1724,7 +2012,7 @@ fn set_page_scriptlets(app: &tauri::AppHandle, label: &str, script: Option<Strin
 }
 
 #[cfg(windows)]
-unsafe fn register_scriptlets(
+unsafe fn register_page_script(
     app: &tauri::AppHandle,
     core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2,
     label: String,
@@ -1734,33 +2022,18 @@ unsafe fn register_scriptlets(
     use windows::core::HSTRING;
 
     let shields = app.state::<shields::Shields>();
-    if let Some(old) = shields.scriptlet_ids.lock().unwrap().remove(&label) {
+    if let Some(old) = shields.page_script_ids.lock().unwrap().remove(&label) {
         let _ = core.RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(old));
     }
     let Some(script) = script else { return };
     let app2 = app.clone();
     let handler = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |result, id| {
         if result.is_ok() {
-            app2.state::<shields::Shields>().scriptlet_ids.lock().unwrap().insert(label, id);
+            app2.state::<shields::Shields>().page_script_ids.lock().unwrap().insert(label, id);
         }
         Ok(())
     }));
     let _ = core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler);
-}
-
-// Fingerprinting protection runs in every frame -- third-party iframes are
-// where most fingerprinting scripts live -- so it's added separately from
-// the main-frame content script.
-fn with_farbling(app: &tauri::AppHandle, builder: WebviewBuilder<tauri::Wry>) -> WebviewBuilder<tauri::Wry> {
-    let enabled = {
-        let settings = app.state::<BrowserState>().store.settings.lock().unwrap().clone();
-        settings.adblock_enabled && settings.shields_fingerprinting
-    };
-    if enabled {
-        builder.initialization_script_for_all_frames(app.state::<shields::Shields>().farbling_script())
-    } else {
-        builder
-    }
 }
 
 // Adds the Shields hooks to a freshly created content webview.
@@ -1941,19 +2214,30 @@ unsafe fn install_shields_hooks(
 
     // A webview's very first page starts loading while it's being created,
     // before Tauri can route that navigation through guard_navigation -- so
-    // register that page's scriptlets here (its document doesn't exist yet
+    // register that page's script here (its document doesn't exist yet
     // while the request is still on the network).
     let mut source = PWSTR::null();
     core.Source(&mut source)?;
     let first_page = take_pwstr(source);
     if let Ok(url) = tauri::Url::parse(&first_page) {
-        let st = app.state::<BrowserState>();
-        if !is_internal_nav(&url) && shields_up_for(&st, url.host_str().unwrap_or("")) {
-            let script = app.state::<shields::Shields>().scriptlets_for(url.as_str());
-            register_scriptlets(app, &core, label_for_scripts, script);
+        if !is_internal_nav(&url) {
+            let st = app.state::<BrowserState>();
+            let page_script = shields_page_script(&st, &app.state::<shields::Shields>(), &url);
+            st.pages.lock().unwrap().entry(id).or_default().cosmetic_exceptions = page_script.exceptions;
+            register_page_script(app, &core, label_for_scripts, page_script.script);
         }
     }
     Ok(())
+}
+
+// The Shields page script for `url` (see shields::page_script) -- nothing
+// where Shields are down for its site.
+fn shields_page_script(st: &BrowserState, shields: &shields::Shields, url: &tauri::Url) -> shields::PageScript {
+    if !shields_up_for(st, url.host_str().unwrap_or("")) {
+        return shields::PageScript::default();
+    }
+    let fingerprinting = st.store.settings.lock().unwrap().shields_fingerprinting;
+    shields.page_script(url.as_str(), fingerprinting)
 }
 
 // Recompiles the engine off the UI thread (a full set of lists takes a moment).
@@ -1992,47 +2276,6 @@ fn start_shields(app: &tauri::AppHandle) {
             std::thread::sleep(Duration::from_secs(6 * 3600));
         }
     });
-}
-
-#[derive(serde::Serialize, Default)]
-struct CosmeticsReply {
-    enabled: bool,
-    fingerprinting: bool,
-    hide: Vec<String>,
-    exceptions: Vec<String>,
-    generichide: bool,
-}
-
-// Element hiding for the calling page. The URL comes from the webview
-// itself, never from the page.
-#[tauri::command]
-fn shields_cosmetics(webview: Webview, state: tauri::State<BrowserState>, shields: tauri::State<shields::Shields>) -> CosmeticsReply {
-    let Ok(url) = webview.url() else { return CosmeticsReply::default() };
-    if is_internal_nav(&url) || !shields_up_for(&state, url.host_str().unwrap_or("")) {
-        return CosmeticsReply::default();
-    }
-    let resources = shields.cosmetics(url.as_str());
-    CosmeticsReply {
-        enabled: true,
-        fingerprinting: state.store.settings.lock().unwrap().shields_fingerprinting,
-        hide: resources.hide_selectors.into_iter().collect(),
-        exceptions: resources.exceptions.into_iter().collect(),
-        generichide: resources.generichide,
-    }
-}
-
-// Generic element-hiding rules matching the classes/ids a page uses.
-#[tauri::command]
-fn shields_hidden_selectors(
-    shields: tauri::State<shields::Shields>,
-    classes: Vec<String>,
-    ids: Vec<String>,
-    exceptions: Vec<String>,
-) -> Vec<String> {
-    let exceptions: HashSet<String> = exceptions.into_iter().collect();
-    let classes: Vec<String> = classes.into_iter().take(5_000).collect();
-    let ids: Vec<String> = ids.into_iter().take(5_000).collect();
-    shields.hidden_selectors(&classes, &ids, &exceptions)
 }
 
 #[tauri::command]
@@ -2408,24 +2651,6 @@ async fn new_tab(app: tauri::AppHandle, url: Option<String>, account: Option<Str
     .and_then(|r| r)
 }
 
-// Opens a URL in a new tab WITHOUT switching to it -- in the same account
-// as the tab asking for it.
-#[tauri::command]
-async fn open_background_tab(app: tauri::AppHandle, webview: Webview, url: String) -> Result<u32, String> {
-    let app2 = app.clone();
-    on_main(&app, move || {
-        let state = app2.state::<BrowserState>();
-        let account = account_of_label(&state, webview.label());
-        let id = create_tab_internal(&app2, &state, Some(url.clone()), account)?;
-        let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
-        let payload = serde_json::json!({ "id": id, "url": url, "account": account });
-        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", payload);
-        Ok(id)
-    })
-    .await
-    .and_then(|r| r)
-}
-
 // Focuses the one existing tab already showing `route` (e.g.
 // "kessel://settings" or "kessel://passwords") if there is one, instead of
 // creating another. Callable from any webview (the settings page's own
@@ -2541,49 +2766,7 @@ async fn reopen_closed_tab_url(app: tauri::AppHandle, url: String) -> Result<u32
     .and_then(|r| r)
 }
 
-#[tauri::command]
-async fn cycle_tab(app: tauri::AppHandle, direction: i32) -> Result<(), String> {
-    let app2 = app.clone();
-    on_main(&app, move || {
-        let state = app2.state::<BrowserState>();
-        let order = state.order.lock().unwrap().clone();
-        if order.is_empty() {
-            return Ok(());
-        }
-        let active = *state.active.lock().unwrap();
-        let current_index = active
-            .and_then(|id| order.iter().position(|&x| x == id))
-            .unwrap_or(0) as i32;
-        let len = order.len() as i32;
-        let next_index = ((current_index + direction) % len + len) % len;
-        let next_id = order[next_index as usize];
-        switch_tab_internal(&state, next_id)
-    })
-    .await
-    .and_then(|r| r)
-}
-
-#[tauri::command]
-async fn switch_tab_by_index(app: tauri::AppHandle, index: i32) -> Result<(), String> {
-    let app2 = app.clone();
-    on_main(&app, move || {
-        let state = app2.state::<BrowserState>();
-        let order = state.order.lock().unwrap().clone();
-        if order.is_empty() {
-            return Ok(());
-        }
-        let real_index = if index < 0 {
-            order.len() - 1
-        } else {
-            (index as usize).min(order.len() - 1)
-        };
-        switch_tab_internal(&state, order[real_index])
-    })
-    .await
-    .and_then(|r| r)
-}
-
-// Resyncs the tab-cycling order (used by cycle_tab / switch_tab_by_index)
+// Resyncs Rust's tab order (what get_open_tabs hands a reloaded toolbar)
 // to match the toolbar's own visual left-to-right tab order. Needed after
 // reviving a discarded tab: the fresh webview it gets is a brand-new id
 // that `new_tab` appends to the end of the order internally, which would
@@ -2688,12 +2871,6 @@ fn page_header_label(id: u32) -> String {
     } else {
         format!("popout-bar-{}", id)
     }
-}
-
-#[tauri::command]
-fn report_ads_hidden(app: tauri::AppHandle, state: tauri::State<BrowserState>, count: u32) {
-    let total = state.store.blocked_count.fetch_add(count, Ordering::SeqCst) + count;
-    let _ = app.emit("adblock-count-changed", total);
 }
 
 #[tauri::command]
@@ -2945,40 +3122,6 @@ fn vault_list_items(state: tauri::State<BrowserState>, vault: tauri::State<Vault
     vault.list_items(vault_timeout(&state))
 }
 
-#[derive(serde::Serialize, Clone)]
-struct AutofillCredential {
-    username: String,
-    password: String,
-}
-
-// `webview` is injected by Tauri from whichever webview actually issued
-// this call -- NOT a value the calling page can supply or fake, unlike a
-// plain string argument would be. Reading the real page host from
-// `webview.url()` server-side is what stops a malicious/lookalike page
-// from asking for credentials belonging to a domain it merely claims to
-// be. Returns None (not an error) whenever there's simply nothing to
-// offer -- vault locked, no saved match, autofill turned off -- since none
-// of those are exceptional from a page's point of view.
-#[tauri::command]
-async fn vault_autofill_match(app: tauri::AppHandle, webview: Webview) -> Option<AutofillCredential> {
-    let app2 = app.clone();
-    on_main(&app, move || {
-        let state = app2.state::<BrowserState>();
-        if !state.store.settings.lock().unwrap().vault_autofill_enabled {
-            return None;
-        }
-        let host = webview.url().ok()?.host_str()?.to_string();
-        let timeout = vault_timeout(&state);
-        let vault = app2.state::<Vault>();
-        vault
-            .find_for_host(timeout, &host)
-            .map(|item| AutofillCredential { username: item.username, password: item.password })
-    })
-    .await
-    .ok()
-    .flatten()
-}
-
 #[tauri::command]
 fn vault_add_item(
     state: tauri::State<BrowserState>,
@@ -3129,7 +3272,7 @@ fn close_side_panel_internal(app: &tauri::AppHandle, state: &BrowserState) -> Re
     *state.side_panel_url.lock().unwrap() = None;
     resize_active_tab(state)?;
     let _ = app.emit("side-panel-changed", None::<String>);
-    let _ = app.emit("side-panel-drag", false);
+    set_panel_drag(app, false);
     Ok(())
 }
 
@@ -3190,9 +3333,10 @@ async fn side_panel_pop_out(app: tauri::AppHandle) -> Result<u32, String> {
 }
 
 // While dragging the grip, every webview under the cursor reports the
-// pointer's x relative to the panel's left edge (see
-// SIDE_PANEL_RESIZE_HANDOFF_SCRIPT). The panel's right edge sits half a grip
-// further right, so the grip stays under the cursor.
+// pointer's x relative to the panel's left edge (the frame through IPC, the
+// panel's page and the active tab through the page channel -- see
+// side_panel_drag_moved). The panel's right edge sits half a grip further
+// right, so the grip stays under the cursor.
 fn side_panel_width_for_pointer(x: f64) -> f64 {
     (x + PANEL_GRIP / 2.0).clamp(SIDE_PANEL_MIN_WIDTH, SIDE_PANEL_MAX_WIDTH)
 }
@@ -3215,7 +3359,12 @@ async fn resize_side_panel_live(app: tauri::AppHandle, width: f64) -> Result<(),
 }
 
 #[tauri::command]
-fn commit_side_panel_width(app: tauri::AppHandle, state: tauri::State<BrowserState>, width: f64) {
+fn commit_side_panel_width(app: tauri::AppHandle, width: f64) {
+    commit_side_panel(&app, width);
+}
+
+fn commit_side_panel(app: &tauri::AppHandle, width: f64) {
+    let state = app.state::<BrowserState>();
     let width = side_panel_width_for_pointer(width);
     state.store.settings.lock().unwrap().side_panel_width = width;
     state.store.save_settings();
@@ -3228,17 +3377,58 @@ fn commit_side_panel_width(app: tauri::AppHandle, state: tauri::State<BrowserSta
     let _ = app.emit("settings-changed", &settings);
 }
 
-// Broadcasts the side panel's own drag state to every webview -- the panel's
-// own resize script and every tab's content script both listen. This is the
-// only signal the tab-side hand-off (see adblock::build_content_script)
-// trusts to decide whether a mousemove is a resize continuation. Deliberately
-// not a clientX-proximity guess: both the panel and every tab share the same
+// The frame's grip started or ended a drag. This is the only signal the
+// pages' half of the hand-off (see adblock::build_content_script) trusts to
+// decide whether a mousemove is a resize continuation. Deliberately not a
+// clientX-proximity guess: both the panel and every tab share the same
 // left-edge origin (chrome_left()), so a pure position heuristic would also
 // fire on ordinary clicks/drags near the tab's own left margin whenever the
 // panel is simply closed, silently overwriting the saved width.
 #[tauri::command]
-fn notify_side_panel_drag(app: tauri::AppHandle, dragging: bool) {
+fn notify_side_panel_drag(app: tauri::AppHandle, webview: Webview, dragging: bool) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    set_panel_drag(&app, dragging);
+    Ok(())
+}
+
+// Whether the grip is being dragged right now. Pages can report the pointer
+// (the page channel), but only a drag Kessel's own frame started moves the
+// panel's edge.
+static PANEL_DRAG: AtomicBool = AtomicBool::new(false);
+
+// Tells the frame (a Tauri event) and the pages the cursor can cross -- the
+// panel's own page and the active tab (a web message) -- whether a drag is on.
+fn set_panel_drag(app: &tauri::AppHandle, dragging: bool) {
+    PANEL_DRAG.store(dragging, Ordering::SeqCst);
     let _ = app.emit("side-panel-drag", dragging);
+    let state = app.state::<BrowserState>();
+    let active = *state.active.lock().unwrap();
+    let tab = active.and_then(|id| state.tabs.lock().unwrap().get(&id).cloned());
+    let panel = state.side_panel.lock().unwrap().clone();
+    let message = serde_json::json!({ "kessel": "panel-drag", "armed": dragging }).to_string();
+    for page in tab.into_iter().chain(panel) {
+        post_to_page(&page, message.clone());
+    }
+}
+
+// The pointer, from a page the drag crossed: its x relative to that page,
+// which for the active tab is relative to the panel's left edge too, while
+// the panel's own page sits PANEL_INSET further right.
+fn side_panel_drag_moved(app: &tauri::AppHandle, id: u32, x: f64, buttons: u32) {
+    let state = app.state::<BrowserState>();
+    let from_active_tab = *state.active.lock().unwrap() == Some(id);
+    if !PANEL_DRAG.load(Ordering::SeqCst) || !x.is_finite() || !(id == 0 || from_active_tab) {
+        return;
+    }
+    let x = if id == 0 { x + PANEL_INSET } else { x };
+    if buttons & 1 == 0 {
+        commit_side_panel(app, x);
+        set_panel_drag(app, false);
+    } else {
+        let width = side_panel_width_for_pointer(x);
+        state.store.settings.lock().unwrap().side_panel_width = width;
+        place_side_panel(&state, width);
+    }
 }
 
 // The toolbar reports its real rendered chrome size here (a ResizeObserver
@@ -3304,21 +3494,17 @@ fn main() {
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .invoke_handler(tauri::generate_handler![
             new_tab,
-            open_background_tab,
             open_singleton_tab,
             close_tab,
             reopen_closed_tab,
             get_closed_tabs,
             reopen_closed_tab_url,
-            cycle_tab,
-            switch_tab_by_index,
             set_tab_order,
             switch_tab,
             navigate,
             go_back,
             go_forward,
             reload,
-            report_ads_hidden,
             get_blocked_count,
             get_history,
             clear_history,
@@ -3346,7 +3532,6 @@ fn main() {
             vault_unlock,
             vault_lock,
             vault_list_items,
-            vault_autofill_match,
             vault_add_item,
             vault_update_item,
             vault_delete_item,
@@ -3366,6 +3551,7 @@ fn main() {
             resize_side_panel_live,
             commit_side_panel_width,
             notify_side_panel_drag,
+            autofill_tab,
             set_chrome_insets,
             pop_out,
             dock_popout,
@@ -3385,8 +3571,6 @@ fn main() {
             detect_browsers,
             import_from_browser,
             vault_import_csv,
-            shields_cosmetics,
-            shields_hidden_selectors,
             shields_status,
             shields_update_lists,
             shields_tab_info,
