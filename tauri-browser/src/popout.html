@@ -6,22 +6,40 @@
   <link rel="stylesheet" href="shared/theme.css" />
   <link rel="stylesheet" href="shared/glass.css" />
   <style>
-    /* Title bar of a torn-off pop-out window. The content webview sits right
-       below it -- #bar's height must match POPOUT_BAR_HEIGHT in main.rs. */
-    html, body { overflow: hidden; user-select: none; }
+    /* Frame of a torn-off pop-out window: fills the whole window, and the
+       page is a separate webview laid on top, POPOUT_HEADER (44px) from the
+       top and POPOUT_INSET (8px) from the other edges -- see
+       popout_content_bounds in main.rs. What shows is the glass ring around
+       the page: the title bar on top and a thin margin elsewhere. */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--bg); }
+    html.glass body { background: #0a1433; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: 0; pointer-events: none; }
+
+    /* Tint + rim only, no backdrop-filter: that would make it a backdrop
+       root and flatten the real glass on the title-bar controls. */
+    #sheet {
+      position: fixed;
+      inset: 3px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    html.glass #sheet {
+      border: none;
+      background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 70%, transparent);
+      box-shadow: var(--lg-edge);
+    }
+
     #bar {
-      height: 40px;
+      position: relative;
+      height: 44px;
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 0 5px 0 8px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      position: relative;
+      padding: 3px 8px 0 8px;
     }
-    html.glass #bar { background: transparent; border: none; }
-    #wallpaper { display: none; }
-    html.glass #wallpaper { display: block; position: fixed; inset: 0; pointer-events: none; }
 
     #site {
       flex: 1;
@@ -71,6 +89,7 @@
 </head>
 <body>
   <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
   <div id="bar">
     <div id="site" class="lg"><span id="site-icon"></span><span id="title"></span></div>
     <div id="controls" class="lg lg-refract">

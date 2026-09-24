@@ -103,6 +103,10 @@ pub(crate) struct BrowserState {
     // the front" API; the only way to guarantee it stays visually on top
     // of newly-created tab webviews is to recreate it after them.
     side_panel: Mutex<Option<Webview>>,
+    // The glass sheet drawn behind the side panel's page (panel-frame.html):
+    // header, buttons and the resize grip. Always created and closed
+    // together with `side_panel`.
+    side_panel_frame: Mutex<Option<Webview>>,
     side_panel_kind: Mutex<Option<String>>,
     side_panel_url: Mutex<Option<String>>,
     // Torn-off pop-out windows, keyed by the id their content script reports
@@ -166,6 +170,70 @@ fn effective_panel_width(window: &Window, preferred: f64) -> f64 {
         .unwrap_or(preferred);
     preferred.min(max_allowed).max(0.0)
 }
+
+// The side panel is a glass sheet (its frame webview, sized by
+// side_panel_bounds) with the page inset inside it -- a header row on top,
+// a thin margin left and bottom, and the resize grip down the right edge.
+// Must match the layout in panel-frame.html.
+const PANEL_INSET: f64 = 8.0;
+const PANEL_HEADER: f64 = 46.0;
+const PANEL_GRIP: f64 = 18.0;
+
+fn side_panel_content_bounds(position: LogicalPosition<f64>, size: LogicalSize<f64>) -> (LogicalPosition<f64>, LogicalSize<f64>) {
+    (
+        LogicalPosition::new(position.x + PANEL_INSET, position.y + PANEL_HEADER),
+        LogicalSize::new(
+            (size.width - PANEL_INSET - PANEL_GRIP).max(0.0),
+            (size.height - PANEL_HEADER - PANEL_INSET).max(0.0),
+        ),
+    )
+}
+
+// Lays out the panel's frame + page for the given width, if it's open.
+fn place_side_panel(state: &BrowserState, width: f64) {
+    let Ok((position, size)) = side_panel_bounds(&state.window, width) else { return };
+    if let Some(frame) = state.side_panel_frame.lock().unwrap().as_ref() {
+        let _ = frame.set_position(position);
+        let _ = frame.set_size(size);
+    }
+    if let Some(page) = state.side_panel.lock().unwrap().as_ref() {
+        let (p, s) = side_panel_content_bounds(position, size);
+        let _ = page.set_position(p);
+        let _ = page.set_size(s);
+    }
+}
+
+// Frameless windows get their resize borders from Tauri as an invisible
+// child window ("TAURI_DRAG_RESIZE_WINDOW") -- but only automatically for
+// single-webview windows, and it's only brought back on top of its sibling
+// webviews when the window is resized. Every webview created after it (each
+// new tab, the side panel) would otherwise cover the borders and make the
+// window impossible to resize, so this re-raises it after each one.
+#[cfg(windows)]
+fn raise_resize_borders(window: &Window) {
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        FindWindowExW, SetWindowPos, HWND_TOP, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER,
+        SWP_NOSIZE,
+    };
+    let Ok(parent) = window.hwnd() else { return };
+    unsafe {
+        if let Ok(borders) = FindWindowExW(Some(parent), None, w!("TAURI_DRAG_RESIZE_BORDERS"), w!("TAURI_DRAG_RESIZE_WINDOW")) {
+            let _ = SetWindowPos(
+                borders,
+                Some(HWND_TOP),
+                0,
+                0,
+                0,
+                0,
+                SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER,
+            );
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn raise_resize_borders(_window: &Window) {}
 
 fn side_panel_bounds(window: &Window, preferred_width: f64) -> tauri::Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
     let size = window.inner_size()?;
@@ -357,6 +425,7 @@ fn create_tab_internal(
     state.tabs.lock().unwrap().insert(id, webview);
     state.order.lock().unwrap().push(id);
     reraise_side_panel(app, state);
+    raise_resize_borders(&state.window);
     Ok(id)
 }
 
@@ -398,13 +467,33 @@ fn resize_active_tab(state: &BrowserState) -> Result<(), String> {
 
 // --- Side panel (Opera-GX-style slide-out) ---------------------------------
 //
-// A single extra content-style webview, shown beside the active tab rather
-// than replacing it. Unlike a regular tab it's not tracked in `state.tabs`/
-// `order` -- it doesn't participate in tab cycling, closing-all, or session
-// restore, and is always freshly recreated on each open (simpler than
-// trying to reuse+renavigate one webview across wildly different kinds of
-// content -- a pinned site one moment, the Settings page the next).
-fn create_side_panel_webview(app: &tauri::AppHandle, state: &BrowserState, url: &str) -> Result<Webview, String> {
+// Two webviews shown beside the active tab rather than replacing it: a glass
+// frame (panel-frame.html -- wallpaper, rounded glass sheet, header with the
+// site's icon/title and open-in-tab / pop-out / close buttons, and the resize
+// grip down its right edge) and, inset inside it, the page itself. Unlike a
+// regular tab it's not tracked in `state.tabs`/`order` -- it doesn't
+// participate in tab cycling, closing-all, or session restore, and is always
+// freshly recreated on each open (simpler than trying to reuse+renavigate
+// one webview across wildly different kinds of content -- a pinned site one
+// moment, the Settings page the next).
+
+const SIDE_PANEL_FRAME_LABEL: &str = "side-panel-frame";
+
+fn side_panel_title(state: &BrowserState, kind: &str, url: &str) -> String {
+    match kind {
+        "downloads" => "Downloads".into(),
+        "passwords" => "Passwords".into(),
+        "settings" => "Settings".into(),
+        _ => kind
+            .strip_prefix("pinned:")
+            .and_then(|id| state.store.pinned.lock().unwrap().iter().find(|p| p.id == id).map(|p| p.title.clone()))
+            .unwrap_or_else(|| url.to_string()),
+    }
+}
+
+// Creates the frame first and the page second, so the page stacks on top of
+// the frame (webviews stack in creation order).
+fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &str, kind: &str) -> Result<(), String> {
     let webview_url = if let Some(route) = internal_route(url) {
         WebviewUrl::App(route.into())
     } else {
@@ -412,39 +501,42 @@ fn create_side_panel_webview(app: &tauri::AppHandle, state: &BrowserState, url: 
         WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
     };
 
-    let (adblock_enabled, autofill_enabled) = {
+    let (adblock_enabled, autofill_enabled, panel_width) = {
         let settings = state.store.settings.lock().unwrap();
-        (settings.adblock_enabled, settings.vault_autofill_enabled)
+        (settings.adblock_enabled, settings.vault_autofill_enabled, settings.side_panel_width)
     };
-    let app_for_nav = app.clone();
+    let (position, size) = side_panel_bounds(&state.window, panel_width).map_err(|e| e.to_string())?;
 
-    // Two scripts concatenated into one: the regular per-tab script (ad
-    // block, shortcuts, title/favicon reporting -- harmless here since id 0
-    // never matches a real tab) plus a resize-handle strip specific to the
-    // panel. The handle has to live *inside* the panel's own webview and
-    // use pointer capture, not a toolbar-drawn strip in some gap next to
-    // it: now that the active tab is always full-width underneath the
-    // panel (an intentional change from an earlier version of this
-    // feature, so the tab never has to reflow to make room for the panel),
-    // there's no longer any screen region beside the panel that isn't
-    // covered by one webview or the other for a separate handle to occupy.
+    let frame_init = format!(
+        "window.__KESSEL_PANEL__ = {{ kind: {}, url: {}, title: {} }};",
+        serde_json::to_string(kind).unwrap_or_default(),
+        serde_json::to_string(url).unwrap_or_default(),
+        serde_json::to_string(&side_panel_title(state, kind, url)).unwrap_or_default()
+    );
+    let frame = state
+        .window
+        .add_child(
+            WebviewBuilder::new(SIDE_PANEL_FRAME_LABEL, WebviewUrl::App("panel-frame.html".into()))
+                .initialization_script(&frame_init),
+            position,
+            size,
+        )
+        .map_err(|e| e.to_string())?;
+
+    // The regular per-tab script (ad block, shortcuts, title/favicon
+    // reporting under id 0, which the frame listens for) plus the panel's
+    // half of the resize hand-off.
     let script = format!(
         "{}\n{}",
         adblock::build_content_script(0, adblock_enabled, autofill_enabled),
-        SIDE_PANEL_RESIZE_HANDLE_SCRIPT
+        SIDE_PANEL_RESIZE_HANDOFF_SCRIPT
     );
-
+    let app_for_nav = app.clone();
     let builder = WebviewBuilder::new("side-panel", webview_url)
         .initialization_script(&script)
         .on_navigation(move |nav_url| {
-            let scheme = nav_url.scheme();
-            let host = nav_url.host_str().unwrap_or("");
-            let is_internal = scheme != "http" && scheme != "https"
-                || host == "localhost"
-                || host == "127.0.0.1"
-                || host == "::1"
-                || host.ends_with(".localhost");
-            if !is_internal {
+            if !is_internal_nav(nav_url) {
+                let host = nav_url.host_str().unwrap_or("");
                 let st = app_for_nav.state::<BrowserState>();
                 let (custom, allow) = {
                     let lists = st.store.adblock_lists.lock().unwrap();
@@ -458,94 +550,81 @@ fn create_side_panel_webview(app: &tauri::AppHandle, state: &BrowserState, url: 
                     return false;
                 }
                 st.store.record_history(nav_url.as_str(), nav_url.as_str());
+                let _ = app_for_nav.emit_to(SIDE_PANEL_FRAME_LABEL, "panel-navigated", nav_url.to_string());
             }
             true
         });
+    let (page_position, page_size) = side_panel_content_bounds(position, size);
+    let page = match state.window.add_child(builder, page_position, page_size) {
+        Ok(page) => page,
+        Err(e) => {
+            let _ = frame.close();
+            return Err(e.to_string());
+        }
+    };
 
-    let panel_width = state.store.settings.lock().unwrap().side_panel_width;
-    let (position, size) = side_panel_bounds(&state.window, panel_width).map_err(|e| e.to_string())?;
-    state
-        .window
-        .add_child(builder, position, size)
-        .map_err(|e| e.to_string())
+    *state.side_panel_frame.lock().unwrap() = Some(frame);
+    *state.side_panel.lock().unwrap() = Some(page);
+    raise_resize_borders(&state.window);
+    Ok(())
 }
 
-// Injected only into the side panel's own webview. Draws an 8px strip fixed
-// to its right edge. Deliberately does NOT use pointer capture: WebView2
-// does not reliably keep delivering pointer events once the cursor leaves
-// the *webview's own bounds* (a documented WebView2/MAUI limitation), which
-// is exactly what happens dragging the panel wider -- the cursor immediately
-// crosses into the active tab's webview, a completely separate native
-// surface. Instead this hands the drag off cooperatively: on mousedown it
-// broadcasts a `side-panel-drag` Tauri event, which both this script and the
-// active tab's own injected content script (see adblock::build_content_script)
-// listen for. Whichever document the cursor is actually over during a given
-// mousemove is the one that computes the width, using plain `clientX` --
-// this works with no shared state and no screen-coordinate math because the
-// panel and the active tab are positioned at the identical left-edge origin
-// (see `left_offset` / `side_panel_bounds`), so `clientX` in either
-// document's own coordinate space already equals the panel width.
-const SIDE_PANEL_RESIZE_HANDLE_SCRIPT: &str = r#"
+fn close_side_panel_webviews(state: &BrowserState) {
+    if let Some(page) = state.side_panel.lock().unwrap().take() {
+        let _ = page.close();
+    }
+    if let Some(frame) = state.side_panel_frame.lock().unwrap().take() {
+        let _ = frame.close();
+    }
+}
+
+// What the panel is showing right now: the live page if it's a real website
+// (so following links inside a pinned site is kept), else the url it was
+// opened with -- our own pages load from an internal asset URL that can't
+// be fed back into a new webview.
+fn side_panel_current_url(state: &BrowserState) -> Option<String> {
+    let live = state
+        .side_panel
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|w| w.url().ok())
+        .filter(|u| !is_internal_nav(u))
+        .map(|u| u.to_string());
+    live.or_else(|| state.side_panel_url.lock().unwrap().clone())
+}
+
+// The panel's half of the resize hand-off. The drag itself starts on the
+// frame's grip (panel-frame.js); WebView2 stops delivering mouse events once
+// the cursor leaves the webview it pressed in, so every webview the cursor
+// can cross during the drag -- the frame, this page, the active tab (see
+// adblock::build_content_script) -- continues it from its own mousemove,
+// armed by the broadcast `side-panel-drag` event. Each reports the pointer's
+// x relative to the panel's left edge; Rust turns that into a width (see
+// resize_side_panel_live). This page sits PANEL_INSET px right of that edge.
+const SIDE_PANEL_RESIZE_HANDOFF_SCRIPT: &str = r#"
 (function () {
+  var PANEL_INSET = 8;
+  var armed = false;
   function invoke(cmd, args) {
     if (window.__TAURI__ && window.__TAURI__.core) {
       return window.__TAURI__.core.invoke(cmd, args).catch(function () {});
     }
   }
-  function setup() {
-    var handle = document.createElement('div');
-    handle.style.cssText =
-      'position:fixed;top:0;right:0;width:8px;height:100%;z-index:2147483647;' +
-      'cursor:ew-resize;background:transparent;transition:background 0.1s ease;';
-    document.documentElement.appendChild(handle);
-
-    var dragging = false;
-
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.listen('side-panel-drag', function (e) {
-        if (!e.payload) {
-          dragging = false;
-          handle.style.background = 'transparent';
-        }
-      });
-    }
-
-    handle.addEventListener('mousedown', function (e) {
-      dragging = true;
-      handle.style.background = 'rgba(124,92,255,0.45)';
-      invoke('notify_side_panel_drag', { dragging: true });
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', function (e) {
-      if (!dragging) return;
-      if (!(e.buttons & 1)) {
-        dragging = false;
-        handle.style.background = 'transparent';
-        invoke('commit_side_panel_width', { width: e.clientX });
-        invoke('notify_side_panel_drag', { dragging: false });
-        return;
-      }
-      invoke('resize_side_panel_live', { width: e.clientX });
-    });
-    document.addEventListener('mouseup', function (e) {
-      if (!dragging) return;
-      dragging = false;
-      handle.style.background = 'transparent';
-      invoke('commit_side_panel_width', { width: e.clientX });
+  if (window.__TAURI__ && window.__TAURI__.event) {
+    window.__TAURI__.event.listen('side-panel-drag', function (e) { armed = !!e.payload; });
+  }
+  document.addEventListener('mousemove', function (e) {
+    if (!armed) return;
+    var x = e.clientX + PANEL_INSET;
+    if (!(e.buttons & 1)) {
+      armed = false;
+      invoke('commit_side_panel_width', { width: x });
       invoke('notify_side_panel_drag', { dragging: false });
-    });
-    handle.addEventListener('mouseenter', function () {
-      if (!dragging) handle.style.background = 'rgba(124,92,255,0.2)';
-    });
-    handle.addEventListener('mouseleave', function () {
-      if (!dragging) handle.style.background = 'transparent';
-    });
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setup);
-  } else {
-    setup();
-  }
+      return;
+    }
+    invoke('resize_side_panel_live', { width: x });
+  }, true);
 })();
 "#;
 
@@ -557,34 +636,14 @@ const SIDE_PANEL_RESIZE_HANDLE_SCRIPT: &str = r#"
 // newest -- and therefore topmost -- webview again. Called after every
 // new tab creation; a no-op if the panel isn't currently open.
 fn reraise_side_panel(app: &tauri::AppHandle, state: &BrowserState) {
-    let old = state.side_panel.lock().unwrap().take();
-    let Some(old) = old else { return };
-
-    // Prefer whatever the panel is actually showing right now, so in-panel
-    // navigation (e.g. following a link inside a pinned site) survives the
-    // re-raise -- but only if it's a real page, not our own internal asset
-    // URL, which wouldn't resolve correctly fed back into
-    // create_side_panel_webview. Fall back to the originally-opened url.
-    let live_url = old.url().ok().and_then(|u| {
-        let scheme = u.scheme();
-        let host = u.host_str().unwrap_or("");
-        let is_internal = scheme != "http" && scheme != "https"
-            || host == "localhost"
-            || host == "127.0.0.1"
-            || host == "::1"
-            || host.ends_with(".localhost");
-        if is_internal {
-            None
-        } else {
-            Some(u.to_string())
-        }
-    });
-    let stored_url = state.side_panel_url.lock().unwrap().clone();
-    let _ = old.close();
-
-    let Some(url) = live_url.or(stored_url) else { return };
-    if let Ok(webview) = create_side_panel_webview(app, state, &url) {
-        *state.side_panel.lock().unwrap() = Some(webview);
+    if state.side_panel.lock().unwrap().is_none() {
+        return;
+    }
+    let url = side_panel_current_url(state);
+    let kind = state.side_panel_kind.lock().unwrap().clone().unwrap_or_default();
+    close_side_panel_webviews(state);
+    if let Some(url) = url {
+        let _ = open_side_panel_webviews(app, state, &url, &kind);
     }
 }
 
@@ -597,10 +656,23 @@ fn reraise_side_panel(app: &tauri::AppHandle, state: &BrowserState) {
 // cycling or session restore, and "back to tabs" (dock_popout) turns one
 // into a regular tab again.
 
-// Must match #bar's height in popout.html.
-const POPOUT_BAR_HEIGHT: f64 = 40.0;
+// The frame webview (popout.html) fills the whole window -- wallpaper, glass
+// sheet, title bar -- and the page sits inset inside it: POPOUT_HEADER below
+// the top, POPOUT_INSET from the other edges. Must match popout.html.
+const POPOUT_HEADER: f64 = 44.0;
+const POPOUT_INSET: f64 = 8.0;
 const POPOUT_WIDTH: f64 = 520.0;
 const POPOUT_HEIGHT: f64 = 720.0;
+
+fn popout_content_bounds(width: f64, height: f64) -> (LogicalPosition<f64>, LogicalSize<f64>) {
+    (
+        LogicalPosition::new(POPOUT_INSET, POPOUT_HEADER),
+        LogicalSize::new(
+            (width - 2.0 * POPOUT_INSET).max(0.0),
+            (height - POPOUT_HEADER - POPOUT_INSET).max(0.0),
+        ),
+    )
+}
 
 pub(crate) struct Popout {
     window: Window,
@@ -662,7 +734,7 @@ fn create_popout_internal(
         .add_child(
             WebviewBuilder::new(&bar_label, WebviewUrl::App("popout.html".into())).initialization_script(&bar_init),
             LogicalPosition::new(0.0, 0.0),
-            LogicalSize::new(POPOUT_WIDTH, POPOUT_BAR_HEIGHT),
+            LogicalSize::new(POPOUT_WIDTH, POPOUT_HEIGHT),
         )
         .map_err(|e| e.to_string())?;
 
@@ -694,12 +766,9 @@ fn create_popout_internal(
             let _ = app_for_nav.emit_to(bar_label_for_nav.as_str(), "popout-navigated", nav_url.to_string());
             true
         });
+    let (content_position, content_size) = popout_content_bounds(POPOUT_WIDTH, POPOUT_HEIGHT);
     let content = window
-        .add_child(
-            content_builder,
-            LogicalPosition::new(0.0, POPOUT_BAR_HEIGHT),
-            LogicalSize::new(POPOUT_WIDTH, POPOUT_HEIGHT - POPOUT_BAR_HEIGHT),
-        )
+        .add_child(content_builder, content_position, content_size)
         .map_err(|e| e.to_string())?;
 
     let window_for_events = window.clone();
@@ -708,9 +777,10 @@ fn create_popout_internal(
         WindowEvent::Resized(_) => {
             if let (Ok(size), Ok(scale)) = (window_for_events.inner_size(), window_for_events.scale_factor()) {
                 let logical = size.to_logical::<f64>(scale);
-                let _ = bar.set_size(LogicalSize::new(logical.width, POPOUT_BAR_HEIGHT));
-                let _ = content.set_position(LogicalPosition::new(0.0, POPOUT_BAR_HEIGHT));
-                let _ = content.set_size(LogicalSize::new(logical.width, (logical.height - POPOUT_BAR_HEIGHT).max(0.0)));
+                let _ = bar.set_size(LogicalSize::new(logical.width, logical.height));
+                let (position, size) = popout_content_bounds(logical.width, logical.height);
+                let _ = content.set_position(position);
+                let _ = content.set_size(size);
             }
         }
         WindowEvent::Destroyed => {
@@ -718,6 +788,9 @@ fn create_popout_internal(
         }
         _ => {}
     });
+    // Resize borders for this frameless window -- created after both
+    // webviews, so they're already on top (see raise_resize_borders).
+    let _ = window.set_resizable(true);
 
     state.popouts.lock().unwrap().insert(id, Popout { window, url });
     Ok(id)
@@ -1518,14 +1591,24 @@ fn update_tab_meta(state: &BrowserState, id: u32, f: impl FnOnce(&mut TabMeta)) 
     f(state.tab_meta.lock().unwrap().entry(id).or_default());
 }
 
-// Also forwarded to the matching pop-out's title bar, if `id` is a pop-out
-// rather than a tab (emit_to a label that doesn't exist is a no-op).
+// Title/favicon reports also go to the header that shows them outside the
+// tab strip: the side panel's frame for id 0 (the panel's page), else the
+// matching pop-out's title bar (emit_to a label that doesn't exist is a
+// no-op, so plain tabs cost nothing extra).
+fn page_header_label(id: u32) -> String {
+    if id == 0 {
+        SIDE_PANEL_FRAME_LABEL.to_string()
+    } else {
+        format!("popout-bar-{}", id)
+    }
+}
+
 #[tauri::command]
 fn report_title(app: tauri::AppHandle, state: tauri::State<BrowserState>, id: u32, title: String) {
     update_tab_meta(&state, id, |m| m.title = Some(title.clone()));
     let payload = serde_json::json!({ "id": id, "title": title });
     let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", payload.clone());
-    let _ = app.emit_to(format!("popout-bar-{}", id).as_str(), "tab-title-changed", payload);
+    let _ = app.emit_to(page_header_label(id).as_str(), "tab-title-changed", payload);
 }
 
 #[tauri::command]
@@ -1533,7 +1616,7 @@ fn report_favicon(app: tauri::AppHandle, state: tauri::State<BrowserState>, id: 
     update_tab_meta(&state, id, |m| m.favicon = Some(url.clone()));
     let payload = serde_json::json!({ "id": id, "url": url });
     let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", payload.clone());
-    let _ = app.emit_to(format!("popout-bar-{}", id).as_str(), "tab-favicon-changed", payload);
+    let _ = app.emit_to(page_header_label(id).as_str(), "tab-favicon-changed", payload);
 }
 
 #[tauri::command]
@@ -1917,9 +2000,7 @@ async fn toggle_side_panel(app: tauri::AppHandle, kind: String, url: String) -> 
         let state = app2.state::<BrowserState>();
         let current_kind = state.side_panel_kind.lock().unwrap().clone();
 
-        if let Some(w) = state.side_panel.lock().unwrap().take() {
-            let _ = w.close();
-        }
+        close_side_panel_webviews(&state);
         *state.side_panel_kind.lock().unwrap() = None;
         *state.side_panel_url.lock().unwrap() = None;
 
@@ -1929,8 +2010,7 @@ async fn toggle_side_panel(app: tauri::AppHandle, kind: String, url: String) -> 
             return Ok(false);
         }
 
-        let webview = create_side_panel_webview(&app2, &state, &url)?;
-        *state.side_panel.lock().unwrap() = Some(webview);
+        open_side_panel_webviews(&app2, &state, &url, &kind)?;
         *state.side_panel_kind.lock().unwrap() = Some(kind.clone());
         *state.side_panel_url.lock().unwrap() = Some(url);
         let _ = app2.emit("side-panel-changed", Some(kind));
@@ -1940,45 +2020,92 @@ async fn toggle_side_panel(app: tauri::AppHandle, kind: String, url: String) -> 
     .and_then(|r| r)
 }
 
+fn close_side_panel_internal(app: &tauri::AppHandle, state: &BrowserState) -> Result<(), String> {
+    close_side_panel_webviews(state);
+    *state.side_panel_kind.lock().unwrap() = None;
+    *state.side_panel_url.lock().unwrap() = None;
+    resize_active_tab(state)?;
+    let _ = app.emit("side-panel-changed", None::<String>);
+    let _ = app.emit("side-panel-drag", false);
+    Ok(())
+}
+
 #[tauri::command]
 async fn close_side_panel(app: tauri::AppHandle) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<(), String> {
         let state = app2.state::<BrowserState>();
-        if let Some(w) = state.side_panel.lock().unwrap().take() {
-            let _ = w.close();
-        }
-        *state.side_panel_kind.lock().unwrap() = None;
-        resize_active_tab(&state)?;
-        let _ = app2.emit("side-panel-changed", None::<String>);
-        let _ = app2.emit("side-panel-drag", false);
-        Ok(())
+        close_side_panel_internal(&app2, &state)
     })
     .await
     .and_then(|r| r)
 }
 
-// Live width preview while dragging the resize handle -- resizes both the
-// panel and the active tab together so there's no gap/overlap mid-drag.
-// Deliberately doesn't persist to disk on every call; see
-// commit_side_panel_width for the one-shot persist on release.
+// The frame's "open in tab" button: what the panel is showing becomes a
+// regular, active tab and the panel closes.
+#[tauri::command]
+async fn side_panel_to_tab(app: tauri::AppHandle) -> Result<u32, String> {
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<u32, String> {
+        let state = app2.state::<BrowserState>();
+        let url = side_panel_current_url(&state).ok_or("the side panel isn't open")?;
+        close_side_panel_internal(&app2, &state)?;
+        let id = create_tab_internal(&app2, &state, Some(url.clone()))?;
+        switch_tab_internal(&state, id)?;
+        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", serde_json::json!({ "id": id, "url": url, "activate": true }));
+        Ok(id)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// The frame's "pop out" button: what the panel is showing moves into a
+// floating pop-out window next to where the panel was.
+#[tauri::command]
+async fn side_panel_pop_out(app: tauri::AppHandle) -> Result<u32, String> {
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<u32, String> {
+        let state = app2.state::<BrowserState>();
+        let url = side_panel_current_url(&state).ok_or("the side panel isn't open")?;
+        let kind = state.side_panel_kind.lock().unwrap().clone().unwrap_or_default();
+        let title = side_panel_title(&state, &kind, &url);
+        let (x, y) = state
+            .window
+            .outer_position()
+            .ok()
+            .zip(state.window.scale_factor().ok())
+            .map(|(p, scale)| {
+                let p = p.to_logical::<f64>(scale);
+                (p.x + chrome_left() + 40.0, p.y + chrome_top() + 20.0)
+            })
+            .unwrap_or((120.0, 120.0));
+        close_side_panel_internal(&app2, &state)?;
+        create_popout_internal(&app2, &state, url, title, x, y)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// While dragging the grip, every webview under the cursor reports the
+// pointer's x relative to the panel's left edge (see
+// SIDE_PANEL_RESIZE_HANDOFF_SCRIPT). The panel's right edge sits half a grip
+// further right, so the grip stays under the cursor.
+fn side_panel_width_for_pointer(x: f64) -> f64 {
+    (x + PANEL_GRIP / 2.0).clamp(SIDE_PANEL_MIN_WIDTH, SIDE_PANEL_MAX_WIDTH)
+}
+
+// Live width preview while dragging the resize grip. Deliberately doesn't
+// persist to disk on every call; see commit_side_panel_width for the
+// one-shot persist on release.
 #[tauri::command]
 async fn resize_side_panel_live(app: tauri::AppHandle, width: f64) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<(), String> {
         let state = app2.state::<BrowserState>();
-        let width = width.clamp(SIDE_PANEL_MIN_WIDTH, SIDE_PANEL_MAX_WIDTH);
-        {
-            let mut settings = state.store.settings.lock().unwrap();
-            settings.side_panel_width = width;
-        }
-        if let Some(w) = state.side_panel.lock().unwrap().as_ref() {
-            if let Ok((position, size)) = side_panel_bounds(&state.window, width) {
-                let _ = w.set_position(position);
-                let _ = w.set_size(size);
-            }
-        }
-        resize_active_tab(&state)
+        let width = side_panel_width_for_pointer(width);
+        state.store.settings.lock().unwrap().side_panel_width = width;
+        place_side_panel(&state, width);
+        Ok(())
     })
     .await
     .and_then(|r| r)
@@ -1986,7 +2113,7 @@ async fn resize_side_panel_live(app: tauri::AppHandle, width: f64) -> Result<(),
 
 #[tauri::command]
 fn commit_side_panel_width(app: tauri::AppHandle, state: tauri::State<BrowserState>, width: f64) {
-    let width = width.clamp(SIDE_PANEL_MIN_WIDTH, SIDE_PANEL_MAX_WIDTH);
+    let width = side_panel_width_for_pointer(width);
     state.store.settings.lock().unwrap().side_panel_width = width;
     state.store.save_settings();
     // Without this, the frontend's cached settings (shared/theme.js) never
@@ -2026,13 +2153,8 @@ async fn set_chrome_insets(app: tauri::AppHandle, left: f64, top: f64) -> Result
     on_main(&app, move || -> Result<(), String> {
         let state = app2.state::<BrowserState>();
         resize_active_tab(&state)?;
-        if let Some(w) = state.side_panel.lock().unwrap().as_ref() {
-            let width = state.store.settings.lock().unwrap().side_panel_width;
-            if let Ok((position, size)) = side_panel_bounds(&state.window, width) {
-                let _ = w.set_position(position);
-                let _ = w.set_size(size);
-            }
-        }
+        let width = state.store.settings.lock().unwrap().side_panel_width;
+        place_side_panel(&state, width);
         Ok(())
     })
     .await
@@ -2122,6 +2244,8 @@ fn main() {
             focus_main_window,
             toggle_side_panel,
             close_side_panel,
+            side_panel_to_tab,
+            side_panel_pop_out,
             resize_side_panel_live,
             commit_side_panel_width,
             notify_side_panel_drag,
@@ -2155,6 +2279,10 @@ fn main() {
                 LogicalPosition::new(0.0, 0.0),
                 LogicalSize::new(width, height),
             )?;
+            // Attaches Tauri's frameless-window resize borders, which it
+            // otherwise only does for single-webview windows (see
+            // raise_resize_borders).
+            let _ = window.set_resizable(true);
 
             let window_for_resize = window.clone();
             let toolbar_for_resize = toolbar.clone();
@@ -2187,6 +2315,7 @@ fn main() {
                 store,
                 singleton_tabs: Mutex::new(HashMap::new()),
                 side_panel: Mutex::new(None),
+                side_panel_frame: Mutex::new(None),
                 side_panel_kind: Mutex::new(None),
                 side_panel_url: Mutex::new(None),
                 popouts: Mutex::new(HashMap::new()),
@@ -2212,14 +2341,8 @@ fn main() {
                 if let WindowEvent::Resized(_) = event {
                     let state = app_handle.state::<BrowserState>();
                     let _ = resize_active_tab(&state);
-                    let panel_open = { state.side_panel.lock().unwrap().clone() };
-                    if let Some(w) = panel_open {
-                        let width = state.store.settings.lock().unwrap().side_panel_width;
-                        if let Ok((position, size)) = side_panel_bounds(&state.window, width) {
-                            let _ = w.set_position(position);
-                            let _ = w.set_size(size);
-                        }
-                    }
+                    let width = state.store.settings.lock().unwrap().side_panel_width;
+                    place_side_panel(&state, width);
                 }
             });
 

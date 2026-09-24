@@ -43,6 +43,7 @@ const PATHS = {
   warning: '<path d="M12 3 2 20h20z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/>',
   logo: '<path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/>',
   x: '<path d="M6 6l12 12"/><path d="M18 6L6 18"/>',
+  popOut: '<path d="M14 4h6v6"/><path d="M20 4l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
   winMin: '<path d="M6 12h12"/>',
   winMax: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   winRestore: '<rect x="5" y="8.5" width="10.5" height="10.5" rx="2.2"/><path d="M8.5 5.5h7.5A2.5 2.5 0 0 1 18.5 8v7.5"/>',

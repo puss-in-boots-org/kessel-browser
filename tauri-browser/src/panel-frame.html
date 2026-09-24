@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Side panel</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The side panel's glass sheet. Its page is a separate webview laid on
+       top of this one, inset PANEL_INSET (8px) left/bottom, PANEL_HEADER
+       (46px) from the top and PANEL_GRIP (18px) from the right -- see
+       side_panel_content_bounds in main.rs. Everything visible here is the
+       ring around that page: header, margins and the resize grip. */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--bg); }
+    html.glass body { background: #0a1433; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; pointer-events: none; }
+
+    /* Tint + rim only, no backdrop-filter: that would make it a backdrop
+       root and flatten the real glass on the header buttons inside it. */
+    #sheet {
+      position: fixed;
+      inset: 3px 3px 3px 2px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    html.glass #sheet {
+      border: none;
+      background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 70%, transparent);
+      box-shadow: var(--lg-edge), var(--lg-shadow);
+    }
+
+    #header {
+      position: fixed;
+      top: 3px;
+      left: 8px;
+      right: 21px;
+      height: 43px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #site { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; padding-left: 4px; }
+    #site .app-icon, #site .panel-icon { width: 22px; height: 22px; font-size: 11px; }
+    .panel-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      background: color-mix(in srgb, var(--accent) 80%, #fff 0%);
+      color: #fff;
+      flex-shrink: 0;
+    }
+    #title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    html.glass #title { color: var(--lg-text); text-shadow: var(--lg-legibility); }
+
+    #controls { display: flex; align-items: center; gap: 1px; height: 30px; padding: 0 3px; border-radius: 15px; }
+    #controls button {
+      width: 28px;
+      height: 24px;
+      border: none;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+    }
+    html.glass #controls button { color: var(--lg-text-dim); }
+    #controls button:hover { background: var(--surface-hover); color: var(--text); }
+    html.glass #controls button:hover { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); }
+    #controls #panel-close:hover { background: #ff453a; color: #fff; }
+
+    /* Resize grip: the whole right margin is the drag target; the pill just
+       shows where it is. */
+    #grip {
+      position: fixed;
+      top: 46px;
+      right: 3px;
+      bottom: 3px;
+      width: 15px;
+      cursor: ew-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #grip::before {
+      content: "";
+      width: 4px;
+      height: 44px;
+      border-radius: 2px;
+      background: var(--text-faint);
+      opacity: 0.55;
+      transition: opacity var(--dur-fast) ease, height var(--dur) var(--ease), background var(--dur-fast) ease;
+    }
+    html.glass #grip::before { background: var(--lg-text); box-shadow: 0 0 6px rgba(0, 0, 0, 0.25); }
+    #grip:hover::before, #grip.dragging::before { opacity: 0.95; height: 64px; }
+    #grip.dragging::before { background: var(--accent); }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
+  <div id="header">
+    <div id="site"><span id="site-icon"></span><span id="title"></span></div>
+    <div id="controls" class="lg lg-refract">
+      <button id="panel-to-tab" title="Open in a tab"></button>
+      <button id="panel-pop-out" title="Pop out into its own window"></button>
+      <button id="panel-close" title="Close"></button>
+    </div>
+  </div>
+  <div id="grip" title="Drag to resize"></div>
+  <script type="module" src="panel-frame.js"></script>
+</body>
+</html>
