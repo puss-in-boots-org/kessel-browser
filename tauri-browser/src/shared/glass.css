@@ -323,3 +323,5 @@ html.glass .tab.grouped:not(.active):not(:hover) { background: color-mix(in srgb
 html.glass .tab.grouped.active { background: var(--lg-gloss), color-mix(in srgb, var(--acct) 30%, var(--lg-tint-strong)); }
 html.glass .tab.grouped::before { left: 14px; right: 14px; bottom: 2px; }
 html.glass #account-btn .acct-avatar.main { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.35); }
+html.glass #autofill-btn { color: var(--lg-text); border-radius: 13px; }
+html.glass #autofill-btn:hover { background: rgba(255, 255, 255, 0.16); }

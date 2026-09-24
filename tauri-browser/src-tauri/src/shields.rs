@@ -8,8 +8,10 @@
 //   * network: should this request (script, image, iframe, XHR...) made by
 //     this page be blocked? -- asked for every request via WebView2's
 //     WebResourceRequested event (see install_shields_hooks in main.rs);
-//   * cosmetic: which elements should be hidden on this page? -- asked by
-//     the content script (shields_cosmetics / shields_hidden_selectors).
+//   * cosmetic: which elements should be hidden on this page? -- answered
+//     by the page script main.rs registers for each page (page_script),
+//     which also carries the site's scriptlets and the fingerprinting
+//     protection.
 // Until the lists have loaded, a small built-in domain list is used so
 // protection starts with the very first request.
 //
@@ -17,7 +19,6 @@
 // navigations, per-tab statistics, and the fingerprinting-protection
 // ("farbling") script.
 
-use adblock::cosmetic_filter_cache::UrlSpecificResources;
 use adblock::lists::{FilterSet, ParseOptions};
 use adblock::request::Request;
 use adblock::resources::{PermissionMask, Resource};
@@ -116,10 +117,10 @@ pub struct Shields {
     // Webview label -> the URL we just rewrote a navigation to, so arriving
     // there doesn't reset the stats that counted the rewrite.
     pub rewrites: Mutex<HashMap<String, String>>,
-    // Webview label -> id of the scriptlet script registered for its current
+    // Webview label -> id of the page script registered for its current
     // page (WebView2's AddScriptToExecuteOnDocumentCreated), replaced on
     // every navigation.
-    pub scriptlet_ids: Mutex<HashMap<String, String>>,
+    pub page_script_ids: Mutex<HashMap<String, String>>,
     // Per-launch secret mixed into the fingerprinting noise, so a site sees
     // stable values within a session but can't link you across sessions.
     session_key: String,
@@ -214,7 +215,7 @@ impl Shields {
             https_failed: Mutex::new(HashSet::new()),
             nav_targets: Mutex::new(HashMap::new()),
             rewrites: Mutex::new(HashMap::new()),
-            scriptlet_ids: Mutex::new(HashMap::new()),
+            page_script_ids: Mutex::new(HashMap::new()),
             session_key,
         }
     }
@@ -340,41 +341,51 @@ impl Shields {
         (result.should_block(), result.rewritten_url)
     }
 
-    // --- Cosmetic ------------------------------------------------------------------
+    // --- The page script -----------------------------------------------------------
 
-    pub fn cosmetics(&self, url: &str) -> UrlSpecificResources {
-        self.engine.read().unwrap().url_cosmetic_resources(url)
+    /// Everything Shields does inside a page, as one script for `url`: the
+    /// fingerprinting protection (if `fingerprinting`), the site's `+js(...)`
+    /// scriptlets, and element hiding. main.rs registers it with WebView2 as
+    /// each navigation starts (only for sites with Shields up), so it runs
+    /// before the page's own scripts, in the page's own JS world. WebView2
+    /// runs such scripts in every frame, so each part checks where it is.
+    pub fn page_script(&self, url: &str, fingerprinting: bool) -> PageScript {
+        let Some(host) = tauri::Url::parse(url).ok().and_then(|u| u.host_str().map(str::to_string)) else {
+            return PageScript::default();
+        };
+        let site = serde_json::to_string(&host).unwrap_or_default();
+        let resources = self.engine.read().unwrap().url_cosmetic_resources(url);
+        let mut parts = Vec::new();
+        if fingerprinting {
+            parts.push(FARBLING_SCRIPT.replace("__KESSEL_SESSION_KEY__", &self.session_key).replace("__KESSEL_SITE__", &site));
+        }
+        if let Some(scriptlets) = wrap_scriptlets(&site, &resources.injected_script) {
+            parts.push(scriptlets);
+        }
+        if !resources.hide_selectors.is_empty() || !resources.generichide {
+            let hide: Vec<&String> = resources.hide_selectors.iter().collect();
+            parts.push(
+                COSMETICS_SCRIPT
+                    .replace("__KESSEL_SITE__", &site)
+                    .replace("__KESSEL_GENERIC__", if resources.generichide { "false" } else { "true" })
+                    .replace("__KESSEL_HIDE__", &serde_json::to_string(&hide).unwrap_or_else(|_| "[]".into())),
+            );
+        }
+        PageScript { script: (!parts.is_empty()).then(|| parts.join("\n")), exceptions: resources.exceptions }
     }
 
+    /// Generic element-hiding rules for the classes/ids a page uses (the
+    /// page script asks for them as its DOM changes).
     pub fn hidden_selectors(&self, classes: &[String], ids: &[String], exceptions: &HashSet<String>) -> Vec<String> {
         self.engine.read().unwrap().hidden_class_id_selectors(classes, ids, exceptions)
     }
 
-    // --- Scriptlets -------------------------------------------------------------
-
-    /// The script to run at document start on `url`, or None if no
-    /// `+js(...)` rule applies. It must run before the page's own scripts
-    /// (main.rs registers it with WebView2 as each navigation starts), in the
-    /// page's own JS world, and only in frames of that same site -- WebView2
-    /// runs document-start scripts in every frame.
+    /// Just the scriptlets part of `url`'s page script, if any.
+    #[cfg(test)]
     pub fn scriptlets_for(&self, url: &str) -> Option<String> {
         let resources = self.engine.read().unwrap().url_cosmetic_resources(url);
-        if resources.injected_script.trim().is_empty() {
-            return None;
-        }
         let host = tauri::Url::parse(url).ok()?.host_str()?.to_string();
-        Some(format!(
-            "(function () {{\n\
-               if (location.hostname !== {host} || window.__kesselScriptlets) return;\n\
-               window.__kesselScriptlets = true;\n\
-               // uBlock's injector provides this object to its scriptlets; its\n\
-               // optional fields (logging, extension-resource origins) stay unset.\n\
-               const scriptletGlobals = {{}};\n\
-               {script}\n\
-             }})();",
-            host = serde_json::to_string(&host).ok()?,
-            script = resources.injected_script,
-        ))
+        wrap_scriptlets(&serde_json::to_string(&host).ok()?, &resources.injected_script)
     }
 
     // --- Per-tab statistics --------------------------------------------------------
@@ -410,13 +421,120 @@ impl Shields {
             None
         }
     }
-
-    // --- Fingerprinting protection ------------------------------------------------
-
-    pub fn farbling_script(&self) -> String {
-        FARBLING_SCRIPT.replace("__KESSEL_SESSION_KEY__", &self.session_key)
-    }
 }
+
+/// See Shields::page_script.
+#[derive(Default)]
+pub struct PageScript {
+    pub script: Option<String>,
+    /// The page's exceptions to generic element hiding (for hidden_selectors).
+    pub exceptions: HashSet<String>,
+}
+
+// The site's scriptlets run in frames of that site only (`site` is its host,
+// as a JS string literal).
+fn wrap_scriptlets(site: &str, injected: &str) -> Option<String> {
+    if injected.trim().is_empty() {
+        return None;
+    }
+    Some(format!(
+        "(function () {{\n\
+           if (location.hostname !== {site} || window.__kesselScriptlets) return;\n\
+           window.__kesselScriptlets = true;\n\
+           // uBlock's injector provides this object to its scriptlets; its\n\
+           // optional fields (logging, extension-resource origins) stay unset.\n\
+           const scriptletGlobals = {{}};\n\
+           {injected}\n\
+         }})();"
+    ))
+}
+
+// Element hiding, in the page's top frame: the site's own selectors at once,
+// then generic ones for the classes/ids the page actually uses -- reported to
+// Kessel as the DOM changes (window.__kesselPage), answered with selectors to
+// hide (a web message; see page_message in main.rs).
+const COSMETICS_SCRIPT: &str = r#"
+(function (HIDE, GENERIC) {
+  if (window.top !== window || location.hostname !== __KESSEL_SITE__) return;
+  var style = document.createElement('style');
+  style.setAttribute('data-kessel', 'shields');
+  function mount() {
+    var parent = document.head || document.documentElement;
+    if (parent) parent.appendChild(style);
+    else document.addEventListener('DOMContentLoaded', mount);
+  }
+  mount();
+  function hide(selectors) {
+    // One rule per selector, so a selector this engine doesn't understand
+    // can't void all the others.
+    var css = '';
+    for (var i = 0; i < selectors.length; i++) css += selectors[i] + '{display:none!important}\n';
+    style.appendChild(document.createTextNode(css));
+  }
+  if (HIDE.length) hide(HIDE);
+
+  var webview = window.chrome && window.chrome.webview;
+  if (!GENERIC || !webview) return;
+  // Kessel adds window.__kesselPage once the DOM is ready, so reports made
+  // before that wait (briefly) for it.
+  var stringify = JSON.stringify, pending = [], tries = 0, timer = null;
+  function post(message) {
+    pending.push(stringify(message));
+    deliver();
+  }
+  function deliver() {
+    var report = window.__kesselPage;
+    if (typeof report === 'function') {
+      while (pending.length) report(pending.shift());
+      return;
+    }
+    if (!timer && tries++ < 100) timer = setTimeout(function () { timer = null; deliver(); }, 50);
+  }
+  webview.addEventListener('message', function (e) {
+    var d = e.data;
+    if (d && d.kessel === 'hide' && d.selectors) hide(d.selectors);
+  });
+  var seenClasses = new Set(), seenIds = new Set(), newClasses = [], newIds = [], timer = null;
+  function collect(el) {
+    if (!el || el.nodeType !== 1) return;
+    if (el.id && !seenIds.has(el.id)) { seenIds.add(el.id); newIds.push(el.id); }
+    var cl = el.classList;
+    if (cl) for (var i = 0; i < cl.length; i++) {
+      if (!seenClasses.has(cl[i])) { seenClasses.add(cl[i]); newClasses.push(cl[i]); }
+    }
+  }
+  function scan(root) {
+    collect(root);
+    if (root.querySelectorAll) {
+      var els = root.querySelectorAll('[id],[class]');
+      for (var i = 0; i < els.length; i++) collect(els[i]);
+    }
+  }
+  function flush() {
+    if (timer || (!newClasses.length && !newIds.length)) return;
+    timer = setTimeout(function () {
+      timer = null;
+      post({ kessel: 'cosmetic-ids', classes: newClasses.splice(0, 5000), ids: newIds.splice(0, 5000) });
+      flush();
+    }, 120);
+  }
+  function start() {
+    if (!style.isConnected) mount();
+    scan(document.documentElement);
+    flush();
+    new MutationObserver(function (records) {
+      for (var i = 0; i < records.length; i++) {
+        var r = records[i];
+        if (r.type === 'attributes') collect(r.target);
+        else for (var j = 0; j < r.addedNodes.length; j++) scan(r.addedNodes[j]);
+      }
+      flush();
+    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})(__KESSEL_HIDE__, __KESSEL_GENERIC__);
+"#;
 
 pub enum Verdict {
     Allow,
@@ -499,8 +617,9 @@ pub fn rewrite_navigation(url: &tauri::Url, upgrade_https: bool, strip_params: b
 // same site sees the same values for the whole session, a different site --
 // or the same site next launch -- sees different ones, so the ID is useless
 // for tracking. The seed is the per-launch session key + the top-level site.
-// The page's own main-frame content script turns this off for sites where
-// Shields are down (window.__kesselFarbleOff).
+// Part of the page script (see page_script): only there on sites where
+// Shields and fingerprinting protection are on, so there's no switch left
+// in the page for a site to flip off itself.
 const FARBLING_SCRIPT: &str = r#"
 (function () {
   if (window.__kesselFarbled) return;
@@ -512,6 +631,8 @@ const FARBLING_SCRIPT: &str = r#"
       site = new URL(location.ancestorOrigins[location.ancestorOrigins.length - 1]).hostname;
     }
   } catch (e) {}
+  // Registered for one page; also runs in its frames, not on another site.
+  if (site !== __KESSEL_SITE__) return;
   var key = site.split('.').slice(-2).join('.');
   var seed = 2166136261 >>> 0;
   var text = '__KESSEL_SESSION_KEY__' + key;
@@ -522,8 +643,6 @@ const FARBLING_SCRIPT: &str = r#"
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
-  function off() { return window.__kesselFarbleOff === true; }
-
   // Canvas: flip the lowest bit of a handful of pixel channels.
   function farbleImageData(data, w, h) {
     var pixels = w * h;
@@ -538,11 +657,11 @@ const FARBLING_SCRIPT: &str = r#"
     var getImageData = CanvasRenderingContext2D.prototype.getImageData;
     CanvasRenderingContext2D.prototype.getImageData = function () {
       var image = getImageData.apply(this, arguments);
-      if (!off()) farbleImageData(image.data, image.width, image.height);
+      farbleImageData(image.data, image.width, image.height);
       return image;
     };
     function farbledCopy(canvas) {
-      if (off() || !canvas.width || !canvas.height || canvas.width * canvas.height > 4000000) return null;
+      if (!canvas.width || !canvas.height || canvas.width * canvas.height > 4000000) return null;
       try {
         var copy = document.createElement('canvas');
         copy.width = canvas.width;
@@ -573,7 +692,7 @@ const FARBLING_SCRIPT: &str = r#"
     var farbled = new WeakSet();
     AudioBuffer.prototype.getChannelData = function () {
       var data = getChannelData.apply(this, arguments);
-      if (!off() && !farbled.has(data)) {
+      if (!farbled.has(data)) {
         farbled.add(data);
         for (var i = 0; i < data.length; i += 97) data[i] += (rand(i) - 0.5) * 1e-7;
       }
@@ -582,7 +701,7 @@ const FARBLING_SCRIPT: &str = r#"
     var getFloatFrequencyData = AnalyserNode.prototype.getFloatFrequencyData;
     AnalyserNode.prototype.getFloatFrequencyData = function (array) {
       getFloatFrequencyData.apply(this, arguments);
-      if (!off()) for (var i = 0; i < array.length; i += 13) array[i] += (rand(i + 7) - 0.5) * 1e-4;
+      for (var i = 0; i < array.length; i += 13) array[i] += (rand(i + 7) - 0.5) * 1e-4;
     };
   } catch (e) {}
 
@@ -596,7 +715,7 @@ const FARBLING_SCRIPT: &str = r#"
         enumerable: true,
         get: function () {
           var real = realCores.call(this);
-          if (off() || real <= 2) return real;
+          if (real <= 2) return real;
           return 2 + Math.floor(rand(4242) * (real - 1));
         }
       });
@@ -677,10 +796,28 @@ mod tests {
     #[test]
     fn cosmetic_rules_for_a_site() {
         let s = engine_with(&["news.site##.sponsored-box", "##.generic-ad"]);
-        let res = s.cosmetics("https://news.site/article");
-        assert!(res.hide_selectors.contains(".sponsored-box"));
-        let generic = s.hidden_selectors(&["generic-ad".to_string()], &[], &res.exceptions);
+        let page = s.page_script("https://news.site/article", false);
+        let script = page.script.expect("element hiding for this site");
+        assert!(script.contains(r#"[".sponsored-box"]"#));
+        assert!(script.contains(r#"location.hostname !== "news.site""#));
+        let generic = s.hidden_selectors(&["generic-ad".to_string()], &[], &page.exceptions);
         assert_eq!(generic, vec![".generic-ad".to_string()]);
+    }
+
+    #[test]
+    fn page_script_parts() {
+        let s = engine_with(&["##.generic-ad"]);
+        // Fingerprinting protection only when asked for, and only for the
+        // site the script was made for -- there's no off switch in the page.
+        let farbled = s.page_script("https://shop.example/", true).script.unwrap();
+        assert!(farbled.contains(r#"if (site !== "shop.example") return;"#));
+        assert!(!farbled.contains("__kesselFarbleOff") && !farbled.contains("__KESSEL_"));
+        let plain = s.page_script("https://shop.example/", false).script.unwrap();
+        assert!(!plain.contains("getImageData"));
+        // Nothing to hide, no scriptlets, no farbling: nothing to register.
+        let none = engine_with(&["@@||shop.example^$generichide"]);
+        assert!(none.page_script("https://shop.example/", false).script.is_none());
+        assert!(engine_with(&[]).page_script("not a url", true).script.is_none());
     }
 
     #[test]

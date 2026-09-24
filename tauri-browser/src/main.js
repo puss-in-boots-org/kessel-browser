@@ -57,8 +57,8 @@ function findTab(id) {
   return tabs.find((t) => t.id === id);
 }
 
-// Rust's tab-cycling order (Ctrl+Tab, Ctrl+1..9) follows the strip's.
-// Sleeping placeholders have no real (u32) id to send.
+// Rust's tab order (what a reloaded toolbar rebuilds its strip from) follows
+// the strip's. Sleeping placeholders have no real (u32) id to send.
 function syncTabOrder() {
   invoke("set_tab_order", { ids: tabs.filter((t) => t.id > 0).map((t) => t.id) }).catch(() => {});
 }
@@ -172,6 +172,7 @@ function paintStaticIcons() {
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
   iconFor("shields-btn", icon("shieldCheck", 16));
+  iconFor("autofill-btn", icon("key", 15));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -541,6 +542,7 @@ function updateAddressBarForActiveTab() {
   updateNavButtons();
   updateShieldsButton();
   updateAccountButton();
+  updateAutofillButton();
 }
 
 // --- Shields button (address bar) -------------------------------------------
@@ -569,6 +571,94 @@ async function toggleShieldsPopup() {
   if (!activeTabId || activeTabId < 0) return;
   const rect = document.getElementById("shields-btn").getBoundingClientRect();
   await invoke("toggle_shields_popup", { id: activeTabId, x: rect.right + 6, y: rect.bottom }).catch(() => {});
+}
+
+// --- Saved login offer (address bar key) ------------------------------------
+// When a page shows a login form and the vault has a login for its site,
+// Rust says so ("autofill-offer", with just the username). Clicking the key
+// has Rust fill the form in -- the password never passes through here, and a
+// page can't press this button.
+
+const autofillOffers = new Map(); // tab id -> username
+
+function updateAutofillButton() {
+  const btn = document.getElementById("autofill-btn");
+  const username = autofillOffers.get(activeTabId);
+  btn.hidden = username === undefined;
+  btn.title = `Fill in your saved login${username ? ` (${username})` : ""}`;
+}
+
+async function fillSavedLogin() {
+  const id = activeTabId;
+  try {
+    await invoke("autofill_tab", { id });
+    toast("Filled in your saved login");
+  } catch (err) {
+    toast(String(err));
+  }
+}
+
+// --- Keyboard shortcuts -------------------------------------------------------
+
+// The shortcut a key press in the toolbar means. Ctrl without Alt only
+// (AltGr is Ctrl+Alt); the same set Rust catches in pages (page_shortcut).
+function shortcutFor(e) {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
+  const key = e.key.toLowerCase();
+  if (key === "t") return e.shiftKey ? "reopen-tab" : "new-tab";
+  if (key === "l") return e.shiftKey ? "passwords" : "focus-address";
+  if (e.key === "Tab") return e.shiftKey ? "prev-tab" : "next-tab";
+  if (e.shiftKey) return null;
+  if (key === "w") return "close-tab";
+  if (key === "d") return "bookmark";
+  if (/^[1-8]$/.test(e.key)) return `tab-${e.key}`;
+  if (e.key === "9") return "last-tab";
+  return null;
+}
+
+// Tab switching goes by the strip itself -- sleeping tabs and folded groups
+// included -- like in any browser.
+function runShortcut(action) {
+  const index = tabs.findIndex((t) => t.id === activeTabId);
+  const nth = /^tab-(\d)$/.exec(action);
+  if (nth) {
+    const tab = tabs[Number(nth[1]) - 1];
+    if (tab) activateTab(tab.id);
+    return;
+  }
+  switch (action) {
+    case "new-tab":
+      createTab();
+      break;
+    case "close-tab":
+      if (activeTabId) closeTab(activeTabId);
+      break;
+    case "reopen-tab":
+      invoke("reopen_closed_tab").then((id) => { if (id != null) toast("Reopened closed tab"); });
+      break;
+    case "focus-address": {
+      const input = document.getElementById("url-input");
+      input.focus();
+      input.select();
+      break;
+    }
+    case "bookmark":
+      toggleBookmark();
+      break;
+    case "passwords":
+      toggleSidePanel("passwords", "kessel://passwords");
+      break;
+    case "next-tab":
+    case "prev-tab":
+      if (tabs.length) {
+        const step = action === "next-tab" ? 1 : -1;
+        activateTab(tabs[(index + step + tabs.length) % tabs.length].id);
+      }
+      break;
+    case "last-tab":
+      if (tabs.length) activateTab(tabs[tabs.length - 1].id);
+      break;
+  }
 }
 
 function updateNavButtons() {
@@ -656,6 +746,7 @@ function addPlaceholderTab(url, account = null) {
 async function closeTab(id, { remember = true } = {}) {
   const tab = tabs.find((t) => t.id === id);
   if (!tab) return;
+  autofillOffers.delete(id);
   if (!tab.neverCreated) {
     // A discarded-but-previously-real tab's id is still a valid u32 Rust
     // once knew (close_tab just no-ops if it's already gone) -- only a
@@ -1020,6 +1111,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
   document.getElementById("account-btn").addEventListener("click", toggleAccountsPopup);
+  document.getElementById("autofill-btn").addEventListener("click", fillSavedLogin);
   document.getElementById("engine-btn").addEventListener("click", (e) => {
     e.stopPropagation();
     const menu = document.getElementById("engine-menu");
@@ -1038,37 +1130,25 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("url-input").addEventListener("focus", (e) => e.target.select());
 
-  // Keyboard shortcuts (fire while focus is inside this toolbar webview --
-  // the same shortcuts also work from inside a loaded page, see
-  // src-tauri/src/adblock.rs::build_content_script).
+  // Keyboard shortcuts while focus is inside this toolbar webview. From
+  // inside a page, Rust catches the same keys (WebView2's accelerator keys)
+  // and forwards them as "page-shortcut".
   document.addEventListener("keydown", (e) => {
     const mod = e.ctrlKey || e.metaKey;
-
-    if (mod && e.key === "t") { e.preventDefault(); createTab(); return; }
-    if (mod && e.key === "w") { e.preventDefault(); if (activeTabId) closeTab(activeTabId); return; }
-    if (mod && e.key === "l") {
+    const action = shortcutFor(e);
+    if (action) {
       e.preventDefault();
-      const input = document.getElementById("url-input");
-      input.focus();
-      input.select();
+      runShortcut(action);
       return;
     }
-    if (e.key === "F5" || (mod && e.key === "r")) {
+    if (e.key === "F5" || (mod && e.key.toLowerCase() === "r")) {
       e.preventDefault();
       if (activeTabId) invoke("reload", { id: activeTabId });
       return;
     }
     if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); if (activeTabId) invoke("go_back", { id: activeTabId }); return; }
     if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); if (activeTabId) invoke("go_forward", { id: activeTabId }); return; }
-    if (mod && e.key === "d") { e.preventDefault(); toggleBookmark(); return; }
-    if (mod && e.key === "Tab") { e.preventDefault(); invoke("cycle_tab", { direction: e.shiftKey ? -1 : 1 }); return; }
-    if (mod && e.shiftKey && e.key.toLowerCase() === "t") {
-      e.preventDefault();
-      invoke("reopen_closed_tab").then((id) => { if (id != null) toast("Reopened closed tab"); });
-      return;
-    }
-    if (mod && e.shiftKey && e.key.toLowerCase() === "l") { e.preventDefault(); toggleSidePanel("passwords", "kessel://passwords"); return; }
-    if (mod && e.key === "b") {
+    if (mod && e.key.toLowerCase() === "b") {
       e.preventDefault();
       invoke("close_side_panel").then(() => {
         openPanelKind = null;
@@ -1076,11 +1156,13 @@ window.addEventListener("DOMContentLoaded", async () => {
       });
       return;
     }
-    if (mod && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      invoke("switch_tab_by_index", { index: e.key === "9" ? -1 : parseInt(e.key, 10) - 1 });
-      return;
-    }
+  });
+  await listen("page-shortcut", (event) => runShortcut(event.payload));
+
+  await listen("autofill-offer", (event) => {
+    const { id, username } = event.payload;
+    autofillOffers.set(id, username);
+    if (id === activeTabId) updateAutofillButton();
   });
 
   // --- Backend events ----------------------------------------------------
@@ -1091,6 +1173,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     // on_navigation in main.rs), so whatever we track here is real.
     const { id, url } = event.payload;
     shieldsStats.delete(id); // a new page starts counting from zero
+    autofillOffers.delete(id); // ...and has its own login form, if any
     const tab = findTab(id);
     if (tab) {
       tab.url = url;

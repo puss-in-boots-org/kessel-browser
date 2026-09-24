@@ -548,3 +548,23 @@ html, body { overflow: hidden; user-select: none; }
   opacity: 0.8;
 }
 .tab.grouped.active::after { background: var(--acct); }
+
+/* --- Saved login offer (address bar key; see autofill_tab in main.rs) --- */
+#autofill-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) ease, transform var(--dur-fast) ease;
+  animation: popIn var(--dur-fast) var(--ease);
+}
+#autofill-btn[hidden] { display: none; }
+#autofill-btn:hover { background: var(--surface-hover); transform: scale(1.08); }
+#autofill-btn:active { transform: scale(0.94); }

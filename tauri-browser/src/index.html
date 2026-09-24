@@ -62,6 +62,9 @@
           <span id="lock-icon"></span>
           <input id="url-input" type="text" placeholder="Search or enter address" spellcheck="false" autocomplete="off" />
           <button id="engine-btn" title="Search engine"></button>
+          <!-- Shown when the page has a login form the vault has a login
+               for; clicking fills it in (see autofill_tab in main.rs). -->
+          <button id="autofill-btn" title="Fill in your saved login" hidden></button>
           <button id="shields-btn" title="Shields"><span id="shields-count" hidden></span></button>
           <button id="star-btn" title="Bookmark this page (Ctrl+D)"></button>
           <!-- Which account this tab is signed in as; opens the account

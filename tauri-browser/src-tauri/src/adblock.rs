@@ -137,302 +137,139 @@ pub const BLOCKED_DOMAINS: &[&str] = &[
     "webminepool.com",
 ];
 
-// Injected into every content page at document-start (before the page's own
-// scripts run). Layers:
-//  1. Shields element hiding (if adblock_enabled), driven by the filter
-//     lists -- see shields.rs.
-//  2. Popup blocker: overrides window.open() to only allow it within ~800ms
+// Kessel's page script: injected into every page's main frame at
+// document-start (before the page's own scripts run). It never uses Tauri's
+// IPC -- websites don't get that -- only the report function Kessel adds to
+// every page (window.__kesselPage) and web messages back, and only for
+// reports Kessel checks for itself or that are harmless if a page fakes them
+// (see page_message in main.rs).
+// Layers:
+//  1. Popup blocker: overrides window.open() to only allow it within ~800ms
 //     of a real click.
-//  3. Zoom controls: Ctrl/Cmd + "+"/"-"/"0".
-//  4. Middle-click / Ctrl-click a link -> open in a new background tab.
-//  5. Cross-window browser shortcuts (work no matter which webview has focus).
-//  6. Side panel resize hand-off: while the side panel's own drag handle is
-//     being dragged wider than the panel itself, this tab picks up the same
-//     drag the moment the cursor enters it (see notes below).
-// (Page titles and icons come from WebView2's own events instead -- see
-// watch_page in main.rs.)
-pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bool) -> String {
-    format!(
-        r#"
-(function() {{
-  var KESSEL_TAB_ID = {id};
-  var ADBLOCK_ENABLED = {adblock};
-  var AUTOFILL_ENABLED = {autofill};
+//  2. Zoom controls: Ctrl/Cmd + "+"/"-"/"0".
+//  3. Ctrl-click / middle-click a link: marks it so the new tab it opens
+//     stays in the background.
+//  4. Login forms: reports that the page has one, so the address bar can
+//     offer a saved login -- the password itself only ever arrives when you
+//     click that offer.
+//  5. Side panel resize hand-off: while the side panel's own grip is being
+//     dragged, this page passes the pointer along when the cursor crosses it.
+// Elsewhere: element hiding, scriptlets and fingerprinting protection are
+// the Shields page script (shields::page_script); keyboard shortcuts are
+// WebView2's accelerator keys, and titles/icons its own events (watch_page
+// in main.rs).
+pub fn build_content_script(autofill_enabled: bool) -> String {
+    CONTENT_SCRIPT.replace("__KESSEL_AUTOFILL__", if autofill_enabled { "true" } else { "false" })
+}
 
-  function invoke(cmd, args) {{
-    if (window.__TAURI__ && window.__TAURI__.core) {{
-      return window.__TAURI__.core.invoke(cmd, args).catch(function() {{}});
-    }}
-  }}
-
-  // --- Shields: element hiding ---
-  // The rules come from the same filter lists as the network blocking (see
-  // shields_cosmetics in main.rs): this site's own selectors right away, then
-  // generic ones matched against the classes/ids this page actually uses,
-  // re-checked as the page changes. Also tells the fingerprinting script
-  // (shields.rs) to stand down where Shields are off for the site.
-  if (ADBLOCK_ENABLED && window.top === window) {{
-    var cosmetics = invoke('shields_cosmetics');
-    if (cosmetics) cosmetics.then(function (c) {{
-      if (!c || !c.enabled) {{ window.__kesselFarbleOff = true; return; }}
-      if (!c.fingerprinting) window.__kesselFarbleOff = true;
-      var style = document.createElement('style');
-      style.setAttribute('data-kessel', 'shields');
-      function mount() {{
-        var parent = document.head || document.documentElement;
-        if (parent) parent.appendChild(style);
-        else document.addEventListener('DOMContentLoaded', mount);
-      }}
-      mount();
-      function hide(selectors) {{
-        // One rule per selector, so a single selector this engine doesn't
-        // understand can't void all the others.
-        var css = '';
-        for (var i = 0; i < selectors.length; i++) css += selectors[i] + '{{display:none!important}}\n';
-        style.appendChild(document.createTextNode(css));
-      }}
-      hide(c.hide || []);
-      if (c.generichide) return;
-
-      var seenClasses = new Set(), seenIds = new Set(), newClasses = [], newIds = [], timer = null;
-      function collect(el) {{
-        if (!el || el.nodeType !== 1) return;
-        if (el.id && !seenIds.has(el.id)) {{ seenIds.add(el.id); newIds.push(el.id); }}
-        var cl = el.classList;
-        if (cl) for (var i = 0; i < cl.length; i++) {{
-          if (!seenClasses.has(cl[i])) {{ seenClasses.add(cl[i]); newClasses.push(cl[i]); }}
-        }}
-      }}
-      function scan(root) {{
-        collect(root);
-        if (root.querySelectorAll) {{
-          var els = root.querySelectorAll('[id],[class]');
-          for (var i = 0; i < els.length; i++) collect(els[i]);
-        }}
-      }}
-      function flush() {{
-        if (timer || (!newClasses.length && !newIds.length)) return;
-        timer = setTimeout(function () {{
-          timer = null;
-          var request = invoke('shields_hidden_selectors', {{
-            classes: newClasses.splice(0), ids: newIds.splice(0), exceptions: c.exceptions || []
-          }});
-          if (request) request.then(function (selectors) {{ if (selectors && selectors.length) hide(selectors); }});
-          flush();
-        }}, 120);
-      }}
-      function start() {{
-        if (!style.isConnected) mount();
-        scan(document.documentElement);
-        flush();
-        new MutationObserver(function (records) {{
-          for (var i = 0; i < records.length; i++) {{
-            var r = records[i];
-            if (r.type === 'attributes') collect(r.target);
-            else for (var j = 0; j < r.addedNodes.length; j++) scan(r.addedNodes[j]);
-          }}
-          flush();
-        }}).observe(document.documentElement, {{ childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] }});
-      }}
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-      else start();
-    }});
-  }}
+const CONTENT_SCRIPT: &str = r#"
+(function() {
+  var AUTOFILL_ENABLED = __KESSEL_AUTOFILL__;
+  // Reports to Kessel, which answers with web messages (window.chrome.webview).
+  var webview = window.chrome && window.chrome.webview;
+  // Kessel adds window.__kesselPage once the DOM is ready, so reports made
+  // before that wait (briefly) for it.
+  var stringify = JSON.stringify, pending = [], tries = 0, timer = null;
+  function post(message) {
+    pending.push(stringify(message));
+    deliver();
+  }
+  function deliver() {
+    var report = window.__kesselPage;
+    if (typeof report === 'function') {
+      while (pending.length) report(pending.shift());
+      return;
+    }
+    if (!timer && tries++ < 100) timer = setTimeout(function () { timer = null; deliver(); }, 50);
+  }
 
   // --- Popup blocker ---
   var lastUserGesture = 0;
-  document.addEventListener('click', function() {{ lastUserGesture = Date.now(); }}, true);
+  document.addEventListener('click', function() { lastUserGesture = Date.now(); }, true);
   var nativeOpen = window.open;
-  window.open = function() {{
-    if (Date.now() - lastUserGesture < 800) {{
+  window.open = function() {
+    if (Date.now() - lastUserGesture < 800) {
       return nativeOpen.apply(window, arguments);
-    }}
+    }
     return null;
-  }};
+  };
 
   // --- Zoom controls (remembered per-site via localStorage, which is
   // already scoped to this page's own origin -- no backend needed) ---
   var ZOOM_KEY = 'kessel-zoom-level';
   var zoom = 1;
-  try {{
+  try {
     var savedZoom = parseFloat(localStorage.getItem(ZOOM_KEY));
-    if (savedZoom && savedZoom > 0) {{
+    if (savedZoom && savedZoom > 0) {
       zoom = savedZoom;
       document.documentElement.style.zoom = zoom;
-    }}
-  }} catch (e) {{}}
-  document.addEventListener('keydown', function(e) {{
+    }
+  } catch (e) {}
+  document.addEventListener('keydown', function(e) {
     var mod = e.ctrlKey || e.metaKey;
     if (!mod) return;
-    if (e.key === '=' || e.key === '+') {{ zoom = Math.min(zoom + 0.1, 3); }}
-    else if (e.key === '-') {{ zoom = Math.max(zoom - 0.1, 0.3); }}
-    else if (e.key === '0') {{ zoom = 1; }}
+    if (e.key === '=' || e.key === '+') { zoom = Math.min(zoom + 0.1, 3); }
+    else if (e.key === '-') { zoom = Math.max(zoom - 0.1, 0.3); }
+    else if (e.key === '0') { zoom = 1; }
     else return;
     e.preventDefault();
     document.documentElement.style.zoom = zoom;
-    try {{ localStorage.setItem(ZOOM_KEY, String(zoom)); }} catch (e) {{}}
-  }}, true);
+    try { localStorage.setItem(ZOOM_KEY, String(zoom)); } catch (e) {}
+  }, true);
 
-  // --- Middle-click / Ctrl-click a link: open in a new background tab ---
-  document.addEventListener('mousedown', function(e) {{
-    if (e.button !== 1) return;
-    var a = e.target.closest('a[href]');
-    if (!a) return;
-    e.preventDefault();
-    invoke('open_background_tab', {{ url: a.href }});
-  }}, true);
-  document.addEventListener('click', function(e) {{
-    if (!(e.ctrlKey || e.metaKey)) return;
-    var a = e.target.closest('a[href]');
-    if (!a) return;
-    e.preventDefault();
-    invoke('open_background_tab', {{ url: a.href }});
-  }}, true);
+  // --- Ctrl-click / middle-click a link: open it in a background tab ---
+  // The click goes ahead as usual (Chromium turns it into a new-window
+  // request); this only tells Kessel not to switch to the tab it opens.
+  function linkOf(e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    return a && typeof a.href === 'string' ? a.href : null;
+  }
+  document.addEventListener('auxclick', function(e) {
+    var url = e.button === 1 && linkOf(e);
+    if (url) post({ kessel: 'open-in-background', url: url });
+  }, true);
+  document.addEventListener('click', function(e) {
+    var url = e.button === 0 && (e.ctrlKey || e.metaKey) && linkOf(e);
+    if (url) post({ kessel: 'open-in-background', url: url });
+  }, true);
 
-  // --- Browser shortcuts that work no matter which webview has focus ---
-  document.addEventListener('keydown', function(e) {{
-    var mod = e.ctrlKey || e.metaKey;
-    if (e.altKey && e.key === 'ArrowLeft') {{ e.preventDefault(); invoke('go_back', {{ id: KESSEL_TAB_ID }}); return; }}
-    if (e.altKey && e.key === 'ArrowRight') {{ e.preventDefault(); invoke('go_forward', {{ id: KESSEL_TAB_ID }}); return; }}
-    if (e.key === 'F5' || (mod && e.key === 'r')) {{ e.preventDefault(); invoke('reload', {{ id: KESSEL_TAB_ID }}); return; }}
-    if (mod && e.key === 't') {{ e.preventDefault(); invoke('new_tab', {{ url: null }}); return; }}
-    if (mod && e.key === 'w') {{ e.preventDefault(); invoke('close_tab', {{ id: KESSEL_TAB_ID, url: location.href }}); return; }}
-    if (mod && e.key === 'Tab') {{ e.preventDefault(); invoke('cycle_tab', {{ direction: e.shiftKey ? -1 : 1 }}); return; }}
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {{ e.preventDefault(); invoke('open_singleton_tab', {{ route: 'kessel://passwords' }}); return; }}
-    if (mod && /^[1-9]$/.test(e.key)) {{
-      e.preventDefault();
-      invoke('switch_tab_by_index', {{ index: e.key === '9' ? -1 : (parseInt(e.key, 10) - 1) }});
-      return;
-    }}
-  }}, true);
+  // --- Login forms ---
+  // Once the page shows a password field, Kessel checks the vault for this
+  // site (from the webview's real address, not anything the page says) and
+  // offers the login in the address bar. Nothing is filled until you click.
+  if (AUTOFILL_ENABLED) {
+    var reported = false;
+    var observer = new MutationObserver(check);
+    function check() {
+      if (reported || !document.querySelector('input[type="password"]')) return;
+      reported = true;
+      observer.disconnect();
+      post({ kessel: 'login-form' });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', check);
+    else check();
+    // Covers login forms that render after the first load (most SPAs).
+    (function watch() {
+      if (reported) return;
+      if (document.body) observer.observe(document.body, { childList: true, subtree: true });
+      else setTimeout(watch, 50);
+    })();
+  }
 
-  // --- Password autofill: offer to fill a detected login form ---
-  // Only ever checks when a password field actually exists on the page,
-  // and only shows a clickable chip -- nothing is filled without you
-  // clicking it. The match itself is decided entirely server-side from
-  // this webview's real, current URL (see vault_autofill_match in
-  // main.rs), not from anything this script tells it, so a look-alike
-  // domain can't fish for credentials belonging to the real one.
-  if (AUTOFILL_ENABLED) {{
-    (function () {{
-      var offered = false;
-
-      function setNativeValue(el, value) {{
-        var proto = Object.getPrototypeOf(el);
-        var desc = Object.getOwnPropertyDescriptor(proto, 'value');
-        if (desc && desc.set) {{ desc.set.call(el, value); }} else {{ el.value = value; }}
-        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
-      }}
-
-      function findUsernameField(pwField) {{
-        var scope = pwField.closest('form') || document;
-        var candidates = scope.querySelectorAll(
-          'input[type="email"], input[type="text"], input[autocomplete="username"], ' +
-          'input[name*="user" i], input[name*="email" i], input[id*="user" i], input[id*="email" i]'
-        );
-        for (var i = 0; i < candidates.length; i++) {{
-          if (candidates[i] !== pwField) return candidates[i];
-        }}
-        return null;
-      }}
-
-      function offerAutofill() {{
-        var pwField = document.querySelector('input[type="password"]');
-        if (!pwField) return;
-        invoke('vault_autofill_match').then(function (match) {{
-          if (!match) return;
-          var userField = findUsernameField(pwField);
-          var chip = document.createElement('div');
-          chip.textContent = 'Fill saved password (' + match.username + ')';
-          chip.style.cssText =
-            'position:absolute;z-index:2147483647;background:#16171d;color:#eceef4;' +
-            'border:1px solid #7c5cff;border-radius:8px;padding:7px 12px;' +
-            'font:12px -apple-system,Segoe UI,Roboto,sans-serif;cursor:pointer;' +
-            'box-shadow:0 6px 18px rgba(0,0,0,.35);';
-          function position() {{
-            var r = pwField.getBoundingClientRect();
-            chip.style.top = (window.scrollY + r.bottom + 4) + 'px';
-            chip.style.left = (window.scrollX + r.left) + 'px';
-          }}
-          position();
-          window.addEventListener('scroll', position, true);
-          window.addEventListener('resize', position);
-          chip.addEventListener('click', function (e) {{
-            e.preventDefault();
-            e.stopPropagation();
-            if (userField) setNativeValue(userField, match.username);
-            setNativeValue(pwField, match.password);
-            chip.remove();
-          }});
-          document.body.appendChild(chip);
-          document.addEventListener('click', function onDocClick(e) {{
-            if (e.target !== chip) {{
-              chip.remove();
-              document.removeEventListener('click', onDocClick, true);
-            }}
-          }}, true);
-        }}).catch(function () {{}});
-      }}
-
-      function tryOffer() {{
-        if (offered) return;
-        if (!document.querySelector('input[type="password"]')) return;
-        offered = true;
-        observer.disconnect();
-        offerAutofill();
-      }}
-
-      if (document.readyState === 'loading') {{
-        document.addEventListener('DOMContentLoaded', tryOffer);
-      }} else {{
-        tryOffer();
-      }}
-      // Covers login forms that render after initial load (most SPAs) --
-      // checks once the first time a password field appears, then stops.
-      var observer = new MutationObserver(tryOffer);
-      (function startObserving() {{
-        if (document.body) {{
-          observer.observe(document.body, {{ childList: true, subtree: true }});
-        }} else {{
-          setTimeout(startObserving, 50);
-        }}
-      }})();
-    }})();
-  }}
-
-  // Side panel resize hand-off (see SIDE_PANEL_RESIZE_HANDLE_SCRIPT in
-  // main.rs): the panel and the active tab share the same left-edge screen
-  // origin, so once the panel's own drag crosses into this tab's webview,
-  // this tab's clientX already equals the desired panel width. Only trusts
-  // the 'side-panel-drag' event to know whether a mousemove is actually part
-  // of a resize -- never a clientX-proximity guess, which would misfire on
-  // ordinary clicks/drags near the page's own left margin whenever the panel
-  // is simply closed. KESSEL_TAB_ID === 0 is the side panel's own sentinel
-  // id (this same function is reused to build its script), so this never
-  // runs a second time inside the panel's own document.
-  if (KESSEL_TAB_ID !== 0) {{
-    var sidePanelDragArmed = false;
-    if (window.__TAURI__ && window.__TAURI__.event) {{
-      window.__TAURI__.event.listen('side-panel-drag', function (e) {{
-        sidePanelDragArmed = !!e.payload;
-      }});
-    }}
-    document.addEventListener('mousemove', function (e) {{
-      if (!sidePanelDragArmed) return;
-      if (!(e.buttons & 1)) {{
-        sidePanelDragArmed = false;
-        invoke('commit_side_panel_width', {{ width: e.clientX }});
-        invoke('notify_side_panel_drag', {{ dragging: false }});
-        return;
-      }}
-      invoke('resize_side_panel_live', {{ width: e.clientX }});
-    }});
-  }}
-}})();
-"#,
-        id = id,
-        adblock = if adblock_enabled { "true" } else { "false" },
-        autofill = if autofill_enabled { "true" } else { "false" }
-    )
-}
+  // --- Side panel resize hand-off ---
+  // The drag starts on the panel frame's grip; WebView2 stops delivering
+  // mouse events to it once the cursor leaves it, so while Kessel says a
+  // drag is on, whichever page the cursor is over passes it along. Kessel
+  // only acts on these during a drag it started itself.
+  var panelDrag = false;
+  if (webview) webview.addEventListener('message', function(e) {
+    var d = e.data;
+    if (d && d.kessel === 'panel-drag') panelDrag = !!d.armed;
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!panelDrag) return;
+    if (!(e.buttons & 1)) panelDrag = false;
+    post({ kessel: 'panel-drag', x: e.clientX, buttons: e.buttons });
+  }, true);
+})();
+"#;
