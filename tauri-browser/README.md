@@ -36,6 +36,16 @@ looks off, that's the next thing to iterate on.
     Tauri's own hook is, WebView2's isn't.
   - **Element hiding** from the same lists: per-site selectors, plus
     generic ones matched to the classes/ids a page actually uses.
+  - **uBlock Origin's scriptlets** (`+js(...)` rules), injected before the
+    page's own scripts and only on the page's own site. This is what
+    removes YouTube's in-video ads, which come from YouTube's own servers
+    and can't be blocked by URL. Scriptlets that can rewrite responses or
+    set cookies run only from uBlock's own lists, as in uBlock. Blocked
+    scripts/images with a `redirect=` rule get uBlock's harmless stand-in
+    instead of a 403, so pages expecting them keep working. The library
+    (uBlock Origin 1.75.0, GPL-3.0) is compiled in from
+    `src-tauri/resources/ublock-resources.json`; regenerate it with
+    `node scripts/build-ublock-resources.mjs [tag]`.
   - **HTTPS by default** with automatic fallback to http:// when a site
     can't do HTTPS; **tracking parameters stripped** from links (fbclid,
     gclid, utm_*, ... plus the lists' `$removeparam`).
@@ -248,11 +258,11 @@ click-tested in a running build yet.
 - Bookmarks and history, persisted to JSON in the OS app-data directory.
 
 ## Known limitations (honest, not hidden)
-- **Shields don't run uBlock/Brave "scriptlets" yet** (`+js(...)` rules)
-  — the engine needs uBlock's scriptlet library for those, which Brave
-  assembles at build time rather than publishing. Network blocking and
-  element hiding work fully; what scriptlets cover (notably YouTube's
-  in-video ads, served from YouTube's own servers) does not yet.
+- **YouTube ad blocking is an arms race** — Shields run the same
+  scriptlets uBlock Origin does, but YouTube changes its player often and
+  the fixes land in uBlock's lists first (picked up within 3 days) and
+  sometimes need a newer scriptlet library (re-run
+  `scripts/build-ublock-resources.mjs` with the new uBlock tag).
 - **The password vault trusts the OS user account it runs under** — it
   protects saved credentials from casual disk access and other apps, via
   real authenticated encryption, not from a compromised OS or a

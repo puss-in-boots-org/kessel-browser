@@ -1355,8 +1355,54 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
         shields.reset_tab(id, &host);
     }
     shields.nav_targets.lock().unwrap().insert(label.to_string(), nav_url.to_string());
+    // This page's `+js(...)` scriptlets, registered before its document
+    // exists so they run ahead of the page's own scripts.
+    let scriptlets = if shields_up_for(&st, &host) { shields.scriptlets_for(nav_url.as_str()) } else { None };
+    set_page_scriptlets(app, label, scriptlets);
     st.store.record_history(nav_url.as_str(), nav_url.as_str());
     true
+}
+
+// Replaces the document-start scriptlet script registered for a webview's
+// page (there's at most one per webview; None just removes the old one).
+fn set_page_scriptlets(app: &tauri::AppHandle, label: &str, script: Option<String>) {
+    #[cfg(windows)]
+    {
+        let Some(webview) = app.get_webview(label) else { return };
+        let (app2, label2) = (app.clone(), label.to_string());
+        let _ = webview.with_webview(move |platform| unsafe {
+            if let Ok(core) = platform.controller().CoreWebView2() {
+                register_scriptlets(&app2, &core, label2, script);
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, label, script);
+}
+
+#[cfg(windows)]
+unsafe fn register_scriptlets(
+    app: &tauri::AppHandle,
+    core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2,
+    label: String,
+    script: Option<String>,
+) {
+    use webview2_com::AddScriptToExecuteOnDocumentCreatedCompletedHandler;
+    use windows::core::HSTRING;
+
+    let shields = app.state::<shields::Shields>();
+    if let Some(old) = shields.scriptlet_ids.lock().unwrap().remove(&label) {
+        let _ = core.RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(old));
+    }
+    let Some(script) = script else { return };
+    let app2 = app.clone();
+    let handler = AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(move |result, id| {
+        if result.is_ok() {
+            app2.state::<shields::Shields>().scriptlet_ids.lock().unwrap().insert(label, id);
+        }
+        Ok(())
+    }));
+    let _ = core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler);
 }
 
 // Fingerprinting protection runs in every frame -- third-party iframes are
@@ -1440,6 +1486,7 @@ unsafe fn install_shields_hooks(
 
     let app_req = app.clone();
     let label_req = label.clone();
+    let label_for_scripts = label.clone();
     let mut token = 0i64;
     core.add_WebResourceRequested(
         &WebResourceRequestedEventHandler::create(Box::new(move |sender, args| {
@@ -1469,8 +1516,18 @@ unsafe fn install_shields_hooks(
             if !shields_up_for(&st, page_url.host_str().unwrap_or("")) {
                 return Ok(());
             }
-            if shields.should_block(&uri, &page, request_kind(context)) {
-                let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from("Blocked by Kessel Shields"), &HSTRING::new())?;
+            let verdict = shields.check_request(&uri, &page, request_kind(context));
+            if !matches!(verdict, shields::Verdict::Allow) {
+                let response = match verdict {
+                    // One of uBlock's stand-ins (e.g. a no-op script) for
+                    // pages that break when the real thing is simply missing.
+                    shields::Verdict::Redirect { mime, body } => {
+                        let stream = windows::Win32::UI::Shell::SHCreateMemStream(Some(&body));
+                        let headers = format!("Content-Type: {}\r\nAccess-Control-Allow-Origin: *", mime);
+                        env.CreateWebResourceResponse(stream.as_ref(), 200, &HSTRING::from("OK"), &HSTRING::from(headers))?
+                    }
+                    _ => env.CreateWebResourceResponse(None, 403, &HSTRING::from("Blocked by Kessel Shields"), &HSTRING::new())?,
+                };
                 args.SetResponse(&response)?;
                 st.store.blocked_count.fetch_add(1, Ordering::Relaxed);
                 if let Some(stats) = shields.bump(id, |s| s.blocked += 1) {
@@ -1536,6 +1593,21 @@ unsafe fn install_shields_hooks(
     if let Ok(core13) = core.cast::<ICoreWebView2_13>() {
         if let Ok(profile) = core13.Profile().and_then(|p| p.cast::<ICoreWebView2Profile3>()) {
             let _ = profile.SetPreferredTrackingPreventionLevel(level);
+        }
+    }
+
+    // A webview's very first page starts loading while it's being created,
+    // before Tauri can route that navigation through guard_navigation -- so
+    // register that page's scriptlets here (its document doesn't exist yet
+    // while the request is still on the network).
+    let mut source = PWSTR::null();
+    core.Source(&mut source)?;
+    let first_page = take_pwstr(source);
+    if let Ok(url) = tauri::Url::parse(&first_page) {
+        let st = app.state::<BrowserState>();
+        if !is_internal_nav(&url) && shields_up_for(&st, url.host_str().unwrap_or("")) {
+            let script = app.state::<shields::Shields>().scriptlets_for(url.as_str());
+            register_scriptlets(app, &core, label_for_scripts, script);
         }
     }
     Ok(())
