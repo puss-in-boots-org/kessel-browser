@@ -57,6 +57,21 @@ function findTab(id) {
   return tabs.find((t) => t.id === id);
 }
 
+// A read-only view of the tab strip for the end-to-end tests (tests/e2e).
+window.__kesselTest = {
+  tabs: () =>
+    tabs.map((t) => ({
+      id: t.id,
+      url: t.url,
+      title: t.title,
+      active: t.id === activeTabId,
+      discarded: !!t.discarded,
+      loading: !!t.loading,
+      account: t.account ?? null,
+    })),
+  activeTabId: () => activeTabId,
+};
+
 // Rust's tab-cycling order (Ctrl+Tab, Ctrl+1..9) follows the strip's.
 // Sleeping placeholders have no real (u32) id to send.
 function syncTabOrder() {

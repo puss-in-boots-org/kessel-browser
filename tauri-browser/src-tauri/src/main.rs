@@ -3,7 +3,10 @@
 
 mod accounts;
 mod adblock;
+mod commands;
 mod import;
+mod keys;
+mod profile;
 mod shields;
 mod store;
 mod vault;
@@ -325,7 +328,7 @@ fn create_tab_internal(
     let app_for_download = app.clone();
     let data_dir = state.data_dir.clone();
 
-    let builder = with_account(app, with_farbling(app, WebviewBuilder::new(&label, webview_url)), account.as_deref())
+    let builder = with_account(app, with_farbling(app, profile::webview(&label, webview_url)), account.as_deref())
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
         .on_new_window({
             let (app, account) = (app.clone(), account.clone());
@@ -448,6 +451,7 @@ fn create_tab_internal(
 
     attach_shields(app, &webview, id);
     watch_page(app, &webview, id);
+    keys::install(app, &webview);
     if let Some(account) = account {
         state.tab_accounts.lock().unwrap().insert(id, account);
     }
@@ -545,7 +549,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
     let frame = state
         .window
         .add_child(
-            WebviewBuilder::new(SIDE_PANEL_FRAME_LABEL, WebviewUrl::App("panel-frame.html".into()))
+            profile::webview(SIDE_PANEL_FRAME_LABEL, WebviewUrl::App("panel-frame.html".into()))
                 .initialization_script(&frame_init),
             position,
             size,
@@ -561,7 +565,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
         SIDE_PANEL_RESIZE_HANDOFF_SCRIPT
     );
     let app_for_nav = app.clone();
-    let builder = with_farbling(app, WebviewBuilder::new("side-panel", webview_url))
+    let builder = with_farbling(app, profile::webview("side-panel", webview_url))
         .initialization_script(&script)
         .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features, None) })
         .on_navigation(move |nav_url| {
@@ -584,6 +588,8 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
     };
     attach_shields(app, &page, 0);
     watch_page(app, &page, 0);
+    keys::install(app, &page);
+    keys::install(app, &frame);
 
     *state.side_panel_frame.lock().unwrap() = Some(frame);
     *state.side_panel.lock().unwrap() = Some(page);
@@ -760,7 +766,7 @@ fn create_popout_internal(
     let bar_label = format!("popout-bar-{}", id);
     let bar = window
         .add_child(
-            WebviewBuilder::new(&bar_label, WebviewUrl::App("popout.html".into())).initialization_script(&bar_init),
+            profile::webview(&bar_label, WebviewUrl::App("popout.html".into())).initialization_script(&bar_init),
             LogicalPosition::new(0.0, 0.0),
             LogicalSize::new(POPOUT_WIDTH, POPOUT_HEIGHT),
         )
@@ -770,7 +776,7 @@ fn create_popout_internal(
     let bar_label_for_nav = bar_label.clone();
     let content_label = format!("popout-content-{}", id);
     let content_label_for_nav = content_label.clone();
-    let content_builder = with_account(app, with_farbling(app, WebviewBuilder::new(&content_label, webview_url)), account.as_deref())
+    let content_builder = with_account(app, with_farbling(app, profile::webview(&content_label, webview_url)), account.as_deref())
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
         .on_new_window({
             let (app, account) = (app.clone(), account.clone());
@@ -796,6 +802,8 @@ fn create_popout_internal(
         .map_err(|e| e.to_string())?;
     attach_shields(app, &content, id);
     watch_page(app, &content, id);
+    keys::install(app, &content);
+    keys::install(app, &bar);
 
     let window_for_events = window.clone();
     let app_for_events = app.clone();
@@ -2143,12 +2151,13 @@ async fn toggle_shields_popup(app: tauri::AppHandle, webview: Webview, id: u32, 
         let popup = state
             .window
             .add_child(
-                WebviewBuilder::new(SHIELDS_POPUP_LABEL, WebviewUrl::App("shields.html".into()))
+                profile::webview(SHIELDS_POPUP_LABEL, WebviewUrl::App("shields.html".into()))
                     .initialization_script(&format!("window.__KESSEL_SHIELDS_TAB__ = {};", id)),
                 LogicalPosition::new(left, y + 6.0),
                 LogicalSize::new(SHIELDS_POPUP_WIDTH, SHIELDS_POPUP_HEIGHT),
             )
             .map_err(|e| e.to_string())?;
+        keys::install(&app2, &popup);
         let _ = popup.set_focus();
         raise_resize_borders(&state.window);
         Ok(true)
@@ -2307,11 +2316,12 @@ async fn toggle_accounts_popup(app: tauri::AppHandle, webview: Webview, x: f64, 
         let popup = state
             .window
             .add_child(
-                WebviewBuilder::new(ACCOUNTS_POPUP_LABEL, WebviewUrl::App("accounts.html".into())),
+                profile::webview(ACCOUNTS_POPUP_LABEL, WebviewUrl::App("accounts.html".into())),
                 LogicalPosition::new(left, y + 6.0),
                 LogicalSize::new(ACCOUNTS_POPUP_WIDTH, ACCOUNTS_POPUP_HEIGHT),
             )
             .map_err(|e| e.to_string())?;
+        keys::install(&app2, &popup);
         let _ = popup.set_focus();
         raise_resize_borders(&state.window);
         Ok(true)
@@ -3294,6 +3304,15 @@ fn save_session(state: tauri::State<BrowserState>, tabs: Vec<SessionTab>) {
     }
 }
 
+// The WebView2 command line for this run (see profile::set_browser_args).
+fn engine_args(_settings: &Settings) -> String {
+    let mut args = String::from(profile::DEFAULT_ENGINE_ARGS);
+    if let Some(port) = profile::remote_debugging_port() {
+        args.push_str(&format!(" --remote-debugging-port={}", port));
+    }
+    args
+}
+
 fn main() {
     tauri::Builder::default()
         // Only for Rust's open_path. The plugin's default also injects a
@@ -3395,24 +3414,37 @@ fn main() {
             close_shields_popup
         ])
         .setup(|app| {
+            // Which profile this is decides where everything below lives,
+            // and its settings decide the engine's command line -- both
+            // before the first webview exists.
+            let profile = profile::init(app);
+            let data_dir = profile.data_dir.clone();
+            let store = Store::load(data_dir.clone());
+            profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
+
             let width = 1280.0;
             let height = 820.0;
 
             // Frameless: the toolbar draws its own glass title bar (drag
             // region + minimize/maximize/close in index.html) so the native
             // Windows caption doesn't sit on top of the Liquid Glass chrome.
+            let title = match &profile.name {
+                Some(name) => format!("Kessel \u{2013} {}", name),
+                None => "Kessel".to_string(),
+            };
             let window = tauri::window::WindowBuilder::new(app, "main")
-                .title("Kessel")
+                .title(title)
                 .inner_size(width, height)
                 .min_inner_size(680.0, 420.0)
                 .decorations(false)
                 .build()?;
 
             let toolbar = window.add_child(
-                WebviewBuilder::new(TOOLBAR_LABEL, WebviewUrl::App("index.html".into())),
+                profile::webview(TOOLBAR_LABEL, WebviewUrl::App("index.html".into())),
                 LogicalPosition::new(0.0, 0.0),
                 LogicalSize::new(width, height),
             )?;
+            keys::install(app.handle(), &toolbar);
             // Attaches Tauri's frameless-window resize borders, which it
             // otherwise only does for single-webview windows (see
             // raise_resize_borders).
@@ -3429,21 +3461,9 @@ fn main() {
                 }
             });
 
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .expect("no app data dir available");
-            fs::create_dir_all(&data_dir).ok();
-
-            let store = Store::load(data_dir.clone());
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
-            let account_data = app
-                .path()
-                .app_local_data_dir()
-                .unwrap_or_else(|_| data_dir.clone())
-                .join("accounts");
-            app.manage(accounts::Accounts::load(&data_dir, account_data));
+            app.manage(accounts::Accounts::load(&data_dir, profile.local_dir.join("accounts")));
 
             let state = BrowserState {
                 window: window.clone(),
