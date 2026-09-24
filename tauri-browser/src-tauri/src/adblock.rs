@@ -151,13 +151,14 @@ pub const BLOCKED_DOMAINS: &[&str] = &[
 //     drag the moment the cursor enters it (see notes below).
 // (Page titles and icons come from WebView2's own events instead -- see
 // watch_page in main.rs.)
-pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bool) -> String {
+pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bool, in_side_panel: bool) -> String {
     format!(
         r#"
 (function() {{
   var KESSEL_TAB_ID = {id};
   var ADBLOCK_ENABLED = {adblock};
   var AUTOFILL_ENABLED = {autofill};
+  var IN_SIDE_PANEL = {side_panel};
 
   function invoke(cmd, args) {{
     if (window.__TAURI__ && window.__TAURI__.core) {{
@@ -408,10 +409,10 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
   // the 'side-panel-drag' event to know whether a mousemove is actually part
   // of a resize -- never a clientX-proximity guess, which would misfire on
   // ordinary clicks/drags near the page's own left margin whenever the panel
-  // is simply closed. KESSEL_TAB_ID === 0 is the side panel's own sentinel
-  // id (this same function is reused to build its script), so this never
-  // runs a second time inside the panel's own document.
-  if (KESSEL_TAB_ID !== 0) {{
+  // is simply closed. This same function builds the side panel page's
+  // script too, which has its own half of the hand-off -- so this part
+  // never runs a second time inside the panel's own document.
+  if (!IN_SIDE_PANEL) {{
     var sidePanelDragArmed = false;
     if (window.__TAURI__ && window.__TAURI__.event) {{
       window.__TAURI__.event.listen('side-panel-drag', function (e) {{
@@ -433,6 +434,7 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
 "#,
         id = id,
         adblock = if adblock_enabled { "true" } else { "false" },
-        autofill = if autofill_enabled { "true" } else { "false" }
+        autofill = if autofill_enabled { "true" } else { "false" },
+        side_panel = if in_side_panel { "true" } else { "false" }
     )
 }

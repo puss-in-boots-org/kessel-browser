@@ -191,27 +191,32 @@ pub fn candidates(vk: u32, mods: u8, typed: Option<char>) -> Vec<Chord> {
 // Which Kessel webview a key press came from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Source {
-    // Kessel's own UI in the main window: the toolbar and its popups.
-    Toolbar,
+    // Kessel's own UI in browser window "win-N": its toolbar, side panel
+    // frame and popups.
+    Toolbar(String),
+    // A tab (whichever window it's in right now).
     Tab(u32),
-    SidePanel,
+    // The page in browser window "win-N"'s side panel.
+    SidePanel(String),
+    // A pop-out window (its title bar or its page).
     Popout(u32),
 }
 
 impl Source {
     pub fn from_label(label: &str) -> Source {
+        let number = |rest: &str| rest.rsplit('-').next().and_then(|n| n.parse::<u32>().ok());
         if let Some(id) = label.strip_prefix("content-").and_then(|s| s.parse().ok()) {
             Source::Tab(id)
-        } else if label == "side-panel" {
-            Source::SidePanel
         } else if let Some(id) = label
             .strip_prefix("popout-content-")
             .or_else(|| label.strip_prefix("popout-bar-"))
             .and_then(|s| s.parse().ok())
         {
             Source::Popout(id)
+        } else if let Some(n) = label.strip_prefix("side-panel-").filter(|r| !r.starts_with("frame")).and_then(number) {
+            Source::SidePanel(format!("win-{}", n))
         } else {
-            Source::Toolbar
+            Source::Toolbar(format!("win-{}", number(label).unwrap_or(1)))
         }
     }
 }
@@ -345,8 +350,9 @@ mod tests {
         assert_eq!(Source::from_label("content-12"), Source::Tab(12));
         assert_eq!(Source::from_label("popout-content-3"), Source::Popout(3));
         assert_eq!(Source::from_label("popout-bar-3"), Source::Popout(3));
-        assert_eq!(Source::from_label("side-panel"), Source::SidePanel);
-        assert_eq!(Source::from_label("toolbar"), Source::Toolbar);
-        assert_eq!(Source::from_label("shields-popup"), Source::Toolbar);
+        assert_eq!(Source::from_label("side-panel-2"), Source::SidePanel("win-2".into()));
+        assert_eq!(Source::from_label("side-panel-frame-2"), Source::Toolbar("win-2".into()));
+        assert_eq!(Source::from_label("toolbar-1"), Source::Toolbar("win-1".into()));
+        assert_eq!(Source::from_label("shields-popup-4"), Source::Toolbar("win-4".into()));
     }
 }

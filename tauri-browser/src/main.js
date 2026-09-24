@@ -6,13 +6,20 @@
 // src-tauri/src/main.rs.
 import { icon, faviconLetter } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
-import { ENGINES, resolveInput, toast, hostOf } from "./shared/api.js";
+import { ENGINES, resolveInput, toast, hostOf, listenHere } from "./shared/api.js";
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 
 const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+// Only events for this window's toolbar (and broadcasts) -- see listenHere.
+const listen = listenHere;
 const appWindow = window.__TAURI__.window.getCurrentWindow();
+
+// Which browser window this toolbar belongs to (set by Rust, see
+// browser_windows.rs). A private window's tabs are InPrivate: no history,
+// no session restore, nothing on the recently-closed list.
+const WIN = window.__KESSEL_WINDOW__ || { label: "win-1", number: 1, private: false };
+document.documentElement.classList.toggle("private-window", !!WIN.private);
 
 // Tells Rust's toolbar watchdog this page is alive. If this renderer
 // process dies (crash, or killed in Task Manager) the heartbeats stop and
@@ -70,6 +77,11 @@ window.__kesselTest = {
       account: t.account ?? null,
     })),
   activeTabId: () => activeTabId,
+  window: () => WIN,
+  // The toolbar's own actions, as its buttons and shortcuts run them.
+  createTab: (url, account) => createTab(url, account),
+  activateTab: (id) => activateTab(id),
+  closeTab: (id) => closeTab(id),
 };
 
 // Rust's tab-cycling order (Ctrl+Tab, Ctrl+1..9) follows the strip's.
@@ -190,6 +202,11 @@ function paintStaticIcons() {
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
+  if (WIN.private) {
+    const badge = document.getElementById("private-badge");
+    badge.innerHTML = `${icon("incognito", 14)}<span>Private</span>`;
+    badge.hidden = false;
+  }
 }
 
 // --- Frameless window: title-bar dragging + window controls -------------------
@@ -440,12 +457,95 @@ function wireTabDrag(el, tab) {
     syncTabOrder();
     renderTabs();
     persistSession();
-    // Dropped somewhere that isn't the tab strip -- below the toolbar (over
-    // the page) or outside the window entirely: tear it off.
+    // Dropped somewhere that isn't a tab strip -- below the toolbar (over
+    // the page) or outside the window: it moves into a window of its own.
+    // (Dropped on another window's strip, that window took it: "move".)
     if (e.dataTransfer.dropEffect === "none" && (e.clientY > reportedInsets.top || isOutsideWindow(e))) {
-      tearOffTab(tab, e);
+      moveTabToNewWindow(tab, e);
     }
   });
+}
+
+// A tab from another Kessel window dropped on this strip moves here, page
+// and all (see adopt_tab in browser_windows.rs).
+function wireTabDrops() {
+  const strip = document.getElementById("tabs");
+  const isForeignTab = (e) => draggedTabId === null && e.dataTransfer.types.includes("application/x-kessel-tab");
+  for (const target of [strip, document.getElementById("tab-bar")]) {
+    target.addEventListener("dragover", (e) => {
+      if (!isForeignTab(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    });
+    target.addEventListener("drop", async (e) => {
+      if (!isForeignTab(e)) return;
+      e.preventDefault();
+      const id = parseInt(e.dataTransfer.getData("application/x-kessel-tab"), 10);
+      if (!(id > 0) || findTab(id)) return;
+      // Where it was dropped: before the first tab whose middle is right of the cursor.
+      const els = [...strip.querySelectorAll(".tab")];
+      const before = els.find((el) => {
+        const r = el.getBoundingClientRect();
+        return e.clientX < r.left + r.width / 2;
+      });
+      try {
+        const info = await invoke("adopt_tab", { id });
+        adoptTabInfo(info, before ? findTab(parseInt(before.dataset.tabId, 10)) : null);
+        await activateTab(info.id);
+        await appWindow.setFocus();
+      } catch (err) {
+        toast(String(err));
+      }
+    });
+  }
+}
+
+// Puts a live tab that moved in from another window into the strip, before
+// `beforeTab` (or at the end).
+function adoptTabInfo(info, beforeTab = null) {
+  if (findTab(info.id)) return;
+  const tab = {
+    id: info.id,
+    url: info.url,
+    title: info.title || INTERNAL_TITLES[info.url] || hostOf(info.url),
+    userTitled: !!info.title,
+    favicon: info.favicon ?? null,
+    account: info.account ?? null,
+    justCreated: true,
+    loading: false,
+    lastActiveAt: Date.now(),
+  };
+  const at = beforeTab ? tabs.indexOf(beforeTab) : -1;
+  if (at >= 0) tabs.splice(at, 0, tab);
+  else tabs.push(tab);
+  normalizeGroups();
+  syncTabOrder();
+}
+
+// "Move to new window" / dragging a tab out: the tab keeps its page and
+// moves into a new window (at the drop point, when there is one). A
+// sleeping tab has no page to move, so a new window just opens its address.
+async function moveTabToNewWindow(tab, e = null) {
+  const at = e && (e.screenX || e.screenY) ? { x: e.screenX - 90, y: e.screenY - 18 } : {};
+  try {
+    if (tab.discarded || tab.id < 0) {
+      await invoke("new_window", { private: !!WIN.private, url: tab.url });
+      await closeTab(tab.id, { remember: false });
+    } else if (tabs.length > 1) {
+      await invoke("move_tab_to_new_window", { id: tab.id, ...at });
+    }
+  } catch (err) {
+    toast(`Couldn't move the tab: ${err}`);
+  }
+}
+
+// "Move to window ▸": sends a live tab to another open window.
+async function sendTabToWindow(tab, target) {
+  try {
+    await invoke("send_tab_to_window", { id: tab.id, target });
+  } catch (err) {
+    toast(String(err));
+  }
 }
 
 // --- Tear-off pop-out windows (see pop_out / dock_popout in main.rs) --------
@@ -483,7 +583,8 @@ async function popOutPinned(p, e) {
 
 // --- Per-tab right-click context menu --------------------------------------
 
-function showTabContextMenu(tab, x, y) {
+async function showTabContextMenu(tab, x, y) {
+  const otherWindows = (await invoke("get_windows").catch(() => [])).filter((w) => !w.current && w.private === !!WIN.private);
   const items = [
     { label: "Duplicate tab", iconName: "copy", action: () => createTab(tab.url, tab.account ?? null) },
     { label: "Close tab", iconName: "close", action: () => closeTab(tab.id) },
@@ -499,6 +600,14 @@ function showTabContextMenu(tab, x, y) {
       },
     },
   ];
+  if (tabs.length > 1) items.push({ label: "Move to new window", iconName: "popOut", action: () => moveTabToNewWindow(tab) });
+  if (tab.id > 0 && !tab.discarded) {
+    for (const w of otherWindows) {
+      const name = w.title ? `“${w.title.length > 28 ? w.title.slice(0, 27) + "…" : w.title}”` : "another window";
+      items.push({ label: `Move to window with ${name} (${w.tabs} tab${w.tabs === 1 ? "" : "s"})`, iconName: "arrowRight", action: () => sendTabToWindow(tab, w.label) });
+    }
+  }
+  if (tab.url && !WIN.private) items.push({ label: "Pop out", iconName: "popOut", action: () => tearOffTab(tab, {}) });
   if (tab.url && !tab.url.startsWith("kessel://") && !pinned.some((p) => p.url === tab.url)) {
     items.push({ label: "Pin to rail", iconName: "pin", action: () => pinUrl(tab.url, tab.title !== "New Tab" ? tab.title : null) });
   }
@@ -648,24 +757,86 @@ async function createTab(url, account = activeAccount()) {
   renderTabs();
   updateAddressBarForActiveTab();
   persistSession();
+  catchUpTab(id);
   return id;
+}
+
+// A page can load (and report its title and icon) before new_tab has even
+// returned its id to us -- those reports found no tab here and were dropped.
+// Rust keeps the latest, so ask once the tab is in the strip.
+async function catchUpTab(id) {
+  const info = await invoke("get_tab_info", { id }).catch(() => null);
+  const tab = findTab(id);
+  if (!info || !tab) return;
+  let changed = false;
+  if (info.title && !tab.userTitled) {
+    tab.title = info.title;
+    tab.userTitled = true;
+    changed = true;
+  }
+  if (info.favicon && !tab.favicon) {
+    tab.favicon = info.favicon;
+    changed = true;
+  }
+  // Only a real address -- right after creation the webview can still be on
+  // about:blank, which isn't where the tab is going.
+  if (info.url && /^(https?|file):/.test(info.url) && info.url !== tab.url) {
+    tab.url = info.url;
+    changed = true;
+    if (id === activeTabId) updateAddressBarForActiveTab();
+  }
+  if (changed) {
+    renderTabs();
+    persistSession();
+  }
 }
 
 // Adds a tab entry with NO webview behind it yet -- used for session-restore
 // tabs you aren't looking at right now. Costs nothing until you click it.
-function addPlaceholderTab(url, account = null) {
+function addPlaceholderTab(url, account = null, title = null) {
   const id = nextPlaceholderId();
   tabs.push({
     id,
     url,
     account: accountById(account)?.id ?? null,
-    title: INTERNAL_TITLES[url] || hostOf(url),
+    title: title || INTERNAL_TITLES[url] || hostOf(url),
+    userTitled: !!title,
     discarded: true,
     neverCreated: true,
     loading: false,
     lastActiveAt: Date.now(),
   });
   return id;
+}
+
+// What this window opens first (see take_window_init in main.rs): the tabs
+// of a restored window -- only the one you were looking at gets a real
+// webview, the rest come back as sleeping placeholders that cost nothing
+// until clicked -- tabs moved in from another window, or links (Shift+click
+// opens one in a new window). Returns whether it opened anything.
+async function openWindowInit(init) {
+  if (!init) return false;
+  if (init.session?.tabs?.length) {
+    const saved = init.session.tabs;
+    const active = Math.min(Math.max(init.session.active || 0, 0), saved.length - 1);
+    for (let i = 0; i < saved.length; i++) {
+      if (i === active) await createTab(saved[i].url, saved[i].account ?? null);
+      else addPlaceholderTab(saved[i].url, saved[i].account ?? null, saved[i].title);
+    }
+    normalizeGroups();
+    renderTabs();
+    return true;
+  }
+  if (init.adopt?.length) {
+    for (const info of init.adopt) adoptTabInfo(info);
+    await activateTab(init.adopt[0].id);
+    return true;
+  }
+  if (init.urls?.length) {
+    for (const url of init.urls) await createTab(url);
+    return true;
+  }
+  return false;
 }
 
 async function closeTab(id, { remember = true } = {}) {
@@ -760,15 +931,20 @@ async function navigateActiveTab(rawInput) {
   await invoke("navigate", { id: tab.id, url });
 }
 
+// This window's tabs, for restoring the session next time (and after a
+// crash). Private windows keep nothing.
+let sessionTimer = null;
 function persistSession() {
-  const settings = currentSettings();
-  if (!settings || !settings.restore_tabs) return;
-  // Settings/Passwords are excluded on purpose: restoring one as a plain
-  // tab would bypass the singleton dedup the next time it's reopened.
-  const saved = tabs
-    .filter((t) => t.url && (t.url.startsWith("http") || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(t.url))
-    .map((t) => ({ url: t.url, account: t.account ?? null }));
-  invoke("save_session", { tabs: saved }).catch(() => {});
+  if (WIN.private) return;
+  clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    // Settings/Passwords are excluded on purpose: restoring one as a plain
+    // tab would bypass the singleton dedup the next time it's reopened.
+    const kept = tabs.filter((t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(t.url));
+    const saved = kept.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null }));
+    const active = Math.max(0, kept.findIndex((t) => t.id === activeTabId));
+    invoke("save_window_session", { tabs: saved, active }).catch(() => {});
+  }, 300);
 }
 
 // --- Bookmarks --------------------------------------------------------
@@ -991,29 +1167,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Before the first tab exists, so Rust places it below the real chrome.
   await wireChromeInsets();
 
-  // Restore last session's tabs if enabled, else open the homepage. Only
-  // the tab you're actually looking at gets a real webview -- the rest
-  // come back as sleeping placeholders (see addPlaceholderTab) that only
-  // cost a webview once you actually click them. Eagerly recreating every
-  // tab from last time on every launch is exactly the kind of waste this
-  // whole feature exists to avoid.
-  const settings = currentSettings();
-  // A reload after the toolbar's process died picks up the tabs that are
-  // still running instead of opening a fresh one.
-  let restored = await restoreAfterToolbarReload();
-  if (!restored && settings?.restore_tabs) {
-    const saved = await invoke("get_session").catch(() => []);
-    if (saved && saved.length) {
-      await createTab(saved[0].url, saved[0].account);
-      for (let i = 1; i < saved.length; i++) addPlaceholderTab(saved[i].url, saved[i].account);
-      normalizeGroups();
-      renderTabs();
-      restored = true;
-    }
-  }
-  if (!restored) await createTab();
-
   wireTabDiscarding();
+  wireTabDrops();
 
   document.getElementById("rail-home").addEventListener("click", () => createTab());
   document.getElementById("rail-add-pin").addEventListener("click", pinCurrentTab);
@@ -1212,6 +1367,30 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateAddressBarForActiveTab();
   });
 
+  // One of this window's tabs moved to another window (dragged there, or
+  // "Move to..."). It's still open, just not here any more; a window whose
+  // last tab left closes, like in any browser.
+  await listen("tab-moved-out", async (event) => {
+    const tab = findTab(event.payload.id);
+    if (!tab) return;
+    const idx = tabs.indexOf(tab);
+    tabs.splice(idx, 1);
+    if (!tabs.length) {
+      await appWindow.close();
+      return;
+    }
+    if (activeTabId === tab.id) await activateTab(tabs[Math.max(0, idx - 1)].id);
+    else renderTabs();
+    syncTabOrder();
+    persistSession();
+  });
+
+  // A tab sent here from another window: show it.
+  await listen("tab-moved-in", async (event) => {
+    adoptTabInfo(event.payload);
+    await activateTab(event.payload.id);
+  });
+
   await listen("pinned-changed", (event) => {
     pinned = event.payload;
     renderPinned();
@@ -1256,6 +1435,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderEngineMenu();
     renderBookmarksBar();
   });
+
+  // Only now, with every listener above in place, does this window open its
+  // tabs -- a fast page can report its title before an earlier listener
+  // would even exist. A reload after the toolbar's process died picks up
+  // the tabs that are still running instead of opening a fresh one.
+  // Otherwise this window opens what it was made for -- your last session's
+  // tabs, tabs moved in from another window, a link -- or else the start page.
+  let restored = await restoreAfterToolbarReload();
+  if (!restored) restored = await openWindowInit(await invoke("take_window_init").catch(() => null));
+  if (!restored) await createTab();
 });
 
 // --- Loading progress bar --------------------------------------------------

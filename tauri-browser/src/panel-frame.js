@@ -1,14 +1,15 @@
 // The side panel's glass frame (see open_side_panel_webviews in main.rs).
 // Rust tells us what the panel shows via window.__KESSEL_PANEL__ before this
-// runs; the page's own title/favicon reports (id 0) and navigations are
-// forwarded to this webview only.
+// runs; the page's own title/favicon reports and navigations are forwarded
+// to this webview only.
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
-import { hostOf } from "./shared/api.js";
+import { hostOf, listenHere } from "./shared/api.js";
 import { siteIcon, alignToChrome, injectRefractionFilter, watchCustomWallpaper } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+// Only this frame's events -- another window's panel reports to its own.
+const listen = listenHere;
 
 const info = window.__KESSEL_PANEL__ || { kind: "", url: "", title: "" };
 const BUILT_IN = { downloads: "download", passwords: "key", settings: "settings" };

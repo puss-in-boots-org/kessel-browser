@@ -3,6 +3,7 @@
 
 mod accounts;
 mod adblock;
+mod browser_windows;
 mod commands;
 mod import;
 mod keys;
@@ -14,7 +15,7 @@ mod vault;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, HistoryEntry, PinnedSite, Settings, Store};
@@ -25,26 +26,46 @@ use tauri::{
 };
 use vault::{TotpSetup, Vault, VaultItem, VaultStatus};
 
-// Where content webviews (tabs, the side panel) start: x = the left rail's
-// width, y = the top chrome's height. These used to be hardcoded constants
-// that had to match style.css by hand; now the toolbar measures its own
-// rendered chrome and reports it via `set_chrome_insets`, so the Liquid
-// Glass layout, the optional bookmarks bar and the interface-size setting
-// can all change it without touching Rust. Stored as f64 bits in atomics so
-// every bounds helper can read them without threading state through.
-// The initial values are only used until the toolbar's first report.
-static CHROME_LEFT: AtomicU64 = AtomicU64::new(f64::to_bits(60.0));
-static CHROME_TOP: AtomicU64 = AtomicU64::new(f64::to_bits(118.0));
+// --- Browser windows ---------------------------------------------------------
+//
+// Kessel can have any number of browser windows. Window N is "win-N"; its
+// own webviews carry the same number: its toolbar is "toolbar-N" (tab strip,
+// address bar, rail), its side panel "side-panel-N" / "side-panel-frame-N",
+// its popups "shields-popup-N" and "accounts-popup-N". Tabs ("content-<id>")
+// are numbered globally and can move between windows (Webview::reparent),
+// so a tab's window is always asked of its webview rather than remembered.
 
-fn chrome_left() -> f64 {
-    f64::from_bits(CHROME_LEFT.load(Ordering::Relaxed))
+fn window_label(number: u32) -> String {
+    format!("win-{}", number)
 }
 
-fn chrome_top() -> f64 {
-    f64::from_bits(CHROME_TOP.load(Ordering::Relaxed))
+// The window number at the end of any per-window label ("toolbar-3" -> 3).
+fn window_number(label: &str) -> Option<u32> {
+    label.rsplit('-').next()?.parse().ok()
 }
 
-const TOOLBAR_LABEL: &str = "toolbar";
+fn toolbar_label(win: &str) -> String {
+    format!("toolbar-{}", window_number(win).unwrap_or(1))
+}
+
+fn side_panel_label(win: &str) -> String {
+    format!("side-panel-{}", window_number(win).unwrap_or(1))
+}
+
+fn side_panel_frame_label(win: &str) -> String {
+    format!("side-panel-frame-{}", window_number(win).unwrap_or(1))
+}
+
+fn popup_label(kind: &str, win: &str) -> String {
+    format!("{}-popup-{}", kind, window_number(win).unwrap_or(1))
+}
+
+// Where content webviews (tabs, the side panel) start in a window: x = the
+// left rail's width, y = the top chrome's height. The toolbar measures its
+// own rendered chrome and reports it (set_chrome_insets), so the Liquid
+// Glass layout, the bookmarks bar and the interface size can all change it
+// without touching Rust. These defaults only last until that first report.
+const DEFAULT_INSETS: (f64, f64) = (60.0, 118.0);
 // Inactive tab webviews get parked far off-screen rather than resized to
 // zero -- some WebView2 versions behave oddly at a literal 0x0 size, and
 // this approach is already proven to work reliably. Tabs are still truly
@@ -83,40 +104,74 @@ fn internal_route(url: &str) -> Option<&'static str> {
 
 // --- Shared app state ------------------------------------------------------
 
+// One browser window: its toolbar, the tabs in it and its side panel.
+pub(crate) struct BrowserWindow {
+    pub(crate) label: String,
+    pub(crate) window: Window,
+    // An InPrivate window: its tabs share one in-memory session that's
+    // forgotten when the last private window closes, and nothing they do is
+    // kept -- no history, no session restore, no recently closed tabs.
+    pub(crate) private: bool,
+    // Live tab ids in the strip's order (tab cycling follows it).
+    order: Vec<u32>,
+    active: Option<u32>,
+    // The chrome size this window's toolbar reported (see DEFAULT_INSETS).
+    insets: (f64, f64),
+    // What the toolbar opens when it starts (see take_window_init).
+    init: Option<serde_json::Value>,
+    // The hover-panel overlay: at most one per window, floating on top of
+    // the active tab rather than pushing it aside. `side_panel_kind`
+    // identifies what's in it (e.g. "pinned:<id>", "downloads",
+    // "passwords", "settings") so a second click on the same rail icon
+    // closes it instead of just re-showing the same thing. `side_panel_url`
+    // is the last known url it should show -- used to recreate it in place
+    // (see reraise_side_panel) since Tauri has no "bring this webview to
+    // the front" API; the only way to guarantee it stays visually on top of
+    // newly-created tab webviews is to recreate it after them.
+    side_panel: Option<Webview>,
+    // The glass sheet drawn behind the side panel's page (panel-frame.html):
+    // header, buttons and the resize grip. Always created and closed
+    // together with `side_panel`.
+    side_panel_frame: Option<Webview>,
+    side_panel_kind: Option<String>,
+    side_panel_url: Option<String>,
+    // The panel page's id for its title/icon reports (0 while closed).
+    side_panel_id: u32,
+    // The toolbar's own copy of its tab list (incl. sleeping tabs that only
+    // exist in the UI), pushed on every change -- for toolbar recovery and
+    // for "reopen closed window".
+    snapshot: Option<String>,
+    // When this toolbar last sent a heartbeat (ms since start), or a grace
+    // deadline, which is why it can be ahead of "now" (see toolbar_watchdog).
+    heartbeat: u64,
+}
+
 pub(crate) struct BrowserState {
-    window: Window,
+    windows: Mutex<Vec<BrowserWindow>>,
+    next_window: AtomicU32,
+    // The browser window you used last: where things without a window of
+    // their own land (a pop-out's "back to tabs", reopening a closed tab
+    // whose window is gone...).
+    focused_window: Mutex<Option<String>>,
     tabs: Mutex<HashMap<u32, Webview>>,
-    order: Mutex<Vec<u32>>,
-    active: Mutex<Option<u32>>,
     next_id: AtomicU32,
     next_download_id: AtomicU32,
     data_dir: PathBuf,
-    // Recently closed tabs: (url, account).
-    closed_stack: Mutex<Vec<(String, Option<String>)>>,
+    // Recently closed tabs, most recent last.
+    closed_stack: Mutex<Vec<ClosedTab>>,
+    // Recently closed windows, most recent last.
+    closed_windows: Mutex<Vec<ClosedWindow>>,
     // Tab or pop-out id -> its account (see accounts.rs); Main isn't listed.
     tab_accounts: Mutex<HashMap<u32, String>>,
+    // The InPrivate tabs (those of private windows): nothing they visit is
+    // recorded.
+    private_tabs: Mutex<HashSet<u32>>,
     pub(crate) store: Store,
     // "kessel://settings" / "kessel://passwords" -> the one tab id showing
     // it, if any. Only used as a fallback path (e.g. typing kessel://settings
     // into the omnibox) now that the rail opens these in the side panel
     // instead -- lets that fallback still avoid spawning a duplicate tab.
     singleton_tabs: Mutex<HashMap<String, u32>>,
-    // The hover-panel overlay: at most one open at a time, floating on top
-    // of the active tab rather than pushing it aside. `side_panel_kind`
-    // identifies what's currently in it (e.g. "pinned:<id>", "downloads",
-    // "passwords", "settings") so a second click on the same rail icon
-    // closes it instead of just re-showing the same thing. `side_panel_url`
-    // is the last known url it should show -- used to recreate it in place
-    // (see reraise_side_panel) since Tauri has no "bring this webview to
-    // the front" API; the only way to guarantee it stays visually on top
-    // of newly-created tab webviews is to recreate it after them.
-    side_panel: Mutex<Option<Webview>>,
-    // The glass sheet drawn behind the side panel's page (panel-frame.html):
-    // header, buttons and the resize grip. Always created and closed
-    // together with `side_panel`.
-    side_panel_frame: Mutex<Option<Webview>>,
-    side_panel_kind: Mutex<Option<String>>,
-    side_panel_url: Mutex<Option<String>>,
     // Torn-off pop-out windows, keyed by the id their content script reports
     // titles/favicons under (drawn from the same counter as tab ids, so the
     // two can never collide). See create_popout_internal.
@@ -125,12 +180,97 @@ pub(crate) struct BrowserState {
     // reloaded (see the toolbar watchdog) can redraw its tab strip without
     // waiting for every page to report again.
     tab_meta: Mutex<HashMap<u32, TabMeta>>,
-    // The toolbar's own copy of its tab list (incl. sleeping tabs that only
-    // exist in the UI), pushed on every change -- also for that recovery.
-    toolbar_snapshot: Mutex<Option<String>>,
-    // Page id (tab, pop-out, 0 = side panel) -> what the toolbar was last
-    // told about it (see watch_page).
+    // Page id (tab, pop-out, side panel page) -> what its toolbar or header
+    // was last told about it (see watch_page).
     pages: Mutex<HashMap<u32, PageState>>,
+    // Each window's tabs, as its toolbar last reported them, for restoring
+    // the session on the next launch (see save_window_session).
+    sessions: Mutex<Vec<(String, WindowSession)>>,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ClosedTab {
+    url: String,
+    #[serde(default)]
+    title: String,
+    account: Option<String>,
+    // The window it was in, so reopening puts it back there if it's open.
+    window: String,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ClosedWindow {
+    tabs: Vec<SessionTab>,
+    active: usize,
+    closed_at: u64,
+}
+
+impl BrowserState {
+    // Runs `f` on browser window `label`, if it's (still) open.
+    fn win<R>(&self, label: &str, f: impl FnOnce(&mut BrowserWindow) -> R) -> Option<R> {
+        self.windows.lock().unwrap().iter_mut().find(|w| w.label == label).map(f)
+    }
+
+    // The window a tab is in right now.
+    fn tab_window(&self, id: u32) -> Option<String> {
+        self.tabs.lock().unwrap().get(&id).map(|w| w.window().label().to_string())
+    }
+
+    fn window_handle(&self, label: &str) -> Option<Window> {
+        self.win(label, |w| w.window.clone())
+    }
+
+    fn insets(&self, label: &str) -> (f64, f64) {
+        self.win(label, |w| w.insets).unwrap_or(DEFAULT_INSETS)
+    }
+
+    fn is_private(&self, label: &str) -> bool {
+        self.win(label, |w| w.private).unwrap_or(false)
+    }
+
+    fn active_tab(&self, win: &str) -> Option<u32> {
+        self.win(win, |w| w.active).flatten()
+    }
+
+    // The browser window you used last, else the first one still open.
+    fn current_window(&self) -> Option<String> {
+        let focused = self.focused_window.lock().unwrap().clone();
+        let windows = self.windows.lock().unwrap();
+        focused
+            .filter(|f| windows.iter().any(|w| &w.label == f))
+            .or_else(|| windows.first().map(|w| w.label.clone()))
+    }
+
+    // The browser window a webview belongs to: a toolbar, tab, side panel or
+    // popup's own window, or -- for a pop-out -- the window you used last.
+    fn window_of(&self, webview: &Webview) -> Option<String> {
+        let label = webview.window().label().to_string();
+        if self.win(&label, |_| ()).is_some() {
+            Some(label)
+        } else {
+            self.current_window()
+        }
+    }
+}
+
+// Sends an event to the toolbar of browser window `win`.
+fn emit_to_window<S: serde::Serialize + Clone>(app: &tauri::AppHandle, win: &str, event: &str, payload: S) {
+    let _ = app.emit_to(toolbar_label(win).as_str(), event, payload);
+}
+
+// Sends an event to the toolbar of the window tab `id` is in.
+fn emit_to_tab_window<S: serde::Serialize + Clone>(app: &tauri::AppHandle, id: u32, event: &str, payload: S) {
+    if let Some(win) = app.state::<BrowserState>().tab_window(id) {
+        emit_to_window(app, &win, event, payload);
+    }
+}
+
+// Sends an event to every window's toolbar.
+fn emit_to_all_windows<S: serde::Serialize + Clone>(app: &tauri::AppHandle, event: &str, payload: S) {
+    let labels: Vec<String> = app.state::<BrowserState>().windows.lock().unwrap().iter().map(|w| w.label.clone()).collect();
+    for win in labels {
+        emit_to_window(app, &win, event, payload.clone());
+    }
 }
 
 #[derive(Default, Clone)]
@@ -160,23 +300,17 @@ struct HistoryWait {
 
 // The active tab always gets the full window width (minus the rail) --
 // it's never pushed aside, since the side panel is a hover overlay that
-// floats on top of it rather than sharing space with it.
-fn content_bounds(window: &Window, left_offset: f64) -> tauri::Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
+// floats on top of it rather than sharing space with it. `insets` is the
+// window's chrome size (left rail, top bars).
+fn content_bounds(window: &Window, insets: (f64, f64)) -> tauri::Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
     let size = window.inner_size()?;
     let scale = window.scale_factor()?;
     let logical = size.to_logical::<f64>(scale);
+    let (left, top) = insets;
     Ok((
-        LogicalPosition::new(left_offset, chrome_top()),
-        LogicalSize::new((logical.width - left_offset).max(0.0), (logical.height - chrome_top()).max(0.0)),
+        LogicalPosition::new(left, top),
+        LogicalSize::new((logical.width - left).max(0.0), (logical.height - top).max(0.0)),
     ))
-}
-
-// The active tab is always positioned at exactly the rail's width -- the
-// side panel overlays on top of it rather than sharing the window with it,
-// so unlike an earlier version of this feature, opening/resizing the panel
-// never moves or resizes the tab underneath.
-fn left_offset(_state: &BrowserState) -> f64 {
-    chrome_left()
 }
 
 // However big you've dragged the panel (or its size-by-default), it's
@@ -188,14 +322,14 @@ fn left_offset(_state: &BrowserState) -> f64 {
 // is small.
 const OVERLAY_EDGE_MARGIN: f64 = 28.0;
 
-fn effective_panel_width(window: &Window, preferred: f64) -> f64 {
+fn effective_panel_width(window: &Window, insets: (f64, f64), preferred: f64) -> f64 {
     let max_allowed = window
         .inner_size()
         .ok()
         .zip(window.scale_factor().ok())
         .map(|(size, scale)| {
             let logical_width = size.to_logical::<f64>(scale).width;
-            (logical_width - chrome_left() - OVERLAY_EDGE_MARGIN).max(0.0)
+            (logical_width - insets.0 - OVERLAY_EDGE_MARGIN).max(0.0)
         })
         .unwrap_or(preferred);
     preferred.min(max_allowed).max(0.0)
@@ -219,14 +353,19 @@ fn side_panel_content_bounds(position: LogicalPosition<f64>, size: LogicalSize<f
     )
 }
 
-// Lays out the panel's frame + page for the given width, if it's open.
-fn place_side_panel(state: &BrowserState, width: f64) {
-    let Ok((position, size)) = side_panel_bounds(&state.window, width) else { return };
-    if let Some(frame) = state.side_panel_frame.lock().unwrap().as_ref() {
+// Lays out window `win`'s panel frame + page for the given width, if open.
+fn place_side_panel(state: &BrowserState, win: &str, width: f64) {
+    let Some((window, insets, frame, page)) =
+        state.win(win, |w| (w.window.clone(), w.insets, w.side_panel_frame.clone(), w.side_panel.clone()))
+    else {
+        return;
+    };
+    let Ok((position, size)) = side_panel_bounds(&window, insets, width) else { return };
+    if let Some(frame) = frame {
         let _ = frame.set_position(position);
         let _ = frame.set_size(size);
     }
-    if let Some(page) = state.side_panel.lock().unwrap().as_ref() {
+    if let Some(page) = page {
         let (p, s) = side_panel_content_bounds(position, size);
         let _ = page.set_position(p);
         let _ = page.set_size(s);
@@ -265,14 +404,15 @@ fn raise_resize_borders(window: &Window) {
 #[cfg(not(windows))]
 fn raise_resize_borders(_window: &Window) {}
 
-fn side_panel_bounds(window: &Window, preferred_width: f64) -> tauri::Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
+fn side_panel_bounds(window: &Window, insets: (f64, f64), preferred_width: f64) -> tauri::Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
     let size = window.inner_size()?;
     let scale = window.scale_factor()?;
     let logical = size.to_logical::<f64>(scale);
-    let effective = effective_panel_width(window, preferred_width);
+    let effective = effective_panel_width(window, insets, preferred_width);
+    let (left, top) = insets;
     Ok((
-        LogicalPosition::new(chrome_left(), chrome_top()),
-        LogicalSize::new(effective, (logical.height - chrome_top()).max(0.0)),
+        LogicalPosition::new(left, top),
+        LogicalSize::new(effective, (logical.height - top).max(0.0)),
     ))
 }
 
@@ -292,16 +432,21 @@ fn toolbar_bounds(window: &Window) -> tauri::Result<(LogicalPosition<f64>, Logic
 
 // --- Tab creation / switching -----------------------------------------------
 
-// `account`: which account's sign-ins the tab uses (None = Main).
+// A new tab (not yet shown) in browser window `win`. `account`: which
+// account's sign-ins the tab uses (None = Main). A private window's tabs
+// are InPrivate, and ignore accounts.
 fn create_tab_internal(
     app: &tauri::AppHandle,
     state: &BrowserState,
+    win: &str,
     url: Option<String>,
     account: Option<String>,
 ) -> Result<u32, String> {
+    let window = state.window_handle(win).ok_or("that window is closed")?;
+    let private = state.is_private(win);
     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
     let label = format!("content-{}", id);
-    let account = app.state::<accounts::Accounts>().resolve(account.as_deref());
+    let account = if private { None } else { app.state::<accounts::Accounts>().resolve(account.as_deref()) };
 
     let resolved = match url.as_deref() {
         None => {
@@ -329,10 +474,11 @@ fn create_tab_internal(
     let data_dir = state.data_dir.clone();
 
     let builder = with_account(app, with_farbling(app, profile::webview(&label, webview_url)), account.as_deref())
-        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+        .incognito(private)
+        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled, false))
         .on_new_window({
-            let (app, account) = (app.clone(), account.clone());
-            move |url, features| open_new_window(&app, url, features, account.clone())
+            let (app, account, opener) = (app.clone(), account.clone(), label.clone());
+            move |url, features| open_new_window(&app, &opener, url, features, account.clone())
         })
         .on_navigation(move |nav_url| {
             // Kessel's own pages (newtab/settings/passwords) load through
@@ -355,7 +501,7 @@ fn create_tab_internal(
                 *meta = TabMeta::default(); // the new page reports its own
             }
             let payload = serde_json::json!({ "id": id, "url": nav_url.to_string() });
-            let _ = app_for_nav.emit_to(TOOLBAR_LABEL, "tab-navigated", payload);
+            emit_to_tab_window(&app_for_nav, id, "tab-navigated", payload);
             true
         })
         .on_page_load(move |_webview, payload| {
@@ -369,7 +515,7 @@ fn create_tab_internal(
                 }
             };
             let p = serde_json::json!({ "id": id, "url": payload.url().to_string() });
-            let _ = app_for_load.emit_to(TOOLBAR_LABEL, event_name, p);
+            emit_to_tab_window(&app_for_load, id, event_name, p);
         })
         .on_download(move |_webview, event| {
             let st = app_for_download.state::<BrowserState>();
@@ -440,8 +586,7 @@ fn create_tab_internal(
             }
         });
 
-    let webview = state
-        .window
+    let webview = window
         .add_child(
             builder,
             LogicalPosition::new(OFFSCREEN_X, 0.0),
@@ -455,44 +600,50 @@ fn create_tab_internal(
     if let Some(account) = account {
         state.tab_accounts.lock().unwrap().insert(id, account);
     }
+    if private {
+        state.private_tabs.lock().unwrap().insert(id);
+    }
     state.tabs.lock().unwrap().insert(id, webview);
-    state.order.lock().unwrap().push(id);
-    reraise_side_panel(app, state);
-    raise_resize_borders(&state.window);
+    state.win(win, |w| w.order.push(id));
+    reraise_side_panel(app, state, win);
+    raise_resize_borders(&window);
     Ok(id)
 }
 
+// Shows tab `id` in its window -- parking the window's previous tab
+// off-screen -- and gives it the keyboard focus.
 fn switch_tab_internal(state: &BrowserState, id: u32) -> Result<(), String> {
-    let tabs = state.tabs.lock().unwrap();
-    let mut active = state.active.lock().unwrap();
-
-    if let Some(prev) = *active {
-        if prev != id {
-            if let Some(w) = tabs.get(&prev) {
-                let _ = w.set_position(LogicalPosition::new(OFFSCREEN_X, 0.0));
+    let win = state.tab_window(id).ok_or("tab not found")?;
+    let (window, insets, prev) =
+        state.win(&win, |w| (w.window.clone(), w.insets, w.active)).ok_or("that window is closed")?;
+    {
+        let tabs = state.tabs.lock().unwrap();
+        if let Some(prev) = prev {
+            if prev != id {
+                if let Some(w) = tabs.get(&prev) {
+                    let _ = w.set_position(LogicalPosition::new(OFFSCREEN_X, 0.0));
+                }
             }
         }
+        let target = tabs.get(&id).ok_or_else(|| "tab not found".to_string())?;
+        let (position, size) = content_bounds(&window, insets).map_err(|e| e.to_string())?;
+        target.set_position(position).map_err(|e| e.to_string())?;
+        target.set_size(size).map_err(|e| e.to_string())?;
+        let _ = target.set_focus();
     }
-
-    let target = tabs.get(&id).ok_or_else(|| "tab not found".to_string())?;
-    let (position, size) = content_bounds(&state.window, left_offset(state)).map_err(|e| e.to_string())?;
-    target.set_position(position).map_err(|e| e.to_string())?;
-    target.set_size(size).map_err(|e| e.to_string())?;
-    let _ = target.set_focus();
-
-    *active = Some(id);
+    state.win(&win, |w| w.active = Some(id));
     Ok(())
 }
 
-// Re-applies the active tab's bounds using the *current* left_offset --
-// called whenever the side panel opens, closes, or resizes, so the active
-// tab keeps making exactly the amount of room the panel actually needs.
-fn resize_active_tab(state: &BrowserState) -> Result<(), String> {
-    let active_id = *state.active.lock().unwrap();
-    let Some(id) = active_id else { return Ok(()) };
+// Re-applies the active tab's bounds in window `win` -- after the window or
+// its chrome changes size.
+fn resize_active_tab(state: &BrowserState, win: &str) -> Result<(), String> {
+    let Some((window, insets, Some(id))) = state.win(win, |w| (w.window.clone(), w.insets, w.active)) else {
+        return Ok(());
+    };
     let tabs = state.tabs.lock().unwrap();
     let Some(target) = tabs.get(&id) else { return Ok(()) };
-    let (position, size) = content_bounds(&state.window, left_offset(state)).map_err(|e| e.to_string())?;
+    let (position, size) = content_bounds(&window, insets).map_err(|e| e.to_string())?;
     target.set_position(position).map_err(|e| e.to_string())?;
     target.set_size(size).map_err(|e| e.to_string())?;
     Ok(())
@@ -510,8 +661,6 @@ fn resize_active_tab(state: &BrowserState) -> Result<(), String> {
 // one webview across wildly different kinds of content -- a pinned site one
 // moment, the Settings page the next).
 
-const SIDE_PANEL_FRAME_LABEL: &str = "side-panel-frame";
-
 fn side_panel_title(state: &BrowserState, kind: &str, url: &str) -> String {
     match kind {
         "downloads" => "Downloads".into(),
@@ -524,102 +673,118 @@ fn side_panel_title(state: &BrowserState, kind: &str, url: &str) -> String {
     }
 }
 
-// Creates the frame first and the page second, so the page stacks on top of
-// the frame (webviews stack in creation order).
-fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &str, kind: &str) -> Result<(), String> {
+// Opens window `win`'s side panel on `url`. Creates the frame first and the
+// page second, so the page stacks on top of the frame (webviews stack in
+// creation order).
+fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &str, url: &str, kind: &str) -> Result<(), String> {
     let webview_url = if let Some(route) = internal_route(url) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(url);
         WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
     };
+    let (window, insets, private) =
+        state.win(win, |w| (w.window.clone(), w.insets, w.private)).ok_or("that window is closed")?;
 
     let (adblock_enabled, autofill_enabled, panel_width) = {
         let settings = state.store.settings.lock().unwrap();
         (settings.adblock_enabled, settings.vault_autofill_enabled, settings.side_panel_width)
     };
-    let (position, size) = side_panel_bounds(&state.window, panel_width).map_err(|e| e.to_string())?;
+    let (position, size) = side_panel_bounds(&window, insets, panel_width).map_err(|e| e.to_string())?;
 
+    let frame_label = side_panel_frame_label(win);
     let frame_init = format!(
         "window.__KESSEL_PANEL__ = {{ kind: {}, url: {}, title: {} }};",
         serde_json::to_string(kind).unwrap_or_default(),
         serde_json::to_string(url).unwrap_or_default(),
         serde_json::to_string(&side_panel_title(state, kind, url)).unwrap_or_default()
     );
-    let frame = state
-        .window
+    let frame = window
         .add_child(
-            profile::webview(SIDE_PANEL_FRAME_LABEL, WebviewUrl::App("panel-frame.html".into()))
-                .initialization_script(&frame_init),
+            profile::webview(&frame_label, WebviewUrl::App("panel-frame.html".into())).initialization_script(&frame_init),
             position,
             size,
         )
         .map_err(|e| e.to_string())?;
 
-    // The regular per-tab script (ad block, shortcuts, title/favicon
-    // reporting under id 0, which the frame listens for) plus the panel's
-    // half of the resize hand-off.
+    // The regular per-tab script (ad block, autofill...) under the page's
+    // own id, whose title and icon the frame shows, plus the panel's half
+    // of the resize hand-off.
+    let page_id = state.next_id.fetch_add(1, Ordering::SeqCst);
+    let page_label = side_panel_label(win);
     let script = format!(
         "{}\n{}",
-        adblock::build_content_script(0, adblock_enabled, autofill_enabled),
+        adblock::build_content_script(page_id, adblock_enabled, autofill_enabled, true),
         SIDE_PANEL_RESIZE_HANDOFF_SCRIPT
     );
     let app_for_nav = app.clone();
-    let builder = with_farbling(app, profile::webview("side-panel", webview_url))
+    let (label_for_nav, frame_for_nav) = (page_label.clone(), frame_label.clone());
+    let builder = with_farbling(app, profile::webview(&page_label, webview_url))
+        .incognito(private)
         .initialization_script(&script)
-        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features, None) })
+        .on_new_window({
+            let (app, opener) = (app.clone(), page_label.clone());
+            move |url, features| open_new_window(&app, &opener, url, features, None)
+        })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
             }
-            if !guard_navigation(&app_for_nav, 0, "side-panel", nav_url) {
+            if !guard_navigation(&app_for_nav, page_id, &label_for_nav, nav_url) {
                 return false;
             }
-            let _ = app_for_nav.emit_to(SIDE_PANEL_FRAME_LABEL, "panel-navigated", nav_url.to_string());
+            let _ = app_for_nav.emit_to(frame_for_nav.as_str(), "panel-navigated", nav_url.to_string());
             true
         });
     let (page_position, page_size) = side_panel_content_bounds(position, size);
-    let page = match state.window.add_child(builder, page_position, page_size) {
+    let page = match window.add_child(builder, page_position, page_size) {
         Ok(page) => page,
         Err(e) => {
             let _ = frame.close();
             return Err(e.to_string());
         }
     };
-    attach_shields(app, &page, 0);
-    watch_page(app, &page, 0);
+    attach_shields(app, &page, page_id);
+    watch_page(app, &page, page_id);
     keys::install(app, &page);
     keys::install(app, &frame);
+    if private {
+        state.private_tabs.lock().unwrap().insert(page_id);
+    }
 
-    *state.side_panel_frame.lock().unwrap() = Some(frame);
-    *state.side_panel.lock().unwrap() = Some(page);
-    raise_resize_borders(&state.window);
+    state.win(win, |w| {
+        w.side_panel_frame = Some(frame);
+        w.side_panel = Some(page);
+        w.side_panel_id = page_id;
+    });
+    raise_resize_borders(&window);
     Ok(())
 }
 
-fn close_side_panel_webviews(state: &BrowserState) {
-    if let Some(page) = state.side_panel.lock().unwrap().take() {
+fn close_side_panel_webviews(state: &BrowserState, win: &str) {
+    let Some((page, frame, page_id)) =
+        state.win(win, |w| (w.side_panel.take(), w.side_panel_frame.take(), std::mem::take(&mut w.side_panel_id)))
+    else {
+        return;
+    };
+    if let Some(page) = page {
         let _ = page.close();
     }
-    if let Some(frame) = state.side_panel_frame.lock().unwrap().take() {
+    if let Some(frame) = frame {
         let _ = frame.close();
     }
+    state.pages.lock().unwrap().remove(&page_id);
+    state.private_tabs.lock().unwrap().remove(&page_id);
 }
 
-// What the panel is showing right now: the live page if it's a real website
-// (so following links inside a pinned site is kept), else the url it was
-// opened with -- our own pages load from an internal asset URL that can't
-// be fed back into a new webview.
-fn side_panel_current_url(state: &BrowserState) -> Option<String> {
-    let live = state
-        .side_panel
-        .lock()
-        .unwrap()
-        .as_ref()
-        .and_then(|w| w.url().ok())
-        .filter(|u| !is_internal_nav(u))
-        .map(|u| u.to_string());
-    live.or_else(|| state.side_panel_url.lock().unwrap().clone())
+// What window `win`'s panel is showing right now: the live page if it's a
+// real website (so following links inside a pinned site is kept), else the
+// url it was opened with -- our own pages load from an internal asset URL
+// that can't be fed back into a new webview.
+fn side_panel_current_url(state: &BrowserState, win: &str) -> Option<String> {
+    let (page, opened) = state.win(win, |w| (w.side_panel.clone(), w.side_panel_url.clone()))?;
+    let live = page.and_then(|w| w.url().ok()).filter(|u| !is_internal_nav(u)).map(|u| u.to_string());
+    live.or(opened)
 }
 
 // The panel's half of the resize hand-off. The drag itself starts on the
@@ -662,16 +827,16 @@ const SIDE_PANEL_RESIZE_HANDOFF_SCRIPT: &str = r#"
 // webview (which would otherwise paint above it, being newer) is to
 // destroy and recreate the panel itself right after, making it the
 // newest -- and therefore topmost -- webview again. Called after every
-// new tab creation; a no-op if the panel isn't currently open.
-fn reraise_side_panel(app: &tauri::AppHandle, state: &BrowserState) {
-    if state.side_panel.lock().unwrap().is_none() {
+// new tab creation; a no-op if the window's panel isn't currently open.
+fn reraise_side_panel(app: &tauri::AppHandle, state: &BrowserState, win: &str) {
+    if !state.win(win, |w| w.side_panel.is_some()).unwrap_or(false) {
         return;
     }
-    let url = side_panel_current_url(state);
-    let kind = state.side_panel_kind.lock().unwrap().clone().unwrap_or_default();
-    close_side_panel_webviews(state);
+    let url = side_panel_current_url(state, win);
+    let kind = state.win(win, |w| w.side_panel_kind.clone()).flatten().unwrap_or_default();
+    close_side_panel_webviews(state, win);
     if let Some(url) = url {
-        let _ = open_side_panel_webviews(app, state, &url, &kind);
+        let _ = open_side_panel_webviews(app, state, win, &url, &kind);
     }
 }
 
@@ -777,10 +942,10 @@ fn create_popout_internal(
     let content_label = format!("popout-content-{}", id);
     let content_label_for_nav = content_label.clone();
     let content_builder = with_account(app, with_farbling(app, profile::webview(&content_label, webview_url)), account.as_deref())
-        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled, false))
         .on_new_window({
-            let (app, account) = (app.clone(), account.clone());
-            move |url, features| open_new_window(&app, url, features, account.clone())
+            let (app, account, opener) = (app.clone(), account.clone(), content_label.clone());
+            move |url, features| open_new_window(&app, &opener, url, features, account.clone())
         })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
@@ -855,7 +1020,7 @@ async fn pop_out(
 }
 
 // "Back to tabs": closes the pop-out and reopens whatever it was showing as
-// the active tab in the main window.
+// the active tab in the browser window you used last.
 #[tauri::command]
 async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
     let app2 = app.clone();
@@ -866,8 +1031,11 @@ async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
         let popout = state.popouts.lock().unwrap().remove(&id);
         let popout = popout.ok_or_else(|| "pop-out window not found".to_string())?;
         let _ = popout.window.close();
-        let tab_id = open_tab_in_front(&app2, Some(popout.url), popout.account)?;
-        let _ = state.window.set_focus();
+        let win = state.current_window().ok_or("no browser window is open")?;
+        let tab_id = open_tab_in_front(&app2, &win, Some(popout.url), popout.account)?;
+        if let Some(window) = state.window_handle(&win) {
+            let _ = window.set_focus();
+        }
         Ok(tab_id)
     })
     .await
@@ -883,14 +1051,12 @@ async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
 // reloads it when the heartbeats stop. On reload, main.js rebuilds its tab
 // strip from get_open_tabs + its own last snapshot instead of starting over.
 //
-// Only judged while the main window is focused and not minimized: Chromium
-// throttles timers in hidden/covered pages (down to once a minute), which
-// would otherwise look exactly like a dead toolbar.
+// Each window's toolbar is watched on its own, and only while that window is
+// focused and not minimized: Chromium throttles timers in hidden/covered
+// pages (down to once a minute), which would otherwise look exactly like a
+// dead toolbar.
 
 static APP_START: OnceLock<Instant> = OnceLock::new();
-// Milliseconds since APP_START of the last heartbeat -- or of a grace
-// deadline, which is why it can be ahead of "now".
-static TOOLBAR_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
 const TOOLBAR_HEARTBEAT_TIMEOUT_MS: u64 = 4_000;
 // Startup and a fresh reload need time to load index.html before the first
 // heartbeat can arrive.
@@ -901,64 +1067,71 @@ fn millis_since_start() -> u64 {
     APP_START.get_or_init(Instant::now).elapsed().as_millis() as u64
 }
 
-fn grant_toolbar_grace(ms: u64) {
-    TOOLBAR_HEARTBEAT.store(millis_since_start() + ms, Ordering::Relaxed);
-}
-
 fn toolbar_watchdog(app: tauri::AppHandle) {
-    grant_toolbar_grace(TOOLBAR_LOAD_GRACE_MS);
     let mut last_tick = millis_since_start();
-    let mut recent_recoveries: Vec<u64> = Vec::new();
+    let mut recent_recoveries: HashMap<String, Vec<u64>> = HashMap::new();
     loop {
         std::thread::sleep(Duration::from_millis(1_000));
         let now = millis_since_start();
+        let Some(state) = app.try_state::<BrowserState>() else { continue };
         // A tick far later than scheduled means the PC slept or this thread
-        // was starved -- the toolbar couldn't have heartbeated either.
-        if now.saturating_sub(last_tick) > 3_000 {
-            grant_toolbar_grace(TOOLBAR_HEARTBEAT_TIMEOUT_MS);
-        }
+        // was starved -- the toolbars couldn't have heartbeated either.
+        let woke_up = now.saturating_sub(last_tick) > 3_000;
         last_tick = now;
 
-        let Some(state) = app.try_state::<BrowserState>() else { continue };
-        let focused = state.window.is_focused().unwrap_or(false);
-        let minimized = state.window.is_minimized().unwrap_or(true);
-        if !focused || minimized {
-            // Re-armed from scratch once you come back to the window.
-            grant_toolbar_grace(TOOLBAR_HEARTBEAT_TIMEOUT_MS);
-            continue;
-        }
-        if now.saturating_sub(TOOLBAR_HEARTBEAT.load(Ordering::Relaxed)) < TOOLBAR_HEARTBEAT_TIMEOUT_MS {
-            continue;
-        }
-
-        // Stop after a few tries rather than reload-looping on a toolbar
-        // that dies again right away (e.g. a broken build).
-        recent_recoveries.retain(|&t| now.saturating_sub(t) < 60_000);
-        if recent_recoveries.len() >= TOOLBAR_MAX_RECOVERIES_PER_MINUTE {
-            continue;
-        }
-        recent_recoveries.push(now);
-        grant_toolbar_grace(TOOLBAR_LOAD_GRACE_MS);
-
-        let app2 = app.clone();
-        let _ = app.run_on_main_thread(move || {
-            if let Some(toolbar) = app2.get_webview(TOOLBAR_LABEL) {
-                // WebView2 keeps the page's URL after its renderer is gone;
-                // navigating to it starts a fresh renderer process.
-                if let Ok(url) = toolbar.url() {
-                    let _ = toolbar.navigate(url);
-                }
+        let windows: Vec<(String, Window, u64)> =
+            state.windows.lock().unwrap().iter().map(|w| (w.label.clone(), w.window.clone(), w.heartbeat)).collect();
+        for (win, window, heartbeat) in windows {
+            let focused = window.is_focused().unwrap_or(false);
+            let minimized = window.is_minimized().unwrap_or(true);
+            if woke_up || !focused || minimized {
+                // Re-armed from scratch once you come back to the window.
+                state.win(&win, |w| w.heartbeat = now + TOOLBAR_HEARTBEAT_TIMEOUT_MS);
+                continue;
             }
-        });
+            if now.saturating_sub(heartbeat) < TOOLBAR_HEARTBEAT_TIMEOUT_MS {
+                continue;
+            }
+
+            // Stop after a few tries rather than reload-looping on a toolbar
+            // that dies again right away (e.g. a broken build).
+            let recent = recent_recoveries.entry(win.clone()).or_default();
+            recent.retain(|&t| now.saturating_sub(t) < 60_000);
+            if recent.len() >= TOOLBAR_MAX_RECOVERIES_PER_MINUTE {
+                continue;
+            }
+            recent.push(now);
+            state.win(&win, |w| w.heartbeat = now + TOOLBAR_LOAD_GRACE_MS);
+
+            let app2 = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(toolbar) = app2.get_webview(&toolbar_label(&win)) {
+                    // WebView2 keeps the page's URL after its renderer is gone;
+                    // navigating to it starts a fresh renderer process.
+                    if let Ok(url) = toolbar.url() {
+                        let _ = toolbar.navigate(url);
+                    }
+                }
+            });
+        }
     }
 }
 
-// Heartbeats only count from the toolbar itself -- a web page calling this
+// The browser window whose toolbar `webview` is, if it is one -- the
+// toolbar-only commands below refuse everything else.
+fn toolbar_window(webview: &Webview) -> Option<String> {
+    let label = webview.label();
+    label.strip_prefix("toolbar-")?;
+    let win = webview.window().label().to_string();
+    (toolbar_label(&win) == label).then_some(win)
+}
+
+// Heartbeats only count from a toolbar itself -- a web page calling this
 // can't keep a dead toolbar from being recovered.
 #[tauri::command]
-fn toolbar_heartbeat(webview: Webview) {
-    if webview.label() == TOOLBAR_LABEL {
-        TOOLBAR_HEARTBEAT.store(millis_since_start(), Ordering::Relaxed);
+fn toolbar_heartbeat(webview: Webview, state: tauri::State<BrowserState>) {
+    if let Some(win) = toolbar_window(&webview) {
+        state.win(&win, |w| w.heartbeat = millis_since_start());
     }
 }
 
@@ -981,44 +1154,45 @@ fn logical_tab_url(url: &tauri::Url) -> String {
     url.to_string()
 }
 
-// Every live tab in tab-cycling order, with what Rust knows about it -- for
-// a reloaded toolbar to rebuild its tab strip from.
+// What Rust knows about tab `id` -- for a toolbar to show it without
+// waiting for the page to report again.
+fn tab_info(state: &BrowserState, id: u32) -> Option<serde_json::Value> {
+    let url = state.tabs.lock().unwrap().get(&id)?.url().map(|u| logical_tab_url(&u)).unwrap_or_default();
+    let m = state.tab_meta.lock().unwrap().get(&id).cloned().unwrap_or_default();
+    let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+    Some(serde_json::json!({ "id": id, "url": url, "title": m.title, "favicon": m.favicon, "account": account }))
+}
+
+// The latest Rust knows about tab `id` (see catchUpTab in main.js).
 #[tauri::command]
-fn get_open_tabs(state: tauri::State<BrowserState>) -> serde_json::Value {
-    let tabs = state.tabs.lock().unwrap();
-    let order = state.order.lock().unwrap().clone();
-    let meta = state.tab_meta.lock().unwrap();
-    let accounts = state.tab_accounts.lock().unwrap();
-    let list: Vec<serde_json::Value> = order
-        .iter()
-        .filter_map(|id| {
-            let webview = tabs.get(id)?;
-            let url = webview.url().map(|u| logical_tab_url(&u)).unwrap_or_default();
-            let m = meta.get(id).cloned().unwrap_or_default();
-            let account = accounts.get(id);
-            Some(serde_json::json!({ "id": id, "url": url, "title": m.title, "favicon": m.favicon, "account": account }))
-        })
-        .collect();
-    drop(accounts);
-    drop(meta);
-    drop(tabs);
-    serde_json::json!({
-        "tabs": list,
-        "active": *state.active.lock().unwrap(),
-        "panel": state.side_panel_kind.lock().unwrap().clone(),
-    })
+fn get_tab_info(state: tauri::State<BrowserState>, id: u32) -> Option<serde_json::Value> {
+    tab_info(&state, id)
+}
+
+// Every live tab of the calling toolbar's window in tab-cycling order, with
+// what Rust knows about it -- for a reloaded toolbar to rebuild its tab
+// strip from.
+#[tauri::command]
+fn get_open_tabs(webview: Webview, state: tauri::State<BrowserState>) -> serde_json::Value {
+    let Some(win) = toolbar_window(&webview) else { return serde_json::json!({ "tabs": [] }) };
+    let (order, active, panel) = state.win(&win, |w| (w.order.clone(), w.active, w.side_panel_kind.clone())).unwrap_or_default();
+    let list: Vec<serde_json::Value> = order.iter().filter_map(|&id| tab_info(&state, id)).collect();
+    serde_json::json!({ "tabs": list, "active": active, "panel": panel })
 }
 
 #[tauri::command]
 fn set_toolbar_snapshot(webview: Webview, state: tauri::State<BrowserState>, snapshot: String) {
-    if webview.label() == TOOLBAR_LABEL && snapshot.len() <= 1_000_000 {
-        *state.toolbar_snapshot.lock().unwrap() = Some(snapshot);
+    if let Some(win) = toolbar_window(&webview) {
+        if snapshot.len() <= 1_000_000 {
+            state.win(&win, |w| w.snapshot = Some(snapshot));
+        }
     }
 }
 
 #[tauri::command]
-fn get_toolbar_snapshot(state: tauri::State<BrowserState>) -> Option<String> {
-    state.toolbar_snapshot.lock().unwrap().clone()
+fn get_toolbar_snapshot(webview: Webview, state: tauri::State<BrowserState>) -> Option<String> {
+    let win = toolbar_window(&webview)?;
+    state.win(&win, |w| w.snapshot.clone()).flatten()
 }
 
 // --- Import from other browsers (Settings -> Import) -----------------------
@@ -1261,7 +1435,8 @@ fn vault_import_csv(
 // webview reaches every tab.
 #[cfg(windows)]
 async fn write_cookies(app: &tauri::AppHandle, cookies: Vec<import::ImportedCookie>) -> Result<(usize, usize), String> {
-    let toolbar = app.get_webview(TOOLBAR_LABEL).ok_or("Kessel's window isn't ready")?;
+    let win = app.state::<BrowserState>().current_window().ok_or("Kessel's window isn't ready")?;
+    let toolbar = app.get_webview(&toolbar_label(&win)).ok_or("Kessel's window isn't ready")?;
     let (tx, rx) = std::sync::mpsc::channel();
     toolbar
         .with_webview(move |platform| {
@@ -1361,8 +1536,10 @@ fn shields_up_for(state: &BrowserState, host: &str) -> bool {
 
 fn emit_shields_stats(app: &tauri::AppHandle, id: u32, stats: &shields::TabStats) {
     let payload = serde_json::json!({ "id": id, "stats": stats });
-    let _ = app.emit_to(TOOLBAR_LABEL, "shields-stats", payload.clone());
-    let _ = app.emit_to(SHIELDS_POPUP_LABEL, "shields-stats", payload);
+    if let Some(win) = app.state::<BrowserState>().tab_window(id) {
+        emit_to_window(app, &win, "shields-stats", payload.clone());
+        let _ = app.emit_to(popup_label("shields", &win).as_str(), "shields-stats", payload);
+    }
 }
 
 // A page asked for a new window: a target="_blank" link, or window.open().
@@ -1375,20 +1552,31 @@ fn emit_shields_stats(app: &tauri::AppHandle, id: u32, stats: &shields::TabStats
 // separate tab can't provide.
 static NEXT_WEB_POPUP_ID: AtomicU32 = AtomicU32::new(1);
 
+// `opener`: the label of the webview asking. Its tab opens in the window
+// that webview is in right now (tabs can move between windows).
 fn open_new_window(
     app: &tauri::AppHandle,
+    opener: &str,
     url: tauri::Url,
     features: tauri::webview::NewWindowFeatures,
     account: Option<String>,
 ) -> tauri::webview::NewWindowResponse<tauri::Wry> {
     use tauri::webview::NewWindowResponse;
+    let state = app.state::<BrowserState>();
+    let win = app
+        .get_webview(opener)
+        .map(|w| w.window().label().to_string())
+        .filter(|w| state.win(w, |_| ()).is_some())
+        .or_else(|| state.current_window());
+    let Some(win) = win else { return NewWindowResponse::Deny };
+    let private = state.is_private(&win);
     let web = matches!(url.scheme(), "http" | "https");
     if web && features.size().is_none() {
         let app2 = app.clone();
         let url = url.to_string();
         // After WebView2's event has returned: creating a tab re-enters it.
         let _ = app.run_on_main_thread(move || {
-            let _ = open_tab_in_front(&app2, Some(url), account);
+            let _ = open_tab_in_front(&app2, &win, Some(url), account);
         });
         return NewWindowResponse::Deny;
     }
@@ -1397,15 +1585,19 @@ fn open_new_window(
     }
     let label = format!("web-popup-{}", NEXT_WEB_POPUP_ID.fetch_add(1, Ordering::Relaxed));
     let app2 = app.clone();
+    let popup_label = label.clone();
     let built = tauri::WebviewWindowBuilder::new(app, label, WebviewUrl::External("about:blank".parse().unwrap()))
         .window_features(features)
+        // A private window's popups stay private (WebView2 requires the
+        // opener and its popup to share a profile anyway).
+        .incognito(private)
         .title(url.host_str().unwrap_or("Kessel"))
         .on_document_title_changed(|window, title| {
             let _ = window.set_title(&title);
         })
         // The popup shares its opener's WebView2 environment (through
         // window_features), so it's signed in as the same account.
-        .on_new_window(move |url, features| open_new_window(&app2, url, features, account.clone()))
+        .on_new_window(move |url, features| open_new_window(&app2, &popup_label, url, features, account.clone()))
         .build();
     match built {
         Ok(window) => NewWindowResponse::Create { window },
@@ -1413,15 +1605,16 @@ fn open_new_window(
     }
 }
 
-// Opens a new tab in `account`, switches to it and tells the toolbar.
-fn open_tab_in_front(app: &tauri::AppHandle, url: Option<String>, account: Option<String>) -> Result<u32, String> {
+// Opens a new tab in window `win` (signed in as `account`), switches to it
+// and tells the window's toolbar.
+fn open_tab_in_front(app: &tauri::AppHandle, win: &str, url: Option<String>, account: Option<String>) -> Result<u32, String> {
     let state = app.state::<BrowserState>();
     let url = url.unwrap_or_else(|| state.store.settings.lock().unwrap().homepage.clone());
-    let id = create_tab_internal(app, &state, Some(url.clone()), account)?;
+    let id = create_tab_internal(app, &state, win, Some(url.clone()), account)?;
     switch_tab_internal(&state, id)?;
     let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
     let payload = serde_json::json!({ "id": id, "url": url, "activate": true, "account": account });
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+    emit_to_window(app, win, "tab-created", payload);
     Ok(id)
 }
 
@@ -1505,7 +1698,11 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     // exists so they run ahead of the page's own scripts.
     let scriptlets = if shields_up_for(&st, &host) { shields.scriptlets_for(nav_url.as_str()) } else { None };
     set_page_scriptlets(app, label, scriptlets);
-    st.store.record_history(nav_url.as_str(), nav_url.as_str());
+    // Private tabs leave no history.
+    let private = st.private_tabs.lock().unwrap().contains(&id);
+    if !private {
+        st.store.record_history(nav_url.as_str(), nav_url.as_str());
+    }
     // A new page: it sends its own title and icon as it loads (like the
     // toolbar, forget the old ones), and its history entry gets the title
     // once there is one (page_title_changed).
@@ -1513,7 +1710,7 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     let page = pages.entry(id).or_default();
     *page = PageState {
         url: nav_url.to_string(),
-        history: Some(HistoryWait { url: nav_url.to_string(), same_document: false, stale_title: String::new() }),
+        history: (!private).then(|| HistoryWait { url: nav_url.to_string(), same_document: false, stale_title: String::new() }),
         ..Default::default()
     };
     true
@@ -1652,8 +1849,10 @@ unsafe fn send_page_favicon(app: &tauri::AppHandle, id: u32, core: &webview2_com
     }
     update_tab_meta(&st, id, |m| m.favicon = Some(uri.clone()));
     let payload = serde_json::json!({ "id": id, "url": uri });
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", payload.clone());
-    let _ = app.emit_to(page_header_label(id).as_str(), "tab-favicon-changed", payload);
+    emit_to_tab_window(app, id, "tab-favicon-changed", payload.clone());
+    if let Some(header) = page_header_label(&st, id) {
+        let _ = app.emit_to(header.as_str(), "tab-favicon-changed", payload);
+    }
 }
 
 // `loaded`: the page just finished loading (so this title is final for its
@@ -1681,8 +1880,10 @@ fn page_title_changed(app: &tauri::AppHandle, id: u32, title: &str, loaded: bool
     }
     update_tab_meta(&st, id, |m| m.title = Some(title.to_string()));
     let payload = serde_json::json!({ "id": id, "title": title });
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", payload.clone());
-    let _ = app.emit_to(page_header_label(id).as_str(), "tab-title-changed", payload);
+    emit_to_tab_window(app, id, "tab-title-changed", payload.clone());
+    if let Some(header) = page_header_label(&st, id) {
+        let _ = app.emit_to(header.as_str(), "tab-title-changed", payload);
+    }
 }
 
 // `same_document`: the page changed its own address (pushState/hash)
@@ -1701,7 +1902,8 @@ fn page_url_changed(app: &tauri::AppHandle, id: u32, source: &str, same_document
         // Moving to another page of a single-page app (not just to another
         // #section of the same one) is a visit, like any other.
         let without_fragment = |u: &str| u.split('#').next().unwrap_or(u).to_string();
-        if same_document && without_fragment(&previous) != without_fragment(&address) && !is_internal_nav(&url) {
+        let private = st.private_tabs.lock().unwrap().contains(&id);
+        if same_document && !private && without_fragment(&previous) != without_fragment(&address) && !is_internal_nav(&url) {
             st.store.record_history(&address, &address);
             page.history = Some(HistoryWait { url: address.clone(), same_document: true, stale_title: page.title.clone() });
         }
@@ -1710,8 +1912,10 @@ fn page_url_changed(app: &tauri::AppHandle, id: u32, source: &str, same_document
         p.url = address.clone(); // so docking it reopens this page
     }
     let payload = serde_json::json!({ "id": id, "url": address });
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-url-changed", payload.clone());
-    let _ = app.emit_to(page_header_label(id).as_str(), "tab-url-changed", payload);
+    emit_to_tab_window(app, id, "tab-url-changed", payload.clone());
+    if let Some(header) = page_header_label(&st, id) {
+        let _ = app.emit_to(header.as_str(), "tab-url-changed", payload);
+    }
 }
 
 // Replaces the document-start scriptlet script registered for a webview's
@@ -1883,7 +2087,7 @@ unsafe fn install_shields_hooks(
                 st.store.blocked_count.fetch_add(1, Ordering::Relaxed);
                 if let Some(stats) = shields.bump(id, |s| s.blocked += 1) {
                     emit_shields_stats(&app_req, id, &stats);
-                    let _ = app_req.emit_to(TOOLBAR_LABEL, "adblock-count-changed", st.store.blocked_count.load(Ordering::Relaxed));
+                    emit_to_all_windows(&app_req, "adblock-count-changed", st.store.blocked_count.load(Ordering::Relaxed));
                 }
             }
             Ok(())
@@ -2115,7 +2319,6 @@ async fn shields_set_site(app: tauri::AppHandle, webview: Webview, id: u32, host
     .await
 }
 
-const SHIELDS_POPUP_LABEL: &str = "shields-popup";
 const SHIELDS_POPUP_WIDTH: f64 = 300.0;
 const SHIELDS_POPUP_HEIGHT: f64 = 400.0;
 
@@ -2125,15 +2328,18 @@ const SHIELDS_POPUP_HEIGHT: f64 = 400.0;
 static SHIELDS_POPUP_CLOSED_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
 // The address bar's shield opens this as a small webview created above
-// everything else (a toolbar-drawn menu would be hidden behind the tab's
-// webview). `x` is the button's right edge, `y` its bottom, in window
-// coordinates. Clicking the shield again closes it.
+// everything else in its window (a toolbar-drawn menu would be hidden behind
+// the tab's webview). `x` is the button's right edge, `y` its bottom, in
+// window coordinates. Clicking the shield again closes it.
 #[tauri::command]
 async fn toggle_shields_popup(app: tauri::AppHandle, webview: Webview, id: u32, x: f64, y: f64) -> Result<bool, String> {
     require_internal_page(&webview)?;
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
-        if let Some(existing) = app2.get_webview(SHIELDS_POPUP_LABEL) {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let label = popup_label("shields", &win);
+        if let Some(existing) = app2.get_webview(&label) {
             let _ = existing.close();
             *SHIELDS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
             return Ok(false);
@@ -2146,12 +2352,11 @@ async fn toggle_shields_popup(app: tauri::AppHandle, webview: Webview, id: u32, 
         if just_closed {
             return Ok(false);
         }
-        let state = app2.state::<BrowserState>();
-        let left = (x - SHIELDS_POPUP_WIDTH).max(chrome_left());
-        let popup = state
-            .window
+        let (window, insets) = state.win(&win, |w| (w.window.clone(), w.insets)).ok_or("that window is closed")?;
+        let left = (x - SHIELDS_POPUP_WIDTH).max(insets.0);
+        let popup = window
             .add_child(
-                profile::webview(SHIELDS_POPUP_LABEL, WebviewUrl::App("shields.html".into()))
+                profile::webview(&label, WebviewUrl::App("shields.html".into()))
                     .initialization_script(&format!("window.__KESSEL_SHIELDS_TAB__ = {};", id)),
                 LogicalPosition::new(left, y + 6.0),
                 LogicalSize::new(SHIELDS_POPUP_WIDTH, SHIELDS_POPUP_HEIGHT),
@@ -2159,18 +2364,20 @@ async fn toggle_shields_popup(app: tauri::AppHandle, webview: Webview, id: u32, 
             .map_err(|e| e.to_string())?;
         keys::install(&app2, &popup);
         let _ = popup.set_focus();
-        raise_resize_borders(&state.window);
+        raise_resize_borders(&window);
         Ok(true)
     })
     .await
     .and_then(|r| r)
 }
 
+// Closes the Shields popup of the window the caller is in.
 #[tauri::command]
-async fn close_shields_popup(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_shields_popup(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
-        if let Some(popup) = app2.get_webview(SHIELDS_POPUP_LABEL) {
+        let Some(win) = app2.state::<BrowserState>().window_of(&webview) else { return };
+        if let Some(popup) = app2.get_webview(&popup_label("shields", &win)) {
             let _ = popup.close();
             *SHIELDS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
         }
@@ -2184,14 +2391,14 @@ async fn close_shields_popup(app: tauri::AppHandle) -> Result<(), String> {
 // list of accounts, "new tab" / "new window" signed in as any of them, and
 // adding, renaming and deleting accounts.
 
-const ACCOUNTS_POPUP_LABEL: &str = "accounts-popup";
 const ACCOUNTS_POPUP_WIDTH: f64 = 300.0;
 const ACCOUNTS_POPUP_HEIGHT: f64 = 420.0;
 static ACCOUNTS_POPUP_CLOSED_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
+// All accounts, and the one the caller's window's active tab is signed in as.
 #[tauri::command]
-fn get_accounts(state: tauri::State<BrowserState>, accounts: tauri::State<accounts::Accounts>) -> serde_json::Value {
-    let active = *state.active.lock().unwrap();
+fn get_accounts(webview: Webview, state: tauri::State<BrowserState>, accounts: tauri::State<accounts::Accounts>) -> serde_json::Value {
+    let active = state.window_of(&webview).and_then(|win| state.active_tab(&win));
     let current = active.and_then(|id| state.tab_accounts.lock().unwrap().get(&id).cloned());
     serde_json::json!({ "accounts": accounts.list(), "current": current })
 }
@@ -2261,31 +2468,34 @@ async fn delete_account(app: tauri::AppHandle, webview: Webview, id: String) -> 
     Ok(())
 }
 
+// Where a pop-out opened from window `win` appears: cascaded over its page.
+fn popout_origin(state: &BrowserState, win: &str, dx: f64, dy: f64) -> (f64, f64) {
+    state
+        .win(win, |w| (w.window.clone(), w.insets))
+        .and_then(|(window, insets)| {
+            let p = window.outer_position().ok()?.to_logical::<f64>(window.scale_factor().ok()?);
+            Some((p.x + insets.0 + dx, p.y + insets.1 + dy))
+        })
+        .unwrap_or((140.0, 140.0))
+}
+
 // A new foreground tab (or pop-out window) signed in as `account` (None =
-// Main), opened on the homepage.
+// Main), opened on the homepage, from the caller's window.
 #[tauri::command]
 async fn open_account_tab(app: tauri::AppHandle, webview: Webview, account: Option<String>, window: bool) -> Result<u32, String> {
     require_internal_page(&webview)?;
     let app2 = app.clone();
     on_main(&app, move || {
-        if let Some(popup) = app2.get_webview(ACCOUNTS_POPUP_LABEL) {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        if let Some(popup) = app2.get_webview(&popup_label("accounts", &win)) {
             let _ = popup.close();
         }
         if !window {
-            return open_tab_in_front(&app2, None, account);
+            return open_tab_in_front(&app2, &win, None, account);
         }
-        let state = app2.state::<BrowserState>();
         let homepage = state.store.settings.lock().unwrap().homepage.clone();
-        let (x, y) = state
-            .window
-            .outer_position()
-            .ok()
-            .zip(state.window.scale_factor().ok())
-            .map(|(p, scale)| {
-                let p = p.to_logical::<f64>(scale);
-                (p.x + chrome_left() + 80.0, p.y + chrome_top() + 30.0)
-            })
-            .unwrap_or((140.0, 140.0));
+        let (x, y) = popout_origin(&state, &win, 80.0, 30.0);
         create_popout_internal(&app2, &state, homepage, String::new(), x, y, account)
     })
     .await
@@ -2298,7 +2508,10 @@ async fn toggle_accounts_popup(app: tauri::AppHandle, webview: Webview, x: f64, 
     require_internal_page(&webview)?;
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
-        if let Some(existing) = app2.get_webview(ACCOUNTS_POPUP_LABEL) {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let label = popup_label("accounts", &win);
+        if let Some(existing) = app2.get_webview(&label) {
             let _ = existing.close();
             *ACCOUNTS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
             return Ok(false);
@@ -2311,30 +2524,31 @@ async fn toggle_accounts_popup(app: tauri::AppHandle, webview: Webview, x: f64, 
         if just_closed {
             return Ok(false);
         }
-        let state = app2.state::<BrowserState>();
-        let left = (x - ACCOUNTS_POPUP_WIDTH).max(chrome_left());
-        let popup = state
-            .window
+        let (window, insets) = state.win(&win, |w| (w.window.clone(), w.insets)).ok_or("that window is closed")?;
+        let left = (x - ACCOUNTS_POPUP_WIDTH).max(insets.0);
+        let popup = window
             .add_child(
-                profile::webview(ACCOUNTS_POPUP_LABEL, WebviewUrl::App("accounts.html".into())),
+                profile::webview(&label, WebviewUrl::App("accounts.html".into())),
                 LogicalPosition::new(left, y + 6.0),
                 LogicalSize::new(ACCOUNTS_POPUP_WIDTH, ACCOUNTS_POPUP_HEIGHT),
             )
             .map_err(|e| e.to_string())?;
         keys::install(&app2, &popup);
         let _ = popup.set_focus();
-        raise_resize_borders(&state.window);
+        raise_resize_borders(&window);
         Ok(true)
     })
     .await
     .and_then(|r| r)
 }
 
+// Closes the Accounts popup of the window the caller is in.
 #[tauri::command]
-async fn close_accounts_popup(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_accounts_popup(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
-        if let Some(popup) = app2.get_webview(ACCOUNTS_POPUP_LABEL) {
+        let Some(win) = app2.state::<BrowserState>().window_of(&webview) else { return };
+        if let Some(popup) = app2.get_webview(&popup_label("accounts", &win)) {
             let _ = popup.close();
             *ACCOUNTS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
         }
@@ -2404,13 +2618,15 @@ where
 
 // --- Tab commands ------------------------------------------------------
 
-// `account`: which account the tab is signed in as (None = Main).
+// A new tab in the caller's window, shown right away. `account`: which
+// account the tab is signed in as (None = Main).
 #[tauri::command]
-async fn new_tab(app: tauri::AppHandle, url: Option<String>, account: Option<String>) -> Result<u32, String> {
+async fn new_tab(app: tauri::AppHandle, webview: Webview, url: Option<String>, account: Option<String>) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let id = create_tab_internal(&app2, &state, url, account)?;
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let id = create_tab_internal(&app2, &state, &win, url, account)?;
         switch_tab_internal(&state, id)?;
         Ok(id)
     })
@@ -2418,18 +2634,19 @@ async fn new_tab(app: tauri::AppHandle, url: Option<String>, account: Option<Str
     .and_then(|r| r)
 }
 
-// Opens a URL in a new tab WITHOUT switching to it -- in the same account
-// as the tab asking for it.
+// Opens a URL in a new tab WITHOUT switching to it -- in the same window and
+// account as the tab asking for it.
 #[tauri::command]
 async fn open_background_tab(app: tauri::AppHandle, webview: Webview, url: String) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
         let account = account_of_label(&state, webview.label());
-        let id = create_tab_internal(&app2, &state, Some(url.clone()), account)?;
+        let id = create_tab_internal(&app2, &state, &win, Some(url.clone()), account)?;
         let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
         let payload = serde_json::json!({ "id": id, "url": url, "account": account });
-        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+        emit_to_window(&app2, &win, "tab-created", payload);
         Ok(id)
     })
     .await
@@ -2437,88 +2654,118 @@ async fn open_background_tab(app: tauri::AppHandle, webview: Webview, url: Strin
 }
 
 // Focuses the one existing tab already showing `route` (e.g.
-// "kessel://settings" or "kessel://passwords") if there is one, instead of
-// creating another. Callable from any webview (the settings page's own
-// "open password manager" button included), not just the toolbar, since
-// the toolbar's in-memory tab list isn't reachable from other webviews.
+// "kessel://settings" or "kessel://passwords") if there is one -- in
+// whichever window it is -- instead of creating another. Callable from any
+// webview (the settings page's own "open password manager" button
+// included), not just the toolbar, since the toolbar's in-memory tab list
+// isn't reachable from other webviews.
 #[tauri::command]
-async fn open_singleton_tab(app: tauri::AppHandle, route: String) -> Result<u32, String> {
+async fn open_singleton_tab(app: tauri::AppHandle, webview: Webview, route: String) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
         let existing = state.singleton_tabs.lock().unwrap().get(&route).copied();
         if let Some(id) = existing {
-            if state.tabs.lock().unwrap().contains_key(&id) {
+            if let Some(win) = state.tab_window(id) {
                 switch_tab_internal(&state, id)?;
-                let _ = app2.emit_to(TOOLBAR_LABEL, "tab-focused", serde_json::json!({ "id": id }));
+                emit_to_window(&app2, &win, "tab-focused", serde_json::json!({ "id": id }));
+                if let Some(window) = state.window_handle(&win) {
+                    let _ = window.set_focus();
+                }
                 return Ok(id);
             }
             // Stale entry (tab was closed since) -- fall through and make a fresh one.
             state.singleton_tabs.lock().unwrap().remove(&route);
         }
-        let id = create_tab_internal(&app2, &state, Some(route.clone()), None)?;
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let id = create_tab_internal(&app2, &state, &win, Some(route.clone()), None)?;
         switch_tab_internal(&state, id)?;
         state.singleton_tabs.lock().unwrap().insert(route.clone(), id);
         let payload = serde_json::json!({ "id": id, "url": route, "activate": true });
-        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+        emit_to_window(&app2, &win, "tab-created", payload);
         Ok(id)
     })
     .await
     .and_then(|r| r)
 }
 
+// Forgets everything Kessel kept about tab `id` (its webview is gone).
+fn forget_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32) {
+    for w in state.windows.lock().unwrap().iter_mut() {
+        w.order.retain(|&x| x != id);
+        if w.active == Some(id) {
+            w.active = None;
+        }
+    }
+    state.tab_accounts.lock().unwrap().remove(&id);
+    state.private_tabs.lock().unwrap().remove(&id);
+    state.singleton_tabs.lock().unwrap().retain(|_, &mut v| v != id);
+    state.tab_meta.lock().unwrap().remove(&id);
+    state.pages.lock().unwrap().remove(&id);
+    app.state::<shields::Shields>().forget_tab(id);
+}
+
+// Closes tab `id`. With `url` (its address) it goes on the recently closed
+// list -- unless it was private.
 #[tauri::command]
 async fn close_tab(app: tauri::AppHandle, id: u32, url: Option<String>) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        // Fixed: the webview is now truly destroyed (Webview::close()),
-        // not just parked off-screen -- no more resource leak on tab close.
-        let mut tabs = state.tabs.lock().unwrap();
-        if let Some(w) = tabs.remove(&id) {
+        let win = state.tab_window(id);
+        let private = state.private_tabs.lock().unwrap().contains(&id);
+        let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+        let title = state.tab_meta.lock().unwrap().get(&id).and_then(|m| m.title.clone()).unwrap_or_default();
+        // The webview is truly destroyed (Webview::close()), not just parked
+        // off-screen -- no resource leak on tab close.
+        let webview = state.tabs.lock().unwrap().remove(&id);
+        if let Some(w) = webview {
             let _ = w.close();
         }
-        drop(tabs);
+        forget_tab(&app2, &state, id);
 
-        state.order.lock().unwrap().retain(|&x| x != id);
-        let account = state.tab_accounts.lock().unwrap().remove(&id);
-
-        if let Some(u) = url {
-            if u.starts_with("http://") || u.starts_with("https://") {
+        if let (Some(u), Some(window), false) = (url, win, private) {
+            if u.starts_with("http://") || u.starts_with("https://") || u.starts_with("file:") {
                 let mut stack = state.closed_stack.lock().unwrap();
-                stack.push((u, account));
-                if stack.len() > 20 {
+                stack.push(ClosedTab { url: u, title, account, window });
+                if stack.len() > 25 {
                     stack.remove(0);
                 }
             }
         }
-
-        let mut active = state.active.lock().unwrap();
-        if *active == Some(id) {
-            *active = None;
-        }
-        drop(active);
-
-        state.singleton_tabs.lock().unwrap().retain(|_, &mut v| v != id);
-        state.tab_meta.lock().unwrap().remove(&id);
-        state.pages.lock().unwrap().remove(&id);
-        app2.state::<shields::Shields>().forget_tab(id);
         Ok(())
     })
     .await
     .and_then(|r| r)
 }
 
+// Reopens a closed tab: back in its own window if that's still open, else
+// in the caller's.
+fn reopen_closed(app: &tauri::AppHandle, caller: Option<String>, closed: ClosedTab) -> Result<u32, String> {
+    let state = app.state::<BrowserState>();
+    let win = Some(closed.window)
+        .filter(|w| state.win(w, |_| ()).is_some())
+        .or(caller)
+        .or_else(|| state.current_window())
+        .ok_or("no browser window is open")?;
+    let id = open_tab_in_front(app, &win, Some(closed.url), closed.account)?;
+    if let Some(window) = state.window_handle(&win) {
+        let _ = window.set_focus();
+    }
+    Ok(id)
+}
+
 #[tauri::command]
-async fn reopen_closed_tab(app: tauri::AppHandle) -> Result<Option<u32>, String> {
+async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<Option<u32>, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
+        let caller = state.window_of(&webview);
         let closed = state.closed_stack.lock().unwrap().pop();
         match closed {
-            // In its old account; open_tab_in_front also puts it in the
-            // tab strip (the toolbar used to never hear about it).
-            Some((url, account)) => open_tab_in_front(&app2, Some(url), account).map(Some),
+            // In its old window and account; open_tab_in_front also puts it
+            // in the tab strip.
+            Some(closed) => reopen_closed(&app2, caller, closed).map(Some),
             None => Ok(None),
         }
     })
@@ -2530,83 +2777,86 @@ async fn reopen_closed_tab(app: tauri::AppHandle) -> Result<Option<u32>, String>
 // blind "pop the last one" that reopen_closed_tab does.
 #[tauri::command]
 fn get_closed_tabs(state: tauri::State<BrowserState>) -> Vec<String> {
-    state.closed_stack.lock().unwrap().iter().rev().map(|(url, _)| url.clone()).collect()
+    state.closed_stack.lock().unwrap().iter().rev().map(|c| c.url.clone()).collect()
 }
 
 // Reopens one specific entry from the closed-tabs list (not necessarily
 // the most recent), removing just that occurrence.
 #[tauri::command]
-async fn reopen_closed_tab_url(app: tauri::AppHandle, url: String) -> Result<u32, String> {
+async fn reopen_closed_tab_url(app: tauri::AppHandle, webview: Webview, url: String) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let account = {
+        let caller = state.window_of(&webview);
+        let closed = {
             let mut stack = state.closed_stack.lock().unwrap();
-            let pos = stack.iter().rposition(|(u, _)| u == &url);
-            pos.and_then(|pos| stack.remove(pos).1)
+            let pos = stack.iter().rposition(|c| c.url == url);
+            pos.map(|pos| stack.remove(pos))
         };
-        open_tab_in_front(&app2, Some(url), account)
+        let closed = closed.unwrap_or(ClosedTab { url, title: String::new(), account: None, window: String::new() });
+        reopen_closed(&app2, caller, closed)
     })
     .await
     .and_then(|r| r)
 }
 
+// Switches the caller's window to another of its live tabs and tells its
+// toolbar.
+fn focus_tab_in_window(app: &tauri::AppHandle, state: &BrowserState, win: &str, id: u32) -> Result<(), String> {
+    switch_tab_internal(state, id)?;
+    emit_to_window(app, win, "tab-focused", serde_json::json!({ "id": id }));
+    Ok(())
+}
+
 #[tauri::command]
-async fn cycle_tab(app: tauri::AppHandle, direction: i32) -> Result<(), String> {
+async fn cycle_tab(app: tauri::AppHandle, webview: Webview, direction: i32) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let order = state.order.lock().unwrap().clone();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let (order, active) = state.win(&win, |w| (w.order.clone(), w.active)).unwrap_or_default();
         if order.is_empty() {
             return Ok(());
         }
-        let active = *state.active.lock().unwrap();
-        let current_index = active
-            .and_then(|id| order.iter().position(|&x| x == id))
-            .unwrap_or(0) as i32;
+        let current_index = active.and_then(|id| order.iter().position(|&x| x == id)).unwrap_or(0) as i32;
         let len = order.len() as i32;
         let next_index = ((current_index + direction) % len + len) % len;
-        let next_id = order[next_index as usize];
-        switch_tab_internal(&state, next_id)
+        focus_tab_in_window(&app2, &state, &win, order[next_index as usize])
     })
     .await
     .and_then(|r| r)
 }
 
 #[tauri::command]
-async fn switch_tab_by_index(app: tauri::AppHandle, index: i32) -> Result<(), String> {
+async fn switch_tab_by_index(app: tauri::AppHandle, webview: Webview, index: i32) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let order = state.order.lock().unwrap().clone();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let order = state.win(&win, |w| w.order.clone()).unwrap_or_default();
         if order.is_empty() {
             return Ok(());
         }
-        let real_index = if index < 0 {
-            order.len() - 1
-        } else {
-            (index as usize).min(order.len() - 1)
-        };
-        switch_tab_internal(&state, order[real_index])
+        let real_index = if index < 0 { order.len() - 1 } else { (index as usize).min(order.len() - 1) };
+        focus_tab_in_window(&app2, &state, &win, order[real_index])
     })
     .await
     .and_then(|r| r)
 }
 
-// Resyncs the tab-cycling order (used by cycle_tab / switch_tab_by_index)
-// to match the toolbar's own visual left-to-right tab order. Needed after
-// reviving a discarded tab: the fresh webview it gets is a brand-new id
-// that `new_tab` appends to the end of the order internally, which would
-// otherwise drift from wherever that tab actually sits in the strip.
-// Silently drops any id Rust doesn't currently know about (e.g. a tab that
-// was closed in the moment between the frontend reading its list and this
-// call landing) rather than erroring.
+// Resyncs the caller's window's tab-cycling order (used by cycle_tab /
+// switch_tab_by_index) to match its toolbar's own visual left-to-right tab
+// order. Needed after reviving a discarded tab: the fresh webview it gets
+// is a brand-new id that `new_tab` appends to the end of the order
+// internally, which would otherwise drift from wherever that tab actually
+// sits in the strip. Silently drops any id that isn't a live tab of this
+// window (e.g. one closed in the moment between the frontend reading its
+// list and this call landing) rather than erroring.
 #[tauri::command]
-fn set_tab_order(state: tauri::State<BrowserState>, ids: Vec<u32>) {
-    let known = state.tabs.lock().unwrap();
-    let valid: Vec<u32> = ids.into_iter().filter(|id| known.contains_key(id)).collect();
-    drop(known);
-    *state.order.lock().unwrap() = valid;
+fn set_tab_order(webview: Webview, state: tauri::State<BrowserState>, ids: Vec<u32>) {
+    let Some(win) = state.window_of(&webview) else { return };
+    let valid: Vec<u32> = ids.into_iter().filter(|&id| state.tab_window(id).as_deref() == Some(win.as_str())).collect();
+    state.win(&win, |w| w.order = valid);
 }
 
 #[tauri::command]
@@ -2689,14 +2939,15 @@ fn update_tab_meta(state: &BrowserState, id: u32, f: impl FnOnce(&mut TabMeta)) 
 }
 
 // Title/icon/address changes also go to the header that shows them outside
-// the tab strip: the side panel's frame for id 0 (the panel's page), else
-// the matching pop-out's title bar (emit_to a label that doesn't exist is a
-// no-op, so plain tabs cost nothing extra). See page_title_changed.
-fn page_header_label(id: u32) -> String {
-    if id == 0 {
-        SIDE_PANEL_FRAME_LABEL.to_string()
-    } else {
-        format!("popout-bar-{}", id)
+// the tab strip: a side panel's frame for its page, else the matching
+// pop-out's title bar (emit_to a label that doesn't exist is a no-op, so
+// plain tabs cost nothing extra -- and a pop-out still being created gets
+// its first title too). See page_title_changed.
+fn page_header_label(state: &BrowserState, id: u32) -> Option<String> {
+    let windows = state.windows.lock().unwrap();
+    match windows.iter().find(|w| w.side_panel_id == id && id != 0) {
+        Some(w) => Some(side_panel_frame_label(&w.label)),
+        None => Some(format!("popout-bar-{}", id)),
     }
 }
 
@@ -3058,11 +3309,11 @@ fn vault_change_master_password(
 // is guarded. Routed through on_main like every other webview-touching
 // call in this app (see on_main's own doc comment on why).
 #[tauri::command]
-async fn get_active_tab_url(app: tauri::AppHandle) -> Option<String> {
+async fn get_active_tab_url(app: tauri::AppHandle, webview: Webview) -> Option<String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let active_id = (*state.active.lock().unwrap())?;
+        let active_id = state.active_tab(&state.window_of(&webview)?)?;
         let tabs = state.tabs.lock().unwrap();
         let webview = tabs.get(&active_id)?;
         let url = webview.url().ok()?;
@@ -3084,17 +3335,16 @@ async fn get_active_tab_url(app: tauri::AppHandle) -> Option<String> {
     .flatten()
 }
 
-// Brings the main browser window to the front -- called after an action in
-// the (always-on-top) control panel opens or switches a tab there, so
-// keyboard focus follows to where the new content actually is.
+// Brings the caller's browser window to the front -- called after an action
+// in a pop-out or panel opens or switches a tab there, so keyboard focus
+// follows to where the new content actually is.
 #[tauri::command]
-async fn focus_main_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn focus_main_window(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
-        app2.get_window("main")
-            .ok_or_else(|| "main window not found".to_string())?
-            .set_focus()
-            .map_err(|e| e.to_string())
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("no browser window is open")?;
+        state.window_handle(&win).ok_or("that window is closed")?.set_focus().map_err(|e| e.to_string())
     })
     .await
     .and_then(|r| r)
@@ -3102,53 +3352,62 @@ async fn focus_main_window(app: tauri::AppHandle) -> Result<(), String> {
 
 // --- Side panel commands ----------------------------------------------
 
-// Opens `url` in the side panel under the given `kind` label, switches it
-// to a different kind if one was already open, or closes it if you clicked
-// the same kind again (the toggle-off case). Returns whether it ended up
-// open. `kind` examples: "pinned:<id>", "downloads", "passwords", "settings".
+// Opens `url` in the caller's window's side panel under the given `kind`
+// label, switches it to a different kind if one was already open, or closes
+// it if you clicked the same kind again (the toggle-off case). Returns
+// whether it ended up open. `kind` examples: "pinned:<id>", "downloads",
+// "passwords", "settings".
 #[tauri::command]
-async fn toggle_side_panel(app: tauri::AppHandle, kind: String, url: String) -> Result<bool, String> {
+async fn toggle_side_panel(app: tauri::AppHandle, webview: Webview, kind: String, url: String) -> Result<bool, String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
-        let current_kind = state.side_panel_kind.lock().unwrap().clone();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let current_kind = state.win(&win, |w| w.side_panel_kind.clone()).flatten();
 
-        close_side_panel_webviews(&state);
-        *state.side_panel_kind.lock().unwrap() = None;
-        *state.side_panel_url.lock().unwrap() = None;
+        close_side_panel_webviews(&state, &win);
+        state.win(&win, |w| {
+            w.side_panel_kind = None;
+            w.side_panel_url = None;
+        });
 
         if current_kind.as_deref() == Some(kind.as_str()) {
             // Same icon clicked again -- toggle off.
-            let _ = app2.emit("side-panel-changed", None::<String>);
+            emit_to_window(&app2, &win, "side-panel-changed", None::<String>);
             return Ok(false);
         }
 
-        open_side_panel_webviews(&app2, &state, &url, &kind)?;
-        *state.side_panel_kind.lock().unwrap() = Some(kind.clone());
-        *state.side_panel_url.lock().unwrap() = Some(url);
-        let _ = app2.emit("side-panel-changed", Some(kind));
+        open_side_panel_webviews(&app2, &state, &win, &url, &kind)?;
+        state.win(&win, |w| {
+            w.side_panel_kind = Some(kind.clone());
+            w.side_panel_url = Some(url);
+        });
+        emit_to_window(&app2, &win, "side-panel-changed", Some(kind));
         Ok(true)
     })
     .await
     .and_then(|r| r)
 }
 
-fn close_side_panel_internal(app: &tauri::AppHandle, state: &BrowserState) -> Result<(), String> {
-    close_side_panel_webviews(state);
-    *state.side_panel_kind.lock().unwrap() = None;
-    *state.side_panel_url.lock().unwrap() = None;
-    resize_active_tab(state)?;
-    let _ = app.emit("side-panel-changed", None::<String>);
+fn close_side_panel_internal(app: &tauri::AppHandle, state: &BrowserState, win: &str) -> Result<(), String> {
+    close_side_panel_webviews(state, win);
+    state.win(win, |w| {
+        w.side_panel_kind = None;
+        w.side_panel_url = None;
+    });
+    resize_active_tab(state, win)?;
+    emit_to_window(app, win, "side-panel-changed", None::<String>);
     let _ = app.emit("side-panel-drag", false);
     Ok(())
 }
 
 #[tauri::command]
-async fn close_side_panel(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_side_panel(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<(), String> {
         let state = app2.state::<BrowserState>();
-        close_side_panel_internal(&app2, &state)
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        close_side_panel_internal(&app2, &state, &win)
     })
     .await
     .and_then(|r| r)
@@ -3157,15 +3416,16 @@ async fn close_side_panel(app: tauri::AppHandle) -> Result<(), String> {
 // The frame's "open in tab" button: what the panel is showing becomes a
 // regular, active tab and the panel closes.
 #[tauri::command]
-async fn side_panel_to_tab(app: tauri::AppHandle) -> Result<u32, String> {
+async fn side_panel_to_tab(app: tauri::AppHandle, webview: Webview) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<u32, String> {
         let state = app2.state::<BrowserState>();
-        let url = side_panel_current_url(&state).ok_or("the side panel isn't open")?;
-        close_side_panel_internal(&app2, &state)?;
-        let id = create_tab_internal(&app2, &state, Some(url.clone()), None)?;
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let url = side_panel_current_url(&state, &win).ok_or("the side panel isn't open")?;
+        close_side_panel_internal(&app2, &state, &win)?;
+        let id = create_tab_internal(&app2, &state, &win, Some(url.clone()), None)?;
         switch_tab_internal(&state, id)?;
-        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", serde_json::json!({ "id": id, "url": url, "activate": true }));
+        emit_to_window(&app2, &win, "tab-created", serde_json::json!({ "id": id, "url": url, "activate": true }));
         Ok(id)
     })
     .await
@@ -3175,24 +3435,16 @@ async fn side_panel_to_tab(app: tauri::AppHandle) -> Result<u32, String> {
 // The frame's "pop out" button: what the panel is showing moves into a
 // floating pop-out window next to where the panel was.
 #[tauri::command]
-async fn side_panel_pop_out(app: tauri::AppHandle) -> Result<u32, String> {
+async fn side_panel_pop_out(app: tauri::AppHandle, webview: Webview) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<u32, String> {
         let state = app2.state::<BrowserState>();
-        let url = side_panel_current_url(&state).ok_or("the side panel isn't open")?;
-        let kind = state.side_panel_kind.lock().unwrap().clone().unwrap_or_default();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let url = side_panel_current_url(&state, &win).ok_or("the side panel isn't open")?;
+        let kind = state.win(&win, |w| w.side_panel_kind.clone()).flatten().unwrap_or_default();
         let title = side_panel_title(&state, &kind, &url);
-        let (x, y) = state
-            .window
-            .outer_position()
-            .ok()
-            .zip(state.window.scale_factor().ok())
-            .map(|(p, scale)| {
-                let p = p.to_logical::<f64>(scale);
-                (p.x + chrome_left() + 40.0, p.y + chrome_top() + 20.0)
-            })
-            .unwrap_or((120.0, 120.0));
-        close_side_panel_internal(&app2, &state)?;
+        let (x, y) = popout_origin(&state, &win, 40.0, 20.0);
+        close_side_panel_internal(&app2, &state, &win)?;
         create_popout_internal(&app2, &state, url, title, x, y, None)
     })
     .await
@@ -3211,13 +3463,14 @@ fn side_panel_width_for_pointer(x: f64) -> f64 {
 // persist to disk on every call; see commit_side_panel_width for the
 // one-shot persist on release.
 #[tauri::command]
-async fn resize_side_panel_live(app: tauri::AppHandle, width: f64) -> Result<(), String> {
+async fn resize_side_panel_live(app: tauri::AppHandle, webview: Webview, width: f64) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<(), String> {
         let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
         let width = side_panel_width_for_pointer(width);
         state.store.settings.lock().unwrap().side_panel_width = width;
-        place_side_panel(&state, width);
+        place_side_panel(&state, &win, width);
         Ok(())
     })
     .await
@@ -3251,23 +3504,24 @@ fn notify_side_panel_drag(app: tauri::AppHandle, dragging: bool) {
     let _ = app.emit("side-panel-drag", dragging);
 }
 
-// The toolbar reports its real rendered chrome size here (a ResizeObserver
-// in main.js) whenever it changes -- first paint, bookmarks bar toggled,
-// interface size changed, Liquid Glass switched on/off. Re-lays out the
-// active tab and the side panel so they start exactly where the chrome ends.
+// A toolbar reports its real rendered chrome size here (a ResizeObserver in
+// main.js) whenever it changes -- first paint, bookmarks bar toggled,
+// interface size changed, Liquid Glass switched on/off, full screen. Re-lays
+// out its window's active tab and side panel so they start exactly where
+// the chrome ends.
 #[tauri::command]
-async fn set_chrome_insets(app: tauri::AppHandle, left: f64, top: f64) -> Result<(), String> {
+async fn set_chrome_insets(app: tauri::AppHandle, webview: Webview, left: f64, top: f64) -> Result<(), String> {
     if !left.is_finite() || !top.is_finite() {
         return Err("invalid chrome insets".into());
     }
-    CHROME_LEFT.store(left.clamp(0.0, 400.0).to_bits(), Ordering::Relaxed);
-    CHROME_TOP.store(top.clamp(0.0, 400.0).to_bits(), Ordering::Relaxed);
+    let win = toolbar_window(&webview).ok_or("only a toolbar reports its chrome")?;
     let app2 = app.clone();
     on_main(&app, move || -> Result<(), String> {
         let state = app2.state::<BrowserState>();
-        resize_active_tab(&state)?;
+        state.win(&win, |w| w.insets = (left.clamp(0.0, 400.0), top.clamp(0.0, 400.0)));
+        resize_active_tab(&state, &win)?;
         let width = state.store.settings.lock().unwrap().side_panel_width;
-        place_side_panel(&state, width);
+        place_side_panel(&state, &win, width);
         Ok(())
     })
     .await
@@ -3275,33 +3529,81 @@ async fn set_chrome_insets(app: tauri::AppHandle, left: f64, top: f64) -> Result
 }
 
 // --- Session restore -------------------------------------------------------
+//
+// session.json keeps every (non-private) window's tabs as its toolbar last
+// reported them -- sleeping ones included -- so the next launch can reopen
+// them, each window in its own window again.
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct SessionTab {
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct SessionTab {
     url: String,
     #[serde(default)]
     account: Option<String>,
+    #[serde(default)]
+    title: Option<String>,
 }
 
-#[tauri::command]
-fn get_session(state: tauri::State<BrowserState>) -> Vec<SessionTab> {
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub(crate) struct WindowSession {
+    tabs: Vec<SessionTab>,
+    // Index of the tab that was active.
+    #[serde(default)]
+    active: usize,
+}
+
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct SessionFile {
+    windows: Vec<WindowSession>,
+}
+
+fn read_session(state: &BrowserState) -> Vec<WindowSession> {
     let path = state.data_dir.join("session.json");
     let Ok(text) = fs::read_to_string(path) else { return Vec::new() };
-    serde_json::from_str::<Vec<SessionTab>>(&text)
-        // Saved before accounts existed: just the urls.
-        .or_else(|_| {
-            serde_json::from_str::<Vec<String>>(&text)
-                .map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None }).collect())
-        })
-        .unwrap_or_default()
+    if let Ok(file) = serde_json::from_str::<SessionFile>(&text) {
+        return file.windows;
+    }
+    // Saved before windows existed: one window's tabs -- or before accounts
+    // existed: just the urls.
+    let tabs = serde_json::from_str::<Vec<SessionTab>>(&text).or_else(|_| {
+        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None, title: None }).collect())
+    });
+    match tabs {
+        Ok(tabs) if !tabs.is_empty() => vec![WindowSession { tabs, active: 0 }],
+        _ => Vec::new(),
+    }
 }
 
-#[tauri::command]
-fn save_session(state: tauri::State<BrowserState>, tabs: Vec<SessionTab>) {
+fn write_session(state: &BrowserState) {
+    let windows: Vec<WindowSession> = state.sessions.lock().unwrap().iter().map(|(_, s)| s.clone()).filter(|s| !s.tabs.is_empty()).collect();
     let path = state.data_dir.join("session.json");
-    if let Ok(s) = serde_json::to_string(&tabs) {
+    if let Ok(s) = serde_json::to_string(&SessionFile { windows }) {
         let _ = fs::write(path, s);
     }
+}
+
+// A toolbar's current tabs, for session restore. Private windows keep none.
+#[tauri::command]
+fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs: Vec<SessionTab>, active: usize) {
+    let Some(win) = toolbar_window(&webview) else { return };
+    if state.is_private(&win) {
+        return;
+    }
+    {
+        let mut sessions = state.sessions.lock().unwrap();
+        let session = WindowSession { tabs, active };
+        match sessions.iter_mut().find(|(w, _)| w == &win) {
+            Some((_, s)) => *s = session,
+            None => sessions.push((win, session)),
+        }
+    }
+    write_session(&state);
+}
+
+// What a new window's toolbar opens first (see browser_windows::create). Taken once.
+#[tauri::command]
+fn take_window_init(webview: Webview, state: tauri::State<BrowserState>) -> serde_json::Value {
+    let Some(win) = toolbar_window(&webview) else { return serde_json::Value::Null };
+    state.win(&win, |w| w.init.take()).flatten().unwrap_or(serde_json::Value::Null)
 }
 
 // The WebView2 command line for this run (see profile::set_browser_args).
@@ -3374,8 +3676,16 @@ fn main() {
             vault_confirm_2fa,
             vault_disable_2fa,
             vault_change_master_password,
-            get_session,
-            save_session,
+            save_window_session,
+            take_window_init,
+            browser_windows::new_window,
+            browser_windows::close_window,
+            browser_windows::get_windows,
+            browser_windows::move_tab_to_new_window,
+            browser_windows::adopt_tab,
+            browser_windows::send_tab_to_window,
+            browser_windows::get_closed_windows,
+            browser_windows::reopen_closed_window,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,
@@ -3398,6 +3708,7 @@ fn main() {
             share_page_storage,
             shared_page_storage,
             toolbar_heartbeat,
+            get_tab_info,
             get_open_tabs,
             set_toolbar_snapshot,
             get_toolbar_snapshot,
@@ -3421,100 +3732,51 @@ fn main() {
             let data_dir = profile.data_dir.clone();
             let store = Store::load(data_dir.clone());
             profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
-
-            let width = 1280.0;
-            let height = 820.0;
-
-            // Frameless: the toolbar draws its own glass title bar (drag
-            // region + minimize/maximize/close in index.html) so the native
-            // Windows caption doesn't sit on top of the Liquid Glass chrome.
-            let title = match &profile.name {
-                Some(name) => format!("Kessel \u{2013} {}", name),
-                None => "Kessel".to_string(),
-            };
-            let window = tauri::window::WindowBuilder::new(app, "main")
-                .title(title)
-                .inner_size(width, height)
-                .min_inner_size(680.0, 420.0)
-                .decorations(false)
-                .build()?;
-
-            let toolbar = window.add_child(
-                profile::webview(TOOLBAR_LABEL, WebviewUrl::App("index.html".into())),
-                LogicalPosition::new(0.0, 0.0),
-                LogicalSize::new(width, height),
-            )?;
-            keys::install(app.handle(), &toolbar);
-            // Attaches Tauri's frameless-window resize borders, which it
-            // otherwise only does for single-webview windows (see
-            // raise_resize_borders).
-            let _ = window.set_resizable(true);
-
-            let window_for_resize = window.clone();
-            let toolbar_for_resize = toolbar.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::Resized(_) = event {
-                    if let Ok((position, size)) = toolbar_bounds(&window_for_resize) {
-                        let _ = toolbar_for_resize.set_position(position);
-                        let _ = toolbar_for_resize.set_size(size);
-                    }
-                }
-            });
+            let restore = store.settings.lock().unwrap().restore_tabs;
 
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
             app.manage(accounts::Accounts::load(&data_dir, profile.local_dir.join("accounts")));
 
             let state = BrowserState {
-                window: window.clone(),
+                windows: Mutex::new(Vec::new()),
+                next_window: AtomicU32::new(1),
+                focused_window: Mutex::new(None),
                 tabs: Mutex::new(HashMap::new()),
-                order: Mutex::new(Vec::new()),
-                active: Mutex::new(None),
                 next_id: AtomicU32::new(1),
                 next_download_id: AtomicU32::new(1),
                 closed_stack: Mutex::new(Vec::new()),
+                closed_windows: Mutex::new(Vec::new()),
                 tab_accounts: Mutex::new(HashMap::new()),
+                private_tabs: Mutex::new(HashSet::new()),
                 data_dir: data_dir.clone(),
                 store,
                 singleton_tabs: Mutex::new(HashMap::new()),
-                side_panel: Mutex::new(None),
-                side_panel_frame: Mutex::new(None),
-                side_panel_kind: Mutex::new(None),
-                side_panel_url: Mutex::new(None),
                 popouts: Mutex::new(HashMap::new()),
                 tab_meta: Mutex::new(HashMap::new()),
-                toolbar_snapshot: Mutex::new(None),
                 pages: Mutex::new(HashMap::new()),
+                sessions: Mutex::new(Vec::new()),
             };
             app.manage(state);
             app.manage(Vault::new(data_dir));
             start_shields(app.handle());
 
+            // The windows of your last session (each with its own tabs), or
+            // one window on the start page. The tabs themselves are opened by
+            // each window's toolbar once it has loaded (see take_window_init),
+            // to avoid a startup race between webview-creation calls.
+            let state = app.state::<BrowserState>();
+            let saved = if restore { read_session(&state) } else { Vec::new() };
+            if saved.is_empty() {
+                browser_windows::create(app.handle(), false, serde_json::Value::Null)?;
+            } else {
+                for session in saved {
+                    browser_windows::create(app.handle(), false, serde_json::json!({ "session": session }))?;
+                }
+            }
+
             let app_for_watchdog = app.handle().clone();
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
-
-            // Re-run the resize handler for the active content tab and the
-            // side panel (if one's open) on window resize.
-            let app_handle = app.handle().clone();
-            window.on_window_event(move |event| {
-                // Pop-out windows are satellites of the main window -- closing
-                // Kessel closes them too rather than leaving them orphaned.
-                if let WindowEvent::Destroyed = event {
-                    app_handle.exit(0);
-                    return;
-                }
-                if let WindowEvent::Resized(_) = event {
-                    let state = app_handle.state::<BrowserState>();
-                    let _ = resize_active_tab(&state);
-                    let width = state.store.settings.lock().unwrap().side_panel_width;
-                    place_side_panel(&state, width);
-                }
-            });
-
-            // NOTE: the first tab is intentionally NOT created here -- main.js
-            // creates it itself once the toolbar has finished loading, to
-            // avoid a startup race between two webview-creation calls.
-
             Ok(())
         })
         .run(tauri::generate_context!())

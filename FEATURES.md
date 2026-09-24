@@ -123,9 +123,9 @@ branch, one small commit per feature or group of features.
 | 2.06 | Mute tab | ⏳ | |
 | 2.07 | Unmute tab | ⏳ | |
 | 2.08 | Drag tabs to reorder | 🟢 | |
-| 2.09 | Drag tab into another window | ⏳ | |
-| 2.10 | Drag tab out into a new window | 🟡 | Tears off into a single-page pop-out window |
-| 2.11 | Move tab to another window | ⏳ | |
+| 2.09 | Drag tab into another window | ✅ | Drop a tab on another window's tab strip: the page moves along, no reload |
+| 2.10 | Drag tab out into a new window | ✅ | Drop a tab outside the strip: it moves into a new window where you let go (Pop out is in the tab menu) |
+| 2.11 | Move tab to another window | ✅ | Tab right-click: Move to new window / Move to window with ... |
 | 2.12 | Reload tab | ⏳ | |
 | 2.13 | Reload multiple tabs | ⏳ | |
 | 2.14 | Close other tabs | 🟢 | |
@@ -143,7 +143,7 @@ branch, one small commit per feature or group of features.
 | 2.26 | Tab group synchronization | ⏳ | |
 | 2.27 | Tab search | ⏳ | |
 | 2.28 | Recently closed tabs | 🟢 | Settings -> History |
-| 2.29 | Recently closed windows | ⏳ | |
+| 2.29 | Recently closed windows | 🟡 | Remembered and reopenable with all their tabs; a menu entry comes with the browser menu |
 | 2.30 | Vertical tabs | ⏳ | |
 | 2.31 | Horizontal tabs | 🟢 | |
 | 2.32 | Scrollable tab bar | ⏳ | |
@@ -167,16 +167,16 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 3.01 | Multiple browser windows | ⏳ | |
-| 3.02 | Private windows | ⏳ | |
-| 3.03 | Incognito windows | ⏳ | |
+| 3.01 | Multiple browser windows | ✅ | Any number of windows, each with its own tabs, side panel and popups |
+| 3.02 | Private windows | ✅ | InPrivate tabs: no history, session or recently-closed entries; Private badge in the tab bar |
+| 3.03 | Incognito windows | ✅ | Same as private windows |
 | 3.04 | Separate profile windows | 🟡 | Account pop-out windows |
 | 3.05 | Always-on-top window mode | 🟡 | Pop-out windows only |
 | 3.06 | Picture-in-picture windows | ⏳ | |
 | 3.07 | Pop-out video windows | ⏳ | |
-| 3.08 | Restore previous windows | ⏳ | |
-| 3.09 | Restore individual windows | ⏳ | |
-| 3.10 | Window session saving | ⏳ | |
+| 3.08 | Restore previous windows | ✅ | Session restore reopens every window with its own tabs |
+| 3.09 | Restore individual windows | 🟡 | A closed window reopens with its tabs (reopen_closed_window) |
+| 3.10 | Window session saving | ✅ | Each window's tabs are saved as they change |
 | 3.11 | Window organization | ⏳ | |
 | 3.12 | Window naming | ⏳ | |
 | 3.13 | Split-screen browser windows | ⏳ | |
@@ -221,7 +221,7 @@ branch, one small commit per feature or group of features.
 | 5.08 | Clear all browsing history | 🟢 | |
 | 5.09 | Recently closed pages | 🟢 | |
 | 5.10 | Recently closed tabs | 🟢 | |
-| 5.11 | Recently closed windows | ⏳ | |
+| 5.11 | Recently closed windows | 🟡 | See 2.29 |
 | 5.12 | Search history | ⏳ | |
 | 5.13 | Download history | 🟢 | |
 | 5.14 | History synchronization | ⏳ | |
@@ -302,10 +302,10 @@ branch, one small commit per feature or group of features.
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 8.01 | Multiple browser profiles | 🟡 | Accounts: separate sign-ins in one window |
-| 8.02 | Separate profile history | ⏳ | |
-| 8.03 | Separate bookmarks | ⏳ | |
-| 8.04 | Separate passwords | ⏳ | |
-| 8.05 | Separate extensions | ⏳ | |
+| 8.02 | Separate profile history | 🟡 | kessel.exe --profile <name> runs a fully separate profile (own history, bookmarks, passwords, settings, cookies); switching UI to come |
+| 8.03 | Separate bookmarks | 🟡 | See 8.02 |
+| 8.04 | Separate passwords | 🟡 | See 8.02 |
+| 8.05 | Separate extensions | 🟡 | See 8.02 |
 | 8.06 | Separate cookies | 🟢 | Accounts |
 | 8.07 | Separate browsing sessions | 🟢 | Accounts |
 | 8.08 | Profile avatars | 🟢 | Accounts |
@@ -704,7 +704,7 @@ branch, one small commit per feature or group of features.
 | 25.02 | Open homepage | 🟢 | |
 | 25.03 | Open specific pages | ⏳ | |
 | 25.04 | Restore previous session | 🟢 | |
-| 25.05 | Restore selected windows | ⏳ | |
+| 25.05 | Restore selected windows | 🟡 | Every window of the last session comes back; picking some is not done yet |
 | 25.06 | Open specific profile | ⏳ | |
 | 25.07 | Continue where you left off | 🟢 | |
 | 25.08 | Startup tab groups | ⏳ | |
@@ -719,8 +719,8 @@ branch, one small commit per feature or group of features.
 | 26.03 | Automatic session recovery | ⏳ | |
 | 26.04 | Crash recovery | 🟡 | Toolbar watchdog |
 | 26.05 | Session snapshots | ⏳ | |
-| 26.06 | Save window | ⏳ | |
-| 26.07 | Restore window | ⏳ | |
+| 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
+| 26.07 | Restore window | 🟡 | Reopen closed window |
 | 26.08 | Suspend session | ⏳ | |
 | 26.09 | Export session | ⏳ | |
 | 26.10 | Import session | ⏳ | |
@@ -1001,7 +1001,7 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 44.01 | Multiple windows | ⏳ | |
+| 44.01 | Multiple windows | ✅ | See 3.01 |
 | 44.02 | Keyboard shortcuts | ⏳ | |
 | 44.03 | Full developer tools | ⏳ | |
 | 44.04 | Extensions | ⏳ | |

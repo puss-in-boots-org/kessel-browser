@@ -4,12 +4,13 @@
 // arrive as the same events the toolbar gets for tabs, addressed to us.
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
-import { hostOf } from "./shared/api.js";
+import { hostOf, listenHere } from "./shared/api.js";
 import { siteIcon, injectRefractionFilter, watchCustomWallpaper } from "./shared/glass.js";
 import { avatarHtml } from "./shared/accounts.js";
 
 const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+// Only this pop-out's events -- with several open, each gets its own.
+const listen = listenHere;
 const appWindow = window.__TAURI__.window.getCurrentWindow();
 
 const INTERNAL_TITLES = { "kessel://settings": "Settings", "kessel://passwords": "Passwords", "kessel://downloads": "Downloads", "kessel://newtab": "New Tab" };

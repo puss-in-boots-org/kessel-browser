@@ -51,6 +51,7 @@ const PATHS = {
   winMax: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
   winRestore: '<rect x="5" y="8.5" width="10.5" height="10.5" rx="2.2"/><path d="M8.5 5.5h7.5A2.5 2.5 0 0 1 18.5 8v7.5"/>',
   arrowRight: '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>',
+  incognito: '<path d="M3 11h18"/><path d="M5.5 11l1.8-5.5h9.4l1.8 5.5"/><circle cx="7.5" cy="16" r="2.6"/><circle cx="16.5" cy="16" r="2.6"/><path d="M10.1 16h3.8"/>',
   dots: '<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/>',
   drag: '<circle cx="9" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.2" fill="currentColor" stroke="none"/>',
 };

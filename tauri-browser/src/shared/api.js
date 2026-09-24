@@ -11,6 +11,14 @@ export const ENGINES = {
   startpage: { name: "Startpage", url: (q) => `https://www.startpage.com/sp/search?query=${encodeURIComponent(q)}` },
 };
 
+// Tauri's own listen() hears an event sent to ANY webview -- even one Rust
+// addressed to another window's toolbar, or to another pop-out's title bar.
+// This only hears events sent to this webview (and ones sent to everyone).
+export function listenHere(event, handler) {
+  const label = window.__TAURI__.webview.getCurrentWebview().label;
+  return window.__TAURI__.event.listen(event, handler, { target: { kind: "Webview", label } });
+}
+
 export function looksLikeUrl(input) {
   const trimmed = input.trim();
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return true;

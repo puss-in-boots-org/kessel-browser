@@ -122,7 +122,8 @@ export class Page {
     const r = await this.session.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, userGesture });
     if (r.exceptionDetails) {
       const d = r.exceptionDetails;
-      throw new Error(`evaluate failed: ${d.exception?.description || d.text}`);
+      // A rejected invoke() rejects with a plain string: that's in `value`.
+      throw new Error(`evaluate failed: ${d.exception?.description || d.exception?.value || d.text}`);
     }
     return r.result.value;
   }
@@ -225,22 +226,52 @@ export class Kessel {
     return new Page(target, session);
   }
 
-  // Kessel's own UI: the toolbar webview (tab strip, address bar, rail).
-  // Its page is index.html, which Tauri serves as the site root.
-  toolbar() {
-    return this.page((t) => /^https?:\/\/(tauri\.localhost|localhost:\d+|127\.0\.0\.1:\d+)\/(index\.html)?([?#].*)?$/.test(t.url));
+  // Every browser window's toolbar webview (tab strip, address bar, rail),
+  // as { label, page }. Its page is index.html, which Tauri serves as the
+  // site root.
+  async toolbars() {
+    const isToolbar = (t) => /^https?:\/\/(tauri\.localhost|localhost:\d+|127\.0\.0\.1:\d+)\/(index\.html)?([?#].*)?$/.test(t.url);
+    const out = [];
+    for (const target of (await this.targets()).filter(isToolbar)) {
+      const page = await this.attach(target);
+      const win = await page.evaluate(`window.__kesselTest ? window.__kesselTest.window() : null`).catch(() => null);
+      if (win) out.push({ label: win.label, private: !!win.private, page });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   }
 
-  // Calls a Kessel command from the toolbar, like the toolbar itself does.
-  async invoke(cmd, args = {}) {
-    const toolbar = await this.toolbar();
+  // The toolbar of browser window `label` (default: the first window).
+  async toolbar(label = null) {
+    return waitFor(
+      async () => {
+        const all = await this.toolbars();
+        return (label ? all.find((t) => t.label === label) : all[0])?.page;
+      },
+      { message: `the toolbar of ${label || "the first window"}` }
+    );
+  }
+
+  // Calls a Kessel command from a window's toolbar, like the toolbar itself does.
+  async invoke(cmd, args = {}, { window = null } = {}) {
+    const toolbar = await this.toolbar(window);
     return toolbar.evaluate(`window.__TAURI__.core.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args)})`);
   }
 
-  // The toolbar's view of the tab strip: [{ id, url, title, active, ... }].
-  async tabs() {
-    const toolbar = await this.toolbar();
+  // A window's view of its tab strip: [{ id, url, title, active, ... }].
+  async tabs(window = null) {
+    const toolbar = await this.toolbar(window);
     return toolbar.evaluate(`window.__kesselTest.tabs()`);
+  }
+
+  // Labels of the open browser windows ("win-1", ...).
+  async windows() {
+    return (await this.toolbars()).map((t) => t.label);
+  }
+
+  // Opens a tab the way the toolbar's own "+" does; returns its id.
+  async createTab(url = null, { window = null } = {}) {
+    const toolbar = await this.toolbar(window);
+    return toolbar.evaluate(`window.__kesselTest.createTab(${JSON.stringify(url)})`);
   }
 
   // Presses real keys through Windows in this Kessel's main window (see
@@ -261,13 +292,16 @@ export class Kessel {
     return existsSync(file) ? readFileSync(file, "utf8") : null;
   }
 
-  async close() {
+  // Stops Kessel. The profile is deleted too, unless `keepProfile` (to
+  // launch again on it).
+  async close({ keepProfile = this.keepProfile } = {}) {
     for (const s of this.sessions.values()) s.close();
     this.sessions.clear();
     try {
       execFileSync("taskkill", ["/PID", String(this.child.pid), "/T", "/F"], { stdio: "ignore" });
     } catch {}
     await sleep(300);
+    if (keepProfile) return;
     try {
       rmSync(this.profileDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     } catch {}
@@ -276,14 +310,18 @@ export class Kessel {
 
 let nextPort = 9400 + Math.floor(Math.random() * 400);
 
-// Launches Kessel on a fresh profile. `settings` are written to its
-// settings.json first (anything left out keeps Kessel's default).
-export async function launch({ settings = {}, args = [] } = {}) {
+// Launches Kessel on a fresh profile -- or on `profileDir`, an earlier
+// run's (kept) profile. `settings` are written to its settings.json first
+// (anything left out keeps Kessel's default).
+export async function launch({ settings = {}, args = [], profileDir = null, keepProfile = false } = {}) {
   if (!existsSync(EXE)) throw new Error(`test build not found: ${EXE}\nbuild it with scripts\\cargo-msvc.cmd build --features tauri/custom-protocol --target-dir target\\e2e`);
-  const profileDir = mkdtempSync(path.join(tmpdir(), "kessel-e2e-"));
+  const reuse = !!profileDir;
+  profileDir = profileDir || mkdtempSync(path.join(tmpdir(), "kessel-e2e-"));
   mkdirSync(path.join(profileDir, "Data"), { recursive: true });
-  // Test pages are plain http on 127.0.0.2: don't try https first.
-  writeFileSync(path.join(profileDir, "Data", "settings.json"), JSON.stringify({ shields_https_upgrade: false, ...settings }));
+  if (!reuse) {
+    // Test pages are plain http on 127.0.0.2: don't try https first.
+    writeFileSync(path.join(profileDir, "Data", "settings.json"), JSON.stringify({ shields_https_upgrade: false, ...settings }));
+  }
   const port = nextPort++;
   const logs = [];
   const child = spawn(EXE, ["--profile-dir", profileDir, ...args], {
@@ -293,6 +331,7 @@ export async function launch({ settings = {}, args = [] } = {}) {
   child.stdout.on("data", (d) => logs.push(d.toString()));
   child.stderr.on("data", (d) => logs.push(d.toString()));
   const kessel = new Kessel(child, port, profileDir, logs);
+  kessel.keepProfile = keepProfile;
   try {
     await waitFor(async () => (await fetch(`http://127.0.0.1:${port}/json/version`)).ok, { timeout: 30000, message: "Kessel's DevTools endpoint" });
     // Ready once the toolbar has opened its first tab.
