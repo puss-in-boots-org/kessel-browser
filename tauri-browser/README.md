@@ -20,6 +20,21 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Tab titles, icons and addresses stay current** (`watch_page` in
+  `main.rs`). Tabs on websites used to keep saying "New Tab" or the host
+  name: the page script reported titles and icons through IPC, which Tauri
+  refuses for websites. They now come straight from WebView2's own events
+  (title changed, icon changed, page loaded), for tabs, pop-outs and the
+  side panel. Same-document navigations -- clicking a video on YouTube,
+  a mail in Gmail, a tab on GitHub -- change the address without loading
+  a new page; those now update the address bar (and so bookmarking,
+  pinning, docking a pop-out and session restore use the right page)
+  instead of keeping the old one. Hover a tab for its full title.
+  - History entries get the page's real title (they used to be just the
+    URL), in-page navigations count as visits, and revisiting the page
+    you're already on doesn't add a duplicate. History is kept in memory
+    and written by a background thread, so navigating never waits on the
+    disk.
 - **Accounts** (`src-tauri/src/accounts.rs`): be signed in as different
   people at once, like Chrome profiles or Firefox containers, but in one
   window. The avatar at the right end of the address bar shows the current

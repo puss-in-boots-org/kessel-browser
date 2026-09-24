@@ -6,7 +6,8 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
 
 fn read_json_or_default<T: for<'a> Deserialize<'a> + Default>(path: &Path) -> T {
     fs::read_to_string(path)
@@ -165,7 +166,14 @@ pub struct Store {
     pub downloads: Mutex<Vec<DownloadEntry>>,
     pub adblock_lists: Mutex<AdblockLists>,
     pub blocked_count: std::sync::atomic::AtomicU32,
+    // History lives in memory; a background thread writes history.json
+    // whenever it changes (a burst of changes is one write), so recording a
+    // visit never makes a navigation wait on the disk.
+    history: Arc<Mutex<Vec<HistoryEntry>>>,
+    history_changed: Sender<()>,
 }
+
+const HISTORY_LIMIT: usize = 500;
 
 impl Store {
     pub fn load(dir: PathBuf) -> Self {
@@ -173,6 +181,17 @@ impl Store {
         let pinned: Vec<PinnedSite> = read_json_or_default(&dir.join("pinned.json"));
         let downloads: Vec<DownloadEntry> = read_json_or_default(&dir.join("downloads.json"));
         let adblock_lists: AdblockLists = read_json_or_default(&dir.join("adblock_lists.json"));
+        let history_path = dir.join("history.json");
+        let history = Arc::new(Mutex::new(read_json_or_default::<Vec<HistoryEntry>>(&history_path)));
+        let (history_changed, changes) = channel::<()>();
+        let to_write = history.clone();
+        std::thread::spawn(move || {
+            while changes.recv().is_ok() {
+                while changes.try_recv().is_ok() {}
+                let snapshot = to_write.lock().unwrap().clone();
+                write_json(&history_path, &snapshot);
+            }
+        });
         Store {
             dir,
             settings: Mutex::new(settings),
@@ -180,12 +199,11 @@ impl Store {
             downloads: Mutex::new(downloads),
             adblock_lists: Mutex::new(adblock_lists),
             blocked_count: std::sync::atomic::AtomicU32::new(0),
+            history,
+            history_changed,
         }
     }
 
-    fn history_path(&self) -> PathBuf {
-        self.dir.join("history.json")
-    }
     fn bookmarks_path(&self) -> PathBuf {
         self.dir.join("bookmarks.json")
     }
@@ -203,29 +221,46 @@ impl Store {
         write_json(&self.dir.join("adblock_lists.json"), &*self.adblock_lists.lock().unwrap());
     }
 
+    // Visiting the page you're already on again (a reload, or clicking the
+    // same link twice) refreshes its entry instead of adding another.
     pub fn record_history(&self, url: &str, title: &str) {
-        let path = self.history_path();
-        let mut history: Vec<HistoryEntry> = read_json_or_default(&path);
-        history.push(HistoryEntry {
-            url: url.to_string(),
-            title: title.to_string(),
-            visited_at: now_unix(),
-        });
-        if history.len() > 500 {
-            let excess = history.len() - 500;
+        let mut history = self.history.lock().unwrap();
+        match history.last_mut() {
+            Some(last) if last.url == url => last.visited_at = now_unix(),
+            _ => history.push(HistoryEntry {
+                url: url.to_string(),
+                title: title.to_string(),
+                visited_at: now_unix(),
+            }),
+        }
+        if history.len() > HISTORY_LIMIT {
+            let excess = history.len() - HISTORY_LIMIT;
             history.drain(0..excess);
         }
-        write_json(&path, &history);
+        drop(history);
+        let _ = self.history_changed.send(());
+    }
+
+    // A visit is recorded as the page starts loading, before it has a
+    // title; this fills the title in once it has one.
+    pub fn set_history_title(&self, url: &str, title: &str) {
+        let mut history = self.history.lock().unwrap();
+        let Some(entry) = history.iter_mut().rev().take(50).find(|e| e.url == url) else { return };
+        if entry.title == title {
+            return;
+        }
+        entry.title = title.to_string();
+        drop(history);
+        let _ = self.history_changed.send(());
     }
 
     pub fn get_history(&self) -> Vec<HistoryEntry> {
-        let mut history: Vec<HistoryEntry> = read_json_or_default(&self.history_path());
-        history.reverse();
-        history
+        self.history.lock().unwrap().iter().rev().cloned().collect()
     }
 
     pub fn clear_history(&self) {
-        write_json(&self.history_path(), &Vec::<HistoryEntry>::new());
+        self.history.lock().unwrap().clear();
+        let _ = self.history_changed.send(());
     }
 
     pub fn get_bookmarks(&self) -> Vec<Bookmark> {

@@ -318,7 +318,8 @@ function renderTabs() {
       (account ? " grouped" : "");
     if (account) el.style.setProperty("--acct", account.color);
     tab.justCreated = false;
-    if (tab.discarded) el.title = "Sleeping to save memory -- click to reload";
+    // The full title on hover -- the strip truncates it.
+    el.title = tab.discarded ? "Sleeping to save memory -- click to reload" : tab.title || "";
     el.dataset.tabId = String(tab.id);
     el.draggable = true;
 
@@ -1093,32 +1094,54 @@ window.addEventListener("DOMContentLoaded", async () => {
     const tab = findTab(id);
     if (tab) {
       tab.url = url;
-      tab.favicon = null; // stale from whatever page this tab was on before
-      if (!tab.userTitled) tab.title = hostOf(url);
+      // Stale from whatever page this tab was on before -- the new page's
+      // own title and icon follow from Rust as it loads (watch_page).
+      tab.favicon = null;
+      tab.title = hostOf(url);
+      tab.userTitled = false;
     }
     if (id === activeTabId) updateAddressBarForActiveTab();
     renderTabs();
     persistSession();
   });
 
+  // Titles and icons change often (a video starting, an unread count), so
+  // they're patched into the tab in place instead of redrawing the strip.
   await listen("tab-favicon-changed", (event) => {
     const { id, url } = event.payload;
     const tab = findTab(id);
-    if (tab) {
-      tab.favicon = url;
-      rememberSiteFavicon(tab.url, url);
-      renderTabs();
-    }
+    if (!tab || tab.favicon === url) return;
+    tab.favicon = url;
+    rememberSiteFavicon(tab.url, url);
+    const fav = document.querySelector(`.tab[data-tab-id="${id}"] .tab-favicon`);
+    if (fav && !tab.loading) fav.innerHTML = faviconGlyph(tab);
+    pushToolbarSnapshot();
   });
 
   await listen("tab-title-changed", (event) => {
     const { id, title } = event.payload;
     const tab = findTab(id);
-    if (tab && title) {
-      tab.title = title;
-      tab.userTitled = true;
+    if (!tab || !title || (tab.title === title && tab.userTitled)) return;
+    tab.title = title;
+    tab.userTitled = true;
+    const el = document.querySelector(`.tab[data-tab-id="${id}"]`);
+    if (el) {
+      el.querySelector(".tab-title").textContent = title;
+      if (!tab.discarded) el.title = title;
     }
-    renderTabs();
+    pushToolbarSnapshot();
+  });
+
+  // The page changed its address without loading a new one (YouTube,
+  // Gmail...), or a navigation ended somewhere else than it started.
+  await listen("tab-url-changed", (event) => {
+    const { id, url } = event.payload;
+    const tab = findTab(id);
+    if (!tab || tab.url === url) return;
+    tab.url = url;
+    if (id === activeTabId) updateAddressBarForActiveTab();
+    pushToolbarSnapshot();
+    persistSession();
   });
 
   await listen("tab-load-started", (event) => {

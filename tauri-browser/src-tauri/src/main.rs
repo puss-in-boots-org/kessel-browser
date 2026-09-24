@@ -125,12 +125,34 @@ pub(crate) struct BrowserState {
     // The toolbar's own copy of its tab list (incl. sleeping tabs that only
     // exist in the UI), pushed on every change -- also for that recovery.
     toolbar_snapshot: Mutex<Option<String>>,
+    // Page id (tab, pop-out, 0 = side panel) -> what the toolbar was last
+    // told about it (see watch_page).
+    pages: Mutex<HashMap<u32, PageState>>,
 }
 
 #[derive(Default, Clone)]
 struct TabMeta {
     title: Option<String>,
     favicon: Option<String>,
+}
+
+#[derive(Default)]
+struct PageState {
+    url: String,
+    title: String,
+    favicon: String,
+    // The history entry still waiting for this page's title.
+    history: Option<HistoryWait>,
+}
+
+struct HistoryWait {
+    url: String,
+    // From a same-document navigation (pushState), which never "finishes
+    // loading" -- its first real title is the one.
+    same_document: bool,
+    // The page's title before that navigation: Chromium re-announces it
+    // right after the address changes, before the page sets its new one.
+    stale_title: String,
 }
 
 // The active tab always gets the full window width (minus the rail) --
@@ -425,6 +447,7 @@ fn create_tab_internal(
         .map_err(|e| e.to_string())?;
 
     attach_shields(app, &webview, id);
+    watch_page(app, &webview, id);
     if let Some(account) = account {
         state.tab_accounts.lock().unwrap().insert(id, account);
     }
@@ -560,6 +583,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
         }
     };
     attach_shields(app, &page, 0);
+    watch_page(app, &page, 0);
 
     *state.side_panel_frame.lock().unwrap() = Some(frame);
     *state.side_panel.lock().unwrap() = Some(page);
@@ -771,6 +795,7 @@ fn create_popout_internal(
         .add_child(content_builder, content_position, content_size)
         .map_err(|e| e.to_string())?;
     attach_shields(app, &content, id);
+    watch_page(app, &content, id);
 
     let window_for_events = window.clone();
     let app_for_events = app.clone();
@@ -788,6 +813,7 @@ fn create_popout_internal(
             let st = app_for_events.state::<BrowserState>();
             st.popouts.lock().unwrap().remove(&id);
             st.tab_accounts.lock().unwrap().remove(&id);
+            st.pages.lock().unwrap().remove(&id);
         }
         _ => {}
     });
@@ -1472,7 +1498,212 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     let scriptlets = if shields_up_for(&st, &host) { shields.scriptlets_for(nav_url.as_str()) } else { None };
     set_page_scriptlets(app, label, scriptlets);
     st.store.record_history(nav_url.as_str(), nav_url.as_str());
+    // A new page: it sends its own title and icon as it loads (like the
+    // toolbar, forget the old ones), and its history entry gets the title
+    // once there is one (page_title_changed).
+    let mut pages = st.pages.lock().unwrap();
+    let page = pages.entry(id).or_default();
+    *page = PageState {
+        url: nav_url.to_string(),
+        history: Some(HistoryWait { url: nav_url.to_string(), same_document: false, stale_title: String::new() }),
+        ..Default::default()
+    };
     true
+}
+
+// --- Page title, icon and address -----------------------------------------
+//
+// Straight from WebView2's own events, for every page webview: tabs,
+// pop-outs and the side panel (id 0). The page script used to report titles
+// and icons through IPC, which Tauri refuses for websites -- so tab titles
+// never updated. Also covers same-document navigations (pushState: clicking
+// a video on YouTube, opening a mail in Gmail...), which change the address
+// without loading a new document, so on_navigation never sees them.
+
+fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
+    #[cfg(windows)]
+    {
+        let app2 = app.clone();
+        let _ = webview.with_webview(move |platform| unsafe {
+            if let Err(e) = install_page_watchers(&app2, &platform, id) {
+                eprintln!("couldn't watch page {}: {}", id, e.message());
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, webview, id);
+}
+
+#[cfg(windows)]
+unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webview::PlatformWebview, id: u32) -> windows::core::Result<()> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::*;
+    use webview2_com::{DocumentTitleChangedEventHandler, FaviconChangedEventHandler, NavigationCompletedEventHandler, SourceChangedEventHandler};
+    use windows::core::Interface;
+
+    let core = platform.controller().CoreWebView2()?;
+    let mut token = 0i64;
+
+    let app_title = app.clone();
+    core.add_DocumentTitleChanged(
+        &DocumentTitleChangedEventHandler::create(Box::new(move |sender, _| {
+            if let Some(core) = sender {
+                page_title_changed(&app_title, id, &webview_title(&core)?, false);
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    if let Ok(core15) = core.cast::<ICoreWebView2_15>() {
+        let app_icon = app.clone();
+        core15.add_FaviconChanged(
+            &FaviconChangedEventHandler::create(Box::new(move |sender, _| {
+                if let Some(core) = sender {
+                    send_page_favicon(&app_icon, id, &core);
+                }
+                Ok(())
+            })),
+            &mut token,
+        )?;
+    }
+
+    // Neither event fires when a new page's title or icon happens to be the
+    // same as the last page's, so both are re-sent once it has loaded --
+    // with its final address, in case a redirect moved it or the navigation
+    // never committed (a download).
+    let app_done = app.clone();
+    core.add_NavigationCompleted(
+        &NavigationCompletedEventHandler::create(Box::new(move |sender, _| {
+            if let Some(core) = sender {
+                page_url_changed(&app_done, id, &webview_source(&core)?, false);
+                page_title_changed(&app_done, id, &webview_title(&core)?, true);
+                send_page_favicon(&app_done, id, &core);
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    let app_source = app.clone();
+    core.add_SourceChanged(
+        &SourceChangedEventHandler::create(Box::new(move |sender, args| {
+            let (Some(core), Some(args)) = (sender, args) else { return Ok(()) };
+            let mut new_document = windows::core::BOOL::default();
+            args.IsNewDocument(&mut new_document)?;
+            if !new_document.as_bool() {
+                page_url_changed(&app_source, id, &webview_source(&core)?, true);
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+    Ok(())
+}
+
+#[cfg(windows)]
+unsafe fn webview_source(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2) -> windows::core::Result<String> {
+    let mut source = windows::core::PWSTR::null();
+    core.Source(&mut source)?;
+    Ok(webview2_com::take_pwstr(source))
+}
+
+#[cfg(windows)]
+unsafe fn webview_title(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2) -> windows::core::Result<String> {
+    let mut title = windows::core::PWSTR::null();
+    core.DocumentTitle(&mut title)?;
+    Ok(webview2_com::take_pwstr(title))
+}
+
+// The page's icon, as WebView2 found it (its <link rel=icon>, else the
+// site's /favicon.ico). Kessel's own pages keep their built-in glyph.
+#[cfg(windows)]
+unsafe fn send_page_favicon(app: &tauri::AppHandle, id: u32, core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_15;
+    use windows::core::Interface;
+    let internal = webview_source(core).ok().and_then(|s| tauri::Url::parse(&s).ok()).map(|u| is_internal_nav(&u));
+    if internal != Some(false) {
+        return;
+    }
+    let Ok(core15) = core.cast::<ICoreWebView2_15>() else { return };
+    let mut uri = windows::core::PWSTR::null();
+    if core15.FaviconUri(&mut uri).is_err() {
+        return;
+    }
+    let uri = webview2_com::take_pwstr(uri);
+    if uri.is_empty() {
+        return;
+    }
+    let st = app.state::<BrowserState>();
+    {
+        let mut pages = st.pages.lock().unwrap();
+        let page = pages.entry(id).or_default();
+        if page.favicon == uri {
+            return; // already showing it
+        }
+        page.favicon = uri.clone();
+    }
+    update_tab_meta(&st, id, |m| m.favicon = Some(uri.clone()));
+    let payload = serde_json::json!({ "id": id, "url": uri });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", payload.clone());
+    let _ = app.emit_to(page_header_label(id).as_str(), "tab-favicon-changed", payload);
+}
+
+// `loaded`: the page just finished loading (so this title is final for its
+// history entry).
+fn page_title_changed(app: &tauri::AppHandle, id: u32, title: &str, loaded: bool) {
+    let title = title.trim();
+    let st = app.state::<BrowserState>();
+    {
+        let mut pages = st.pages.lock().unwrap();
+        let page = pages.entry(id).or_default();
+        if let Some(wait) = &page.history {
+            // A page with no <title> reports (part of) its address instead.
+            let real = !title.is_empty() && title != wait.url && !wait.url.ends_with(title) && title != wait.stale_title;
+            if real {
+                st.store.set_history_title(&wait.url, title);
+            }
+            if loaded || (real && wait.same_document) {
+                page.history = None;
+            }
+        }
+        if title.is_empty() || page.title == title {
+            return;
+        }
+        page.title = title.to_string();
+    }
+    update_tab_meta(&st, id, |m| m.title = Some(title.to_string()));
+    let payload = serde_json::json!({ "id": id, "title": title });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", payload.clone());
+    let _ = app.emit_to(page_header_label(id).as_str(), "tab-title-changed", payload);
+}
+
+// `same_document`: the page changed its own address (pushState/hash)
+// rather than loading a new page.
+fn page_url_changed(app: &tauri::AppHandle, id: u32, source: &str, same_document: bool) {
+    let Ok(url) = tauri::Url::parse(source) else { return };
+    let address = logical_tab_url(&url);
+    let st = app.state::<BrowserState>();
+    {
+        let mut pages = st.pages.lock().unwrap();
+        let page = pages.entry(id).or_default();
+        if page.url == address {
+            return;
+        }
+        let previous = std::mem::replace(&mut page.url, address.clone());
+        // Moving to another page of a single-page app (not just to another
+        // #section of the same one) is a visit, like any other.
+        let without_fragment = |u: &str| u.split('#').next().unwrap_or(u).to_string();
+        if same_document && without_fragment(&previous) != without_fragment(&address) && !is_internal_nav(&url) {
+            st.store.record_history(&address, &address);
+            page.history = Some(HistoryWait { url: address.clone(), same_document: true, stale_title: page.title.clone() });
+        }
+    }
+    if let Some(p) = st.popouts.lock().unwrap().get_mut(&id) {
+        p.url = address.clone(); // so docking it reopens this page
+    }
+    let payload = serde_json::json!({ "id": id, "url": address });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-url-changed", payload.clone());
+    let _ = app.emit_to(page_header_label(id).as_str(), "tab-url-changed", payload);
 }
 
 // Replaces the document-start scriptlet script registered for a webview's
@@ -2260,6 +2491,7 @@ async fn close_tab(app: tauri::AppHandle, id: u32, url: Option<String>) -> Resul
 
         state.singleton_tabs.lock().unwrap().retain(|_, &mut v| v != id);
         state.tab_meta.lock().unwrap().remove(&id);
+        state.pages.lock().unwrap().remove(&id);
         app2.state::<shields::Shields>().forget_tab(id);
         Ok(())
     })
@@ -2446,32 +2678,16 @@ fn update_tab_meta(state: &BrowserState, id: u32, f: impl FnOnce(&mut TabMeta)) 
     f(state.tab_meta.lock().unwrap().entry(id).or_default());
 }
 
-// Title/favicon reports also go to the header that shows them outside the
-// tab strip: the side panel's frame for id 0 (the panel's page), else the
-// matching pop-out's title bar (emit_to a label that doesn't exist is a
-// no-op, so plain tabs cost nothing extra).
+// Title/icon/address changes also go to the header that shows them outside
+// the tab strip: the side panel's frame for id 0 (the panel's page), else
+// the matching pop-out's title bar (emit_to a label that doesn't exist is a
+// no-op, so plain tabs cost nothing extra). See page_title_changed.
 fn page_header_label(id: u32) -> String {
     if id == 0 {
         SIDE_PANEL_FRAME_LABEL.to_string()
     } else {
         format!("popout-bar-{}", id)
     }
-}
-
-#[tauri::command]
-fn report_title(app: tauri::AppHandle, state: tauri::State<BrowserState>, id: u32, title: String) {
-    update_tab_meta(&state, id, |m| m.title = Some(title.clone()));
-    let payload = serde_json::json!({ "id": id, "title": title });
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-title-changed", payload.clone());
-    let _ = app.emit_to(page_header_label(id).as_str(), "tab-title-changed", payload);
-}
-
-#[tauri::command]
-fn report_favicon(app: tauri::AppHandle, state: tauri::State<BrowserState>, id: u32, url: String) {
-    update_tab_meta(&state, id, |m| m.favicon = Some(url.clone()));
-    let payload = serde_json::json!({ "id": id, "url": url });
-    let _ = app.emit_to(TOOLBAR_LABEL, "tab-favicon-changed", payload.clone());
-    let _ = app.emit_to(page_header_label(id).as_str(), "tab-favicon-changed", payload);
 }
 
 #[tauri::command]
@@ -3102,8 +3318,6 @@ fn main() {
             go_back,
             go_forward,
             reload,
-            report_title,
-            report_favicon,
             report_ads_hidden,
             get_blocked_count,
             get_history,
@@ -3250,6 +3464,7 @@ fn main() {
                 popouts: Mutex::new(HashMap::new()),
                 tab_meta: Mutex::new(HashMap::new()),
                 toolbar_snapshot: Mutex::new(None),
+                pages: Mutex::new(HashMap::new()),
             };
             app.manage(state);
             app.manage(Vault::new(data_dir));

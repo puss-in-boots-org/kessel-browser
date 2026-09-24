@@ -97,4 +97,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     state = { url: e.payload, title: "", favicon: null };
     render();
   });
+  // Same page, new address (pushState) -- keeps its title and icon.
+  await listen("tab-url-changed", (e) => {
+    if (e.payload.id !== 0 || BUILT_IN[info.kind] || e.payload.url === state.url) return;
+    state.url = e.payload.url;
+    render();
+  });
 });

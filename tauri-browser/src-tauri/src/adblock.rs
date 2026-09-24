@@ -146,10 +146,11 @@ pub const BLOCKED_DOMAINS: &[&str] = &[
 //  3. Zoom controls: Ctrl/Cmd + "+"/"-"/"0".
 //  4. Middle-click / Ctrl-click a link -> open in a new background tab.
 //  5. Cross-window browser shortcuts (work no matter which webview has focus).
-//  6. Reports the document title back to the toolbar so tabs show real titles.
-//  7. Side panel resize hand-off: while the side panel's own drag handle is
+//  6. Side panel resize hand-off: while the side panel's own drag handle is
 //     being dragged wider than the panel itself, this tab picks up the same
 //     drag the moment the cursor enters it (see notes below).
+// (Page titles and icons come from WebView2's own events instead -- see
+// watch_page in main.rs.)
 pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bool) -> String {
     format!(
         r#"
@@ -304,43 +305,6 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
       return;
     }}
   }}, true);
-
-  // --- Report real page titles back to the toolbar's tab strip ---
-  var lastTitle = null;
-  function reportTitle() {{
-    var t = document.title || location.href;
-    if (t !== lastTitle) {{
-      lastTitle = t;
-      invoke('report_title', {{ id: KESSEL_TAB_ID, title: t }});
-    }}
-  }}
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', reportTitle);
-  }} else {{
-    reportTitle();
-  }}
-  (function watchTitle() {{
-    var titleEl = document.querySelector('title');
-    if (titleEl) {{
-      new MutationObserver(reportTitle).observe(titleEl, {{ childList: true }});
-    }} else {{
-      setTimeout(watchTitle, 200);
-    }}
-  }})();
-
-  // --- Report the page's favicon back to the toolbar's tab strip ---
-  function reportFavicon() {{
-    try {{
-      var link = document.querySelector('link[rel~="icon"]') || document.querySelector('link[rel="shortcut icon"]');
-      var href = link ? link.href : (location.origin + '/favicon.ico');
-      invoke('report_favicon', {{ id: KESSEL_TAB_ID, url: href }});
-    }} catch (e) {{}}
-  }}
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', reportFavicon);
-  }} else {{
-    reportFavicon();
-  }}
 
   // --- Password autofill: offer to fill a detected login form ---
   // Only ever checks when a password field actually exists on the page,
