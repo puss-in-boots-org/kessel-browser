@@ -2,10 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adblock;
+mod import;
 mod store;
 mod vault;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -898,6 +899,199 @@ fn set_toolbar_snapshot(webview: Webview, state: tauri::State<BrowserState>, sna
 #[tauri::command]
 fn get_toolbar_snapshot(state: tauri::State<BrowserState>) -> Option<String> {
     state.toolbar_snapshot.lock().unwrap().clone()
+}
+
+// --- Import from Opera / Opera GX (Settings -> Import) ---------------------
+
+// These read the user's other browser data -- only Kessel's own pages may
+// start them, never a website (every webview can reach invoke()).
+fn require_internal_page(webview: &Webview) -> Result<(), String> {
+    match webview.url() {
+        Ok(url) if is_internal_nav(&url) => Ok(()),
+        _ => Err("Importing can only be started from Kessel's settings".into()),
+    }
+}
+
+#[derive(serde::Serialize)]
+struct ImportSource {
+    name: String,
+    bookmarks: usize,
+    speed_dial: usize,
+    running: bool,
+}
+
+#[tauri::command]
+async fn detect_opera(webview: Webview) -> Result<Vec<ImportSource>, String> {
+    require_internal_page(&webview)?;
+    let running = import::is_running();
+    Ok(import::find_profiles()
+        .iter()
+        .map(|p| {
+            let (bookmarks, speed_dial) = import::read_bookmarks(p).map(|(b, s)| (b.len(), s.len())).unwrap_or((0, 0));
+            ImportSource { name: p.name.to_string(), bookmarks, speed_dial, running }
+        })
+        .collect())
+}
+
+#[derive(serde::Deserialize)]
+struct ImportChoice {
+    source: String,
+    bookmarks: bool,
+    speed_dial: bool,
+    cookies: bool,
+}
+
+#[derive(serde::Serialize, Default)]
+struct ImportReport {
+    bookmarks_added: usize,
+    bookmarks_existing: usize,
+    speed_dial_added: usize,
+    speed_dial_existing: usize,
+    cookies_imported: usize,
+    cookies_skipped: usize,
+    cookie_error: Option<String>,
+}
+
+// Opera's Speed Dial becomes Kessel's pinned sites (the new-tab Speed Dial
+// and the rail). Already-present URLs are left alone, so re-running an
+// import doesn't duplicate anything.
+#[tauri::command]
+async fn import_from_opera(app: tauri::AppHandle, webview: Webview, choice: ImportChoice) -> Result<ImportReport, String> {
+    require_internal_page(&webview)?;
+    let profile = import::find_profiles()
+        .into_iter()
+        .find(|p| p.name == choice.source)
+        .ok_or_else(|| format!("{} isn't installed", choice.source))?;
+    let state = app.state::<BrowserState>();
+    let mut report = ImportReport::default();
+
+    if choice.bookmarks || choice.speed_dial {
+        let (bookmarks, speed_dial) = import::read_bookmarks(&profile)?;
+        if choice.bookmarks {
+            let mut known: HashSet<String> = state.store.get_bookmarks().into_iter().map(|b| b.url).collect();
+            for b in bookmarks {
+                if known.insert(b.url.clone()) {
+                    state.store.add_bookmark(b.url, b.title);
+                    report.bookmarks_added += 1;
+                } else {
+                    report.bookmarks_existing += 1;
+                }
+            }
+            let _ = app.emit("bookmarks-changed", state.store.get_bookmarks());
+        }
+        if choice.speed_dial {
+            {
+                let mut pinned = state.store.pinned.lock().unwrap();
+                for s in speed_dial {
+                    if pinned.iter().any(|p| p.url == s.url) {
+                        report.speed_dial_existing += 1;
+                        continue;
+                    }
+                    pinned.push(PinnedSite {
+                        id: format!("{:x}", now_unix()) + &format!("{:x}", rand_u16()),
+                        url: s.url,
+                        title: s.title,
+                    });
+                    report.speed_dial_added += 1;
+                }
+            }
+            state.store.save_pinned();
+            emit_pinned_changed(&app, &state);
+        }
+    }
+
+    if choice.cookies {
+        match import::read_cookies(&profile) {
+            Err(e) => report.cookie_error = Some(e),
+            Ok(read) => {
+                report.cookies_skipped = read.skipped;
+                match write_cookies(&app, read.cookies).await {
+                    Ok((written, failed)) => {
+                        report.cookies_imported = written;
+                        report.cookies_skipped += failed;
+                    }
+                    Err(e) => report.cookie_error = Some(e),
+                }
+            }
+        }
+    }
+    Ok(report)
+}
+
+// Straight through WebView2's cookie manager rather than Tauri's
+// Webview::set_cookie: that goes through the `cookie` crate, whose domain()
+// drops the leading dot -- turning every ".google.com" domain cookie into a
+// google.com-only one, which would break logins spanning subdomains. All
+// Kessel webviews share one WebView2 profile, so writing via the toolbar's
+// webview reaches every tab.
+#[cfg(windows)]
+async fn write_cookies(app: &tauri::AppHandle, cookies: Vec<import::ImportedCookie>) -> Result<(usize, usize), String> {
+    let toolbar = app.get_webview(TOOLBAR_LABEL).ok_or("Kessel's window isn't ready")?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    toolbar
+        .with_webview(move |platform| {
+            let _ = tx.send(unsafe { add_cookies_to_webview2(&platform.controller(), &cookies) });
+        })
+        .map_err(|e| e.to_string())?;
+    let received = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(120)))
+        .await
+        .map_err(|e| e.to_string())?;
+    received.map_err(|_| "Timed out while saving cookies".to_string())?
+}
+
+#[cfg(not(windows))]
+async fn write_cookies(_app: &tauri::AppHandle, _cookies: Vec<import::ImportedCookie>) -> Result<(usize, usize), String> {
+    Err("Cookie import is only supported on Windows".into())
+}
+
+// Runs on the main thread (inside with_webview). Returns (written, failed).
+#[cfg(windows)]
+unsafe fn add_cookies_to_webview2(
+    controller: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Controller,
+    cookies: &[import::ImportedCookie],
+) -> Result<(usize, usize), String> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2_2, COREWEBVIEW2_COOKIE_SAME_SITE_KIND_LAX, COREWEBVIEW2_COOKIE_SAME_SITE_KIND_NONE,
+        COREWEBVIEW2_COOKIE_SAME_SITE_KIND_STRICT,
+    };
+    use windows::core::{Interface, HSTRING};
+
+    let core = controller.CoreWebView2().map_err(|e| e.message().to_string())?;
+    let core2: ICoreWebView2_2 = core.cast().map_err(|e| e.message().to_string())?;
+    let manager = core2.CookieManager().map_err(|e| e.message().to_string())?;
+
+    let (mut written, mut failed) = (0usize, 0usize);
+    for c in cookies {
+        let result = (|| -> windows::core::Result<()> {
+            let cookie = manager.CreateCookie(
+                &HSTRING::from(c.name.as_str()),
+                &HSTRING::from(c.value.as_str()),
+                &HSTRING::from(c.domain.as_str()),
+                &HSTRING::from(c.path.as_str()),
+            )?;
+            if let Some(expires) = c.expires {
+                cookie.SetExpires(expires)?;
+            }
+            cookie.SetIsHttpOnly(c.http_only)?;
+            cookie.SetIsSecure(c.secure)?;
+            let same_site = match c.same_site {
+                0 => Some(COREWEBVIEW2_COOKIE_SAME_SITE_KIND_NONE),
+                1 => Some(COREWEBVIEW2_COOKIE_SAME_SITE_KIND_LAX),
+                2 => Some(COREWEBVIEW2_COOKIE_SAME_SITE_KIND_STRICT),
+                _ => None,
+            };
+            if let Some(kind) = same_site {
+                cookie.SetSameSite(kind)?;
+            }
+            manager.AddOrUpdateCookie(&cookie)
+        })();
+        if result.is_ok() {
+            written += 1;
+        } else {
+            failed += 1;
+        }
+    }
+    Ok((written, failed))
 }
 
 // --- Threading bridge --------------------------------------------------
@@ -1822,7 +2016,9 @@ fn main() {
             toolbar_heartbeat,
             get_open_tabs,
             set_toolbar_snapshot,
-            get_toolbar_snapshot
+            get_toolbar_snapshot,
+            detect_opera,
+            import_from_opera
         ])
         .setup(|app| {
             let width = 1280.0;

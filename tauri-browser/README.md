@@ -20,6 +20,16 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Import from Opera GX / Opera** (Settings → Import): bookmarks bar +
+  Other bookmarks → Kessel bookmarks, Speed Dial → pinned sites, and
+  cookies so you stay signed in. Cookies are decrypted on this PC (DPAPI +
+  AES-256-GCM, Chromium's own scheme, incl. the 32-byte domain-hash prefix
+  of cookie DB v24+) and written straight into WebView2's cookie manager
+  -- not via Tauri's `set_cookie`, whose `cookie` crate drops the leading
+  dot of `.domain` cookies and would break logins spanning subdomains.
+  Only counts are returned to the page; only Kessel's own pages can start
+  an import. Expired, partitioned and app-bound (`v20`) cookies are
+  skipped. Close Opera first so its cookie database can be read.
 - **Toolbar auto-recovery**: the toolbar is its own WebView2 renderer
   process. If it dies (crash, or killed in Task Manager) your tabs keep
   running but the chrome used to go blank for good. Now it sends Rust a

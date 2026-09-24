@@ -17,6 +17,7 @@ const SECTIONS = [
   { id: "history", label: "History", icon: "history" },
   { id: "downloads", label: "Downloads", icon: "download" },
   { id: "passwords", label: "Passwords", icon: "key" },
+  { id: "import", label: "Import", icon: "arrowRight" },
   { id: "about", label: "About", icon: "bolt" },
 ];
 
@@ -542,12 +543,76 @@ function passwordsPanel(settings) {
   return p;
 }
 
-function aboutPanel() {
+// Moves bookmarks, Speed Dial and cookies over from Opera / Opera GX (see
+// src-tauri/src/import.rs). Only counts ever come back from Rust -- cookie
+// values never reach this page.
+async function importPanel() {
+  const p = el(`<div class="panel" id="panel-import">
+    <h2>Import</h2>
+    <p class="sub">Bring your bookmarks, Speed Dial and sign-ins over from another browser.</p>
+    <div id="import-sources"><div class="setting-card"><div class="setting-row"><div class="info"><div class="desc">Looking for browsers…</div></div></div></div></div>
+  </div>`);
+
+  const sources = await invoke("detect_opera").catch(() => []);
+  const holder = p.querySelector("#import-sources");
+  if (!sources.length) {
+    holder.innerHTML = `<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">No supported browser found</div><div class="desc">Kessel can import from Opera GX and Opera on this PC.</div></div></div></div>`;
+    return p;
+  }
+  holder.innerHTML = "";
+
+  for (const src of sources) {
+    const card = el(`<div class="setting-card">
+      ${settingRow({ title: src.name, desc: src.running ? `Close ${src.name} first so its cookies can be read.` : "Pick what to bring over. Things you already have in Kessel are skipped.", controlHtml: "" })}
+      ${settingRow({ title: "Bookmarks", desc: `${src.bookmarks} from the bookmarks bar and Other bookmarks`, controlHtml: switchHtml("imp-bookmarks", src.bookmarks > 0) })}
+      ${settingRow({ title: "Speed Dial", desc: `${src.speed_dial} sites, added to your pinned sites`, controlHtml: switchHtml("imp-speed", src.speed_dial > 0) })}
+      ${settingRow({ title: "Cookies", desc: "Stay signed in to your sites. Decrypted on this PC only and saved straight into Kessel.", controlHtml: switchHtml("imp-cookies", true) })}
+      <div class="add-row" style="justify-content:space-between;align-items:center">
+        <span class="faint" id="imp-result" style="font-size:12px"></span>
+        <button class="btn primary sm" id="imp-go">Import from ${src.name}</button>
+      </div>
+    </div>`);
+    for (const sw of card.querySelectorAll(".switch")) {
+      sw.addEventListener("click", () => sw.classList.toggle("on"));
+    }
+    const go = card.querySelector("#imp-go");
+    const result = card.querySelector("#imp-result");
+    go.addEventListener("click", async () => {
+      const choice = {
+        source: src.name,
+        bookmarks: card.querySelector("#imp-bookmarks").classList.contains("on"),
+        speed_dial: card.querySelector("#imp-speed").classList.contains("on"),
+        cookies: card.querySelector("#imp-cookies").classList.contains("on"),
+      };
+      if (!choice.bookmarks && !choice.speed_dial && !choice.cookies) return;
+      go.disabled = true;
+      result.textContent = "Importing…";
+      try {
+        const r = await invoke("import_from_opera", { choice });
+        const parts = [];
+        if (choice.bookmarks) parts.push(`${r.bookmarks_added} bookmarks${r.bookmarks_existing ? ` (${r.bookmarks_existing} already here)` : ""}`);
+        if (choice.speed_dial) parts.push(`${r.speed_dial_added} Speed Dial sites${r.speed_dial_existing ? ` (${r.speed_dial_existing} already here)` : ""}`);
+        if (choice.cookies) parts.push(r.cookie_error ? `cookies failed: ${r.cookie_error}` : `${r.cookies_imported} cookies (${r.cookies_skipped} expired or not transferable)`);
+        result.textContent = `Imported ${parts.join(", ")}.`;
+        toast(r.cookie_error ? "Import finished with a problem" : "Import complete");
+      } catch (err) {
+        result.textContent = String(err);
+      } finally {
+        go.disabled = false;
+      }
+    });
+    holder.appendChild(card);
+  }
+  return p;
+}
+
+async function aboutPanel() {
+  const version = await window.__TAURI__.app.getVersion().catch(() => "");
   return el(`<div class="panel" id="panel-about">
     <h2>About Kessel</h2>
     <p class="sub">A real, working custom browser.</p>
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="title">Version</div></div><div class="control mono muted">0.6.0</div></div>
+      <div class="setting-row"><div class="info"><div class="title">Version</div></div><div class="control mono muted">${version}</div></div>
       <div class="setting-row"><div class="info"><div class="title">Engine</div></div><div class="control muted">Tauri 2 + your OS's native WebView</div></div>
     </div>
     <div class="setting-card">
@@ -569,7 +634,8 @@ async function buildPanel(id, settings) {
     case "history": return await historyPanel();
     case "downloads": return await downloadsPanel();
     case "passwords": return passwordsPanel(settings);
-    case "about": return aboutPanel();
+    case "import": return await importPanel();
+    case "about": return await aboutPanel();
     default: return el(`<div class="panel"></div>`);
   }
 }
