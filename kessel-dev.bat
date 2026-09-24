@@ -5,5 +5,5 @@ REM Kessel project folder. Leaves you at a normal prompt -- run
 REM `npm run dev` yourself whenever you're ready.
 
 call "D:\visual studio\product\VC\Auxiliary\Build\vcvarsall.bat" amd64 10.0.19041.0
-cd /d "C:\kessel-browser\tauri-browser"
+cd /d "%~dp0tauri-browser"
 cmd /k
