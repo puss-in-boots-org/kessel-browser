@@ -105,6 +105,17 @@ pub struct Settings {
     pub glass_refraction: bool,
     pub wallpaper: String,
     pub bookmarks_bar: bool,
+
+    // Shields (src-tauri/src/shields.rs). `adblock_enabled` above is the
+    // master switch; these are its individual protections.
+    pub shields_https_upgrade: bool,
+    pub shields_strip_tracking: bool,
+    pub shields_fingerprinting: bool,
+    // WebView2's built-in (Edge) tracking prevention: "basic" | "balanced" |
+    // "strict" | "off". Works alongside the filter lists.
+    pub shields_tracking_prevention: String,
+    // Ids from shields::FILTER_LISTS.
+    pub filter_lists: Vec<String>,
 }
 
 impl Default for Settings {
@@ -130,6 +141,11 @@ impl Default for Settings {
             glass_refraction: true,
             wallpaper: "nightfall".into(),
             bookmarks_bar: true,
+            shields_https_upgrade: true,
+            shields_strip_tracking: true,
+            shields_fingerprinting: true,
+            shields_tracking_prevention: "balanced".into(),
+            filter_lists: crate::shields::default_list_ids(),
         }
     }
 }

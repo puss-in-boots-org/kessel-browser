@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shields</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The Shields popup: a small webview Rust places under the address bar's
+       shield button (see toggle_shields_popup in main.rs). */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+    html.glass body { background: #0a1433; border: none; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }
+    html.glass #sheet {
+      position: fixed;
+      inset: 0;
+      background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 85%, transparent);
+      box-shadow: var(--lg-edge);
+    }
+    main { position: relative; padding: 14px 16px 12px; color: var(--text); }
+    html.glass main { color: var(--lg-text); }
+
+    .head { display: flex; align-items: center; gap: 10px; }
+    .badge-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: linear-gradient(150deg, #34d399, #0e9f6e);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+      flex-shrink: 0;
+    }
+    .off .badge-icon { background: linear-gradient(150deg, #9ca3af, #4b5563); box-shadow: none; }
+    .head .text { flex: 1; min-width: 0; }
+    .head .title { font-size: 14px; font-weight: 700; }
+    .head .host { font-size: 12px; opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .state { margin: 12px 0 10px; font-size: 12px; opacity: 0.85; line-height: 1.4; }
+
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+    .stat { border-radius: 12px; padding: 8px 6px; text-align: center; background: var(--surface-2); }
+    html.glass .stat { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.15); }
+    html.glass[data-glass-tone="light"] .stat { background: rgba(255, 255, 255, 0.5); }
+    .stat b { display: block; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .stat span { font-size: 10.5px; opacity: 0.75; line-height: 1.2; display: block; }
+    .off .stats { opacity: 0.4; }
+
+    h3 { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.6; margin: 0 0 4px; text-transform: uppercase; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 12.5px; }
+    .row small { display: block; font-size: 11px; opacity: 0.6; }
+    .switch { flex-shrink: 0; }
+    html.glass .switch:not(.on) { background: rgba(255, 255, 255, 0.2); }
+
+    .foot { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; }
+    .foot a { color: inherit; opacity: 0.75; cursor: pointer; text-decoration: none; }
+    .foot a:hover { opacity: 1; text-decoration: underline; }
+    .note { font-size: 11px; opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
+  <main id="main">
+    <div class="head">
+      <span class="badge-icon" id="badge-icon"></span>
+      <div class="text"><div class="title">Shields</div><div class="host" id="host"></div></div>
+      <button class="switch" id="site-switch" role="switch" title="Shields for this site"></button>
+    </div>
+    <div class="state" id="state"></div>
+    <div class="stats">
+      <div class="stat"><b id="n-blocked">0</b><span>ads &amp; trackers blocked</span></div>
+      <div class="stat"><b id="n-https">0</b><span>upgraded to HTTPS</span></div>
+      <div class="stat"><b id="n-params">0</b><span>tracking links cleaned</span></div>
+    </div>
+    <h3>For all sites</h3>
+    <div class="row"><div>Block ads &amp; trackers<small>Filter lists + Edge tracking prevention</small></div><button class="switch" id="g-adblock" role="switch"></button></div>
+    <div class="row"><div>Upgrade connections to HTTPS</div><button class="switch" id="g-https" role="switch"></button></div>
+    <div class="row"><div>Remove tracking from links</div><button class="switch" id="g-strip" role="switch"></button></div>
+    <div class="row"><div>Block fingerprinting<small>Applies to pages opened from now on</small></div><button class="switch" id="g-fp" role="switch"></button></div>
+    <div class="foot"><span class="note" id="lists-note"></span><a id="open-settings">Filter lists &amp; more</a></div>
+  </main>
+  <script type="module" src="shields.js"></script>
+</body>
+</html>

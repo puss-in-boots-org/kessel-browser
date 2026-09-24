@@ -4,6 +4,7 @@ import { toast, formatRelativeTime, hostOf } from "./shared/api.js";
 import { WALLPAPERS, setCustomWallpaper, clearCustomWallpaper, hasCustomWallpaper, wallpaperCss } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
 
 const ACCENTS = ["#7c5cff", "#3b82f6", "#0ea5a4", "#f472b6", "#f97316", "#22c55e", "#e11d48", "#eab308"];
 
@@ -262,27 +263,41 @@ function searchPanel(settings) {
 }
 
 async function privacyPanel(settings) {
-  const blockedCount = await invoke("get_blocked_count").catch(() => 0);
-  const builtinCount = await invoke("builtin_blocklist_count").catch(() => 0);
-  const lists = await invoke("get_adblock_lists").catch(() => ({ custom: [], allow: [] }));
+  const [blockedCount, shields, lists] = await Promise.all([
+    invoke("get_blocked_count").catch(() => 0),
+    invoke("shields_status").catch(() => ({ engine: { rules: 0, lists_loaded: false }, lists: [] })),
+    invoke("get_adblock_lists").catch(() => ({ custom: [], allow: [] })),
+  ]);
 
   const p = el(`<div class="panel" id="panel-privacy">
     <h2>Privacy &amp; Security</h2>
-    <p class="sub">Ad/tracker blocking, browsing data, and the vault's auto-lock.</p>
+    <p class="sub">Shields (ads, trackers, fingerprinting), browsing data, and the vault's auto-lock.</p>
 
     <div class="setting-card">
-      ${settingRow({ title: "Block ads & trackers", desc: `${builtinCount}+ known domains, blocked at the navigation level`, controlHtml: switchHtml("adblock-toggle", settings.adblock_enabled) })}
-      ${settingRow({ title: "Blocked this session", controlHtml: `<span class="mono muted">${blockedCount}</span>` })}
+      ${settingRow({ title: "Shields", desc: "Block ads, trackers and fingerprinting on every site. Turn them off for one site from the shield in the address bar.", controlHtml: switchHtml("adblock-toggle", settings.adblock_enabled) })}
+      ${settingRow({ title: "Blocked this session", desc: `<span id="rule-count"></span>`, controlHtml: `<span class="mono muted">${blockedCount}</span>` })}
     </div>
 
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="title">Custom blocked domains</div><div class="desc">Always blocked, in addition to the built-in list</div></div></div>
+      ${settingRow({ title: "Upgrade connections to HTTPS", desc: "Opens the secure version of sites, and falls back if a site doesn't have one", controlHtml: switchHtml("https-toggle", settings.shields_https_upgrade) })}
+      ${settingRow({ title: "Remove tracking from links", desc: "Strips fbclid, gclid, utm_ and other tracking parameters from pages you open", controlHtml: switchHtml("strip-toggle", settings.shields_strip_tracking) })}
+      ${settingRow({ title: "Block fingerprinting", desc: "Adds invisible noise to canvas, audio and hardware details so sites can't recognise your device (new pages)", controlHtml: switchHtml("fp-toggle", settings.shields_fingerprinting) })}
+      ${settingRow({ title: "Browser tracking prevention", desc: "WebView2's built-in (Edge) protection, on top of the filter lists", controlHtml: `<select class="field" id="tp-select" style="width:130px"><option value="basic">Basic</option><option value="balanced">Balanced</option><option value="strict">Strict</option><option value="off">Off</option></select>` })}
+    </div>
+
+    <div class="setting-card">
+      <div class="setting-row"><div class="info"><div class="title">Filter lists</div><div class="desc">The same lists Brave and uBlock Origin use. Downloaded to this PC and refreshed every few days.</div></div><div class="control"><button class="btn sm" id="update-lists-btn">Update now</button></div></div>
+      <div id="filter-lists"></div>
+    </div>
+
+    <div class="setting-card">
+      <div class="setting-row"><div class="info"><div class="title">Custom blocked domains</div><div class="desc">Always blocked, in addition to the filter lists</div></div></div>
       <div class="list-panel" id="custom-blocklist"></div>
       <div class="add-row"><input class="field" id="add-block-domain" placeholder="example.com" /><button class="btn sm" id="add-block-btn">Add</button></div>
     </div>
 
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="title">Allowed sites</div><div class="desc">Never blocked, even if matched by a rule above</div></div></div>
+      <div class="setting-row"><div class="info"><div class="title">Sites with Shields down</div><div class="desc">Nothing is blocked on these sites</div></div></div>
       <div class="list-panel" id="allow-list"></div>
       <div class="add-row"><input class="field" id="add-allow-domain" placeholder="example.com" /><button class="btn sm" id="add-allow-btn">Add</button></div>
     </div>
@@ -293,17 +308,73 @@ async function privacyPanel(settings) {
     </div>
   </div>`);
 
-  p.querySelector("#adblock-toggle").addEventListener("click", async () => {
-    const btn = p.querySelector("#adblock-toggle");
-    const next = await saveSettings({ adblock_enabled: !btn.classList.contains("on") });
-    btn.classList.toggle("on", next.adblock_enabled);
-    toast(next.adblock_enabled ? "Ad blocking enabled" : "Ad blocking disabled");
+  function wireSetting(id, key, message) {
+    p.querySelector(`#${id}`).addEventListener("click", async () => {
+      const btn = p.querySelector(`#${id}`);
+      const next = await saveSettings({ [key]: !btn.classList.contains("on") });
+      btn.classList.toggle("on", !!next[key]);
+      if (message) toast(message(next[key]));
+    });
+  }
+  wireSetting("adblock-toggle", "adblock_enabled", (on) => (on ? "Shields are on" : "Shields are off"));
+  wireSetting("https-toggle", "shields_https_upgrade");
+  wireSetting("strip-toggle", "shields_strip_tracking");
+  wireSetting("fp-toggle", "shields_fingerprinting", () => "Applies to pages you open from now on");
+  const tp = p.querySelector("#tp-select");
+  tp.value = settings.shields_tracking_prevention || "balanced";
+  tp.addEventListener("change", () => saveSettings({ shields_tracking_prevention: tp.value }).then(() => toast("Applies to tabs you open from now on")));
+
+  // --- Filter lists ---
+  const ago = (unix) => {
+    if (!unix) return "not downloaded yet";
+    const mins = Math.round((Date.now() / 1000 - unix) / 60);
+    if (mins < 2) return "updated just now";
+    if (mins < 90) return `updated ${mins} minutes ago`;
+    const hours = Math.round(mins / 60);
+    return hours < 36 ? `updated ${hours} hours ago` : `updated ${Math.round(hours / 24)} days ago`;
+  };
+  function renderLists(status) {
+    p.querySelector("#rule-count").textContent = status.engine.lists_loaded
+      ? `${status.engine.rules.toLocaleString()} rules loaded`
+      : "Filter lists are downloading -- using a small built-in list until then";
+    const holder = p.querySelector("#filter-lists");
+    holder.innerHTML = "";
+    for (const list of status.lists) {
+      const detail = list.error ? `Couldn't update: ${list.error}` : `${list.description} · ${ago(list.updated_at)}`;
+      const row = el(settingRow({ title: list.name, desc: detail, controlHtml: switchHtml(`list-${list.id}`, list.enabled) }));
+      row.querySelector(".switch").addEventListener("click", async (e) => {
+        const on = !e.currentTarget.classList.contains("on");
+        const current = currentSettings()?.filter_lists || [];
+        const next = on ? [...new Set([...current, list.id])] : current.filter((id) => id !== list.id);
+        await saveSettings({ filter_lists: next });
+        e.currentTarget.classList.toggle("on", on);
+        toast(on ? `Adding ${list.name}…` : `${list.name} removed`);
+      });
+      holder.appendChild(row);
+    }
+  }
+  renderLists(shields);
+  listen("shields-lists-changed", async () => renderLists(await invoke("shields_status")));
+  p.querySelector("#update-lists-btn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "Updating…";
+    try {
+      renderLists(await invoke("shields_update_lists"));
+      toast("Filter lists updated");
+    } catch (err) {
+      toast(String(err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Update now";
+    }
   });
 
   function renderDomainList(container, items, removeCmd) {
     container.innerHTML = items.length ? "" : `<div class="empty">None yet.</div>`;
     for (const domain of items) {
-      const row = el(`<div class="list-row"><span class="lr-title">${domain}</span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
+      const row = el(`<div class="list-row"><span class="lr-title"></span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
+      row.querySelector(".lr-title").textContent = domain;
       row.querySelector("button").addEventListener("click", async () => {
         await invoke(removeCmd, { domain });
         const fresh = await invoke("get_adblock_lists");

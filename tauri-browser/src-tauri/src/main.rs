@@ -3,6 +3,7 @@
 
 mod adblock;
 mod import;
+mod shields;
 mod store;
 mod vault;
 
@@ -290,15 +291,14 @@ fn create_tab_internal(
         (settings.adblock_enabled, settings.vault_autofill_enabled)
     };
     let app_for_nav = app.clone();
+    let label_for_nav = label.clone();
     let app_for_load = app.clone();
     let app_for_download = app.clone();
     let data_dir = state.data_dir.clone();
 
-    let builder = WebviewBuilder::new(&label, webview_url)
+    let builder = with_farbling(app, WebviewBuilder::new(&label, webview_url))
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
         .on_navigation(move |nav_url| {
-            let scheme = nav_url.scheme();
-            let host = nav_url.host_str().unwrap_or("");
             // Kessel's own pages (newtab/settings/passwords) load through
             // Tauri's own asset URL -- in a dev build that's a local
             // loopback HTTP server (e.g. http://127.0.0.1:1430/newtab.html),
@@ -308,38 +308,29 @@ fn create_tab_internal(
             // purposes -- the toolbar already knows the logical kessel://
             // url for these from tab creation, and blindly overwriting it
             // with the raw internal asset URL leaked into the omnibox.
-            let is_internal = scheme != "http" && scheme != "https"
-                || host == "localhost"
-                || host == "127.0.0.1"
-                || host == "::1"
-                || host.ends_with(".localhost");
-
-            if !is_internal {
-                let st = app_for_nav.state::<BrowserState>();
-                let (custom, allow) = {
-                    let lists = st.store.adblock_lists.lock().unwrap();
-                    (lists.custom.clone(), lists.allow.clone())
-                };
-                let enabled = st.store.settings.lock().unwrap().adblock_enabled;
-                if enabled && adblock::is_blocked(host, nav_url.as_str(), &custom, &allow) {
-                    st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
-                    let count = st.store.blocked_count.load(Ordering::SeqCst);
-                    let _ = app_for_nav.emit("adblock-count-changed", count);
-                    return false;
-                }
-                st.store.record_history(nav_url.as_str(), nav_url.as_str());
-                if let Some(meta) = st.tab_meta.lock().unwrap().get_mut(&id) {
-                    *meta = TabMeta::default(); // the new page reports its own
-                }
-                let payload = serde_json::json!({ "id": id, "url": nav_url.to_string() });
-                let _ = app_for_nav.emit_to(TOOLBAR_LABEL, "tab-navigated", payload);
+            if is_internal_nav(nav_url) {
+                return true;
             }
+            if !guard_navigation(&app_for_nav, id, &label_for_nav, nav_url) {
+                return false;
+            }
+            let st = app_for_nav.state::<BrowserState>();
+            if let Some(meta) = st.tab_meta.lock().unwrap().get_mut(&id) {
+                *meta = TabMeta::default(); // the new page reports its own
+            }
+            let payload = serde_json::json!({ "id": id, "url": nav_url.to_string() });
+            let _ = app_for_nav.emit_to(TOOLBAR_LABEL, "tab-navigated", payload);
             true
         })
         .on_page_load(move |_webview, payload| {
             let event_name = match payload.event() {
                 PageLoadEvent::Started => "tab-load-started",
-                PageLoadEvent::Finished => "tab-load-finished",
+                PageLoadEvent::Finished => {
+                    // The final count, which the throttled live updates may
+                    // not have sent yet.
+                    emit_shields_stats(&app_for_load, id, &app_for_load.state::<shields::Shields>().tab_stats(id));
+                    "tab-load-finished"
+                }
             };
             let p = serde_json::json!({ "id": id, "url": payload.url().to_string() });
             let _ = app_for_load.emit_to(TOOLBAR_LABEL, event_name, p);
@@ -422,6 +413,7 @@ fn create_tab_internal(
         )
         .map_err(|e| e.to_string())?;
 
+    attach_shields(app, &webview, id);
     state.tabs.lock().unwrap().insert(id, webview);
     state.order.lock().unwrap().push(id);
     reraise_side_panel(app, state);
@@ -532,26 +524,16 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
         SIDE_PANEL_RESIZE_HANDOFF_SCRIPT
     );
     let app_for_nav = app.clone();
-    let builder = WebviewBuilder::new("side-panel", webview_url)
+    let builder = with_farbling(app, WebviewBuilder::new("side-panel", webview_url))
         .initialization_script(&script)
         .on_navigation(move |nav_url| {
-            if !is_internal_nav(nav_url) {
-                let host = nav_url.host_str().unwrap_or("");
-                let st = app_for_nav.state::<BrowserState>();
-                let (custom, allow) = {
-                    let lists = st.store.adblock_lists.lock().unwrap();
-                    (lists.custom.clone(), lists.allow.clone())
-                };
-                let enabled = st.store.settings.lock().unwrap().adblock_enabled;
-                if enabled && adblock::is_blocked(host, nav_url.as_str(), &custom, &allow) {
-                    st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
-                    let count = st.store.blocked_count.load(Ordering::SeqCst);
-                    let _ = app_for_nav.emit("adblock-count-changed", count);
-                    return false;
-                }
-                st.store.record_history(nav_url.as_str(), nav_url.as_str());
-                let _ = app_for_nav.emit_to(SIDE_PANEL_FRAME_LABEL, "panel-navigated", nav_url.to_string());
+            if is_internal_nav(nav_url) {
+                return true;
             }
+            if !guard_navigation(&app_for_nav, 0, "side-panel", nav_url) {
+                return false;
+            }
+            let _ = app_for_nav.emit_to(SIDE_PANEL_FRAME_LABEL, "panel-navigated", nav_url.to_string());
             true
         });
     let (page_position, page_size) = side_panel_content_bounds(position, size);
@@ -562,6 +544,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
             return Err(e.to_string());
         }
     };
+    attach_shields(app, &page, 0);
 
     *state.side_panel_frame.lock().unwrap() = Some(frame);
     *state.side_panel.lock().unwrap() = Some(page);
@@ -740,26 +723,18 @@ fn create_popout_internal(
 
     let app_for_nav = app.clone();
     let bar_label_for_nav = bar_label.clone();
-    let content_builder = WebviewBuilder::new(format!("popout-content-{}", id), webview_url)
+    let content_label = format!("popout-content-{}", id);
+    let content_label_for_nav = content_label.clone();
+    let content_builder = with_farbling(app, WebviewBuilder::new(&content_label, webview_url))
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
             }
-            let st = app_for_nav.state::<BrowserState>();
-            let (custom, allow) = {
-                let lists = st.store.adblock_lists.lock().unwrap();
-                (lists.custom.clone(), lists.allow.clone())
-            };
-            let enabled = st.store.settings.lock().unwrap().adblock_enabled;
-            let host = nav_url.host_str().unwrap_or("");
-            if enabled && adblock::is_blocked(host, nav_url.as_str(), &custom, &allow) {
-                st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
-                let count = st.store.blocked_count.load(Ordering::SeqCst);
-                let _ = app_for_nav.emit("adblock-count-changed", count);
+            if !guard_navigation(&app_for_nav, id, &content_label_for_nav, nav_url) {
                 return false;
             }
-            st.store.record_history(nav_url.as_str(), nav_url.as_str());
+            let st = app_for_nav.state::<BrowserState>();
             if let Some(p) = st.popouts.lock().unwrap().get_mut(&id) {
                 p.url = nav_url.to_string();
             }
@@ -770,6 +745,7 @@ fn create_popout_internal(
     let content = window
         .add_child(content_builder, content_position, content_size)
         .map_err(|e| e.to_string())?;
+    attach_shields(app, &content, id);
 
     let window_for_events = window.clone();
     let app_for_events = app.clone();
@@ -1282,6 +1258,502 @@ unsafe fn add_cookies_to_webview2(
     Ok((written, failed))
 }
 
+// --- Shields integration -----------------------------------------------------
+//
+// shields.rs holds the engine and the rules; this wires it into every content
+// webview (tabs, the side panel's page, pop-outs):
+//   * guard_navigation -- top-level navigations: HTTPS upgrade, tracking
+//     parameter stripping, blocking known-bad pages;
+//   * install_shields_hooks -- WebView2's WebResourceRequested for every
+//     request the page makes (the network half of ad/tracker blocking), the
+//     HTTPS fallback, and WebView2's own tracking prevention;
+//   * the commands the content script (element hiding), the toolbar's shield
+//     button and the Shields popup use.
+
+// "Shields down" for a site = its domain is on the allow list.
+fn site_allowed(state: &BrowserState, host: &str) -> bool {
+    let host = host.trim_start_matches("www.");
+    state
+        .store
+        .adblock_lists
+        .lock()
+        .unwrap()
+        .allow
+        .iter()
+        .map(|d| d.trim().trim_start_matches("www."))
+        .any(|d| !d.is_empty() && (host == d || host.ends_with(&format!(".{}", d))))
+}
+
+fn shields_up_for(state: &BrowserState, host: &str) -> bool {
+    state.store.settings.lock().unwrap().adblock_enabled && !site_allowed(state, host)
+}
+
+fn emit_shields_stats(app: &tauri::AppHandle, id: u32, stats: &shields::TabStats) {
+    let payload = serde_json::json!({ "id": id, "stats": stats });
+    let _ = app.emit_to(TOOLBAR_LABEL, "shields-stats", payload.clone());
+    let _ = app.emit_to(SHIELDS_POPUP_LABEL, "shields-stats", payload);
+}
+
+// A top-level navigation in any content webview. Returns whether to let it
+// proceed; when it rewrites the URL (HTTPS / stripped parameters) it cancels
+// this one and starts the rewritten one instead.
+fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &tauri::Url) -> bool {
+    if is_internal_nav(nav_url) {
+        return true;
+    }
+    let st = app.state::<BrowserState>();
+    let shields = app.state::<shields::Shields>();
+    let host = nav_url.host_str().unwrap_or("").to_lowercase();
+
+    if shields_up_for(&st, &host) {
+        let (https, strip) = {
+            let s = st.store.settings.lock().unwrap();
+            (s.shields_https_upgrade, s.shields_strip_tracking)
+        };
+        let failed = shields.https_failed.lock().unwrap().clone();
+        let (blocked, list_rewrite) = shields.check_document(nav_url.as_str());
+        if blocked {
+            st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
+            let _ = app.emit("adblock-count-changed", st.store.blocked_count.load(Ordering::SeqCst));
+            return false;
+        }
+        // Our own HTTPS/parameter rules first, then the lists' $removeparam.
+        let rewrite = shields::rewrite_navigation(nav_url, https, strip, &failed).or_else(|| {
+            list_rewrite
+                .filter(|u| strip && u != nav_url.as_str())
+                .map(|url| shields::Rewrite { url, upgraded: false, stripped: true })
+        });
+        if let Some(rw) = rewrite {
+            if rw.upgraded {
+                shields.https_pending.lock().unwrap().insert(label.to_string(), nav_url.to_string());
+            }
+            shields.rewrites.lock().unwrap().insert(label.to_string(), rw.url.clone());
+            shields.reset_tab(id, &host);
+            if let Some(stats) = shields.bump(id, |s| {
+                s.https_upgrades += rw.upgraded as u32;
+                s.params_stripped += rw.stripped as u32;
+            }) {
+                emit_shields_stats(app, id, &stats);
+            }
+            let (app2, label2) = (app.clone(), label.to_string());
+            let _ = app.run_on_main_thread(move || {
+                if let (Some(w), Ok(url)) = (app2.get_webview(&label2), tauri::Url::parse(&rw.url)) {
+                    let _ = w.navigate(url);
+                }
+            });
+            return false;
+        }
+    }
+
+    // A new page: fresh per-page stats -- unless we're arriving at the URL
+    // we just rewrote to, whose stats already count that rewrite.
+    let arrived_via_rewrite = {
+        let mut rewrites = shields.rewrites.lock().unwrap();
+        rewrites.get(label).map(|u| u == nav_url.as_str()).unwrap_or(false) && rewrites.remove(label).is_some()
+    };
+    if !arrived_via_rewrite {
+        shields.reset_tab(id, &host);
+    }
+    shields.nav_targets.lock().unwrap().insert(label.to_string(), nav_url.to_string());
+    st.store.record_history(nav_url.as_str(), nav_url.as_str());
+    true
+}
+
+// Fingerprinting protection runs in every frame -- third-party iframes are
+// where most fingerprinting scripts live -- so it's added separately from
+// the main-frame content script.
+fn with_farbling(app: &tauri::AppHandle, builder: WebviewBuilder<tauri::Wry>) -> WebviewBuilder<tauri::Wry> {
+    let enabled = {
+        let settings = app.state::<BrowserState>().store.settings.lock().unwrap().clone();
+        settings.adblock_enabled && settings.shields_fingerprinting
+    };
+    if enabled {
+        builder.initialization_script_for_all_frames(app.state::<shields::Shields>().farbling_script())
+    } else {
+        builder
+    }
+}
+
+// Adds the Shields hooks to a freshly created content webview.
+fn attach_shields(app: &tauri::AppHandle, webview: &Webview, id: u32) {
+    #[cfg(windows)]
+    {
+        let (app2, label) = (app.clone(), webview.label().to_string());
+        let _ = webview.with_webview(move |platform| unsafe {
+            if let Err(e) = install_shields_hooks(&app2, &platform, id, label) {
+                eprintln!("Shields: couldn't hook webview {}: {}", id, e.message());
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, webview, id);
+}
+
+// Maps WebView2's resource context to the request types filter lists use.
+#[cfg(windows)]
+fn request_kind(context: webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_WEB_RESOURCE_CONTEXT) -> &'static str {
+    use webview2_com::Microsoft::Web::WebView2::Win32::*;
+    match context {
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT => "subdocument",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_STYLESHEET => "stylesheet",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE => "image",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA => "media",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FONT => "font",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_SCRIPT => "script",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST => "xmlhttprequest",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH => "fetch",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_WEBSOCKET => "websocket",
+        COREWEBVIEW2_WEB_RESOURCE_CONTEXT_PING => "ping",
+        _ => "other",
+    }
+}
+
+// Runs on the main thread (inside with_webview).
+#[cfg(windows)]
+unsafe fn install_shields_hooks(
+    app: &tauri::AppHandle,
+    platform: &tauri::webview::PlatformWebview,
+    id: u32,
+    label: String,
+) -> windows::core::Result<()> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::*;
+    use webview2_com::{take_pwstr, NavigationCompletedEventHandler, WebResourceRequestedEventHandler};
+    use windows::core::{Interface, HSTRING, PWSTR};
+
+    let core = platform.controller().CoreWebView2()?;
+    let env = platform.environment();
+
+    // Every http(s) request -- from the page, its iframes and its workers
+    // (the source-kinds API needs a newer WebView2 runtime; older ones only
+    // report the page's own requests).
+    for filter in ["http://*", "https://*"] {
+        let filter = HSTRING::from(filter);
+        match core.cast::<ICoreWebView2_22>() {
+            Ok(core22) => core22.AddWebResourceRequestedFilterWithRequestSourceKinds(
+                &filter,
+                COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+                COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL,
+            )?,
+            Err(_) => core.AddWebResourceRequestedFilter(&filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)?,
+        }
+    }
+
+    let app_req = app.clone();
+    let label_req = label.clone();
+    let mut token = 0i64;
+    core.add_WebResourceRequested(
+        &WebResourceRequestedEventHandler::create(Box::new(move |sender, args| {
+            let (Some(sender), Some(args)) = (sender, args) else { return Ok(()) };
+            let request = args.Request()?;
+            let mut uri = PWSTR::null();
+            request.Uri(&mut uri)?;
+            let uri = take_pwstr(uri);
+            let mut page = PWSTR::null();
+            sender.Source(&mut page)?;
+            let page = take_pwstr(page);
+            // Kessel's own pages (new tab, settings...) are never filtered.
+            let Ok(page_url) = tauri::Url::parse(&page) else { return Ok(()) };
+            if is_internal_nav(&page_url) {
+                return Ok(());
+            }
+            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
+            args.ResourceContext(&mut context)?;
+            let shields = app_req.state::<shields::Shields>();
+            // The page's own document -- guard_navigation already judged it.
+            if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
+                && shields.nav_targets.lock().unwrap().get(&label_req).map(|u| u == &uri).unwrap_or(false)
+            {
+                return Ok(());
+            }
+            let st = app_req.state::<BrowserState>();
+            if !shields_up_for(&st, page_url.host_str().unwrap_or("")) {
+                return Ok(());
+            }
+            if shields.should_block(&uri, &page, request_kind(context)) {
+                let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from("Blocked by Kessel Shields"), &HSTRING::new())?;
+                args.SetResponse(&response)?;
+                st.store.blocked_count.fetch_add(1, Ordering::Relaxed);
+                if let Some(stats) = shields.bump(id, |s| s.blocked += 1) {
+                    emit_shields_stats(&app_req, id, &stats);
+                    let _ = app_req.emit_to(TOOLBAR_LABEL, "adblock-count-changed", st.store.blocked_count.load(Ordering::Relaxed));
+                }
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    // HTTPS by default, with a fallback: if a page we upgraded to https fails
+    // to connect, go back to its http:// address and don't upgrade that host
+    // again this session.
+    let app_nav = app.clone();
+    let label_nav = label;
+    let mut token = 0i64;
+    core.add_NavigationCompleted(
+        &NavigationCompletedEventHandler::create(Box::new(move |sender, args| {
+            let (Some(sender), Some(args)) = (sender, args) else { return Ok(()) };
+            let shields = app_nav.state::<shields::Shields>();
+            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else { return Ok(()) };
+            let mut success = windows::core::BOOL::default();
+            args.IsSuccess(&mut success)?;
+            if success.as_bool() {
+                return Ok(());
+            }
+            let mut status = COREWEBVIEW2_WEB_ERROR_STATUS::default();
+            args.WebErrorStatus(&mut status)?;
+            let https_problem = [
+                COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET,
+                COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE,
+                COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CLIENT_CERTIFICATE_CONTAINS_ERRORS,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED,
+                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID,
+            ]
+            .contains(&status);
+            if https_problem {
+                if let Some(host) = tauri::Url::parse(&original).ok().and_then(|u| u.host_str().map(|h| h.to_lowercase())) {
+                    shields.https_failed.lock().unwrap().insert(host);
+                }
+                sender.Navigate(&HSTRING::from(original))?;
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    // WebView2's own (Edge) tracking prevention, on top of the lists. It's a
+    // profile-wide setting, so re-applying it per webview keeps it current.
+    let level = match app.state::<BrowserState>().store.settings.lock().unwrap().shields_tracking_prevention.as_str() {
+        "off" => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_NONE,
+        "basic" => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_BASIC,
+        "strict" => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_STRICT,
+        _ => COREWEBVIEW2_TRACKING_PREVENTION_LEVEL_BALANCED,
+    };
+    if let Ok(core13) = core.cast::<ICoreWebView2_13>() {
+        if let Ok(profile) = core13.Profile().and_then(|p| p.cast::<ICoreWebView2Profile3>()) {
+            let _ = profile.SetPreferredTrackingPreventionLevel(level);
+        }
+    }
+    Ok(())
+}
+
+// Recompiles the engine off the UI thread (a full set of lists takes a moment).
+fn rebuild_shields_async(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let st = app.state::<BrowserState>();
+        let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
+        let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
+        app.state::<shields::Shields>().rebuild(&enabled, &custom);
+        let _ = app.emit("shields-lists-changed", ());
+    });
+}
+
+// At startup: compile whatever lists are cached (so protection is complete
+// within a moment of launch), then download stale or missing ones, and keep
+// checking every few hours while Kessel runs.
+fn start_shields(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let lists = |app: &tauri::AppHandle| {
+            let st = app.state::<BrowserState>();
+            let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
+            let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
+            (enabled, custom)
+        };
+        let (enabled, custom) = lists(&app);
+        app.state::<shields::Shields>().rebuild(&enabled, &custom);
+        loop {
+            let (enabled, custom) = lists(&app);
+            let shields = app.state::<shields::Shields>();
+            if shields.refresh_lists(&enabled, false) || !shields.engine_state().lists_loaded {
+                shields.rebuild(&enabled, &custom);
+            }
+            let _ = app.emit("shields-lists-changed", ());
+            std::thread::sleep(Duration::from_secs(6 * 3600));
+        }
+    });
+}
+
+#[derive(serde::Serialize, Default)]
+struct CosmeticsReply {
+    enabled: bool,
+    fingerprinting: bool,
+    hide: Vec<String>,
+    exceptions: Vec<String>,
+    generichide: bool,
+}
+
+// Element hiding for the calling page. The URL comes from the webview
+// itself, never from the page.
+#[tauri::command]
+fn shields_cosmetics(webview: Webview, state: tauri::State<BrowserState>, shields: tauri::State<shields::Shields>) -> CosmeticsReply {
+    let Ok(url) = webview.url() else { return CosmeticsReply::default() };
+    if is_internal_nav(&url) || !shields_up_for(&state, url.host_str().unwrap_or("")) {
+        return CosmeticsReply::default();
+    }
+    let resources = shields.cosmetics(url.as_str());
+    CosmeticsReply {
+        enabled: true,
+        fingerprinting: state.store.settings.lock().unwrap().shields_fingerprinting,
+        hide: resources.hide_selectors.into_iter().collect(),
+        exceptions: resources.exceptions.into_iter().collect(),
+        generichide: resources.generichide,
+    }
+}
+
+// Generic element-hiding rules matching the classes/ids a page uses.
+#[tauri::command]
+fn shields_hidden_selectors(
+    shields: tauri::State<shields::Shields>,
+    classes: Vec<String>,
+    ids: Vec<String>,
+    exceptions: Vec<String>,
+) -> Vec<String> {
+    let exceptions: HashSet<String> = exceptions.into_iter().collect();
+    let classes: Vec<String> = classes.into_iter().take(5_000).collect();
+    let ids: Vec<String> = ids.into_iter().take(5_000).collect();
+    shields.hidden_selectors(&classes, &ids, &exceptions)
+}
+
+#[tauri::command]
+fn shields_status(state: tauri::State<BrowserState>, shields: tauri::State<shields::Shields>) -> serde_json::Value {
+    let enabled = state.store.settings.lock().unwrap().filter_lists.clone();
+    serde_json::json!({ "engine": shields.engine_state(), "lists": shields.list_states(&enabled) })
+}
+
+// Settings -> "Update now": re-downloads every enabled list.
+#[tauri::command]
+async fn shields_update_lists(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let app2 = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let st = app2.state::<BrowserState>();
+        let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
+        let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
+        let shields = app2.state::<shields::Shields>();
+        shields.refresh_lists(&enabled, true);
+        shields.rebuild(&enabled, &custom);
+        let _ = app2.emit("shields-lists-changed", ());
+        serde_json::json!({ "engine": shields.engine_state(), "lists": shields.list_states(&enabled) })
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+// What the shield button / popup shows for a tab.
+#[tauri::command]
+fn shields_tab_info(state: tauri::State<BrowserState>, shields: tauri::State<shields::Shields>, id: u32) -> serde_json::Value {
+    let stats = shields.tab_stats(id);
+    let settings = state.store.settings.lock().unwrap().clone();
+    serde_json::json!({
+        "stats": stats,
+        "host": stats.host,
+        "global": settings.adblock_enabled,
+        "site_enabled": !site_allowed(&state, &stats.host),
+        "https_upgrade": settings.shields_https_upgrade,
+        "strip_tracking": settings.shields_strip_tracking,
+        "fingerprinting": settings.shields_fingerprinting,
+        "lists_loaded": shields.engine_state().lists_loaded,
+    })
+}
+
+// The popup's per-site switch: Shields down = the site's domain goes on the
+// allow list. Reloads the tab so it takes effect. Only Kessel's own pages
+// may call this -- otherwise any website could switch its own blocking off.
+#[tauri::command]
+async fn shields_set_site(app: tauri::AppHandle, webview: Webview, id: u32, host: String, enabled: bool) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let host = host.trim().trim_start_matches("www.").to_lowercase();
+    if host.is_empty() {
+        return Err("no site to change".into());
+    }
+    {
+        let state = app.state::<BrowserState>();
+        let mut lists = state.store.adblock_lists.lock().unwrap();
+        lists.allow.retain(|d| d.trim_start_matches("www.") != host);
+        if !enabled {
+            lists.allow.push(host);
+        }
+        drop(lists);
+        state.store.save_adblock_lists();
+    }
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let tab = state.tabs.lock().unwrap().get(&id).cloned();
+        if let Some(w) = tab {
+            let _ = w.eval("location.reload()");
+        }
+    })
+    .await
+}
+
+const SHIELDS_POPUP_LABEL: &str = "shields-popup";
+const SHIELDS_POPUP_WIDTH: f64 = 300.0;
+const SHIELDS_POPUP_HEIGHT: f64 = 400.0;
+
+// When the popup last closed. Clicking the shield button while the popup is
+// open first blurs (= closes) the popup, then delivers the click -- which
+// must count as "close", not "open it again".
+static SHIELDS_POPUP_CLOSED_AT: Mutex<Option<Instant>> = Mutex::new(None);
+
+// The address bar's shield opens this as a small webview created above
+// everything else (a toolbar-drawn menu would be hidden behind the tab's
+// webview). `x` is the button's right edge, `y` its bottom, in window
+// coordinates. Clicking the shield again closes it.
+#[tauri::command]
+async fn toggle_shields_popup(app: tauri::AppHandle, webview: Webview, id: u32, x: f64, y: f64) -> Result<bool, String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<bool, String> {
+        if let Some(existing) = app2.get_webview(SHIELDS_POPUP_LABEL) {
+            let _ = existing.close();
+            *SHIELDS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
+            return Ok(false);
+        }
+        let just_closed = SHIELDS_POPUP_CLOSED_AT
+            .lock()
+            .unwrap()
+            .map(|t| t.elapsed() < Duration::from_millis(400))
+            .unwrap_or(false);
+        if just_closed {
+            return Ok(false);
+        }
+        let state = app2.state::<BrowserState>();
+        let left = (x - SHIELDS_POPUP_WIDTH).max(chrome_left());
+        let popup = state
+            .window
+            .add_child(
+                WebviewBuilder::new(SHIELDS_POPUP_LABEL, WebviewUrl::App("shields.html".into()))
+                    .initialization_script(&format!("window.__KESSEL_SHIELDS_TAB__ = {};", id)),
+                LogicalPosition::new(left, y + 6.0),
+                LogicalSize::new(SHIELDS_POPUP_WIDTH, SHIELDS_POPUP_HEIGHT),
+            )
+            .map_err(|e| e.to_string())?;
+        let _ = popup.set_focus();
+        raise_resize_borders(&state.window);
+        Ok(true)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+#[tauri::command]
+async fn close_shields_popup(app: tauri::AppHandle) -> Result<(), String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        if let Some(popup) = app2.get_webview(SHIELDS_POPUP_LABEL) {
+            let _ = popup.close();
+            *SHIELDS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
+        }
+    })
+    .await
+}
+
 // --- Threading bridge --------------------------------------------------
 //
 // IMPORTANT: creating/moving/navigating webviews must happen on the main
@@ -1399,6 +1871,7 @@ async fn close_tab(app: tauri::AppHandle, id: u32, url: Option<String>) -> Resul
 
         state.singleton_tabs.lock().unwrap().retain(|_, &mut v| v != id);
         state.tab_meta.lock().unwrap().remove(&id);
+        app2.state::<shields::Shields>().forget_tab(id);
         Ok(())
     })
     .await
@@ -1725,11 +2198,29 @@ fn get_settings(state: tauri::State<BrowserState>) -> Settings {
     state.store.settings.lock().unwrap().clone()
 }
 
+// Only Kessel's own pages may change settings -- every webview can reach
+// invoke(), and a website must not be able to e.g. switch Shields off.
 #[tauri::command]
-fn update_settings(app: tauri::AppHandle, state: tauri::State<BrowserState>, settings: Settings) {
+fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, settings: Settings) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let lists_changed = state.store.settings.lock().unwrap().filter_lists != settings.filter_lists;
     *state.store.settings.lock().unwrap() = settings.clone();
     state.store.save_settings();
     let _ = app.emit("settings-changed", &settings);
+    if lists_changed {
+        // Download any newly enabled list, then recompile.
+        let app2 = app.clone();
+        std::thread::spawn(move || {
+            let st = app2.state::<BrowserState>();
+            let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
+            let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
+            let shields = app2.state::<shields::Shields>();
+            shields.refresh_lists(&enabled, false);
+            shields.rebuild(&enabled, &custom);
+            let _ = app2.emit("shields-lists-changed", ());
+        });
+    }
+    Ok(())
 }
 
 // --- Downloads -----------------------------------------------------------
@@ -1766,11 +2257,14 @@ fn get_adblock_lists(state: tauri::State<BrowserState>) -> AdblockLists {
     state.store.adblock_lists.lock().unwrap().clone()
 }
 
+// These four change what gets blocked, so like update_settings they only
+// accept calls from Kessel's own pages (a site must not unblock itself).
 #[tauri::command]
-fn add_custom_blocked_domain(state: tauri::State<BrowserState>, domain: String) {
+fn add_custom_blocked_domain(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, domain: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
     let domain = domain.trim().to_lowercase();
     if domain.is_empty() {
-        return;
+        return Ok(());
     }
     let mut lists = state.store.adblock_lists.lock().unwrap();
     if !lists.custom.contains(&domain) {
@@ -1778,19 +2272,25 @@ fn add_custom_blocked_domain(state: tauri::State<BrowserState>, domain: String) 
     }
     drop(lists);
     state.store.save_adblock_lists();
+    rebuild_shields_async(&app);
+    Ok(())
 }
 
 #[tauri::command]
-fn remove_custom_blocked_domain(state: tauri::State<BrowserState>, domain: String) {
+fn remove_custom_blocked_domain(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, domain: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
     state.store.adblock_lists.lock().unwrap().custom.retain(|d| d != &domain);
     state.store.save_adblock_lists();
+    rebuild_shields_async(&app);
+    Ok(())
 }
 
 #[tauri::command]
-fn add_allowed_domain(state: tauri::State<BrowserState>, domain: String) {
+fn add_allowed_domain(webview: Webview, state: tauri::State<BrowserState>, domain: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
     let domain = domain.trim().to_lowercase();
     if domain.is_empty() {
-        return;
+        return Ok(());
     }
     let mut lists = state.store.adblock_lists.lock().unwrap();
     if !lists.allow.contains(&domain) {
@@ -1798,17 +2298,22 @@ fn add_allowed_domain(state: tauri::State<BrowserState>, domain: String) {
     }
     drop(lists);
     state.store.save_adblock_lists();
+    Ok(())
 }
 
 #[tauri::command]
-fn remove_allowed_domain(state: tauri::State<BrowserState>, domain: String) {
+fn remove_allowed_domain(webview: Webview, state: tauri::State<BrowserState>, domain: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
     state.store.adblock_lists.lock().unwrap().allow.retain(|d| d != &domain);
     state.store.save_adblock_lists();
+    Ok(())
 }
 
+// How many blocking rules are loaded right now (was: the size of the old
+// built-in domain list).
 #[tauri::command]
-fn builtin_blocklist_count() -> usize {
-    adblock::BLOCKED_DOMAINS.len()
+fn builtin_blocklist_count(shields: tauri::State<shields::Shields>) -> usize {
+    shields.engine_state().rules
 }
 
 // --- Vault (password manager) ---------------------------------------------
@@ -2258,7 +2763,15 @@ fn main() {
             get_toolbar_snapshot,
             detect_browsers,
             import_from_browser,
-            vault_import_csv
+            vault_import_csv,
+            shields_cosmetics,
+            shields_hidden_selectors,
+            shields_status,
+            shields_update_lists,
+            shields_tab_info,
+            shields_set_site,
+            toggle_shields_popup,
+            close_shields_popup
         ])
         .setup(|app| {
             let width = 1280.0;
@@ -2302,6 +2815,8 @@ fn main() {
             fs::create_dir_all(&data_dir).ok();
 
             let store = Store::load(data_dir.clone());
+            let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
+            app.manage(shields::Shields::new(&data_dir, &custom_blocked));
 
             let state = BrowserState {
                 window: window.clone(),
@@ -2324,6 +2839,7 @@ fn main() {
             };
             app.manage(state);
             app.manage(Vault::new(data_dir));
+            start_shields(app.handle());
 
             let app_for_watchdog = app.handle().clone();
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));

@@ -311,3 +311,8 @@ html.glass .toast {
 }
 
 html.glass #progress-fill { height: 2px; border-radius: 1px; }
+
+html.glass #shields-btn { color: #5ef0b4; border-radius: 13px; }
+html.glass #shields-btn:hover { background: rgba(255, 255, 255, 0.16); }
+html.glass #shields-btn.off { color: var(--lg-text-faint); }
+html.glass #shields-count { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25); }

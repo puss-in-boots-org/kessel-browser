@@ -20,6 +20,35 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Shields** (`src-tauri/src/shields.rs`) replace the old domain list,
+  Brave-style:
+  - **Brave's own engine** (`adblock-rust`) with the lists Brave/uBlock
+    Origin use: EasyList, EasyPrivacy, uBlock filters (+ privacy, unbreak,
+    quick fixes), Peter Lowe's; optional cookie notices, annoyances,
+    Hungarian (hufilter). Downloaded to `<app data>/shields` through
+    Windows' certificate store (works behind HTTPS-inspecting antivirus),
+    refreshed every 3 days, ~154k rules compiled in <0.1 s; a small
+    built-in list covers the first seconds after a fresh install.
+  - **Real network blocking**: every request a page makes -- scripts,
+    images, iframes, XHR/fetch, workers -- goes through WebView2's
+    `WebResourceRequested` and is answered 403 if the lists say so
+    (~2.6 µs per check). The old README said this was impossible in Tauri;
+    Tauri's own hook is, WebView2's isn't.
+  - **Element hiding** from the same lists: per-site selectors, plus
+    generic ones matched to the classes/ids a page actually uses.
+  - **HTTPS by default** with automatic fallback to http:// when a site
+    can't do HTTPS; **tracking parameters stripped** from links (fbclid,
+    gclid, utm_*, ... plus the lists' `$removeparam`).
+  - **Fingerprinting protection** ("farbling"): per-site, per-session noise
+    on canvas and audio readouts and a randomised CPU core count, in every
+    frame. **WebView2's Edge tracking prevention** on top (Balanced by
+    default).
+  - **Shields button** in the address bar with a live per-page count and a
+    popup: per-site Shields up/down, counters, protection toggles.
+    Settings → Privacy manages lists, levels, custom and allowed sites.
+  - Settings, the allow/block lists and the popup now only accept calls
+    from Kessel's own pages -- a website could previously switch ad
+    blocking off through `update_settings`.
 - **Import from Opera GX, Opera, Brave and Chrome** (Settings → Import,
   every Chrome profile separately): bookmarks bar + other bookmarks →
   Kessel bookmarks, Opera's Speed Dial / Chrome's own New Tab shortcuts →
@@ -219,12 +248,11 @@ click-tested in a running build yet.
 - Bookmarks and history, persisted to JSON in the OS app-data directory.
 
 ## Known limitations (honest, not hidden)
-- **Ad blocking can't intercept sub-resource network requests** on
-  external sites — Tauri's per-request interception hook
-  (`on_web_resource_request`) is documented as not working for external
-  sites, only the app's own bundled pages. So this is domain-navigation
-  blocking (built-in list + your custom list) plus cosmetic hiding, not
-  the same mechanism a browser-extension blocker like uBlock Origin uses.
+- **Shields don't run uBlock/Brave "scriptlets" yet** (`+js(...)` rules)
+  — the engine needs uBlock's scriptlet library for those, which Brave
+  assembles at build time rather than publishing. Network blocking and
+  element hiding work fully; what scriptlets cover (notably YouTube's
+  in-video ads, served from YouTube's own servers) does not yet.
 - **The password vault trusts the OS user account it runs under** — it
   protects saved credentials from casual disk access and other apps, via
   real authenticated encryption, not from a compromised OS or a
@@ -232,9 +260,10 @@ click-tested in a running build yet.
 - **Every page can technically call this app's Rust commands** — since
   `withGlobalTauri` exposes `window.__TAURI__` to every webview (needed
   for the shortcuts/link-handling to work from inside pages), a malicious
-  website could in theory also call those same commands. Low risk for a
-  personal project used by one person; a production browser would need
-  tighter per-webview command scoping. Autofill's match-lookup command is
+  website could in theory also call those same commands. The ones that
+  change protection or read other data -- settings, the Shields allow and
+  block lists, importing, the Shields popup -- now check the caller is one
+  of Kessel's own pages (`require_internal_page`); the rest still don't. Autofill's match-lookup command is
   hardened against the specific worst case this enables (a page can't
   spoof which site it is — see `vault_autofill_match` in `main.rs`), but
   a page can still ask "is there a saved credential for the site I'm

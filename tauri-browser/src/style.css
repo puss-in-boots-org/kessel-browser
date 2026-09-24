@@ -451,3 +451,40 @@ html, body { overflow: hidden; user-select: none; }
 .bm-chip:hover { background: var(--surface-hover); color: var(--text); }
 .bm-chip .bm-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-chip .app-icon { width: 16px; height: 16px; font-size: 9px; }
+
+/* --- Shields button (address bar) --- */
+#shields-btn {
+  position: relative;
+  background: none;
+  border: none;
+  color: var(--success);
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+#shields-btn[hidden] { display: none; }
+#shields-btn:hover { background: var(--surface-hover); }
+#shields-btn.off { color: var(--text-faint); }
+#shields-count {
+  position: absolute;
+  right: -3px;
+  bottom: 0;
+  min-width: 14px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+#shields-count[hidden] { display: none; }

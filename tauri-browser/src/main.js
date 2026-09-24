@@ -74,6 +74,7 @@ function paintStaticIcons() {
   iconFor("lock-icon", icon("lock", 13));
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
+  iconFor("shields-btn", icon("shieldCheck", 16));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -406,6 +407,35 @@ function updateAddressBarForActiveTab() {
   }
   updateStarButton();
   updateNavButtons();
+  updateShieldsButton();
+}
+
+// --- Shields button (address bar) -------------------------------------------
+// Shows how much Shields blocked on the active tab's current page; clicking
+// it opens the Shields popup (shields.html) for that tab. Counts arrive as
+// "shields-stats" events from Rust (see shields.rs / main.rs).
+
+const shieldsStats = new Map(); // tab id -> { blocked, https_upgrades, params_stripped, host }
+
+function updateShieldsButton() {
+  const btn = document.getElementById("shields-btn");
+  const count = document.getElementById("shields-count");
+  const tab = findTab(activeTabId);
+  const webPage = !!(tab && tab.url && /^https?:/.test(tab.url));
+  btn.hidden = !webPage;
+  const on = currentSettings()?.adblock_enabled ?? true;
+  const stats = shieldsStats.get(activeTabId);
+  const blocked = stats?.blocked || 0;
+  btn.classList.toggle("off", !on);
+  count.hidden = !on || blocked === 0;
+  count.textContent = blocked > 99 ? "99+" : String(blocked);
+  btn.title = on ? `Shields: ${blocked} blocked on this page` : "Shields are off";
+}
+
+async function toggleShieldsPopup() {
+  if (!activeTabId || activeTabId < 0) return;
+  const rect = document.getElementById("shields-btn").getBoundingClientRect();
+  await invoke("toggle_shields_popup", { id: activeTabId, x: rect.right + 6, y: rect.bottom }).catch(() => {});
 }
 
 function updateNavButtons() {
@@ -421,6 +451,8 @@ function updateNavButtons() {
 async function activateTab(id) {
   const tab = findTab(id);
   if (!tab) return;
+  // The Shields popup belongs to the tab it was opened for.
+  invoke("close_shields_popup").catch(() => {});
 
   // Stamp the tab we're leaving as "went idle now" -- wireTabDiscarding
   // measures elapsed time from this, not from when it was created.
@@ -843,6 +875,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (activeTabId) invoke("reload", { id: activeTabId });
   });
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
+  document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
   document.getElementById("engine-btn").addEventListener("click", (e) => {
     e.stopPropagation();
     const menu = document.getElementById("engine-menu");
@@ -913,6 +946,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     // internal kessel://... pages are filtered out on the Rust side (see
     // on_navigation in main.rs), so whatever we track here is real.
     const { id, url } = event.payload;
+    shieldsStats.delete(id); // a new page starts counting from zero
     const tab = findTab(id);
     if (tab) {
       tab.url = url;
@@ -997,6 +1031,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     updatePanelHighlights();
   });
 
+  await listen("shields-stats", (event) => {
+    shieldsStats.set(event.payload.id, event.payload.stats);
+    if (event.payload.id === activeTabId) updateShieldsButton();
+  });
+
   await listen("adblock-count-changed", (event) => {
     blockedCount = event.payload;
     updateShield();
@@ -1015,6 +1054,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   window.addEventListener("kessel-settings", () => {
+    updateShieldsButton();
     updateShield();
     renderEngineMenu();
     renderBookmarksBar();

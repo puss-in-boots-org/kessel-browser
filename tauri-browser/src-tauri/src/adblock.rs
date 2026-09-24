@@ -1,6 +1,6 @@
-// Ad & tracker blocking: a curated domain list (navigation-level blocking,
-// see the honest limitation noted in main.rs) plus the cosmetic/behavioral
-// script injected into every content page.
+// The script injected into every content page, plus the small built-in
+// domain list Shields (shields.rs) falls back on until the real filter
+// lists have loaded. The blocking itself lives in shields.rs.
 
 pub const BLOCKED_DOMAINS: &[&str] = &[
     // --- Google ad/tracking network ---
@@ -137,22 +137,10 @@ pub const BLOCKED_DOMAINS: &[&str] = &[
     "webminepool.com",
 ];
 
-pub fn is_blocked(host: &str, full_url: &str, custom: &[String], allow: &[String]) -> bool {
-    if allow.iter().any(|d| !d.is_empty() && (host.ends_with(d.as_str()) || host == d.as_str())) {
-        return false;
-    }
-    BLOCKED_DOMAINS
-        .iter()
-        .any(|d| host.ends_with(d) || full_url.contains(d))
-        || custom
-            .iter()
-            .any(|d| !d.is_empty() && (host.ends_with(d.as_str()) || full_url.contains(d.as_str())))
-}
-
 // Injected into every content page at document-start (before the page's own
 // scripts run). Layers:
-//  1. Cosmetic ad-hiding (if adblock_enabled): hides common ad-container
-//     elements via CSS, with a MutationObserver for ones added dynamically.
+//  1. Shields element hiding (if adblock_enabled), driven by the filter
+//     lists -- see shields.rs.
 //  2. Popup blocker: overrides window.open() to only allow it within ~800ms
 //     of a real click.
 //  3. Zoom controls: Ctrl/Cmd + "+"/"-"/"0".
@@ -176,47 +164,78 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
     }}
   }}
 
-  // --- Cosmetic ad-hiding ---
-  if (ADBLOCK_ENABLED) {{
-    var selectors = [
-      'ins.adsbygoogle', '.adsbygoogle', '[id^="google_ads"]', '[id*="dfp-ad"]',
-      '.ad-banner', '.ad-container', '.advertisement', '.advert', '.sponsored-content',
-      'div[class*="-ad-"]', 'div[class^="ad-"]', 'div[id^="ad-"]', 'div[class*="banner-ad"]',
-      'aside[class*="-ad"]', '.taboola', '#taboola-below-article', '.outbrain', '.ob-widget',
-      'iframe[src*="doubleclick"]', 'iframe[src*="googlesyndication"]', '[data-ad-slot]',
-      'ins.adsbygoogle-noablate', '.google-auto-placed', '[id^="taboola-"]',
-      '.OUTBRAIN', 'div[id*="AdThrive"]', '.adthrive-ad', '.pushly-widget'
-    ];
-    var reported = false;
-    function hideAds() {{
-      try {{
-        var hidden = 0;
-        selectors.forEach(function(sel) {{
-          document.querySelectorAll(sel).forEach(function(el) {{
-            if (el.style.display !== 'none') {{
-              el.style.setProperty('display', 'none', 'important');
-              hidden++;
-            }}
-          }});
-        }});
-        if (hidden > 0 && !reported) {{
-          reported = true;
-          invoke('report_ads_hidden', {{ count: hidden }});
-        }}
-      }} catch (e) {{}}
-    }}
-    if (document.readyState === 'loading') {{
-      document.addEventListener('DOMContentLoaded', hideAds);
-    }} else {{
-      hideAds();
-    }}
-    (function startObserving() {{
-      if (document.body) {{
-        new MutationObserver(function() {{ hideAds(); }}).observe(document.body, {{ childList: true, subtree: true }});
-      }} else {{
-        setTimeout(startObserving, 50);
+  // --- Shields: element hiding ---
+  // The rules come from the same filter lists as the network blocking (see
+  // shields_cosmetics in main.rs): this site's own selectors right away, then
+  // generic ones matched against the classes/ids this page actually uses,
+  // re-checked as the page changes. Also tells the fingerprinting script
+  // (shields.rs) to stand down where Shields are off for the site.
+  if (ADBLOCK_ENABLED && window.top === window) {{
+    var cosmetics = invoke('shields_cosmetics');
+    if (cosmetics) cosmetics.then(function (c) {{
+      if (!c || !c.enabled) {{ window.__kesselFarbleOff = true; return; }}
+      if (!c.fingerprinting) window.__kesselFarbleOff = true;
+      var style = document.createElement('style');
+      style.setAttribute('data-kessel', 'shields');
+      function mount() {{
+        var parent = document.head || document.documentElement;
+        if (parent) parent.appendChild(style);
+        else document.addEventListener('DOMContentLoaded', mount);
       }}
-    }})();
+      mount();
+      function hide(selectors) {{
+        // One rule per selector, so a single selector this engine doesn't
+        // understand can't void all the others.
+        var css = '';
+        for (var i = 0; i < selectors.length; i++) css += selectors[i] + '{{display:none!important}}\n';
+        style.appendChild(document.createTextNode(css));
+      }}
+      hide(c.hide || []);
+      if (c.generichide) return;
+
+      var seenClasses = new Set(), seenIds = new Set(), newClasses = [], newIds = [], timer = null;
+      function collect(el) {{
+        if (!el || el.nodeType !== 1) return;
+        if (el.id && !seenIds.has(el.id)) {{ seenIds.add(el.id); newIds.push(el.id); }}
+        var cl = el.classList;
+        if (cl) for (var i = 0; i < cl.length; i++) {{
+          if (!seenClasses.has(cl[i])) {{ seenClasses.add(cl[i]); newClasses.push(cl[i]); }}
+        }}
+      }}
+      function scan(root) {{
+        collect(root);
+        if (root.querySelectorAll) {{
+          var els = root.querySelectorAll('[id],[class]');
+          for (var i = 0; i < els.length; i++) collect(els[i]);
+        }}
+      }}
+      function flush() {{
+        if (timer || (!newClasses.length && !newIds.length)) return;
+        timer = setTimeout(function () {{
+          timer = null;
+          var request = invoke('shields_hidden_selectors', {{
+            classes: newClasses.splice(0), ids: newIds.splice(0), exceptions: c.exceptions || []
+          }});
+          if (request) request.then(function (selectors) {{ if (selectors && selectors.length) hide(selectors); }});
+          flush();
+        }}, 120);
+      }}
+      function start() {{
+        if (!style.isConnected) mount();
+        scan(document.documentElement);
+        flush();
+        new MutationObserver(function (records) {{
+          for (var i = 0; i < records.length; i++) {{
+            var r = records[i];
+            if (r.type === 'attributes') collect(r.target);
+            else for (var j = 0; j < r.addedNodes.length; j++) scan(r.addedNodes[j]);
+          }}
+          flush();
+        }}).observe(document.documentElement, {{ childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] }});
+      }}
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+      else start();
+    }});
   }}
 
   // --- Popup blocker ---

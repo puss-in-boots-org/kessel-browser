@@ -20,6 +20,8 @@ rand = "0.10.2"
 tauri-plugin-opener = "2.5.5"
 base64 = "0.23.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+adblock = { version = "0.13.3", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
+ureq = { version = "3.4.2", default-features = false, features = ["native-tls", "gzip"] }
 
 [[bin]]
 name = "kessel"
