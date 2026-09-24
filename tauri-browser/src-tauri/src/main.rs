@@ -917,6 +917,7 @@ struct ImportSource {
     name: String,
     bookmarks: usize,
     speed_dial: usize,
+    passwords: usize,
     running: bool,
 }
 
@@ -928,7 +929,7 @@ async fn detect_opera(webview: Webview) -> Result<Vec<ImportSource>, String> {
         .iter()
         .map(|p| {
             let (bookmarks, speed_dial) = import::read_bookmarks(p).map(|(b, s)| (b.len(), s.len())).unwrap_or((0, 0));
-            ImportSource { name: p.name.to_string(), bookmarks, speed_dial, running }
+            ImportSource { name: p.name.to_string(), bookmarks, speed_dial, passwords: import::count_logins(p), running }
         })
         .collect())
 }
@@ -939,6 +940,8 @@ struct ImportChoice {
     bookmarks: bool,
     speed_dial: bool,
     cookies: bool,
+    #[serde(default)]
+    passwords: bool,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -950,13 +953,22 @@ struct ImportReport {
     cookies_imported: usize,
     cookies_skipped: usize,
     cookie_error: Option<String>,
+    passwords_added: usize,
+    passwords_existing: usize,
+    passwords_skipped: usize,
+    password_error: Option<String>,
 }
 
 // Opera's Speed Dial becomes Kessel's pinned sites (the new-tab Speed Dial
 // and the rail). Already-present URLs are left alone, so re-running an
 // import doesn't duplicate anything.
 #[tauri::command]
-async fn import_from_opera(app: tauri::AppHandle, webview: Webview, choice: ImportChoice) -> Result<ImportReport, String> {
+async fn import_from_opera(
+    app: tauri::AppHandle,
+    webview: Webview,
+    vault: tauri::State<'_, Vault>,
+    choice: ImportChoice,
+) -> Result<ImportReport, String> {
     require_internal_page(&webview)?;
     let profile = import::find_profiles()
         .into_iter()
@@ -1011,6 +1023,33 @@ async fn import_from_opera(app: tauri::AppHandle, webview: Webview, choice: Impo
                         report.cookies_skipped += failed;
                     }
                     Err(e) => report.cookie_error = Some(e),
+                }
+            }
+        }
+    }
+
+    // Saved passwords go into the encrypted vault, so it has to be unlocked
+    // -- they're never written anywhere in plain text.
+    if choice.passwords {
+        let status = vault.status();
+        if !status.initialized {
+            report.password_error = Some("create a password vault first (Settings \u{2192} Passwords)".into());
+        } else if !status.unlocked {
+            report.password_error = Some("unlock your password vault first (Settings \u{2192} Passwords)".into());
+        } else {
+            match import::read_logins(&profile) {
+                Err(e) => report.password_error = Some(e),
+                Ok(read) => {
+                    report.passwords_skipped = read.skipped;
+                    let entries = read.logins.into_iter().map(|l| (l.site, l.username, l.password)).collect();
+                    let note = format!("Imported from {}", profile.name);
+                    match vault.import_items(vault_timeout(&state), entries, &note) {
+                        Ok((added, existing)) => {
+                            report.passwords_added = added;
+                            report.passwords_existing = existing;
+                        }
+                        Err(e) => report.password_error = Some(e),
+                    }
                 }
             }
         }

@@ -21,8 +21,11 @@ looks off, that's the next thing to iterate on.
 
 ## Unreleased
 - **Import from Opera GX / Opera** (Settings → Import): bookmarks bar +
-  Other bookmarks → Kessel bookmarks, Speed Dial → pinned sites, and
-  cookies so you stay signed in. Cookies are decrypted on this PC (DPAPI +
+  Other bookmarks → Kessel bookmarks, Speed Dial → pinned sites,
+  cookies so you stay signed in, and saved passwords → the encrypted
+  password vault (which must be unlocked; saved once via
+  `Vault::import_items`, skipping logins already there; never-save markers
+  and Android app logins are skipped). Cookies are decrypted on this PC (DPAPI +
   AES-256-GCM, Chromium's own scheme, incl. the 32-byte domain-hash prefix
   of cookie DB v24+) and written straight into WebView2's cookie manager
   -- not via Tauri's `set_cookie`, whose `cookie` crate drops the leading

@@ -553,7 +553,16 @@ async function importPanel() {
     <div id="import-sources"><div class="setting-card"><div class="setting-row"><div class="info"><div class="desc">Looking for browsers…</div></div></div></div></div>
   </div>`);
 
-  const sources = await invoke("detect_opera").catch(() => []);
+  const [sources, vault] = await Promise.all([
+    invoke("detect_opera").catch(() => []),
+    invoke("vault_status").catch(() => ({ initialized: false, unlocked: false })),
+  ]);
+  // Passwords land in the encrypted vault, which must be open to write to.
+  const vaultNote = !vault.initialized
+    ? "Create a password vault first (Passwords page), then come back."
+    : !vault.unlocked
+      ? "Unlock your password vault first (Passwords page), then come back."
+      : "Saved into your encrypted password vault.";
   const holder = p.querySelector("#import-sources");
   if (!sources.length) {
     holder.innerHTML = `<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">No supported browser found</div><div class="desc">Kessel can import from Opera GX and Opera on this PC.</div></div></div></div>`;
@@ -567,6 +576,7 @@ async function importPanel() {
       ${settingRow({ title: "Bookmarks", desc: `${src.bookmarks} from the bookmarks bar and Other bookmarks`, controlHtml: switchHtml("imp-bookmarks", src.bookmarks > 0) })}
       ${settingRow({ title: "Speed Dial", desc: `${src.speed_dial} sites, added to your pinned sites`, controlHtml: switchHtml("imp-speed", src.speed_dial > 0) })}
       ${settingRow({ title: "Cookies", desc: "Stay signed in to your sites. Decrypted on this PC only and saved straight into Kessel.", controlHtml: switchHtml("imp-cookies", true) })}
+      ${settingRow({ title: "Passwords", desc: `${src.passwords} saved logins. ${vaultNote}`, controlHtml: switchHtml("imp-passwords", src.passwords > 0 && vault.unlocked) })}
       <div class="add-row" style="justify-content:space-between;align-items:center">
         <span class="faint" id="imp-result" style="font-size:12px"></span>
         <button class="btn primary sm" id="imp-go">Import from ${src.name}</button>
@@ -583,8 +593,9 @@ async function importPanel() {
         bookmarks: card.querySelector("#imp-bookmarks").classList.contains("on"),
         speed_dial: card.querySelector("#imp-speed").classList.contains("on"),
         cookies: card.querySelector("#imp-cookies").classList.contains("on"),
+        passwords: card.querySelector("#imp-passwords").classList.contains("on"),
       };
-      if (!choice.bookmarks && !choice.speed_dial && !choice.cookies) return;
+      if (!choice.bookmarks && !choice.speed_dial && !choice.cookies && !choice.passwords) return;
       go.disabled = true;
       result.textContent = "Importing…";
       try {
@@ -593,8 +604,9 @@ async function importPanel() {
         if (choice.bookmarks) parts.push(`${r.bookmarks_added} bookmarks${r.bookmarks_existing ? ` (${r.bookmarks_existing} already here)` : ""}`);
         if (choice.speed_dial) parts.push(`${r.speed_dial_added} Speed Dial sites${r.speed_dial_existing ? ` (${r.speed_dial_existing} already here)` : ""}`);
         if (choice.cookies) parts.push(r.cookie_error ? `cookies failed: ${r.cookie_error}` : `${r.cookies_imported} cookies (${r.cookies_skipped} expired or not transferable)`);
+        if (choice.passwords) parts.push(r.password_error ? `passwords failed: ${r.password_error}` : `${r.passwords_added} passwords${r.passwords_existing ? ` (${r.passwords_existing} already saved)` : ""}`);
         result.textContent = `Imported ${parts.join(", ")}.`;
-        toast(r.cookie_error ? "Import finished with a problem" : "Import complete");
+        toast(r.cookie_error || r.password_error ? "Import finished with a problem" : "Import complete");
       } catch (err) {
         result.textContent = String(err);
       } finally {

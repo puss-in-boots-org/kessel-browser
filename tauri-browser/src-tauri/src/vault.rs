@@ -387,6 +387,44 @@ impl Vault {
         Ok(id)
     }
 
+    /// Bulk import (e.g. from another browser): saves once at the end rather
+    /// than re-encrypting the whole vault per item, like add_item would.
+    /// Entries whose site + username are already saved are left alone, so a
+    /// repeated import doesn't duplicate anything. Returns (added, already_saved).
+    pub fn import_items(
+        &self,
+        timeout_minutes: u32,
+        entries: Vec<(String, String, String)>,
+        notes: &str,
+    ) -> Result<(usize, usize), String> {
+        self.enforce_timeout(timeout_minutes);
+        self.touch();
+        let mut session = self.session.lock().unwrap();
+        let s = session.as_mut().ok_or("vault is locked")?;
+        let (mut added, mut existing) = (0, 0);
+        for (site, username, password) in entries {
+            let site_host = extract_host(&site);
+            if s.data.items.iter().any(|i| extract_host(&i.site) == site_host && i.username == username) {
+                existing += 1;
+                continue;
+            }
+            let id = format!("{:x}", now()) + &format!("{:x}", random_bytes(4).iter().fold(0u32, |a, &b| (a << 8) | b as u32));
+            s.data.items.push(VaultItem {
+                id,
+                site,
+                username,
+                password,
+                notes: notes.to_string(),
+                updated_at: now(),
+            });
+            added += 1;
+        }
+        if added > 0 {
+            self.save_locked(s);
+        }
+        Ok((added, existing))
+    }
+
     pub fn update_item(
         &self,
         timeout_minutes: u32,

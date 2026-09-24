@@ -180,6 +180,112 @@ fn chromium_time_to_unix(micros: i64) -> f64 {
     micros as f64 / 1_000_000.0 - 11_644_473_600.0
 }
 
+// --- Saved passwords ----------------------------------------------------------
+//
+// `Login Data` (and `Login Data For Account`, the synced-account store) use
+// the same key and v10 scheme as cookies, without the domain-hash prefix.
+
+pub struct ImportedLogin {
+    // Host of the login page, e.g. "accounts.google.com" -- the format
+    // Kessel's vault and its autofill matching use.
+    pub site: String,
+    pub username: String,
+    pub password: String,
+}
+
+pub struct LoginRead {
+    pub logins: Vec<ImportedLogin>,
+    pub skipped: usize,
+}
+
+fn login_databases(p: &OperaProfile) -> Vec<PathBuf> {
+    ["Login Data", "Login Data For Account"]
+        .iter()
+        .map(|f| p.profile.join(f))
+        .filter(|f| f.exists())
+        .collect()
+}
+
+// Works on a copy of Opera's file, like read_cookies.
+fn with_db_copy<T>(p: &OperaProfile, source: &Path, f: impl FnOnce(&rusqlite::Connection) -> Result<T, String>) -> Result<T, String> {
+    use rusqlite::{Connection, OpenFlags};
+    let name = source.file_name().and_then(|n| n.to_str()).unwrap_or("db").replace(' ', "-");
+    let copy = std::env::temp_dir().join(format!("kessel-opera-{}-{}.db", name, std::process::id()));
+    fs::copy(source, &copy).map_err(|_| format!("Couldn't read {}'s data -- close {} and try again.", p.name, p.name))?;
+    let result = Connection::open_with_flags(&copy, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| e.to_string())
+        .and_then(|db| f(&db));
+    let _ = fs::remove_file(&copy);
+    result
+}
+
+/// How many saved logins there are to import (nothing is decrypted).
+pub fn count_logins(p: &OperaProfile) -> usize {
+    login_databases(p)
+        .iter()
+        .filter_map(|db| {
+            with_db_copy(p, db, |c| {
+                c.query_row(
+                    "SELECT count(*) FROM logins WHERE blacklisted_by_user = 0 AND length(password_value) > 0",
+                    [],
+                    |r| r.get::<_, i64>(0),
+                )
+                .map_err(|e| e.to_string())
+            })
+            .ok()
+        })
+        .sum::<i64>() as usize
+}
+
+pub fn read_logins(p: &OperaProfile) -> Result<LoginRead, String> {
+    let key = cookie_key(p)?;
+    let mut out = LoginRead { logins: Vec::new(), skipped: 0 };
+    let mut seen = std::collections::HashSet::new();
+    for db in login_databases(p) {
+        let rows: Vec<(String, String, String, Vec<u8>, i64)> = with_db_copy(p, &db, |c| {
+            let mut stmt = c
+                .prepare("SELECT origin_url, signon_realm, username_value, password_value, blacklisted_by_user FROM logins")
+                .map_err(|e| e.to_string())?;
+            let mapped = stmt
+                .query_map([], |r| {
+                    Ok((
+                        r.get::<_, String>(0).unwrap_or_default(),
+                        r.get::<_, String>(1).unwrap_or_default(),
+                        r.get::<_, String>(2).unwrap_or_default(),
+                        r.get::<_, Vec<u8>>(3).unwrap_or_default(),
+                        r.get::<_, i64>(4).unwrap_or(0),
+                    ))
+                })
+                .map_err(|e| e.to_string())?;
+            Ok(mapped.filter_map(Result::ok).collect())
+        })?;
+
+        for (origin, realm, username, encrypted, never_save) in rows {
+            // "Never save for this site" markers, Android app logins and
+            // empty entries have no usable web password.
+            let url = tauri::Url::parse(if origin.is_empty() { &realm } else { &origin }).ok();
+            let site = url
+                .as_ref()
+                .filter(|u| u.scheme() == "http" || u.scheme() == "https")
+                .and_then(|u| u.host_str())
+                .map(|h| h.to_string());
+            let (Some(site), false, false) = (site, never_save != 0, encrypted.is_empty()) else {
+                out.skipped += 1;
+                continue;
+            };
+            let Some(password) = decrypt_value(&key, &encrypted, 0) else {
+                out.skipped += 1;
+                continue;
+            };
+            if !seen.insert((site.clone(), username.clone())) {
+                continue; // same login in both databases
+            }
+            out.logins.push(ImportedLogin { site, username, password });
+        }
+    }
+    Ok(out)
+}
+
 /// Reads and decrypts every cookie that can be moved to another browser.
 /// Works on a copy of the database, so it never touches Opera's own file.
 pub fn read_cookies(p: &OperaProfile) -> Result<CookieRead, String> {
