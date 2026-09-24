@@ -6,6 +6,7 @@ import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
 import { hostOf } from "./shared/api.js";
 import { siteIcon, injectRefractionFilter, watchCustomWallpaper } from "./shared/glass.js";
+import { avatarHtml } from "./shared/accounts.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -22,7 +23,13 @@ function render() {
   document.getElementById("site").title = state.url;
   const holder = document.getElementById("site-icon");
   holder.replaceChildren(siteIcon(state.url, { label: title, knownFavicon: state.favicon }));
-  appWindow.setTitle(title).catch(() => {});
+  // Signed in as another account than Main: its avatar leads the bar.
+  const account = info.account;
+  if (account) {
+    holder.insertAdjacentHTML("afterbegin", avatarHtml(account, 18));
+    document.getElementById("site").title = `${account.name} · ${state.url}`;
+  }
+  appWindow.setTitle(account ? `${title} (${account.name})` : title).catch(() => {});
 }
 
 function paintButtons() {

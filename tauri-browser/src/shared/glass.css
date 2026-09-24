@@ -316,3 +316,10 @@ html.glass #shields-btn { color: #5ef0b4; border-radius: 13px; }
 html.glass #shields-btn:hover { background: rgba(255, 255, 255, 0.16); }
 html.glass #shields-btn.off { color: var(--lg-text-faint); }
 html.glass #shields-count { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.25); }
+
+/* Accounts: tab groups on glass (see style.css for the plain look). */
+html.glass .tab-group { height: 24px; line-height: 24px; border-radius: 12px; box-shadow: var(--lg-edge), 0 2px 8px color-mix(in srgb, var(--acct) 40%, transparent); }
+html.glass .tab.grouped:not(.active):not(:hover) { background: color-mix(in srgb, var(--acct) 14%, transparent); }
+html.glass .tab.grouped.active { background: var(--lg-gloss), color-mix(in srgb, var(--acct) 30%, var(--lg-tint-strong)); }
+html.glass .tab.grouped::before { left: 14px; right: 14px; bottom: 2px; }
+html.glass #account-btn .acct-avatar.main { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.35); }

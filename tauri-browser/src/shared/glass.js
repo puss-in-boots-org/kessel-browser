@@ -76,11 +76,57 @@ function writeStorage(key, value) {
   try {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, value);
+    shareSoon(key);
     return true;
   } catch {
     return false; // quota exceeded / storage unavailable
   }
 }
+
+// --- Account tabs ---------------------------------------------------------------
+// A Kessel page inside an account's tab (see src-tauri/src/accounts.rs) runs
+// in that account's own data folder, with its own -- empty -- localStorage.
+// So Main's pages hand the wallpaper and toolbar geometry to Rust whenever
+// they change, and pages in an account's tab copy them from there on load.
+
+const SHARED_KEYS = [CUSTOM_KEY, TONE_KEY, CHROME_KEY];
+const ipc = (cmd, args) => window.__TAURI__?.core?.invoke?.(cmd, args) ?? Promise.reject(new Error("no IPC"));
+const changedKeys = new Set();
+let shareTimer = null;
+
+function shareSoon(key) {
+  if (!SHARED_KEYS.includes(key)) return;
+  changedKeys.add(key);
+  clearTimeout(shareTimer);
+  shareTimer = setTimeout(() => {
+    sharePageStorage([...changedKeys]);
+    changedKeys.clear();
+  }, 300);
+}
+
+// Called with no keys by the toolbar on startup, to share everything once.
+export function sharePageStorage(keys = SHARED_KEYS) {
+  const values = Object.fromEntries(keys.map((k) => [k, readStorage(k)]));
+  return ipc("share_page_storage", { values }).catch(() => {});
+}
+
+async function adoptSharedStorage() {
+  const shared = await ipc("shared_page_storage").catch(() => null);
+  if (!shared) return; // a Main page: nothing to copy
+  for (const [key, value] of Object.entries(shared)) {
+    if (!SHARED_KEYS.includes(key) || readStorage(key) === value) continue;
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      continue;
+    }
+    // This page's own listeners (alignToChrome, watchCustomWallpaper).
+    window.dispatchEvent(new StorageEvent("storage", { key }));
+  }
+  if (lastSettings) applyGlass(lastSettings);
+}
+adoptSharedStorage();
 
 // --- Settings -> <html> -------------------------------------------------------
 

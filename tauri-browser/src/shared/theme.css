@@ -335,3 +335,29 @@ label.label {
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 38%);
   mix-blend-mode: soft-light;
 }
+
+/* Account avatars (shared/accounts.js): Main is a person glyph, other
+   accounts their initial on their colour. */
+.acct-avatar {
+  --size: 22px;
+  width: var(--size);
+  height: var(--size);
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--size) * 0.5);
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--acct) 78%, #fff), var(--acct));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 1px 3px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+.acct-avatar.main {
+  color: var(--text-dim);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  text-shadow: none;
+}

@@ -488,3 +488,63 @@ html, body { overflow: hidden; user-select: none; }
   pointer-events: none;
 }
 #shields-count[hidden] { display: none; }
+
+/* --- Accounts: address-bar avatar + tab groups (see accounts.rs) --- */
+#account-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+#account-btn:hover { transform: scale(1.08); }
+#account-btn:active { transform: scale(0.94); }
+
+/* The group's label, in front of its tabs. */
+.tab-group {
+  align-self: center;
+  flex-shrink: 0;
+  max-width: 120px;
+  height: 22px;
+  padding: 0 9px;
+  margin: 0 1px 0 4px;
+  border-radius: 11px;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 22px;
+  color: #fff;
+  background: var(--acct);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--acct) 45%, transparent);
+  transition: transform var(--dur-fast) ease, filter var(--dur-fast) ease;
+}
+.tab-group:hover { filter: brightness(1.1); }
+.tab-group:active { transform: scale(0.95); }
+.tab-group.collapsed { opacity: 0.85; }
+
+/* A grouped tab: tinted with its account's colour, underlined in it. */
+.tab.grouped { background: color-mix(in srgb, var(--acct) 9%, transparent); }
+.tab.grouped:hover, .tab.grouped.active { background: color-mix(in srgb, var(--acct) 16%, var(--surface)); }
+.tab.grouped::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--acct);
+  opacity: 0.8;
+}
+.tab.grouped.active::after { background: var(--acct); }

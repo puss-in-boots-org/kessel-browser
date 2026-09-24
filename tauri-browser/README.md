@@ -20,6 +20,24 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Accounts** (`src-tauri/src/accounts.rs`): be signed in as different
+  people at once, like Chrome profiles or Firefox containers, but in one
+  window. The avatar at the right end of the address bar shows the current
+  tab's account and opens the account menu: new tab or new window as any
+  account, add, rename, delete. Each extra account keeps its own cookies,
+  storage and cache in its own WebView2 data folder
+  (`<local app data>/accounts/<id>`); "Main" is the usual one the importer
+  fills. An account's tabs sit together as a coloured group with a label
+  chip (click to fold, right-click for "new tab / new window / close
+  group"). New tabs, links, popups, sleeping tabs, tear-offs, reopened and
+  restored tabs all stay in their account. Right-click a tab → "Open as …"
+  to load the same page as someone else. Deleting an account closes its
+  tabs and erases its folder. Shields, history, bookmarks and passwords
+  stay shared. Cost: an account adds one set of WebView2 processes, only
+  while one of its tabs is open (WebView2 can't share them across data
+  folders).
+  - Ctrl+Shift+T and Settings' "Reopen" used to open the tab without it
+    ever appearing in the tab strip; fixed on the way.
 - **Links that open a new window work.** `target="_blank"` links,
   Shift-click and `window.open()` did nothing at all: Tauri's opener
   plugin grabbed them to open in the system browser, a call websites

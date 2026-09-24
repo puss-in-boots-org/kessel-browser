@@ -7,7 +7,8 @@
 import { icon, faviconLetter } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { ENGINES, resolveInput, toast, hostOf } from "./shared/api.js";
-import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon } from "./shared/glass.js";
+import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
+import { avatarHtml, accountName } from "./shared/accounts.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -24,7 +25,10 @@ setInterval(() => invoke("toolbar_heartbeat").catch(() => {}), 1000);
 // Each tab maps to a real native webview created by Rust. This module only
 // tracks id/url/title/loading for the tab-strip UI and forwards actions.
 
-// { id, url, title, loading, discarded, neverCreated, lastActiveAt }
+// { id, url, title, loading, discarded, neverCreated, lastActiveAt, account }
+// `account`: the id of the account the tab is signed in as, null for Main
+// (see src-tauri/src/accounts.rs). An account's tabs stay together in the
+// strip as a coloured, collapsible group.
 // `discarded` tabs have no live webview backing them right now -- either
 // they were idle and got their webview destroyed to free memory (see
 // wireTabDiscarding), or (neverCreated: true) they're a restored-session
@@ -51,6 +55,99 @@ function nextPlaceholderId() {
 
 function findTab(id) {
   return tabs.find((t) => t.id === id);
+}
+
+// Rust's tab-cycling order (Ctrl+Tab, Ctrl+1..9) follows the strip's.
+// Sleeping placeholders have no real (u32) id to send.
+function syncTabOrder() {
+  invoke("set_tab_order", { ids: tabs.filter((t) => t.id > 0).map((t) => t.id) }).catch(() => {});
+}
+
+// --- Accounts ----------------------------------------------------------------
+
+let accounts = []; // [{ id, name, color }], Main not included
+const collapsedGroups = new Set(); // account ids whose tab group is folded
+
+function accountById(id) {
+  return (id && accounts.find((a) => a.id === id)) || null;
+}
+
+function activeAccount() {
+  return findTab(activeTabId)?.account ?? null;
+}
+
+// A new tab joins its account's group: right after that account's last tab
+// (Main tabs, and the first tab of an account, go at the end).
+function insertTab(tab) {
+  let last = -1;
+  if (tab.account) tabs.forEach((t, i) => { if (t.account === tab.account) last = i; });
+  if (last === -1) tabs.push(tab);
+  else tabs.splice(last + 1, 0, tab);
+  if (last !== -1) syncTabOrder();
+}
+
+// Keeps every account's tabs contiguous (a dragged tab can't leave its
+// group, or split one: it can't change which account it's signed in as).
+function normalizeGroups() {
+  const out = [];
+  const seen = new Set();
+  for (const t of tabs) {
+    if (!t.account) out.push(t);
+    else if (!seen.has(t.account)) {
+      seen.add(t.account);
+      out.push(...tabs.filter((x) => x.account === t.account));
+    }
+  }
+  tabs = out;
+}
+
+function updateAccountButton() {
+  const btn = document.getElementById("account-btn");
+  const account = accountById(activeAccount());
+  btn.innerHTML = avatarHtml(account, 20);
+  btn.title = `This tab: ${accountName(account)}. Open a tab or window as another account`;
+}
+
+async function toggleAccountsPopup() {
+  const rect = document.getElementById("account-btn").getBoundingClientRect();
+  await invoke("toggle_accounts_popup", { x: rect.right + 6, y: rect.bottom }).catch(() => {});
+}
+
+// The group's label in the tab strip: click folds/unfolds the group,
+// right-click has the group's actions.
+function groupChip(account) {
+  const count = tabs.filter((t) => t.account === account.id).length;
+  const collapsed = collapsedGroups.has(account.id);
+  const chip = document.createElement("div");
+  chip.className = "tab-group" + (collapsed ? " collapsed" : "");
+  chip.dataset.group = account.id;
+  chip.style.setProperty("--acct", account.color);
+  chip.textContent = collapsed ? `${account.name} · ${count}` : account.name;
+  chip.title = `${account.name}: ${count} tab${count === 1 ? "" : "s"} signed in as this account.\nClick to ${collapsed ? "expand" : "collapse"}, right-click for more.`;
+  chip.addEventListener("click", () => {
+    if (collapsed) collapsedGroups.delete(account.id);
+    else collapsedGroups.add(account.id);
+    renderTabs();
+  });
+  chip.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    showContextMenu(
+      [
+        { label: `New tab as ${account.name}`, iconName: "plus", action: () => createTab(undefined, account.id) },
+        { label: "Open in a new window", iconName: "popOut", action: () => invoke("open_account_tab", { account: account.id, window: true }).catch((err) => toast(String(err))) },
+        {
+          label: "Close group",
+          iconName: "close",
+          action: async () => {
+            for (const t of tabs.filter((x) => x.account === account.id)) await closeTab(t.id);
+          },
+        },
+      ],
+      e.clientX,
+      e.clientY
+    );
+  });
+  return chip;
 }
 
 // Inserts as the first child rather than replacing innerHTML -- rail-shield
@@ -148,7 +245,7 @@ function pushToolbarSnapshot() {
   clearTimeout(snapshotTimer);
   snapshotTimer = setTimeout(() => {
     const snapshot = {
-      tabs: tabs.map(({ id, url, title, favicon, discarded, neverCreated, userTitled }) => ({ id, url, title, favicon, discarded, neverCreated, userTitled })),
+      tabs: tabs.map(({ id, url, title, favicon, discarded, neverCreated, userTitled, account }) => ({ id, url, title, favicon, discarded, neverCreated, userTitled, account })),
       activeTabId,
       placeholderCounter,
     };
@@ -181,21 +278,22 @@ async function restoreAfterToolbarReload() {
     const tab = liveById.get(saved.id);
     if (!tab) continue; // closed while the toolbar was down
     liveById.delete(saved.id);
-    restored.push({ ...saved, url: tab.url, title: tab.title || saved.title, favicon: tab.favicon ?? saved.favicon, loading: false, lastActiveAt: now });
+    restored.push({ ...saved, url: tab.url, title: tab.title || saved.title, favicon: tab.favicon ?? saved.favicon, account: tab.account ?? null, loading: false, lastActiveAt: now });
   }
   for (const tab of liveById.values()) {
     const title = tab.title || INTERNAL_TITLES[tab.url] || hostOf(tab.url);
-    restored.push({ id: tab.id, url: tab.url, title, favicon: tab.favicon, userTitled: !!tab.title, loading: false, lastActiveAt: now });
+    restored.push({ id: tab.id, url: tab.url, title, favicon: tab.favicon, userTitled: !!tab.title, account: tab.account ?? null, loading: false, lastActiveAt: now });
   }
 
   tabs = restored;
+  normalizeGroups();
   activeTabId = live.active ?? restored.find((t) => !t.discarded)?.id ?? null;
   placeholderCounter = Math.min(snapshot?.placeholderCounter ?? 0, ...restored.map((t) => t.id), 0);
   openPanelKind = live.panel ?? null;
   renderTabs();
   updateAddressBarForActiveTab();
   updatePanelHighlights();
-  invoke("set_tab_order", { ids: tabs.map((t) => t.id) }).catch(() => {});
+  syncTabOrder();
   return true;
 }
 
@@ -203,12 +301,22 @@ function renderTabs() {
   pushToolbarSnapshot();
   const container = document.getElementById("tabs");
   container.innerHTML = "";
+  let prevGroup = null;
   for (const tab of tabs) {
+    // An account's tabs: a labelled chip in front, its colour on each tab,
+    // and (folded) only the chip -- plus the active tab if it's in there.
+    const account = accountById(tab.account);
+    if (account && account.id !== prevGroup) container.appendChild(groupChip(account));
+    prevGroup = account?.id ?? null;
+    if (account && collapsedGroups.has(account.id) && tab.id !== activeTabId) continue;
+
     const el = document.createElement("div");
     el.className = "tab" +
       (tab.id === activeTabId ? " active" : "") +
       (tab.justCreated ? " tab-enter" : "") +
-      (tab.discarded ? " discarded" : "");
+      (tab.discarded ? " discarded" : "") +
+      (account ? " grouped" : "");
+    if (account) el.style.setProperty("--acct", account.color);
     tab.justCreated = false;
     if (tab.discarded) el.title = "Sleeping to save memory -- click to reload";
     el.dataset.tabId = String(tab.id);
@@ -302,9 +410,19 @@ function wireTabDrag(el, tab) {
   el.addEventListener("dragend", (e) => {
     el.classList.remove("dragging");
     draggedTabId = null;
-    const newOrderIds = Array.from(document.getElementById("tabs").children).map((c) => parseInt(c.dataset.tabId, 10));
-    tabs.sort((a, b) => newOrderIds.indexOf(a.id) - newOrderIds.indexOf(b.id));
-    invoke("set_tab_order", { ids: tabs.map((t) => t.id) }).catch(() => {});
+    // The strip's new order. A folded group's hidden tabs aren't in the
+    // DOM -- they stay right behind their group's chip.
+    const children = Array.from(document.getElementById("tabs").children);
+    const shown = new Set(children.filter((c) => c.dataset.tabId).map((c) => parseInt(c.dataset.tabId, 10)));
+    const order = [];
+    for (const c of children) {
+      if (c.dataset.group) order.push(...tabs.filter((t) => t.account === c.dataset.group && !shown.has(t.id)));
+      else if (c.dataset.tabId) order.push(findTab(parseInt(c.dataset.tabId, 10)));
+    }
+    tabs = [...order.filter(Boolean), ...tabs.filter((t) => !order.includes(t))];
+    normalizeGroups();
+    syncTabOrder();
+    renderTabs();
     persistSession();
     // Dropped somewhere that isn't the tab strip -- below the toolbar (over
     // the page) or outside the window entirely: tear it off.
@@ -332,7 +450,7 @@ async function tearOffTab(tab, e) {
   if (!tab.url) return;
   const title = tab.title && tab.title !== "New Tab" ? tab.title : "";
   try {
-    await invoke("pop_out", { url: tab.url, title, ...popOutPosition(e) });
+    await invoke("pop_out", { url: tab.url, title, account: tab.account ?? null, ...popOutPosition(e) });
   } catch (err) {
     toast(`Couldn't pop out: ${err}`);
     return;
@@ -350,15 +468,8 @@ async function popOutPinned(p, e) {
 // --- Per-tab right-click context menu --------------------------------------
 
 function showTabContextMenu(tab, x, y) {
-  document.querySelector(".tab-context-menu")?.remove();
-  const menu = document.createElement("div");
-  menu.className = "menu tab-context-menu";
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-  menu.style.right = "auto";
-
   const items = [
-    { label: "Duplicate tab", iconName: "copy", action: () => createTab(tab.url) },
+    { label: "Duplicate tab", iconName: "copy", action: () => createTab(tab.url, tab.account ?? null) },
     { label: "Close tab", iconName: "close", action: () => closeTab(tab.id) },
     {
       label: "Close other tabs",
@@ -375,11 +486,31 @@ function showTabContextMenu(tab, x, y) {
   if (tab.url && !tab.url.startsWith("kessel://") && !pinned.some((p) => p.url === tab.url)) {
     items.push({ label: "Pin to rail", iconName: "pin", action: () => pinUrl(tab.url, tab.title !== "New Tab" ? tab.title : null) });
   }
+  // The same page, signed in as someone else.
+  if (tab.url && accounts.length) {
+    for (const account of [null, ...accounts]) {
+      if ((account?.id ?? null) === (tab.account ?? null)) continue;
+      items.push({ label: `Open as ${accountName(account)}`, iconName: "user", action: () => createTab(tab.url, account?.id ?? null) });
+    }
+  }
+  showContextMenu(items, x, y);
+}
+
+function showContextMenu(items, x, y) {
+  document.querySelector(".tab-context-menu")?.remove();
+  const menu = document.createElement("div");
+  menu.className = "menu tab-context-menu";
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  menu.style.right = "auto";
 
   for (const item of items) {
     const row = document.createElement("div");
     row.className = "menu-item";
-    row.innerHTML = `${icon(item.iconName, 14)}<span>${item.label}</span>`;
+    row.innerHTML = icon(item.iconName, 14);
+    const label = document.createElement("span");
+    label.textContent = item.label; // account names are user-typed
+    row.appendChild(label);
     row.addEventListener("click", () => {
       menu.remove();
       item.action();
@@ -408,6 +539,7 @@ function updateAddressBarForActiveTab() {
   updateStarButton();
   updateNavButtons();
   updateShieldsButton();
+  updateAccountButton();
 }
 
 // --- Shields button (address bar) -------------------------------------------
@@ -465,7 +597,7 @@ async function activateTab(id) {
     // It reloads from scratch: scroll position and any unsaved page state
     // from before it was discarded is gone, same trade every browser's
     // "memory saver" makes.
-    const newId = await invoke("new_tab", { url: tab.url });
+    const newId = await invoke("new_tab", { url: tab.url, account: tab.account ?? null });
     tab.id = newId;
     tab.discarded = false;
     tab.neverCreated = false;
@@ -473,7 +605,7 @@ async function activateTab(id) {
     // new_tab always appends to Rust's own tab-cycling order -- resync it
     // to match the toolbar's visual order so Ctrl+Tab / Ctrl+1..9 don't
     // drift from what's actually on screen.
-    invoke("set_tab_order", { ids: tabs.map((t) => t.id) }).catch(() => {});
+    syncTabOrder();
     activeTabId = newId;
   } else {
     activeTabId = id;
@@ -484,13 +616,18 @@ async function activateTab(id) {
   persistSession();
 }
 
-async function createTab(url) {
-  const id = await invoke("new_tab", { url: url ?? null });
+// A new tab opens in the same account as the tab you're on (so "+" and
+// Ctrl+T inside an account's group stay signed in as that account), unless
+// `account` says otherwise (null = Main).
+async function createTab(url, account = activeAccount()) {
+  account = accountById(account)?.id ?? null;
+  const id = await invoke("new_tab", { url: url ?? null, account });
   // Resolve what Rust will actually open this tab to, so the omnibox/star/
   // pin logic below has an accurate url immediately -- don't wait on a
   // possibly-unreliable navigation event for internal kessel:// pages.
   const resolvedUrl = url ?? (currentSettings()?.homepage || "kessel://newtab");
-  tabs.push({ id, url: resolvedUrl, title: "New Tab", justCreated: true, loading: false, lastActiveAt: Date.now() });
+  insertTab({ id, url: resolvedUrl, title: "New Tab", account, justCreated: true, loading: false, lastActiveAt: Date.now() });
+  if (account) collapsedGroups.delete(account);
   activeTabId = id;
   renderTabs();
   updateAddressBarForActiveTab();
@@ -500,11 +637,12 @@ async function createTab(url) {
 
 // Adds a tab entry with NO webview behind it yet -- used for session-restore
 // tabs you aren't looking at right now. Costs nothing until you click it.
-function addPlaceholderTab(url) {
+function addPlaceholderTab(url, account = null) {
   const id = nextPlaceholderId();
   tabs.push({
     id,
     url,
+    account: accountById(account)?.id ?? null,
     title: INTERNAL_TITLES[url] || hostOf(url),
     discarded: true,
     neverCreated: true,
@@ -611,10 +749,10 @@ function persistSession() {
   if (!settings || !settings.restore_tabs) return;
   // Settings/Passwords are excluded on purpose: restoring one as a plain
   // tab would bypass the singleton dedup the next time it's reopened.
-  const urls = tabs
-    .map((t) => t.url)
-    .filter((u) => u && (u.startsWith("http") || u.startsWith("kessel://")) && !SINGLETON_ROUTES.has(u));
-  invoke("save_session", { urls }).catch(() => {});
+  const saved = tabs
+    .filter((t) => t.url && (t.url.startsWith("http") || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(t.url))
+    .map((t) => ({ url: t.url, account: t.account ?? null }));
+  invoke("save_session", { tabs: saved }).catch(() => {});
 }
 
 // --- Bookmarks --------------------------------------------------------
@@ -821,12 +959,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
   injectRefractionFilter();
   watchCustomWallpaper(currentSettings);
+  // Account tabs copy the wallpaper and our geometry from Main (glass.js).
+  sharePageStorage();
   paintStaticIcons();
   wireWindowControls();
   renderEngineMenu();
 
   await refreshBookmarks();
   await refreshPinned();
+  accounts = (await invoke("get_accounts").catch(() => null))?.accounts ?? [];
   blockedCount = await invoke("get_blocked_count").catch(() => 0);
   updateShield();
   updateDownloadsBadge();
@@ -845,10 +986,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   // still running instead of opening a fresh one.
   let restored = await restoreAfterToolbarReload();
   if (!restored && settings?.restore_tabs) {
-    const urls = await invoke("get_session").catch(() => []);
-    if (urls && urls.length) {
-      await createTab(urls[0]);
-      for (let i = 1; i < urls.length; i++) addPlaceholderTab(urls[i]);
+    const saved = await invoke("get_session").catch(() => []);
+    if (saved && saved.length) {
+      await createTab(saved[0].url, saved[0].account);
+      for (let i = 1; i < saved.length; i++) addPlaceholderTab(saved[i].url, saved[i].account);
+      normalizeGroups();
       renderTabs();
       restored = true;
     }
@@ -876,6 +1018,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
+  document.getElementById("account-btn").addEventListener("click", toggleAccountsPopup);
   document.getElementById("engine-btn").addEventListener("click", (e) => {
     e.stopPropagation();
     const menu = document.getElementById("engine-menu");
@@ -993,17 +1136,33 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   await listen("tab-created", (event) => {
-    const { id, url, activate } = event.payload;
+    const { id, url, activate, account = null } = event.payload;
     if (!findTab(id)) {
-      tabs.push({ id, url, title: INTERNAL_TITLES[url] || hostOf(url), justCreated: true, loading: false, lastActiveAt: Date.now() });
+      insertTab({ id, url, title: INTERNAL_TITLES[url] || hostOf(url), account, justCreated: true, loading: false, lastActiveAt: Date.now() });
       if (activate) {
         activeTabId = id;
+        if (account) collapsedGroups.delete(account);
         updateAddressBarForActiveTab();
       } else {
         toast("Opened in a new tab");
       }
       renderTabs();
       persistSession();
+    }
+  });
+
+  await listen("accounts-changed", (event) => {
+    accounts = event.payload || [];
+    renderTabs();
+    updateAccountButton();
+  });
+
+  // A deleted account's tabs go too -- sleeping ones included, which only
+  // this toolbar knows about.
+  await listen("account-removed", async (event) => {
+    collapsedGroups.delete(event.payload);
+    for (const t of tabs.filter((x) => x.account === event.payload)) {
+      await closeTab(t.id, { remember: false });
     }
   });
 

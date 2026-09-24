@@ -1,6 +1,7 @@
 // Prevents an additional console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod accounts;
 mod adblock;
 mod import;
 mod shields;
@@ -87,7 +88,10 @@ pub(crate) struct BrowserState {
     next_id: AtomicU32,
     next_download_id: AtomicU32,
     data_dir: PathBuf,
-    closed_stack: Mutex<Vec<String>>,
+    // Recently closed tabs: (url, account).
+    closed_stack: Mutex<Vec<(String, Option<String>)>>,
+    // Tab or pop-out id -> its account (see accounts.rs); Main isn't listed.
+    tab_accounts: Mutex<HashMap<u32, String>>,
     pub(crate) store: Store,
     // "kessel://settings" / "kessel://passwords" -> the one tab id showing
     // it, if any. Only used as a fallback path (e.g. typing kessel://settings
@@ -263,13 +267,16 @@ fn toolbar_bounds(window: &Window) -> tauri::Result<(LogicalPosition<f64>, Logic
 
 // --- Tab creation / switching -----------------------------------------------
 
+// `account`: which account's sign-ins the tab uses (None = Main).
 fn create_tab_internal(
     app: &tauri::AppHandle,
     state: &BrowserState,
     url: Option<String>,
+    account: Option<String>,
 ) -> Result<u32, String> {
     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
     let label = format!("content-{}", id);
+    let account = app.state::<accounts::Accounts>().resolve(account.as_deref());
 
     let resolved = match url.as_deref() {
         None => {
@@ -296,9 +303,12 @@ fn create_tab_internal(
     let app_for_download = app.clone();
     let data_dir = state.data_dir.clone();
 
-    let builder = with_farbling(app, WebviewBuilder::new(&label, webview_url))
+    let builder = with_account(app, with_farbling(app, WebviewBuilder::new(&label, webview_url)), account.as_deref())
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
-        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features) })
+        .on_new_window({
+            let (app, account) = (app.clone(), account.clone());
+            move |url, features| open_new_window(&app, url, features, account.clone())
+        })
         .on_navigation(move |nav_url| {
             // Kessel's own pages (newtab/settings/passwords) load through
             // Tauri's own asset URL -- in a dev build that's a local
@@ -415,6 +425,9 @@ fn create_tab_internal(
         .map_err(|e| e.to_string())?;
 
     attach_shields(app, &webview, id);
+    if let Some(account) = account {
+        state.tab_accounts.lock().unwrap().insert(id, account);
+    }
     state.tabs.lock().unwrap().insert(id, webview);
     state.order.lock().unwrap().push(id);
     reraise_side_panel(app, state);
@@ -527,7 +540,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
     let app_for_nav = app.clone();
     let builder = with_farbling(app, WebviewBuilder::new("side-panel", webview_url))
         .initialization_script(&script)
-        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features) })
+        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features, None) })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
@@ -665,6 +678,8 @@ pub(crate) struct Popout {
     // navigation -- the content webview's own url() is the raw asset URL for
     // internal pages, which create_tab_internal can't take back.
     url: String,
+    // Its account (None = Main), kept when it's docked back into a tab.
+    account: Option<String>,
 }
 
 fn is_internal_nav(nav_url: &tauri::Url) -> bool {
@@ -684,8 +699,10 @@ fn create_popout_internal(
     title: String,
     x: f64,
     y: f64,
+    account: Option<String>,
 ) -> Result<u32, String> {
     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
+    let account = app.state::<accounts::Accounts>().resolve(account.as_deref());
     let webview_url = if let Some(route) = internal_route(&url) {
         WebviewUrl::App(route.into())
     } else {
@@ -706,13 +723,15 @@ fn create_popout_internal(
         .build()
         .map_err(|e| e.to_string())?;
 
-    // The bar learns which pop-out it belongs to before any of its own
-    // scripts run.
+    // The bar learns which pop-out it belongs to (and whose account it's
+    // signed in as) before any of its own scripts run.
+    let account_info = account.as_deref().and_then(|a| app.state::<accounts::Accounts>().get(a));
     let bar_init = format!(
-        "window.__KESSEL_POPOUT__ = {{ id: {}, url: {}, title: {} }};",
+        "window.__KESSEL_POPOUT__ = {{ id: {}, url: {}, title: {}, account: {} }};",
         id,
         serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".into()),
-        serde_json::to_string(&title).unwrap_or_else(|_| "\"\"".into())
+        serde_json::to_string(&title).unwrap_or_else(|_| "\"\"".into()),
+        serde_json::to_string(&account_info).unwrap_or_else(|_| "null".into())
     );
     let bar_label = format!("popout-bar-{}", id);
     let bar = window
@@ -727,9 +746,12 @@ fn create_popout_internal(
     let bar_label_for_nav = bar_label.clone();
     let content_label = format!("popout-content-{}", id);
     let content_label_for_nav = content_label.clone();
-    let content_builder = with_farbling(app, WebviewBuilder::new(&content_label, webview_url))
+    let content_builder = with_account(app, with_farbling(app, WebviewBuilder::new(&content_label, webview_url)), account.as_deref())
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
-        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features) })
+        .on_new_window({
+            let (app, account) = (app.clone(), account.clone());
+            move |url, features| open_new_window(&app, url, features, account.clone())
+        })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
@@ -763,7 +785,9 @@ fn create_popout_internal(
             }
         }
         WindowEvent::Destroyed => {
-            app_for_events.state::<BrowserState>().popouts.lock().unwrap().remove(&id);
+            let st = app_for_events.state::<BrowserState>();
+            st.popouts.lock().unwrap().remove(&id);
+            st.tab_accounts.lock().unwrap().remove(&id);
         }
         _ => {}
     });
@@ -771,16 +795,26 @@ fn create_popout_internal(
     // webviews, so they're already on top (see raise_resize_borders).
     let _ = window.set_resizable(true);
 
-    state.popouts.lock().unwrap().insert(id, Popout { window, url });
+    if let Some(account) = &account {
+        state.tab_accounts.lock().unwrap().insert(id, account.clone());
+    }
+    state.popouts.lock().unwrap().insert(id, Popout { window, url, account });
     Ok(id)
 }
 
 #[tauri::command]
-async fn pop_out(app: tauri::AppHandle, url: String, title: Option<String>, x: f64, y: f64) -> Result<u32, String> {
+async fn pop_out(
+    app: tauri::AppHandle,
+    url: String,
+    title: Option<String>,
+    x: f64,
+    y: f64,
+    account: Option<String>,
+) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        create_popout_internal(&app2, &state, url, title.unwrap_or_default(), x, y)
+        create_popout_internal(&app2, &state, url, title.unwrap_or_default(), x, y, account)
     })
     .await
     .and_then(|r| r)
@@ -798,10 +832,7 @@ async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
         let popout = state.popouts.lock().unwrap().remove(&id);
         let popout = popout.ok_or_else(|| "pop-out window not found".to_string())?;
         let _ = popout.window.close();
-        let tab_id = create_tab_internal(&app2, &state, Some(popout.url.clone()))?;
-        switch_tab_internal(&state, tab_id)?;
-        let payload = serde_json::json!({ "id": tab_id, "url": popout.url, "activate": true });
-        let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+        let tab_id = open_tab_in_front(&app2, Some(popout.url), popout.account)?;
         let _ = state.window.set_focus();
         Ok(tab_id)
     })
@@ -923,15 +954,18 @@ fn get_open_tabs(state: tauri::State<BrowserState>) -> serde_json::Value {
     let tabs = state.tabs.lock().unwrap();
     let order = state.order.lock().unwrap().clone();
     let meta = state.tab_meta.lock().unwrap();
+    let accounts = state.tab_accounts.lock().unwrap();
     let list: Vec<serde_json::Value> = order
         .iter()
         .filter_map(|id| {
             let webview = tabs.get(id)?;
             let url = webview.url().map(|u| logical_tab_url(&u)).unwrap_or_default();
             let m = meta.get(id).cloned().unwrap_or_default();
-            Some(serde_json::json!({ "id": id, "url": url, "title": m.title, "favicon": m.favicon }))
+            let account = accounts.get(id);
+            Some(serde_json::json!({ "id": id, "url": url, "title": m.title, "favicon": m.favicon, "account": account }))
         })
         .collect();
+    drop(accounts);
     drop(meta);
     drop(tabs);
     serde_json::json!({
@@ -1311,6 +1345,7 @@ fn open_new_window(
     app: &tauri::AppHandle,
     url: tauri::Url,
     features: tauri::webview::NewWindowFeatures,
+    account: Option<String>,
 ) -> tauri::webview::NewWindowResponse<tauri::Wry> {
     use tauri::webview::NewWindowResponse;
     let web = matches!(url.scheme(), "http" | "https");
@@ -1319,11 +1354,7 @@ fn open_new_window(
         let url = url.to_string();
         // After WebView2's event has returned: creating a tab re-enters it.
         let _ = app.run_on_main_thread(move || {
-            let state = app2.state::<BrowserState>();
-            if let Ok(id) = create_tab_internal(&app2, &state, Some(url.clone())) {
-                let _ = switch_tab_internal(&state, id);
-                let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", serde_json::json!({ "id": id, "url": url, "activate": true }));
-            }
+            let _ = open_tab_in_front(&app2, Some(url), account);
         });
         return NewWindowResponse::Deny;
     }
@@ -1338,11 +1369,40 @@ fn open_new_window(
         .on_document_title_changed(|window, title| {
             let _ = window.set_title(&title);
         })
-        .on_new_window(move |url, features| open_new_window(&app2, url, features))
+        // The popup shares its opener's WebView2 environment (through
+        // window_features), so it's signed in as the same account.
+        .on_new_window(move |url, features| open_new_window(&app2, url, features, account.clone()))
         .build();
     match built {
         Ok(window) => NewWindowResponse::Create { window },
         Err(_) => NewWindowResponse::Deny,
+    }
+}
+
+// Opens a new tab in `account`, switches to it and tells the toolbar.
+fn open_tab_in_front(app: &tauri::AppHandle, url: Option<String>, account: Option<String>) -> Result<u32, String> {
+    let state = app.state::<BrowserState>();
+    let url = url.unwrap_or_else(|| state.store.settings.lock().unwrap().homepage.clone());
+    let id = create_tab_internal(app, &state, Some(url.clone()), account)?;
+    switch_tab_internal(&state, id)?;
+    let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+    let payload = serde_json::json!({ "id": id, "url": url, "activate": true, "account": account });
+    let _ = app.emit_to(TOOLBAR_LABEL, "tab-created", payload);
+    Ok(id)
+}
+
+// The account a tab's or pop-out's page webview belongs to, by its label.
+fn account_of_label(state: &BrowserState, label: &str) -> Option<String> {
+    let id: u32 = label.strip_prefix("content-").or_else(|| label.strip_prefix("popout-content-"))?.parse().ok()?;
+    state.tab_accounts.lock().unwrap().get(&id).cloned()
+}
+
+// Points an account's webview at that account's WebView2 data folder
+// (Main: left as is).
+fn with_account(app: &tauri::AppHandle, builder: WebviewBuilder<tauri::Wry>, account: Option<&str>) -> WebviewBuilder<tauri::Wry> {
+    match app.state::<accounts::Accounts>().data_dir(account) {
+        Some(dir) => builder.data_directory(dir),
+        None => builder,
     }
 }
 
@@ -1878,6 +1938,206 @@ async fn close_shields_popup(app: tauri::AppHandle) -> Result<(), String> {
     .await
 }
 
+// --- Accounts (see accounts.rs) ------------------------------------------
+//
+// The avatar at the right end of the address bar opens accounts.html: the
+// list of accounts, "new tab" / "new window" signed in as any of them, and
+// adding, renaming and deleting accounts.
+
+const ACCOUNTS_POPUP_LABEL: &str = "accounts-popup";
+const ACCOUNTS_POPUP_WIDTH: f64 = 300.0;
+const ACCOUNTS_POPUP_HEIGHT: f64 = 420.0;
+static ACCOUNTS_POPUP_CLOSED_AT: Mutex<Option<Instant>> = Mutex::new(None);
+
+#[tauri::command]
+fn get_accounts(state: tauri::State<BrowserState>, accounts: tauri::State<accounts::Accounts>) -> serde_json::Value {
+    let active = *state.active.lock().unwrap();
+    let current = active.and_then(|id| state.tab_accounts.lock().unwrap().get(&id).cloned());
+    serde_json::json!({ "accounts": accounts.list(), "current": current })
+}
+
+#[tauri::command]
+fn create_account(
+    app: tauri::AppHandle,
+    webview: Webview,
+    accounts: tauri::State<accounts::Accounts>,
+    name: String,
+) -> Result<accounts::Account, String> {
+    require_internal_page(&webview)?;
+    let account = accounts.create(&name)?;
+    let _ = app.emit("accounts-changed", accounts.list());
+    Ok(account)
+}
+
+#[tauri::command]
+fn rename_account(
+    app: tauri::AppHandle,
+    webview: Webview,
+    accounts: tauri::State<accounts::Accounts>,
+    id: String,
+    name: String,
+) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    accounts.rename(&id, &name)?;
+    let _ = app.emit("accounts-changed", accounts.list());
+    Ok(())
+}
+
+// Deletes an account and everything its sites stored (sign-ins, cookies,
+// cache). Its pop-outs close here; its tabs -- including sleeping ones only
+// the toolbar knows about -- are closed by the toolbar on "account-removed".
+#[tauri::command]
+async fn delete_account(app: tauri::AppHandle, webview: Webview, id: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    app.state::<accounts::Accounts>().remove(&id)?;
+    let app2 = app.clone();
+    let id2 = id.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let windows: Vec<Window> = state
+            .popouts
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|p| p.account.as_deref() == Some(id2.as_str()))
+            .map(|p| p.window.clone())
+            .collect();
+        for window in windows {
+            let _ = window.close();
+        }
+    })
+    .await?;
+    let _ = app.emit("account-removed", &id);
+    let _ = app.emit("accounts-changed", app.state::<accounts::Accounts>().list());
+    // Its folder can only go once WebView2 has let go of it.
+    std::thread::spawn(move || {
+        for _ in 0..60 {
+            std::thread::sleep(Duration::from_secs(1));
+            if app.state::<accounts::Accounts>().try_purge(&id) {
+                return;
+            }
+        }
+    });
+    Ok(())
+}
+
+// A new foreground tab (or pop-out window) signed in as `account` (None =
+// Main), opened on the homepage.
+#[tauri::command]
+async fn open_account_tab(app: tauri::AppHandle, webview: Webview, account: Option<String>, window: bool) -> Result<u32, String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || {
+        if let Some(popup) = app2.get_webview(ACCOUNTS_POPUP_LABEL) {
+            let _ = popup.close();
+        }
+        if !window {
+            return open_tab_in_front(&app2, None, account);
+        }
+        let state = app2.state::<BrowserState>();
+        let homepage = state.store.settings.lock().unwrap().homepage.clone();
+        let (x, y) = state
+            .window
+            .outer_position()
+            .ok()
+            .zip(state.window.scale_factor().ok())
+            .map(|(p, scale)| {
+                let p = p.to_logical::<f64>(scale);
+                (p.x + chrome_left() + 80.0, p.y + chrome_top() + 30.0)
+            })
+            .unwrap_or((140.0, 140.0));
+        create_popout_internal(&app2, &state, homepage, String::new(), x, y, account)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// Same popover behaviour as the Shields popup (see toggle_shields_popup).
+#[tauri::command]
+async fn toggle_accounts_popup(app: tauri::AppHandle, webview: Webview, x: f64, y: f64) -> Result<bool, String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<bool, String> {
+        if let Some(existing) = app2.get_webview(ACCOUNTS_POPUP_LABEL) {
+            let _ = existing.close();
+            *ACCOUNTS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
+            return Ok(false);
+        }
+        let just_closed = ACCOUNTS_POPUP_CLOSED_AT
+            .lock()
+            .unwrap()
+            .map(|t| t.elapsed() < Duration::from_millis(400))
+            .unwrap_or(false);
+        if just_closed {
+            return Ok(false);
+        }
+        let state = app2.state::<BrowserState>();
+        let left = (x - ACCOUNTS_POPUP_WIDTH).max(chrome_left());
+        let popup = state
+            .window
+            .add_child(
+                WebviewBuilder::new(ACCOUNTS_POPUP_LABEL, WebviewUrl::App("accounts.html".into())),
+                LogicalPosition::new(left, y + 6.0),
+                LogicalSize::new(ACCOUNTS_POPUP_WIDTH, ACCOUNTS_POPUP_HEIGHT),
+            )
+            .map_err(|e| e.to_string())?;
+        let _ = popup.set_focus();
+        raise_resize_borders(&state.window);
+        Ok(true)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+#[tauri::command]
+async fn close_accounts_popup(app: tauri::AppHandle) -> Result<(), String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        if let Some(popup) = app2.get_webview(ACCOUNTS_POPUP_LABEL) {
+            let _ = popup.close();
+            *ACCOUNTS_POPUP_CLOSED_AT.lock().unwrap() = Some(Instant::now());
+        }
+    })
+    .await
+}
+
+// Kessel's own pages keep a few things in localStorage (the custom
+// wallpaper, its text tone, the toolbar's geometry -- see shared/glass.js).
+// An account tab's new-tab page runs in that account's data folder, whose
+// localStorage starts out empty, so Main's pages share those values here
+// (share_page_storage) and account pages copy them (shared_page_storage).
+const SHARED_PAGE_KEYS: &[&str] = &["kessel.wallpaper.custom", "kessel.wallpaper.custom.tone", "kessel.chrome"];
+static SHARED_PAGE_STORAGE: Mutex<Option<HashMap<String, Option<String>>>> = Mutex::new(None);
+
+#[tauri::command]
+fn share_page_storage(
+    webview: Webview,
+    state: tauri::State<BrowserState>,
+    values: HashMap<String, Option<String>>,
+) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    if account_of_label(&state, webview.label()).is_some() {
+        return Ok(()); // only Main's copy counts
+    }
+    let mut shared = SHARED_PAGE_STORAGE.lock().unwrap();
+    let shared = shared.get_or_insert_with(HashMap::new);
+    for (key, value) in values {
+        if SHARED_PAGE_KEYS.contains(&key.as_str()) {
+            shared.insert(key, value);
+        }
+    }
+    Ok(())
+}
+
+// Main's values, for a page in an account's tab; None for Main's own pages
+// (they already have them), so asking is cheap everywhere.
+#[tauri::command]
+fn shared_page_storage(webview: Webview, state: tauri::State<BrowserState>) -> Option<HashMap<String, Option<String>>> {
+    require_internal_page(&webview).ok()?;
+    account_of_label(&state, webview.label())?;
+    SHARED_PAGE_STORAGE.lock().unwrap().clone()
+}
+
 // --- Threading bridge --------------------------------------------------
 //
 // IMPORTANT: creating/moving/navigating webviews must happen on the main
@@ -1903,12 +2163,13 @@ where
 
 // --- Tab commands ------------------------------------------------------
 
+// `account`: which account the tab is signed in as (None = Main).
 #[tauri::command]
-async fn new_tab(app: tauri::AppHandle, url: Option<String>) -> Result<u32, String> {
+async fn new_tab(app: tauri::AppHandle, url: Option<String>, account: Option<String>) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let id = create_tab_internal(&app2, &state, url)?;
+        let id = create_tab_internal(&app2, &state, url, account)?;
         switch_tab_internal(&state, id)?;
         Ok(id)
     })
@@ -1916,14 +2177,17 @@ async fn new_tab(app: tauri::AppHandle, url: Option<String>) -> Result<u32, Stri
     .and_then(|r| r)
 }
 
-// Opens a URL in a new tab WITHOUT switching to it.
+// Opens a URL in a new tab WITHOUT switching to it -- in the same account
+// as the tab asking for it.
 #[tauri::command]
-async fn open_background_tab(app: tauri::AppHandle, url: String) -> Result<u32, String> {
+async fn open_background_tab(app: tauri::AppHandle, webview: Webview, url: String) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let id = create_tab_internal(&app2, &state, Some(url.clone()))?;
-        let payload = serde_json::json!({ "id": id, "url": url });
+        let account = account_of_label(&state, webview.label());
+        let id = create_tab_internal(&app2, &state, Some(url.clone()), account)?;
+        let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+        let payload = serde_json::json!({ "id": id, "url": url, "account": account });
         let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", payload);
         Ok(id)
     })
@@ -1951,7 +2215,7 @@ async fn open_singleton_tab(app: tauri::AppHandle, route: String) -> Result<u32,
             // Stale entry (tab was closed since) -- fall through and make a fresh one.
             state.singleton_tabs.lock().unwrap().remove(&route);
         }
-        let id = create_tab_internal(&app2, &state, Some(route.clone()))?;
+        let id = create_tab_internal(&app2, &state, Some(route.clone()), None)?;
         switch_tab_internal(&state, id)?;
         state.singleton_tabs.lock().unwrap().insert(route.clone(), id);
         let payload = serde_json::json!({ "id": id, "url": route, "activate": true });
@@ -1976,11 +2240,12 @@ async fn close_tab(app: tauri::AppHandle, id: u32, url: Option<String>) -> Resul
         drop(tabs);
 
         state.order.lock().unwrap().retain(|&x| x != id);
+        let account = state.tab_accounts.lock().unwrap().remove(&id);
 
         if let Some(u) = url {
             if u.starts_with("http://") || u.starts_with("https://") {
                 let mut stack = state.closed_stack.lock().unwrap();
-                stack.push(u);
+                stack.push((u, account));
                 if stack.len() > 20 {
                     stack.remove(0);
                 }
@@ -2007,13 +2272,11 @@ async fn reopen_closed_tab(app: tauri::AppHandle) -> Result<Option<u32>, String>
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let url = state.closed_stack.lock().unwrap().pop();
-        match url {
-            Some(u) => {
-                let id = create_tab_internal(&app2, &state, Some(u))?;
-                switch_tab_internal(&state, id)?;
-                Ok(Some(id))
-            }
+        let closed = state.closed_stack.lock().unwrap().pop();
+        match closed {
+            // In its old account; open_tab_in_front also puts it in the
+            // tab strip (the toolbar used to never hear about it).
+            Some((url, account)) => open_tab_in_front(&app2, Some(url), account).map(Some),
             None => Ok(None),
         }
     })
@@ -2025,9 +2288,7 @@ async fn reopen_closed_tab(app: tauri::AppHandle) -> Result<Option<u32>, String>
 // blind "pop the last one" that reopen_closed_tab does.
 #[tauri::command]
 fn get_closed_tabs(state: tauri::State<BrowserState>) -> Vec<String> {
-    let mut v = state.closed_stack.lock().unwrap().clone();
-    v.reverse();
-    v
+    state.closed_stack.lock().unwrap().iter().rev().map(|(url, _)| url.clone()).collect()
 }
 
 // Reopens one specific entry from the closed-tabs list (not necessarily
@@ -2037,15 +2298,12 @@ async fn reopen_closed_tab_url(app: tauri::AppHandle, url: String) -> Result<u32
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        {
+        let account = {
             let mut stack = state.closed_stack.lock().unwrap();
-            if let Some(pos) = stack.iter().rposition(|u| u == &url) {
-                stack.remove(pos);
-            }
-        }
-        let id = create_tab_internal(&app2, &state, Some(url))?;
-        switch_tab_internal(&state, id)?;
-        Ok(id)
+            let pos = stack.iter().rposition(|(u, _)| u == &url);
+            pos.and_then(|pos| stack.remove(pos).1)
+        };
+        open_tab_in_front(&app2, Some(url), account)
     })
     .await
     .and_then(|r| r)
@@ -2679,7 +2937,7 @@ async fn side_panel_to_tab(app: tauri::AppHandle) -> Result<u32, String> {
         let state = app2.state::<BrowserState>();
         let url = side_panel_current_url(&state).ok_or("the side panel isn't open")?;
         close_side_panel_internal(&app2, &state)?;
-        let id = create_tab_internal(&app2, &state, Some(url.clone()))?;
+        let id = create_tab_internal(&app2, &state, Some(url.clone()), None)?;
         switch_tab_internal(&state, id)?;
         let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", serde_json::json!({ "id": id, "url": url, "activate": true }));
         Ok(id)
@@ -2709,7 +2967,7 @@ async fn side_panel_pop_out(app: tauri::AppHandle) -> Result<u32, String> {
             })
             .unwrap_or((120.0, 120.0));
         close_side_panel_internal(&app2, &state)?;
-        create_popout_internal(&app2, &state, url, title, x, y)
+        create_popout_internal(&app2, &state, url, title, x, y, None)
     })
     .await
     .and_then(|r| r)
@@ -2792,19 +3050,30 @@ async fn set_chrome_insets(app: tauri::AppHandle, left: f64, top: f64) -> Result
 
 // --- Session restore -------------------------------------------------------
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SessionTab {
+    url: String,
+    #[serde(default)]
+    account: Option<String>,
+}
+
 #[tauri::command]
-fn get_session(state: tauri::State<BrowserState>) -> Vec<String> {
+fn get_session(state: tauri::State<BrowserState>) -> Vec<SessionTab> {
     let path = state.data_dir.join("session.json");
-    fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+    let Ok(text) = fs::read_to_string(path) else { return Vec::new() };
+    serde_json::from_str::<Vec<SessionTab>>(&text)
+        // Saved before accounts existed: just the urls.
+        .or_else(|_| {
+            serde_json::from_str::<Vec<String>>(&text)
+                .map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None }).collect())
+        })
         .unwrap_or_default()
 }
 
 #[tauri::command]
-fn save_session(state: tauri::State<BrowserState>, urls: Vec<String>) {
+fn save_session(state: tauri::State<BrowserState>, tabs: Vec<SessionTab>) {
     let path = state.data_dir.join("session.json");
-    if let Ok(s) = serde_json::to_string(&urls) {
+    if let Ok(s) = serde_json::to_string(&tabs) {
         let _ = fs::write(path, s);
     }
 }
@@ -2886,6 +3155,15 @@ fn main() {
             set_chrome_insets,
             pop_out,
             dock_popout,
+            get_accounts,
+            create_account,
+            rename_account,
+            delete_account,
+            open_account_tab,
+            toggle_accounts_popup,
+            close_accounts_popup,
+            share_page_storage,
+            shared_page_storage,
             toolbar_heartbeat,
             get_open_tabs,
             set_toolbar_snapshot,
@@ -2946,6 +3224,12 @@ fn main() {
             let store = Store::load(data_dir.clone());
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
+            let account_data = app
+                .path()
+                .app_local_data_dir()
+                .unwrap_or_else(|_| data_dir.clone())
+                .join("accounts");
+            app.manage(accounts::Accounts::load(&data_dir, account_data));
 
             let state = BrowserState {
                 window: window.clone(),
@@ -2955,6 +3239,7 @@ fn main() {
                 next_id: AtomicU32::new(1),
                 next_download_id: AtomicU32::new(1),
                 closed_stack: Mutex::new(Vec::new()),
+                tab_accounts: Mutex::new(HashMap::new()),
                 data_dir: data_dir.clone(),
                 store,
                 singleton_tabs: Mutex::new(HashMap::new()),
