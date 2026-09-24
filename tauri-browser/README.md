@@ -20,6 +20,13 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Links that open a new window work.** `target="_blank"` links,
+  Shift-click and `window.open()` did nothing at all: Tauri's opener
+  plugin grabbed them to open in the system browser, a call websites
+  aren't allowed to make, and WebView2 drops new-window requests nobody
+  handles. Ordinary links now open in a new tab. Sized or blank popups
+  (e.g. "Sign in with Google", PayPal) get a real popup window that keeps
+  `window.opener`, so the sign-in can report back to the page.
 - **Shields** (`src-tauri/src/shields.rs`) replace the old domain list,
   Brave-style:
   - **Brave's own engine** (`adblock-rust`) with the lists Brave/uBlock

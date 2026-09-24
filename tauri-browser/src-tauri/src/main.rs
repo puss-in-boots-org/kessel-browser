@@ -298,6 +298,7 @@ fn create_tab_internal(
 
     let builder = with_farbling(app, WebviewBuilder::new(&label, webview_url))
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features) })
         .on_navigation(move |nav_url| {
             // Kessel's own pages (newtab/settings/passwords) load through
             // Tauri's own asset URL -- in a dev build that's a local
@@ -526,6 +527,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, url: &
     let app_for_nav = app.clone();
     let builder = with_farbling(app, WebviewBuilder::new("side-panel", webview_url))
         .initialization_script(&script)
+        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features) })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
@@ -727,6 +729,7 @@ fn create_popout_internal(
     let content_label_for_nav = content_label.clone();
     let content_builder = with_farbling(app, WebviewBuilder::new(&content_label, webview_url))
         .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled))
+        .on_new_window({ let app = app.clone(); move |url, features| open_new_window(&app, url, features) })
         .on_navigation(move |nav_url| {
             if is_internal_nav(nav_url) {
                 return true;
@@ -1292,6 +1295,55 @@ fn emit_shields_stats(app: &tauri::AppHandle, id: u32, stats: &shields::TabStats
     let payload = serde_json::json!({ "id": id, "stats": stats });
     let _ = app.emit_to(TOOLBAR_LABEL, "shields-stats", payload.clone());
     let _ = app.emit_to(SHIELDS_POPUP_LABEL, "shields-stats", payload);
+}
+
+// A page asked for a new window: a target="_blank" link, or window.open().
+// Without this handler WebView2 (via wry) silently drops the request, so
+// such links did nothing at all. An ordinary link becomes a new foreground
+// tab, like in any browser. A popup that asks for a size, or that starts
+// out blank for the page to fill in (sign-in windows: "Sign in with
+// Google", PayPal...), gets a real popup window instead, because those talk
+// back to the page that opened them through window.opener -- which a
+// separate tab can't provide.
+static NEXT_WEB_POPUP_ID: AtomicU32 = AtomicU32::new(1);
+
+fn open_new_window(
+    app: &tauri::AppHandle,
+    url: tauri::Url,
+    features: tauri::webview::NewWindowFeatures,
+) -> tauri::webview::NewWindowResponse<tauri::Wry> {
+    use tauri::webview::NewWindowResponse;
+    let web = matches!(url.scheme(), "http" | "https");
+    if web && features.size().is_none() {
+        let app2 = app.clone();
+        let url = url.to_string();
+        // After WebView2's event has returned: creating a tab re-enters it.
+        let _ = app.run_on_main_thread(move || {
+            let state = app2.state::<BrowserState>();
+            if let Ok(id) = create_tab_internal(&app2, &state, Some(url.clone())) {
+                let _ = switch_tab_internal(&state, id);
+                let _ = app2.emit_to(TOOLBAR_LABEL, "tab-created", serde_json::json!({ "id": id, "url": url, "activate": true }));
+            }
+        });
+        return NewWindowResponse::Deny;
+    }
+    if !web && url.as_str() != "about:blank" {
+        return NewWindowResponse::Deny;
+    }
+    let label = format!("web-popup-{}", NEXT_WEB_POPUP_ID.fetch_add(1, Ordering::Relaxed));
+    let app2 = app.clone();
+    let built = tauri::WebviewWindowBuilder::new(app, label, WebviewUrl::External("about:blank".parse().unwrap()))
+        .window_features(features)
+        .title(url.host_str().unwrap_or("Kessel"))
+        .on_document_title_changed(|window, title| {
+            let _ = window.set_title(&title);
+        })
+        .on_new_window(move |url, features| open_new_window(&app2, url, features))
+        .build();
+    match built {
+        Ok(window) => NewWindowResponse::Create { window },
+        Err(_) => NewWindowResponse::Deny,
+    }
 }
 
 // A top-level navigation in any content webview. Returns whether to let it
@@ -2759,7 +2811,12 @@ fn save_session(state: tauri::State<BrowserState>, urls: Vec<String>) {
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+        // Only for Rust's open_path. The plugin's default also injects a
+        // script into every page that hijacks target="_blank" and
+        // Ctrl/Shift-clicked links to open them in the *system* browser --
+        // which websites aren't permitted to call, so those links silently
+        // did nothing. A browser handles them itself (open_new_window).
+        .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .invoke_handler(tauri::generate_handler![
             new_tab,
             open_background_tab,
