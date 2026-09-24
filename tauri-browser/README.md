@@ -20,8 +20,10 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
-- **Import from Opera GX / Opera** (Settings → Import): bookmarks bar +
-  Other bookmarks → Kessel bookmarks, Speed Dial → pinned sites,
+- **Import from Opera GX, Opera, Brave and Chrome** (Settings → Import,
+  every Chrome profile separately): bookmarks bar + other bookmarks →
+  Kessel bookmarks, Opera's Speed Dial / Chrome's own New Tab shortcuts →
+  pinned sites,
   cookies so you stay signed in, and saved passwords → the encrypted
   password vault (which must be unlocked; saved once via
   `Vault::import_items`, skipping logins already there; never-save markers
@@ -31,8 +33,16 @@ looks off, that's the next thing to iterate on.
   -- not via Tauri's `set_cookie`, whose `cookie` crate drops the leading
   dot of `.domain` cookies and would break logins spanning subdomains.
   Only counts are returned to the page; only Kessel's own pages can start
-  an import. Expired, partitioned and app-bound (`v20`) cookies are
-  skipped. Close Opera first so its cookie database can be read.
+  an import. Expired and partitioned cookies are skipped. Close the other
+  browser first so its cookie database can be read.
+  - **Chrome's app-bound encryption** (`v20`) can only be unwrapped by
+    Chrome's own elevation service, so those cookies/passwords are counted
+    and skipped -- deliberately no workaround (that's infostealer
+    territory). For passwords, **Passwords from a file** imports the CSV
+    from Chrome's "Export passwords" (also Brave/Edge/Firefox exports).
+  - If a security program blocks reading a browser's profile (seen with
+    Brave's folder on a PC running ESET), the importer says so instead of
+    failing with "close the browser".
 - **Toolbar auto-recovery**: the toolbar is its own WebView2 renderer
   process. If it dies (crash, or killed in Task Manager) your tabs keep
   running but the chrome used to go blank for good. Now it sends Rust a

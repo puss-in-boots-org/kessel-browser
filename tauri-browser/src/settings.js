@@ -543,18 +543,20 @@ function passwordsPanel(settings) {
   return p;
 }
 
-// Moves bookmarks, Speed Dial and cookies over from Opera / Opera GX (see
-// src-tauri/src/import.rs). Only counts ever come back from Rust -- cookie
-// values never reach this page.
+// Moves bookmarks, Speed Dial / New Tab shortcuts, cookies and passwords
+// over from another browser on this PC (see src-tauri/src/import.rs). Only
+// counts ever come back from Rust -- cookie values and passwords never reach
+// this page. The one exception is a password CSV you pick yourself, which is
+// parsed here and handed straight to the vault.
 async function importPanel() {
   const p = el(`<div class="panel" id="panel-import">
     <h2>Import</h2>
-    <p class="sub">Bring your bookmarks, Speed Dial and sign-ins over from another browser.</p>
+    <p class="sub">Bring your bookmarks, Speed Dial, sign-ins and passwords over from another browser.</p>
     <div id="import-sources"><div class="setting-card"><div class="setting-row"><div class="info"><div class="desc">Looking for browsers…</div></div></div></div></div>
   </div>`);
 
   const [sources, vault] = await Promise.all([
-    invoke("detect_opera").catch(() => []),
+    invoke("detect_browsers").catch(() => []),
     invoke("vault_status").catch(() => ({ initialized: false, unlocked: false })),
   ]);
   // Passwords land in the encrypted vault, which must be open to write to.
@@ -564,58 +566,155 @@ async function importPanel() {
       ? "Unlock your password vault first (Passwords page), then come back."
       : "Saved into your encrypted password vault.";
   const holder = p.querySelector("#import-sources");
-  if (!sources.length) {
-    holder.innerHTML = `<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">No supported browser found</div><div class="desc">Kessel can import from Opera GX and Opera on this PC.</div></div></div></div>`;
-    return p;
-  }
   holder.innerHTML = "";
-
-  for (const src of sources) {
-    const card = el(`<div class="setting-card">
-      ${settingRow({ title: src.name, desc: src.running ? `Close ${src.name} first so its cookies can be read.` : "Pick what to bring over. Things you already have in Kessel are skipped.", controlHtml: "" })}
-      ${settingRow({ title: "Bookmarks", desc: `${src.bookmarks} from the bookmarks bar and Other bookmarks`, controlHtml: switchHtml("imp-bookmarks", src.bookmarks > 0) })}
-      ${settingRow({ title: "Speed Dial", desc: `${src.speed_dial} sites, added to your pinned sites`, controlHtml: switchHtml("imp-speed", src.speed_dial > 0) })}
-      ${settingRow({ title: "Cookies", desc: "Stay signed in to your sites. Decrypted on this PC only and saved straight into Kessel.", controlHtml: switchHtml("imp-cookies", true) })}
-      ${settingRow({ title: "Passwords", desc: `${src.passwords} saved logins. ${vaultNote}`, controlHtml: switchHtml("imp-passwords", src.passwords > 0 && vault.unlocked) })}
-      <div class="add-row" style="justify-content:space-between;align-items:center">
-        <span class="faint" id="imp-result" style="font-size:12px"></span>
-        <button class="btn primary sm" id="imp-go">Import from ${src.name}</button>
-      </div>
-    </div>`);
-    for (const sw of card.querySelectorAll(".switch")) {
-      sw.addEventListener("click", () => sw.classList.toggle("on"));
-    }
-    const go = card.querySelector("#imp-go");
-    const result = card.querySelector("#imp-result");
-    go.addEventListener("click", async () => {
-      const choice = {
-        source: src.name,
-        bookmarks: card.querySelector("#imp-bookmarks").classList.contains("on"),
-        speed_dial: card.querySelector("#imp-speed").classList.contains("on"),
-        cookies: card.querySelector("#imp-cookies").classList.contains("on"),
-        passwords: card.querySelector("#imp-passwords").classList.contains("on"),
-      };
-      if (!choice.bookmarks && !choice.speed_dial && !choice.cookies && !choice.passwords) return;
-      go.disabled = true;
-      result.textContent = "Importing…";
-      try {
-        const r = await invoke("import_from_opera", { choice });
-        const parts = [];
-        if (choice.bookmarks) parts.push(`${r.bookmarks_added} bookmarks${r.bookmarks_existing ? ` (${r.bookmarks_existing} already here)` : ""}`);
-        if (choice.speed_dial) parts.push(`${r.speed_dial_added} Speed Dial sites${r.speed_dial_existing ? ` (${r.speed_dial_existing} already here)` : ""}`);
-        if (choice.cookies) parts.push(r.cookie_error ? `cookies failed: ${r.cookie_error}` : `${r.cookies_imported} cookies (${r.cookies_skipped} expired or not transferable)`);
-        if (choice.passwords) parts.push(r.password_error ? `passwords failed: ${r.password_error}` : `${r.passwords_added} passwords${r.passwords_existing ? ` (${r.passwords_existing} already saved)` : ""}`);
-        result.textContent = `Imported ${parts.join(", ")}.`;
-        toast(r.cookie_error || r.password_error ? "Import finished with a problem" : "Import complete");
-      } catch (err) {
-        result.textContent = String(err);
-      } finally {
-        go.disabled = false;
-      }
-    });
-    holder.appendChild(card);
+  if (!sources.length) {
+    holder.appendChild(el(`<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">No supported browser found</div><div class="desc">Kessel can import from Opera GX, Opera, Brave and Chrome on this PC.</div></div></div></div>`));
   }
+  for (const src of sources) holder.appendChild(importCard(src, vault, vaultNote));
+  holder.appendChild(csvImportCard(vault, vaultNote));
   return p;
+}
+
+function importCard(src, vault, vaultNote) {
+  if (src.blocked) {
+    return el(`<div class="setting-card">${settingRow({ title: src.name, desc: src.blocked, controlHtml: "" })}</div>`);
+  }
+  const isOpera = src.browser.startsWith("Opera");
+  const speedLabel = isOpera ? "Speed Dial" : "New Tab shortcuts";
+  const speedDesc = isOpera || src.speed_dial
+    ? `${src.speed_dial} sites, added to your pinned sites`
+    : "None pinned (only shortcuts you added yourself are saved, not most-visited ones)";
+  // Chrome's app-bound encryption: only Chrome itself can read its newer
+  // cookies and passwords -- say so up front instead of failing silently.
+  const cookieDesc = src.app_bound
+    ? `${src.browser} locks most of its cookies with app-bound encryption that only ${src.browser} itself can read, so few or none will come over -- you may need to sign in again.`
+    : "Stay signed in to your sites. Decrypted on this PC only and saved straight into Kessel.";
+  const passwordDesc = src.app_bound
+    ? `${src.passwords} saved logins, but ${src.browser} locks them the same way. Use ${src.browser}'s "Export passwords" and the file import below instead.`
+    : `${src.passwords} saved logins. ${vaultNote}`;
+  const card = el(`<div class="setting-card">
+    ${settingRow({ title: src.name, desc: src.running ? `Close ${src.browser} first so its cookies can be read.` : "Pick what to bring over. Things you already have in Kessel are skipped.", controlHtml: "" })}
+    ${settingRow({ title: "Bookmarks", desc: `${src.bookmarks} from the bookmarks bar and other bookmarks`, controlHtml: switchHtml("imp-bookmarks", src.bookmarks > 0) })}
+    ${settingRow({ title: speedLabel, desc: speedDesc, controlHtml: switchHtml("imp-speed", src.speed_dial > 0) })}
+    ${settingRow({ title: "Cookies", desc: cookieDesc, controlHtml: switchHtml("imp-cookies", !src.app_bound) })}
+    ${settingRow({ title: "Passwords", desc: passwordDesc, controlHtml: switchHtml("imp-passwords", src.passwords > 0 && vault.unlocked && !src.app_bound) })}
+    <div class="add-row" style="justify-content:space-between;align-items:center">
+      <span class="faint" id="imp-result" style="font-size:12px"></span>
+      <button class="btn primary sm" id="imp-go">Import from ${src.name}</button>
+    </div>
+  </div>`);
+  for (const sw of card.querySelectorAll(".switch")) {
+    sw.addEventListener("click", () => sw.classList.toggle("on"));
+  }
+  const go = card.querySelector("#imp-go");
+  const result = card.querySelector("#imp-result");
+  go.addEventListener("click", async () => {
+    const choice = {
+      source: src.id,
+      bookmarks: card.querySelector("#imp-bookmarks").classList.contains("on"),
+      speed_dial: card.querySelector("#imp-speed").classList.contains("on"),
+      cookies: card.querySelector("#imp-cookies").classList.contains("on"),
+      passwords: card.querySelector("#imp-passwords").classList.contains("on"),
+    };
+    if (!choice.bookmarks && !choice.speed_dial && !choice.cookies && !choice.passwords) return;
+    go.disabled = true;
+    result.textContent = "Importing…";
+    try {
+      const r = await invoke("import_from_browser", { choice });
+      const locked = (n) => (n ? `, ${n} locked by ${src.browser}` : "");
+      const parts = [];
+      if (choice.bookmarks) parts.push(`${r.bookmarks_added} bookmarks${r.bookmarks_existing ? ` (${r.bookmarks_existing} already here)` : ""}`);
+      if (choice.speed_dial) parts.push(`${r.speed_dial_added} ${speedLabel.toLowerCase()}${r.speed_dial_existing ? ` (${r.speed_dial_existing} already here)` : ""}`);
+      if (choice.cookies) parts.push(r.cookie_error ? `cookies failed: ${r.cookie_error}` : `${r.cookies_imported} cookies (${r.cookies_skipped} expired or not transferable${locked(r.cookies_app_bound)})`);
+      if (choice.passwords) parts.push(r.password_error ? `passwords failed: ${r.password_error}` : `${r.passwords_added} passwords${r.passwords_existing ? ` (${r.passwords_existing} already saved)` : ""}${r.passwords_app_bound ? ` -- ${r.passwords_app_bound} locked, use the file import below` : ""}`);
+      result.textContent = `Imported ${parts.join(", ")}.`;
+      toast(r.cookie_error || r.password_error ? "Import finished with a problem" : "Import complete");
+    } catch (err) {
+      result.textContent = String(err);
+    } finally {
+      go.disabled = false;
+    }
+  });
+  return card;
+}
+
+// --- Passwords from an exported CSV file -------------------------------------
+
+function csvImportCard(vault, vaultNote) {
+  const card = el(`<div class="setting-card">
+    ${settingRow({
+      title: "Passwords from a file",
+      desc: `For browsers that lock their passwords (like Chrome): in Chrome open Google Password Manager → Settings → Export passwords; Brave, Edge and Firefox can export the same kind of .csv file. ${vaultNote} Delete the exported file afterwards -- it holds your passwords in plain text.`,
+      controlHtml: `<button class="btn sm" id="csv-pick" ${vault.unlocked ? "" : "disabled"}>Choose .csv file…</button>`,
+    })}
+    <div class="add-row" style="padding-top:0;border-top:none"><span class="faint" id="csv-result" style="font-size:12px"></span></div>
+    <input type="file" id="csv-file" accept=".csv,text/csv" hidden />
+  </div>`);
+  const file = card.querySelector("#csv-file");
+  const result = card.querySelector("#csv-result");
+  card.querySelector("#csv-pick").addEventListener("click", () => file.click());
+  file.addEventListener("change", async () => {
+    const picked = file.files[0];
+    file.value = "";
+    if (!picked) return;
+    result.textContent = "Importing…";
+    try {
+      const logins = loginsFromCsv(await picked.text());
+      const [added, existing, skipped] = await invoke("vault_import_csv", { source: picked.name, logins });
+      result.textContent = `Imported ${added} passwords${existing ? `, ${existing} already saved` : ""}${skipped ? `, ${skipped} skipped (not a website or no password)` : ""}. You can delete ${picked.name} now.`;
+      toast("Passwords imported");
+    } catch (err) {
+      result.textContent = err?.message || String(err);
+    }
+  });
+  return card;
+}
+
+// Minimal RFC 4180 CSV reader: quoted fields may contain commas, quotes
+// ("") and line breaks -- all of which real passwords and notes do.
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c !== '"') field += c;
+      else if (text[i + 1] === '"') field += text[++i];
+      else quoted = false;
+    } else if (c === '"') {
+      quoted = true;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += c;
+    }
+  }
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((f) => f !== ""));
+}
+
+// Chrome/Brave/Edge export name,url,username,password,note; Firefox uses
+// url,username,password,... too, with other exporters varying the names.
+function loginsFromCsv(text) {
+  const [header = [], ...rows] = parseCsv(text.replace(/^﻿/, ""));
+  const column = (...names) => header.findIndex((h) => names.includes(h.trim().toLowerCase()));
+  const url = column("url", "origin", "website", "login_uri");
+  const user = column("username", "login", "user", "login_username");
+  const pass = column("password", "login_password");
+  if (url < 0 || pass < 0) throw new Error("This doesn't look like a browser password export (it has no url and password columns).");
+  return rows.map((r) => ({ url: r[url] || "", username: user >= 0 ? r[user] || "" : "", password: r[pass] || "" }));
 }
 
 async function aboutPanel() {

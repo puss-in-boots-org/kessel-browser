@@ -901,7 +901,7 @@ fn get_toolbar_snapshot(state: tauri::State<BrowserState>) -> Option<String> {
     state.toolbar_snapshot.lock().unwrap().clone()
 }
 
-// --- Import from Opera / Opera GX (Settings -> Import) ---------------------
+// --- Import from other browsers (Settings -> Import) -----------------------
 
 // These read the user's other browser data -- only Kessel's own pages may
 // start them, never a website (every webview can reach invoke()).
@@ -914,22 +914,43 @@ fn require_internal_page(webview: &Webview) -> Result<(), String> {
 
 #[derive(serde::Serialize)]
 struct ImportSource {
+    id: String,
     name: String,
+    browser: String,
     bookmarks: usize,
     speed_dial: usize,
     passwords: usize,
     running: bool,
+    // Chrome's app-bound encryption: newer cookies/passwords only the
+    // browser itself can read.
+    app_bound: bool,
+    // Why this profile can't be read at all (e.g. guarded by a security
+    // program), if so.
+    blocked: Option<String>,
 }
 
 #[tauri::command]
-async fn detect_opera(webview: Webview) -> Result<Vec<ImportSource>, String> {
+async fn detect_browsers(webview: Webview) -> Result<Vec<ImportSource>, String> {
     require_internal_page(&webview)?;
-    let running = import::is_running();
     Ok(import::find_profiles()
         .iter()
         .map(|p| {
-            let (bookmarks, speed_dial) = import::read_bookmarks(p).map(|(b, s)| (b.len(), s.len())).unwrap_or((0, 0));
-            ImportSource { name: p.name.to_string(), bookmarks, speed_dial, passwords: import::count_logins(p), running }
+            let blocked = import::access_problem(p);
+            let (bookmarks, speed_dial) = match blocked {
+                Some(_) => (0, 0),
+                None => import::read_bookmarks(p).map(|(b, s)| (b.len(), s.len())).unwrap_or((0, 0)),
+            };
+            ImportSource {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                browser: p.browser.to_string(),
+                bookmarks,
+                speed_dial,
+                passwords: if blocked.is_some() { 0 } else { import::count_logins(p) },
+                running: import::is_running(p),
+                app_bound: import::uses_app_bound_encryption(p),
+                blocked,
+            }
         })
         .collect())
 }
@@ -952,18 +973,20 @@ struct ImportReport {
     speed_dial_existing: usize,
     cookies_imported: usize,
     cookies_skipped: usize,
+    cookies_app_bound: usize,
     cookie_error: Option<String>,
     passwords_added: usize,
     passwords_existing: usize,
     passwords_skipped: usize,
+    passwords_app_bound: usize,
     password_error: Option<String>,
 }
 
-// Opera's Speed Dial becomes Kessel's pinned sites (the new-tab Speed Dial
-// and the rail). Already-present URLs are left alone, so re-running an
-// import doesn't duplicate anything.
+// Speed Dial / New Tab shortcuts become Kessel's pinned sites (the new-tab
+// Speed Dial and the rail). Anything already present is left alone, so
+// re-running an import doesn't duplicate anything.
 #[tauri::command]
-async fn import_from_opera(
+async fn import_from_browser(
     app: tauri::AppHandle,
     webview: Webview,
     vault: tauri::State<'_, Vault>,
@@ -972,8 +995,8 @@ async fn import_from_opera(
     require_internal_page(&webview)?;
     let profile = import::find_profiles()
         .into_iter()
-        .find(|p| p.name == choice.source)
-        .ok_or_else(|| format!("{} isn't installed", choice.source))?;
+        .find(|p| p.id == choice.source)
+        .ok_or("That browser profile isn't on this PC anymore")?;
     let state = app.state::<BrowserState>();
     let mut report = ImportReport::default();
 
@@ -1017,6 +1040,7 @@ async fn import_from_opera(
             Err(e) => report.cookie_error = Some(e),
             Ok(read) => {
                 report.cookies_skipped = read.skipped;
+                report.cookies_app_bound = read.app_bound;
                 match write_cookies(&app, read.cookies).await {
                     Ok((written, failed)) => {
                         report.cookies_imported = written;
@@ -1031,16 +1055,13 @@ async fn import_from_opera(
     // Saved passwords go into the encrypted vault, so it has to be unlocked
     // -- they're never written anywhere in plain text.
     if choice.passwords {
-        let status = vault.status();
-        if !status.initialized {
-            report.password_error = Some("create a password vault first (Settings \u{2192} Passwords)".into());
-        } else if !status.unlocked {
-            report.password_error = Some("unlock your password vault first (Settings \u{2192} Passwords)".into());
-        } else {
-            match import::read_logins(&profile) {
+        match vault_ready(&vault) {
+            Err(e) => report.password_error = Some(e),
+            Ok(()) => match import::read_logins(&profile) {
                 Err(e) => report.password_error = Some(e),
                 Ok(read) => {
                     report.passwords_skipped = read.skipped;
+                    report.passwords_app_bound = read.app_bound;
                     let entries = read.logins.into_iter().map(|l| (l.site, l.username, l.password)).collect();
                     let note = format!("Imported from {}", profile.name);
                     match vault.import_items(vault_timeout(&state), entries, &note) {
@@ -1051,10 +1072,65 @@ async fn import_from_opera(
                         Err(e) => report.password_error = Some(e),
                     }
                 }
-            }
+            },
         }
     }
     Ok(report)
+}
+
+fn vault_ready(vault: &Vault) -> Result<(), String> {
+    let status = vault.status();
+    if !status.initialized {
+        Err("create a password vault first (Settings \u{2192} Passwords)".into())
+    } else if !status.unlocked {
+        Err("unlock your password vault first (Settings \u{2192} Passwords)".into())
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct CsvLogin {
+    url: String,
+    username: String,
+    password: String,
+}
+
+// Passwords exported as CSV by another browser (Chrome/Brave/Edge "Export
+// passwords", Firefox's "Export Logins") -- the way to bring over Chrome
+// passwords that app-bound encryption keeps us from reading directly. The
+// settings page parses the file you picked; this only stores the rows.
+// Returns [added, already saved, skipped].
+#[tauri::command]
+fn vault_import_csv(
+    webview: Webview,
+    state: tauri::State<BrowserState>,
+    vault: tauri::State<Vault>,
+    source: String,
+    logins: Vec<CsvLogin>,
+) -> Result<[usize; 3], String> {
+    require_internal_page(&webview)?;
+    vault_ready(&vault)?;
+    let mut skipped = 0;
+    let entries: Vec<(String, String, String)> = logins
+        .into_iter()
+        .filter_map(|l| {
+            let site = tauri::Url::parse(l.url.trim())
+                .ok()
+                .filter(|u| u.scheme() == "http" || u.scheme() == "https")
+                .and_then(|u| u.host_str().map(|h| h.to_string()));
+            match site {
+                Some(site) if !l.password.is_empty() => Some((site, l.username, l.password)),
+                _ => {
+                    skipped += 1;
+                    None
+                }
+            }
+        })
+        .collect();
+    let source: String = source.chars().filter(|c| !c.is_control()).take(60).collect();
+    let (added, existing) = vault.import_items(vault_timeout(&state), entries, &format!("Imported from {}", source))?;
+    Ok([added, existing, skipped])
 }
 
 // Straight through WebView2's cookie manager rather than Tauri's
@@ -2056,8 +2132,9 @@ fn main() {
             get_open_tabs,
             set_toolbar_snapshot,
             get_toolbar_snapshot,
-            detect_opera,
-            import_from_opera
+            detect_browsers,
+            import_from_browser,
+            vault_import_csv
         ])
         .setup(|app| {
             let width = 1280.0;
