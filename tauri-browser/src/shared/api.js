@@ -194,3 +194,30 @@ export function confirmDialog(message, confirmLabel = "Confirm") {
     document.addEventListener("keydown", onKey);
   });
 }
+
+// 1.2 GB / 340 MB.
+export function formatBytes(bytes) {
+  if (bytes == null) return "";
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  return `${Math.max(1, Math.round(bytes / 1024 ** 2))} MB`;
+}
+
+// Resolves once this page (with everything it loads) has finished loading.
+export function whenPageLoaded() {
+  if (document.readyState === "complete") return Promise.resolve();
+  return new Promise((resolve) => {
+    window.addEventListener("load", resolve, { once: true });
+    setTimeout(resolve, 3000);
+  });
+}
+
+// Closes the popup this page is in (a menu, the share sheet, tab search...)
+// -- once its page has finished loading: a webview hidden or destroyed while
+// its page still loads can leave the next webview Kessel makes (the tab a
+// menu item opens, say) never loading at all.
+let popupClosing = false;
+export function closeOwnPopup(command = "close_popup") {
+  if (popupClosing) return;
+  popupClosing = true;
+  whenPageLoaded().then(() => window.__TAURI__.core.invoke(command).catch(() => {}));
+}

@@ -8,15 +8,22 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
 import { watchCustomWallpaper } from "./shared/glass.js";
+import { closeOwnPopup, whenPageLoaded } from "./shared/api.js";
 
 const { invoke } = window.__TAURI__.core;
 const { emitTo } = window.__TAURI__.event;
 let info = window.__KESSEL_POPUP__ || { items: [] };
 
-const close = () => invoke("close_popup").catch(() => {});
+const close = () => closeOwnPopup();
 
-function pick(id) {
-  emitTo(info.opener, "context-pick", { token: info.token, id }).catch(() => {});
+// The item runs once this menu has finished loading (a click can come
+// sooner than that): see closeOwnPopup.
+let picked = false;
+async function pick(id) {
+  if (picked) return;
+  picked = true;
+  await whenPageLoaded();
+  await emitTo(info.opener, "context-pick", { token: info.token, id }).catch(() => {});
   close();
 }
 
@@ -57,10 +64,12 @@ function build() {
     label.className = "label";
     label.textContent = item.label; // tab titles and names are the user's / sites'
     row.appendChild(label);
-    if (item.keys) {
+    // A colour choice that's the current one: ticked at the end.
+    if (item.keys || (item.swatch && item.checked)) {
       const keys = document.createElement("span");
       keys.className = "keys";
-      keys.textContent = item.keys;
+      if (item.keys) keys.textContent = item.keys;
+      else keys.innerHTML = icon("check", 13);
       row.appendChild(keys);
     }
     row.addEventListener("click", () => pick(item.id));
@@ -101,6 +110,7 @@ window.addEventListener("focus", () => clearTimeout(blurTimer));
 
 window.__kesselShowMenu = (next) => {
   clearTimeout(blurTimer);
+  picked = false;
   info = next || { items: [] };
   build();
 };

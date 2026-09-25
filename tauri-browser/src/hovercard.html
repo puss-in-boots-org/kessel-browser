@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tab</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* A hovered tab's card (see showHoverCard in main.js): a popup over the
+       page, never taking the mouse or the keyboard. */
+    html, body { height: 100%; overflow: hidden; user-select: none; pointer-events: none; }
+    body { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+    html.glass body { background: #0a1433; border: none; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); }
+    html.glass #sheet { position: fixed; inset: 0; background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 90%, transparent); box-shadow: var(--lg-edge); }
+    main { position: relative; padding: 11px 13px; color: var(--text); display: flex; flex-direction: column; gap: 3px; }
+    html.glass main { color: var(--lg-text); }
+    #title { font-size: 13px; font-weight: 650; line-height: 18px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+    .line { display: flex; align-items: center; gap: 6px; font-size: 11.5px; line-height: 18px; min-height: 18px; opacity: 0.72; white-space: nowrap; overflow: hidden; }
+    .line svg { flex-shrink: 0; }
+    #host .secure { color: #34c77b; display: flex; }
+    #status { opacity: 0.9; gap: 8px; }
+    .pill { display: inline-flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    #memory.heavy { color: #f59a42; opacity: 1; font-weight: 600; }
+    #preview { margin-top: 6px; height: 154px; border-radius: 8px; overflow: hidden; background: color-mix(in srgb, var(--text) 6%, transparent); display: flex; align-items: center; justify-content: center; font-size: 11px; opacity: 0.95; }
+    html.glass #preview { background: rgba(255, 255, 255, 0.06); }
+    #preview img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+    #preview .none { opacity: 0.5; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
+  <main>
+    <div id="title"></div>
+    <div class="line" id="host"></div>
+    <div class="line" id="status" hidden></div>
+    <div class="line" id="memory" hidden></div>
+    <div id="preview" hidden></div>
+  </main>
+  <script type="module" src="hovercard.js"></script>
+</body>
+</html>

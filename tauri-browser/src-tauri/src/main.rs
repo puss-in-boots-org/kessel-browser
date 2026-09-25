@@ -11,6 +11,7 @@ mod dialogs;
 mod history;
 mod import;
 mod keys;
+mod lifecycle;
 mod page;
 mod profile;
 mod shields;
@@ -254,6 +255,7 @@ pub(crate) struct ClosedTab {
 pub(crate) struct ClosedWindow {
     tabs: Vec<SessionTab>,
     active: usize,
+    groups: Vec<serde_json::Value>,
     // Unix time (shown in lists), and ms since start (for "what closed last").
     closed_at: u64,
     closed_at_ms: u64,
@@ -662,6 +664,9 @@ fn create_tab_internal(
     if let Some(account) = account {
         state.tab_accounts.lock().unwrap().insert(id, account);
     }
+    // Opened behind the current tab: hidden (throttled) once it's loading --
+    // a tab you switch to is shown by switch_tab_internal.
+    lifecycle::hide_new(&webview, id);
     state.tabs.lock().unwrap().insert(id, webview);
     state.win(win, |w| w.order.push(id));
     reraise_side_panel(app, state, win);
@@ -675,22 +680,26 @@ fn switch_tab_internal(state: &BrowserState, id: u32) -> Result<(), String> {
     let win = state.tab_window(id).ok_or("tab not found")?;
     let (window, insets, prev) =
         state.win(&win, |w| (w.window.clone(), w.insets, w.active)).ok_or("that window is closed")?;
-    {
+    let (prev_tab, target) = {
         let tabs = state.tabs.lock().unwrap();
-        if let Some(prev) = prev {
-            if prev != id {
-                if let Some(w) = tabs.get(&prev) {
-                    let _ = w.set_position(LogicalPosition::new(OFFSCREEN_X, 0.0));
-                }
-            }
-        }
-        let target = tabs.get(&id).ok_or_else(|| "tab not found".to_string())?;
-        let (position, size) = content_bounds(&window, insets).map_err(|e| e.to_string())?;
-        target.set_position(position).map_err(|e| e.to_string())?;
-        target.set_size(size).map_err(|e| e.to_string())?;
-        let _ = target.set_focus();
+        let prev_tab = prev.filter(|&p| p != id).and_then(|p| tabs.get(&p).cloned());
+        (prev_tab, tabs.get(&id).cloned().ok_or_else(|| "tab not found".to_string())?)
+    };
+    if let Some(w) = &prev_tab {
+        let _ = w.set_position(LogicalPosition::new(OFFSCREEN_X, 0.0));
     }
+    let (position, size) = content_bounds(&window, insets).map_err(|e| e.to_string())?;
+    target.set_position(position).map_err(|e| e.to_string())?;
+    target.set_size(size).map_err(|e| e.to_string())?;
     state.win(&win, |w| w.active = Some(id));
+    // The engine draws and runs the tab you're on at full speed; the one
+    // you left is pictured (hover cards) and then hidden, so it's
+    // throttled like any browser's background tab.
+    lifecycle::show(&target);
+    let _ = target.set_focus();
+    if let (Some(w), Some(prev)) = (&prev_tab, prev) {
+        lifecycle::hide(w, prev, true);
+    }
     Ok(())
 }
 
@@ -1298,6 +1307,99 @@ fn all_tabs(state: tauri::State<BrowserState>) -> Vec<serde_json::Value> {
         }
     }
     out
+}
+
+// Tab search (tabsearch.html): every tab of every window -- sleeping ones
+// too, which only their toolbar's snapshot knows -- in strip order, the
+// caller's window first; plus the recently closed tabs.
+#[tauri::command]
+fn tab_search_list(webview: Webview, state: tauri::State<BrowserState>) -> serde_json::Value {
+    let current = state.window_of(&webview).or_else(|| state.current_window());
+    let windows: Vec<(String, bool, Vec<u32>, Option<u32>, Option<String>)> =
+        state.windows.lock().unwrap().iter().map(|w| (w.label.clone(), w.private, w.order.clone(), w.active, w.snapshot.clone())).collect();
+    let mut out = Vec::new();
+    for (label, private, order, active, snapshot) in windows {
+        let snapshot: Option<serde_json::Value> = snapshot.and_then(|s| serde_json::from_str(&s).ok());
+        let groups = snapshot.as_ref().and_then(|s| s.get("groups")).cloned().unwrap_or(serde_json::json!([]));
+        let mut tabs = Vec::new();
+        let mut listed = HashSet::new();
+        for saved in snapshot.as_ref().and_then(|s| s.get("tabs")).and_then(|t| t.as_array()).cloned().unwrap_or_default() {
+            let id = saved.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+            let asleep = saved.get("discarded").and_then(|v| v.as_bool()).unwrap_or(false);
+            let mut tab = saved.clone();
+            if id > 0 && !asleep {
+                // Awake: what it shows now (gone since the snapshot: skipped).
+                let Some(live) = tab_info(&state, id as u32) else { continue };
+                listed.insert(id as u32);
+                for key in ["url", "title", "favicon"] {
+                    if !live[key].is_null() {
+                        tab[key] = live[key].clone();
+                    }
+                }
+            }
+            tab["active"] = serde_json::json!(id > 0 && active == Some(id as u32));
+            tabs.push(tab);
+        }
+        // Opened since the last snapshot.
+        for id in order.into_iter().filter(|id| !listed.contains(id)) {
+            if let Some(mut tab) = tab_info(&state, id) {
+                tab["active"] = serde_json::json!(active == Some(id));
+                tabs.push(tab);
+            }
+        }
+        out.push(serde_json::json!({ "label": label, "private": private, "current": current.as_deref() == Some(label.as_str()), "tabs": tabs, "groups": groups }));
+    }
+    out.sort_by_key(|w| !w["current"].as_bool().unwrap_or(false));
+    let closed: Vec<serde_json::Value> = state
+        .closed_stack
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .map(|c| serde_json::json!({ "url": c.url, "title": c.title }))
+        .collect();
+    serde_json::json!({ "windows": out, "closed": closed })
+}
+
+// Brings browser window `label` to the front.
+#[tauri::command]
+async fn focus_window(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let window = state.window_handle(&label).ok_or("that window is closed")?;
+        let _ = window.unminimize();
+        window.set_focus().map_err(|e| e.to_string())
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// --- Saved tab groups (see store.rs) ------------------------------------------
+
+#[tauri::command]
+fn get_saved_groups(state: tauri::State<BrowserState>) -> Vec<store::SavedGroup> {
+    state.store.saved_groups()
+}
+
+#[tauri::command]
+fn save_tab_group(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, mut group: store::SavedGroup) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    if state.window_of(&webview).map(|w| state.is_private(&w)).unwrap_or(false) {
+        return Err("a private window's groups aren't saved".into());
+    }
+    group.saved_at = now_unix();
+    let groups = state.store.save_group(group);
+    let _ = app.emit("saved-groups-changed", groups);
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_saved_group(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, id: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let groups = state.store.delete_saved_group(&id);
+    let _ = app.emit("saved-groups-changed", groups);
+    Ok(())
 }
 
 // Brings tab `id` to the front, in whichever window it is.
@@ -2909,6 +3011,27 @@ static POPUP_CLOSED_AT: Mutex<Option<(String, Instant)>> = Mutex::new(None);
 // Which kind ("context" / "dropdown") each window's menu popup was opened as
 // last: a dropdown's button toggles only its own menu.
 static CONTEXT_KIND: Mutex<std::collections::BTreeMap<String, String>> = Mutex::new(std::collections::BTreeMap::new());
+// Each window's open popup of a kind ("context-popup-1") -> that popup's own
+// label ("context12-popup-1"). Every popup gets a fresh label: a closed one
+// lingers a moment before it's really gone, and neither a new popup nor the
+// button that toggles it may mistake that one for the open one.
+static OPEN_POPUPS: Mutex<std::collections::BTreeMap<String, String>> = Mutex::new(std::collections::BTreeMap::new());
+static POPUP_SERIAL: AtomicU32 = AtomicU32::new(1);
+
+fn open_popup(app: &tauri::AppHandle, base: &str) -> Option<Webview> {
+    let label = OPEN_POPUPS.lock().unwrap().get(base).cloned()?;
+    app.get_webview(&label)
+}
+
+// Popup `label` closed (or is closing): it's no longer the open one.
+fn popup_closed(label: &str) {
+    let mut open = OPEN_POPUPS.lock().unwrap();
+    let base = open.iter().find(|(_, l)| l.as_str() == label).map(|(b, _)| b.clone());
+    if let Some(base) = base {
+        open.remove(&base);
+        *POPUP_CLOSED_AT.lock().unwrap() = Some((base, Instant::now()));
+    }
+}
 
 // `kind` "context" is a right-click menu (context.html): it opens at the
 // point (x, y) -- upward or leftward when there's no room -- and a new one
@@ -2929,6 +3052,7 @@ async fn toggle_popup(
     let page = match kind.as_str() {
         "menu" => "menu.html",
         "share" => "share.html",
+        "tabsearch" => "tabsearch.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
@@ -2939,18 +3063,18 @@ async fn toggle_popup(
         let state = app2.state::<BrowserState>();
         let win = state.window_of(&webview).ok_or("that window is closed")?;
         // One right-click menu or dropdown at a time: both are context.html.
-        let label = popup_label(if at_point { "context" } else { &kind }, &win);
-        let reopened_kind = CONTEXT_KIND.lock().unwrap().insert(label.clone(), kind.clone());
+        let family = if at_point { "context" } else { kind.as_str() };
+        let base = popup_label(family, &win);
+        let reopened_kind = CONTEXT_KIND.lock().unwrap().insert(base.clone(), kind.clone());
         let same_kind = reopened_kind.as_deref() == Some(kind.as_str());
-        let existing = app2.get_webview(&label);
+        let existing = open_popup(&app2, &base);
         if let Some(open) = &existing {
-            if toggles && same_kind {
+            if (toggles && same_kind) || !at_point {
+                popup_closed(open.label());
                 let _ = open.close();
-                *POPUP_CLOSED_AT.lock().unwrap() = Some((label.clone(), Instant::now()));
-                return Ok(false);
-            }
-            if !at_point {
-                let _ = open.close();
+                if toggles && same_kind {
+                    return Ok(false);
+                }
             }
         }
         // The click on the button that opened it first blurred (= closed) it.
@@ -2958,7 +3082,7 @@ async fn toggle_popup(
             .lock()
             .unwrap()
             .as_ref()
-            .map(|(l, t)| l == &label && t.elapsed() < Duration::from_millis(400))
+            .map(|(l, t)| l == &base && t.elapsed() < Duration::from_millis(400))
             .unwrap_or(false);
         if just_closed && toggles && same_kind {
             return Ok(false);
@@ -2988,14 +3112,16 @@ async fn toggle_popup(
             raise_webview(&open);
             return Ok(true);
         }
+        // "context12-popup-1": the window's number stays last (see keys.rs).
+        let label = format!("{}{}-popup-{}", family, POPUP_SERIAL.fetch_add(1, Ordering::Relaxed), window_number(&win).unwrap_or(1));
         let popup = window
             .add_child(
-                profile::webview(&label, WebviewUrl::App(page.into()))
-                    .initialization_script(&format!("window.__KESSEL_POPUP__ = {};", init)),
+                profile::webview(&label, WebviewUrl::App(page.into())).initialization_script(&format!("window.__KESSEL_POPUP__ = {};", init)),
                 LogicalPosition::new(left, top),
                 LogicalSize::new(width, height),
             )
             .map_err(|e| e.to_string())?;
+        OPEN_POPUPS.lock().unwrap().insert(base, label);
         keys::install(&app2, &popup);
         let _ = popup.set_focus();
         raise_resize_borders(&window);
@@ -3004,7 +3130,6 @@ async fn toggle_popup(
     .await
     .and_then(|r| r)
 }
-
 // Puts `webview` above its window's other webviews (a tab made after it
 // would otherwise cover it): each child webview sits in its own little
 // window (wry's container), so this is just Windows' z-order.
@@ -3070,7 +3195,7 @@ async fn close_popup(app: tauri::AppHandle, webview: Webview) -> Result<(), Stri
     on_main(&app, move || {
         let label = webview.label().to_string();
         if label.contains("-popup-") {
-            *POPUP_CLOSED_AT.lock().unwrap() = Some((label, Instant::now()));
+            popup_closed(&label);
             let _ = webview.close();
         }
     })
@@ -3261,6 +3386,7 @@ fn forget_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32) {
     state.tab_meta.lock().unwrap().remove(&id);
     state.pages.lock().unwrap().remove(&id);
     app.state::<shields::Shields>().forget_tab(id);
+    lifecycle::forget(id);
 }
 
 // Closes tab `id`. With `url` (its address) it goes on the recently closed
@@ -3327,7 +3453,7 @@ async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<se
         if window_at.is_some() && window_at >= tab_at {
             let closed = state.closed_windows.lock().unwrap().pop();
             if let Some(closed) = closed {
-                let session = WindowSession { tabs: closed.tabs, active: closed.active };
+                let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups };
                 let win = browser_windows::create(&app2, false, serde_json::json!({ "session": session }))?;
                 return Ok(serde_json::json!({ "window": win }));
             }
@@ -4440,9 +4566,11 @@ pub(crate) struct SessionTab {
     account: Option<String>,
     #[serde(default)]
     title: Option<String>,
-    // Pinned tabs come back pinned.
+    // Pinned tabs come back pinned, and grouped ones in their group.
     #[serde(default)]
     pinned: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    group: Option<String>,
 }
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -4451,6 +4579,9 @@ pub(crate) struct WindowSession {
     // Index of the tab that was active.
     #[serde(default)]
     active: usize,
+    // The window's tab groups: [{ id, name, color, collapsed }].
+    #[serde(default)]
+    groups: Vec<serde_json::Value>,
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -4467,10 +4598,10 @@ fn read_session(state: &BrowserState) -> Vec<WindowSession> {
     // Saved before windows existed: one window's tabs -- or before accounts
     // existed: just the urls.
     let tabs = serde_json::from_str::<Vec<SessionTab>>(&text).or_else(|_| {
-        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None, title: None, pinned: false }).collect())
+        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None, title: None, pinned: false, group: None }).collect())
     });
     match tabs {
-        Ok(tabs) if !tabs.is_empty() => vec![WindowSession { tabs, active: 0 }],
+        Ok(tabs) if !tabs.is_empty() => vec![WindowSession { tabs, active: 0, groups: Vec::new() }],
         _ => Vec::new(),
     }
 }
@@ -4485,14 +4616,14 @@ fn write_session(state: &BrowserState) {
 
 // A toolbar's current tabs, for session restore. Private windows keep none.
 #[tauri::command]
-fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs: Vec<SessionTab>, active: usize) {
+fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs: Vec<SessionTab>, active: usize, groups: Option<Vec<serde_json::Value>>) {
     let Some(win) = toolbar_window(&webview) else { return };
     if state.is_private(&win) {
         return;
     }
     {
         let mut sessions = state.sessions.lock().unwrap();
-        let session = WindowSession { tabs, active };
+        let session = WindowSession { tabs, active, groups: groups.unwrap_or_default() };
         match sessions.iter_mut().find(|(w, _)| w == &win) {
             Some((_, s)) => *s = session,
             None => sessions.push((win, session)),
@@ -4645,6 +4776,15 @@ fn main() {
             get_tab_info,
             get_open_tabs,
             all_tabs,
+            tab_search_list,
+            focus_window,
+            get_saved_groups,
+            save_tab_group,
+            delete_saved_group,
+            lifecycle::tab_thumbnail,
+            lifecycle::freeze_tab,
+            lifecycle::tab_resources,
+            lifecycle::hover_card,
             focus_tab,
             set_toolbar_snapshot,
             get_toolbar_snapshot,

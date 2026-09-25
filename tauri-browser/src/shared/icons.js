@@ -79,6 +79,14 @@ const PATHS = {
   arrowUpLeft: '<path d="M17 17 7 7"/><path d="M7 15V7h8"/>',
   volume: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.3a8 8 0 0 1 0 11.4"/>',
   volumeOff: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/>',
+  tabs: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 11h18"/><path d="M7 7V5a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v2"/>',
+  chevronLeft: '<path d="M15 6l-6 6 6 6"/>',
+  chevronRight: '<path d="M9 6l6 6-6 6"/>',
+  sidebar: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/>',
+  moon2: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  snowflake: '<path d="M12 3v18"/><path d="M4.2 7.5l15.6 9"/><path d="M19.8 7.5l-15.6 9"/><path d="M9.5 4.5L12 6l2.5-1.5"/><path d="M9.5 19.5L12 18l2.5 1.5"/>',
+  layers: '<path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5"/>',
+  ungroup: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
 };
 
 export function icon(name, size = 18) {

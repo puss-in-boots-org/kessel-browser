@@ -35,6 +35,17 @@
       </div>
     </div>
 
+    <!-- Vertical tabs (Settings -> Tabs): the tab strip, its tab search and
+         new-tab buttons move in here (see applyTabLayout in main.js). -->
+    <div id="vtabs" hidden>
+      <div id="vtabs-head">
+        <button id="vtabs-collapse"></button>
+      </div>
+      <div id="vtabs-list"></div>
+      <div id="vtabs-foot"></div>
+      <div id="vtabs-resize" title="Drag to make the tabs wider or narrower"></div>
+    </div>
+
     <div id="main-col">
       <div id="progress-bar"><div id="progress-fill"></div></div>
 
@@ -42,8 +53,11 @@
            space here drags the window, double-click maximizes. -->
       <div id="tab-bar">
         <div id="private-badge" hidden title="Private window: pages you visit aren't kept in history, and sign-ins and cookies are forgotten when the last private window closes."></div>
+        <button id="tabs-scroll-left" class="strip-scroll" title="Scroll the tabs left" hidden></button>
         <div id="tabs"></div>
+        <button id="tabs-scroll-right" class="strip-scroll" title="Scroll the tabs right" hidden></button>
         <button id="new-tab-btn" title="New tab (Ctrl+T)"></button>
+        <button id="tab-search-btn" title="Search tabs (Ctrl+Shift+A)"></button>
         <div id="drag-space"></div>
         <div id="window-controls">
           <button id="win-min" title="Minimize"></button>

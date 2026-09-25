@@ -332,7 +332,7 @@ html, body { overflow: hidden; user-select: none; }
 .tab .tab-audio.muted { color: var(--danger); opacity: 0.85; }
 .tab.pinned .tab-audio { width: 16px; height: 16px; }
 
-#new-tab-btn {
+#new-tab-btn, #tab-search-btn, .strip-scroll, #vtabs-collapse {
   background: transparent;
   border: none;
   color: var(--text-dim);
@@ -346,7 +346,9 @@ html, body { overflow: hidden; user-select: none; }
   justify-content: center;
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
-#new-tab-btn:hover { background: var(--surface-hover); color: var(--text); }
+#new-tab-btn:hover, #tab-search-btn:hover, .strip-scroll:hover, #vtabs-collapse:hover { background: var(--surface-hover); color: var(--text); }
+.strip-scroll { width: 22px; align-self: center; }
+.strip-scroll[hidden] { display: none; }
 
 /* --- Nav bar / omnibox --- */
 #nav-bar {
@@ -620,3 +622,114 @@ html.fullscreen #progress-bar { display: none !important; }
   opacity: 0.8;
 }
 .tab.grouped.active::after { background: var(--acct); }
+
+/* --- Tab groups you make (named, coloured; see userGroupChip in main.js) --- */
+.tab-group.user-group { border-radius: 7px; margin-left: 6px; }
+.tab-group.user-group.unnamed:not(.collapsed):not(.editing) { width: 14px; min-width: 14px; height: 14px; padding: 0; border-radius: 50%; }
+.tab-group.user-group.editing { max-width: 190px; padding: 0 3px; background: var(--surface-2); box-shadow: inset 0 0 0 2px var(--acct); cursor: text; }
+.group-name-input {
+  width: 150px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+/* A line in the group's colour under its tabs, joining them up. */
+.tab .group-line {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  bottom: 0;
+  height: 2.5px;
+  background: var(--group);
+  pointer-events: none;
+}
+.tab.group-end .group-line { right: 4px; border-radius: 0 2px 2px 0; }
+
+/* A background tab whose page changed its title: a dot until you look. */
+.tab .tab-favicon { position: relative; }
+.tab.attention .tab-favicon::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px var(--bg);
+}
+/* Frozen (scripts stopped): a little faded. Using a lot of memory or CPU:
+   an orange ring (the hover card says how much). */
+.tab.frozen .tab-favicon { filter: grayscale(0.7); opacity: 0.75; }
+.tab.heavy .tab-favicon { box-shadow: 0 0 0 2px #f59a42; }
+
+/* --- A full strip: tabs shrink toward their icons, then it scrolls ---
+   Every tab starts 200px wide and they shrink alike; one too narrow for
+   its title (.narrow, see updateStripOverflow) shows just its icon. */
+.tab:not(.pinned) { width: 200px; flex: 0 1 auto; min-width: 44px; }
+html.tabs-scroll .tab:not(.pinned) { min-width: 150px; }
+.tab.narrow .tab-title { display: none; }
+.tab.narrow:not(.active) .close-tab { display: none; }
+.tab.narrow { justify-content: center; padding-left: 4px; padding-right: 4px; }
+
+/* --- Vertical tabs (Settings -> Tabs) --- */
+#vtabs {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+#vtabs[hidden] { display: none; }
+#vtabs-head { display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding: 8px 8px 2px; }
+#vtabs-list { flex: 1; min-height: 0; display: flex; }
+#vtabs-foot { padding: 4px 8px 10px; }
+#vtabs-resize { position: absolute; top: 0; bottom: 0; right: -3px; width: 7px; cursor: col-resize; z-index: 3; }
+html.vertical-tabs #tabs {
+  flex: 1;
+  flex-flow: row wrap;
+  align-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  gap: 2px;
+  padding: 4px 8px;
+}
+html.vertical-tabs .tab { flex: 1 1 100%; width: auto; max-width: none; min-width: 0; border-radius: 9px; }
+html.vertical-tabs .tab.pinned { flex: 0 0 auto; }
+html.vertical-tabs .tab.active::after { left: 0; right: auto; top: 8px; bottom: 8px; width: 3px; height: auto; border-radius: 0 2px 2px 0; }
+html.vertical-tabs .tab .group-line { left: 0; right: auto; top: 5px; bottom: 5px; width: 3px; height: auto; border-radius: 2px; }
+html.vertical-tabs .tab.in-group { margin-left: 8px; }
+html.vertical-tabs .tab-group { flex: 1 1 100%; max-width: none; margin: 8px 0 2px; border-radius: 7px; text-align: left; color: var(--text); background: color-mix(in srgb, var(--acct) 20%, transparent); box-shadow: inset 3px 0 0 var(--acct); }
+html.vertical-tabs .tab-group.user-group.unnamed:not(.collapsed):not(.editing) { flex: 0 0 14px; }
+html.vertical-tabs .tab.pinned + .tab:not(.pinned), html.vertical-tabs .tab.pinned + .tab-group { margin-left: 0; }
+html.vertical-tabs .tab.grouped::before { left: 0; right: auto; top: 6px; bottom: 6px; width: 2px; height: auto; }
+html.vertical-tabs .strip-scroll { display: none; }
+html.vertical-tabs #new-tab-btn { width: 100%; justify-content: flex-start; gap: 8px; padding: 0 10px; height: 32px; }
+html.vertical-tabs #new-tab-btn::after { content: "New tab"; font-size: 12.5px; }
+/* Collapsed: just icons. */
+html.vtabs-collapsed #vtabs { width: 56px; }
+html.vtabs-collapsed #vtabs-head { flex-direction: column; padding: 8px 0 2px; }
+html.vtabs-collapsed #vtabs .tab { flex: 0 0 40px; justify-content: center; padding: 8px 0; }
+html.vtabs-collapsed #vtabs .tab-title,
+html.vtabs-collapsed #vtabs .close-tab,
+html.vtabs-collapsed #vtabs .tab-audio { display: none; }
+html.vtabs-collapsed #vtabs .tab.in-group { margin-left: 0; }
+html.vtabs-collapsed #vtabs .tab-group { font-size: 0; height: 4px; min-height: 4px; padding: 0; border-radius: 2px; margin: 6px 4px 2px; }
+html.vtabs-collapsed #vtabs #tabs { padding: 4px 6px; }
+html.vtabs-collapsed #new-tab-btn { justify-content: center; padding: 0; }
+html.vtabs-collapsed #new-tab-btn::after { content: none; }
+html.vtabs-collapsed #vtabs-resize { display: none; }
+
+/* --- Saved tab groups on the bookmarks bar --- */
+.bm-chip.saved-group { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--group) 70%, transparent); }
+.bm-chip .saved-group-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--group); flex-shrink: 0; }

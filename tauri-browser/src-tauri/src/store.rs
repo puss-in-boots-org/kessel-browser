@@ -130,6 +130,32 @@ pub struct Settings {
     pub address_answers: bool,
     // A home button next to reload.
     pub show_home_button: bool,
+
+    // The tab strip: "horizontal" (along the top) or "vertical" (a column
+    // beside the page, `vertical_tabs_width` wide, or just icons when
+    // collapsed). A full horizontal strip "shrink"s its tabs down to their
+    // icons, or keeps them readable and "scroll"s.
+    pub tab_layout: String,
+    pub vertical_tabs_width: f64,
+    pub vertical_tabs_collapsed: bool,
+    pub tab_overflow: String,
+    // Hovering a tab shows a card with its title and address -- and, if
+    // these are on, a preview of the page and how much memory it uses.
+    pub tab_hover_cards: bool,
+    pub hover_card_preview: bool,
+    pub hover_card_memory: bool,
+    // A dot on a background tab whose title changed (a new message...).
+    pub tab_attention_dots: bool,
+    // Tabs from the same site go into a group of their own.
+    pub auto_group_tabs: bool,
+    // Background tabs: frozen (their scripts stop) after this many minutes
+    // (0 = never), told to use less memory, and at most this many kept
+    // awake at once (0 = no limit) -- the rest go to sleep. Sites here
+    // never freeze or sleep.
+    pub freeze_tabs_after_minutes: u32,
+    pub reduce_background_memory: bool,
+    pub max_awake_tabs: u32,
+    pub never_sleep_sites: Vec<String>,
 }
 
 impl Default for Settings {
@@ -169,8 +195,44 @@ impl Default for Settings {
             autocomplete_addresses: true,
             address_answers: true,
             show_home_button: true,
+            tab_layout: "horizontal".into(),
+            vertical_tabs_width: 240.0,
+            vertical_tabs_collapsed: false,
+            tab_overflow: "shrink".into(),
+            tab_hover_cards: true,
+            hover_card_preview: true,
+            hover_card_memory: true,
+            tab_attention_dots: true,
+            auto_group_tabs: false,
+            freeze_tabs_after_minutes: 5,
+            reduce_background_memory: true,
+            max_awake_tabs: 0,
+            never_sleep_sites: Vec::new(),
         }
     }
+}
+
+// --- Saved tab groups -----------------------------------------------------------
+//
+// A tab group you saved: it shows on the bookmarks bar and opens again,
+// tabs and all, after you close it.
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SavedGroupTab {
+    pub url: String,
+    #[serde(default)]
+    pub title: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SavedGroup {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    pub color: String,
+    pub tabs: Vec<SavedGroupTab>,
+    #[serde(default)]
+    pub saved_at: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -277,6 +339,28 @@ impl Store {
         let mut bookmarks: Vec<Bookmark> = read_json_or_default(&path);
         bookmarks.retain(|b| b.url != url);
         write_json(&path, &bookmarks);
+    }
+
+    pub fn saved_groups(&self) -> Vec<SavedGroup> {
+        read_json_or_default(&self.dir.join("saved_groups.json"))
+    }
+
+    // Saves `group` -- replacing the one with its id, if it was saved before.
+    pub fn save_group(&self, group: SavedGroup) -> Vec<SavedGroup> {
+        let mut groups = self.saved_groups();
+        match groups.iter_mut().find(|g| g.id == group.id) {
+            Some(g) => *g = group,
+            None => groups.push(group),
+        }
+        write_json(&self.dir.join("saved_groups.json"), &groups);
+        groups
+    }
+
+    pub fn delete_saved_group(&self, id: &str) -> Vec<SavedGroup> {
+        let mut groups = self.saved_groups();
+        groups.retain(|g| g.id != id);
+        write_json(&self.dir.join("saved_groups.json"), &groups);
+        groups
     }
 }
 

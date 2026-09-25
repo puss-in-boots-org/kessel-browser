@@ -257,6 +257,8 @@ pub fn install(app: &tauri::AppHandle, webview: &tauri::Webview) {
                 eprintln!("keys: couldn't hook a webview: {}", e.message());
             }
         });
+        // Where the keyboard focus goes back to when the window does.
+        crate::lifecycle::track_focus(webview);
     }
     #[cfg(not(windows))]
     let _ = (app, webview);

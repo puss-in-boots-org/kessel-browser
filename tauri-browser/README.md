@@ -20,6 +20,24 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **The whole tab section** (`src-tauri/src/lifecycle.rs`, tabsearch.html,
+  hovercard.html): named, coloured tab groups you can fold, save to the
+  bookmarks bar and get back after a restart, or have made by site; tab
+  search (Ctrl+Shift+A) across every window, sleeping and closed tabs
+  included; vertical tabs; a full strip that shrinks its tabs and then
+  scrolls; hover cards with a page preview and memory/CPU use; a dot on
+  background tabs that changed. Background tabs are now really hidden
+  from the engine (throttled like any browser's), paused after a while,
+  put to sleep after longer, with a limit on how many stay awake and
+  sites that never sleep. Settings has a new Tabs section, with "Keep tabs
+  when Kessel closes" at the top.
+  - Fixed along the way: switching back to a Kessel window (Alt+Tab) left
+    the keyboard nowhere until you clicked -- it goes back to the page now;
+    a menu item picked the instant its menu opened could open a tab that
+    never loaded (popups now close only once loaded, and wry answers
+    requests of webviews that closed mid-load, see
+    `vendor/wry/KESSEL-PATCH.md`); a view-source tab lost its
+    `view-source:` address.
 - **Pinned tabs, muted tabs, picking several tabs, and a full tab menu.**
   Pin a tab (tab menu) and it shrinks to its icon at the front of the
   strip, loses its close button, survives "close other tabs" and comes back

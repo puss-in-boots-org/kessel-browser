@@ -43,7 +43,7 @@ setInterval(() => invoke("toolbar_heartbeat").catch(() => {}), 1000);
 // `audible` / `muted`: the page plays sound / was muted (see "tab-audio").
 // `discarded` tabs have no live webview backing them right now -- either
 // they were idle and got their webview destroyed to free memory (see
-// wireTabDiscarding), or (neverCreated: true) they're a restored-session
+// lifecycleTick), or (neverCreated: true) they're a restored-session
 // tab that was never actually opened yet, since eagerly recreating every
 // webview from your last session on launch is exactly the kind of memory
 // waste this whole thing is meant to avoid.
@@ -83,7 +83,35 @@ window.__kesselTest = {
       audible: !!t.audible,
       muted: !!t.muted,
       selected: selectedTabs.has(t.id),
+      group: groupOf(t)?.id ?? null,
+      frozen: !!t.frozen,
+      attention: !!t.attention,
+      memory: t.memory ?? null,
+      cpu: t.cpu ?? null,
     })),
+  groups: () => [...tabGroups.values()],
+  // Lifecycle: pretend tab `id` was last looked at `minutes` ago, then run
+  // the check that freezes / puts tabs to sleep.
+  age: (id, minutes) => {
+    const tab = findTab(id);
+    if (tab) tab.lastActiveAt = Date.now() - minutes * 60 * 1000;
+  },
+  tick: () => lifecycleTick(),
+  pollResources: () => pollTabResources(),
+  hover: (id) => {
+    hoverTab = id;
+    return showHoverCard(id);
+  },
+  unhover: () => hideHoverCard(),
+  renameGroup: (id, name) => {
+    groupEdit = null;
+    const g = tabGroups.get(id);
+    if (g) g.name = name;
+    renderTabs();
+    persistSession();
+  },
+  // The group whose name is being typed, and what's typed so far.
+  groupEdit: () => groupEdit && { id: groupEdit.id, value: groupEdit.value },
   activeTabId: () => activeTabId,
   window: () => WIN,
   // The toolbar's own actions, as its buttons and shortcuts run them.
@@ -139,20 +167,73 @@ function insertTab(tab) {
 }
 
 // Pinned tabs first, then the rest with every account's tabs contiguous (a
-// dragged tab can't leave its group, or split one: it can't change which
-// account it's signed in as).
+// dragged tab can't leave its account's group, or split one: it can't
+// change which account it's signed in as) -- and every tab group's tabs
+// together (a group's tabs are all of one account).
 function normalizeGroups() {
-  const out = tabs.filter((t) => t.pinned);
-  const seen = new Set();
-  for (const t of tabs) {
-    if (t.pinned) continue;
-    if (!t.account) out.push(t);
-    else if (!seen.has(t.account)) {
-      seen.add(t.account);
-      out.push(...tabs.filter((x) => x.account === t.account && !x.pinned));
+  for (const t of tabs) if (t.pinned) t.group = null; // pinned tabs aren't grouped
+  const together = (list, key) => {
+    const out = [];
+    const seen = new Set();
+    for (const t of list) {
+      const k = key(t);
+      if (!k) out.push(t);
+      else if (!seen.has(k)) {
+        seen.add(k);
+        out.push(...list.filter((x) => key(x) === k));
+      }
     }
-  }
-  tabs = out;
+    return out;
+  };
+  const rest = tabs.filter((t) => !t.pinned);
+  tabs = [...tabs.filter((t) => t.pinned), ...together(together(rest, (t) => t.account), (t) => t.group)];
+}
+
+// --- Tab groups --------------------------------------------------------------------
+// Named, coloured groups of tabs you make (right-click a tab): shown as a
+// label in the strip, folded with a click, kept with the session, and --
+// saved -- on the bookmarks bar to open again later. Separate from an
+// account's tabs (see groupChip), though a group's tabs are all of one
+// account.
+
+// id -> { id, name, color, collapsed, site? } (`site`: made by grouping tabs
+// by site, which new tabs of that site join).
+const tabGroups = new Map();
+let savedGroups = []; // [{ id, name, color, tabs: [{ url, title }] }] (store.rs)
+
+const GROUP_COLORS = {
+  grey: ["Grey", "#9aa0a6"],
+  blue: ["Blue", "#5b8def"],
+  red: ["Red", "#ef5b5b"],
+  yellow: ["Yellow", "#f2c14e"],
+  green: ["Green", "#4fbf7f"],
+  pink: ["Pink", "#f06ab0"],
+  purple: ["Purple", "#a878f0"],
+  cyan: ["Cyan", "#3fc5d4"],
+  orange: ["Orange", "#f59a42"],
+};
+
+function groupColor(group) {
+  return (GROUP_COLORS[group?.color] || GROUP_COLORS.grey)[1];
+}
+
+function groupOf(tab) {
+  return (tab?.group && tabGroups.get(tab.group)) || null;
+}
+
+// The first colour no open group uses (then round again) -- grey last.
+function nextGroupColor() {
+  const used = [...tabGroups.values()].map((g) => g.color);
+  const names = [...Object.keys(GROUP_COLORS).filter((c) => c !== "grey"), "grey"];
+  return names.find((c) => !used.includes(c)) || names[tabGroups.size % names.length];
+}
+
+function newGroupId() {
+  return `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function groupLabel(group) {
+  return group.name ? `“${group.name}”` : `${GROUP_COLORS[group.color]?.[0] || "Grey"} group`;
 }
 
 // Puts `tab` right after `anchor` in the strip (a duplicate next to its
@@ -214,6 +295,307 @@ function groupChip(account) {
   return chip;
 }
 
+// A tab group's label in the strip: its name in its colour (a coloured dot
+// when unnamed). Click folds or unfolds it, double-click renames it,
+// right-click has everything else.
+function userGroupChip(group) {
+  const members = tabs.filter((t) => t.group === group.id);
+  const chip = document.createElement("div");
+  chip.className = "tab-group user-group" + (group.collapsed ? " collapsed" : "") + (group.name ? "" : " unnamed");
+  chip.dataset.userGroup = group.id;
+  chip.style.setProperty("--acct", groupColor(group));
+  chip.textContent = group.collapsed ? `${group.name}${group.name ? " · " : ""}${members.length}` : group.name;
+  const saved = savedGroups.some((g) => g.id === group.id);
+  chip.title = `${group.name || "Unnamed group"}: ${members.length} tab${members.length === 1 ? "" : "s"}${saved ? " (saved)" : ""}.\nClick to ${group.collapsed ? "expand" : "collapse"}, double-click to rename, right-click for more.`;
+  chip.addEventListener("click", (e) => {
+    if (e.target.closest("input")) return;
+    toggleGroupCollapsed(group);
+  });
+  chip.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    renameGroupInline(group.id);
+  });
+  chip.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (groupEdit) return;
+    showContextMenu(groupMenuItems(group), e.clientX, e.clientY);
+  });
+  if (groupEdit?.id === group.id) groupNameEditor(chip);
+  return chip;
+}
+
+// Folds or unfolds a group. Folding the group of the tab you're on moves
+// you to the nearest tab outside it (if there is one), like Chrome.
+async function toggleGroupCollapsed(group, collapsed = !group.collapsed) {
+  group.collapsed = collapsed;
+  const active = findTab(activeTabId);
+  if (collapsed && active?.group === group.id) {
+    const at = tabs.indexOf(active);
+    const outside = (t) => t.group !== group.id && !isHiddenInGroup(t);
+    const next = tabs.slice(at + 1).find(outside) ?? tabs.slice(0, at).reverse().find(outside);
+    if (next) await activateTab(next.id);
+  }
+  renderTabs();
+  persistSession();
+}
+
+function groupMenuItems(group) {
+  const members = tabs.filter((t) => t.group === group.id);
+  const saved = savedGroups.some((g) => g.id === group.id);
+  return [
+    { header: group.name || "Unnamed group" },
+    { label: "Rename group", iconName: "edit", action: () => renameGroupInline(group.id) },
+    ...Object.entries(GROUP_COLORS).map(([key, [name, color]]) => ({ label: name, swatch: color, checked: group.color === key, action: () => setGroupColor(group, key) })),
+    "-",
+    { label: "New tab in group", iconName: "plus", action: () => createTab(undefined, members[0]?.account ?? null, { after: members[members.length - 1], group: group.id }) },
+    { label: group.collapsed ? "Expand group" : "Collapse group", iconName: group.collapsed ? "expand" : "minus", action: () => toggleGroupCollapsed(group) },
+    { label: saved ? "Saved -- forget it" : "Save group", iconName: saved ? "trash" : "bookmark", disabled: !!WIN.private, action: () => (saved ? forgetSavedGroup(group.id) : saveGroup(group)) },
+    { label: "Move group to new window", iconName: "popOut", disabled: members.length >= tabs.length, action: () => moveTabsToNewWindow(members) },
+    "-",
+    { label: "Ungroup", iconName: "ungroup", action: () => ungroup(group) },
+    { label: "Close group", iconName: "close", danger: true, action: () => closeTabs(members) },
+  ];
+}
+
+function setGroupColor(group, color) {
+  group.color = color;
+  renderTabs();
+  persistSession();
+}
+
+// Puts `list` (all of one account; pinned tabs are left out) in a new group
+// and lets you name it.
+function createGroup(list, { name = "", site = null, rename = true } = {}) {
+  const members = list.filter((t) => !t.pinned && (t.account ?? null) === (list[0].account ?? null));
+  if (!members.length) return null;
+  const group = { id: newGroupId(), name, color: nextGroupColor(), collapsed: false, ...(site ? { site } : {}) };
+  tabGroups.set(group.id, group);
+  for (const t of members) t.group = group.id;
+  normalizeGroups();
+  clearSelection();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+  if (rename) renameGroupInline(group.id);
+  return group;
+}
+
+function addToGroup(list, group) {
+  const account = tabs.find((t) => t.group === group.id)?.account ?? null;
+  const members = list.filter((t) => !t.pinned && (t.account ?? null) === account);
+  for (const t of members) t.group = group.id;
+  // They join at the end of the group.
+  const rest = tabs.filter((t) => !members.includes(t));
+  const last = rest.map((t) => t.group).lastIndexOf(group.id);
+  rest.splice(last + 1, 0, ...members);
+  tabs = rest;
+  normalizeGroups();
+  clearSelection();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+}
+
+// Takes `list` out of their groups: each goes just after its group.
+function removeFromGroup(list) {
+  for (const t of list) {
+    const group = t.group;
+    if (!group) continue;
+    t.group = null;
+    const rest = tabs.filter((x) => x !== t);
+    const last = rest.map((x) => x.group).lastIndexOf(group);
+    if (last >= 0) {
+      rest.splice(last + 1, 0, t);
+      tabs = rest;
+    }
+  }
+  normalizeGroups();
+  clearSelection();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+}
+
+function ungroup(group) {
+  for (const t of tabs) if (t.group === group.id) t.group = null;
+  tabGroups.delete(group.id);
+  renderTabs();
+  persistSession();
+}
+
+// Types a new name for a group right in its label. The strip redraws often
+// (a tab loading, a title changing), so what's typed so far -- and where
+// the cursor is -- lives here and each redraw puts the box back as it was.
+let groupEdit = null; // { id, value, start, end, fresh } while typing a name
+
+function renameGroupInline(id) {
+  const group = tabGroups.get(id);
+  if (!group) return;
+  group.collapsed = false;
+  groupEdit = { id, value: group.name, start: 0, end: group.name.length, fresh: true };
+  invoke("focus_webview").catch(() => {});
+  renderTabs();
+}
+
+function finishGroupEdit(keep) {
+  const edit = groupEdit;
+  if (!edit) return;
+  groupEdit = null;
+  const group = tabGroups.get(edit.id);
+  if (keep && group) group.name = edit.value.trim();
+  renderTabs();
+  persistSession();
+}
+
+// The name box inside group `group`'s label (see userGroupChip).
+function groupNameEditor(chip) {
+  const edit = groupEdit;
+  chip.classList.add("editing");
+  chip.textContent = "";
+  const input = document.createElement("input");
+  input.className = "group-name-input";
+  input.value = edit.value;
+  input.placeholder = "Name this group";
+  input.maxLength = 40;
+  input.spellcheck = false;
+  const remember = () => {
+    edit.value = input.value;
+    edit.start = input.selectionStart ?? input.value.length;
+    edit.end = input.selectionEnd ?? input.value.length;
+  };
+  input.addEventListener("input", remember);
+  input.addEventListener("keyup", remember);
+  input.addEventListener("mouseup", remember);
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") finishGroupEdit(true);
+    else if (e.key === "Escape") finishGroupEdit(false);
+  });
+  // Clicked away: done. (A redraw replacing this box isn't that.)
+  input.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (groupEdit === edit && !document.querySelector(".group-name-input:focus")) finishGroupEdit(true);
+    }, 0);
+  });
+  chip.appendChild(input);
+  queueMicrotask(() => {
+    if (!input.isConnected || groupEdit !== edit) return;
+    input.focus();
+    if (edit.fresh) {
+      input.select();
+      edit.fresh = false;
+    } else {
+      input.setSelectionRange(edit.start, edit.end);
+    }
+  });
+}
+
+// Groups tabs from the same site (at least two) -- joining a group made
+// this way for that site if there is one.
+function groupTabsBySite() {
+  const bySite = new Map();
+  for (const t of tabs) {
+    if (t.pinned || t.group || !/^https?:/.test(t.url || "")) continue;
+    const key = siteKey(t);
+    if (!bySite.has(key)) bySite.set(key, []);
+    bySite.get(key).push(t);
+  }
+  let made = 0;
+  for (const [key, list] of bySite) {
+    const existing = [...tabGroups.values()].find((g) => g.site === key);
+    if (existing) addToGroup(list, existing);
+    else if (list.length >= 2) {
+      createGroup(list, { name: siteName(list[0].url), site: key, rename: false });
+      made++;
+    }
+  }
+  return made;
+}
+
+// The site a tab belongs to for grouping, per account.
+function siteKey(tab) {
+  return `${tab.account ?? ""}|${hostOf(tab.url).replace(/^m\./, "")}`;
+}
+
+// "github.com" -> "GitHub"-ish: the site's name without www. and the ending.
+function siteName(url) {
+  const host = hostOf(url).replace(/^m\./, "");
+  const parts = host.split(".");
+  const name = parts.length > 1 ? parts[parts.length - 2] : host;
+  return /^\d+$/.test(name) ? host : name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+// With "Group tabs from the same site" on: a tab that went to a site joins
+// that site's group, or starts one with another tab of the site. One that
+// left its site-group's site leaves the group.
+function autoGroupTab(tab) {
+  if (!currentSettings()?.auto_group_tabs || !tab || tab.pinned || !/^https?:/.test(tab.url || "")) return;
+  const key = siteKey(tab);
+  const own = groupOf(tab);
+  if (own?.site && own.site !== key) removeFromGroup([tab]);
+  if (tab.group) return;
+  const existing = [...tabGroups.values()].find((g) => g.site === key);
+  if (existing) return addToGroup([tab], existing);
+  const partner = tabs.find((t) => t !== tab && !t.pinned && !t.group && /^https?:/.test(t.url || "") && siteKey(t) === key);
+  if (partner) createGroup([partner, tab], { name: siteName(tab.url), site: key, rename: false });
+}
+
+// --- Saved groups -------------------------------------------------------------
+
+async function saveGroup(group, { quiet = false } = {}) {
+  const members = tabs.filter((t) => t.group === group.id && t.url);
+  try {
+    await invoke("save_tab_group", { group: { id: group.id, name: group.name, color: group.color, tabs: members.map((t) => ({ url: t.url, title: t.userTitled ? t.title : "" })) } });
+    if (!quiet) toast(`Saved ${groupLabel(group)} -- it's on the bookmarks bar`);
+  } catch (err) {
+    if (!quiet) toast(String(err));
+  }
+}
+
+async function forgetSavedGroup(id) {
+  await invoke("delete_saved_group", { id }).catch((err) => toast(String(err)));
+}
+
+// A saved group whose tabs changed is saved again (debounced with the
+// session), so the saved copy stays the group as it is.
+function syncSavedGroups() {
+  for (const group of tabGroups.values()) {
+    const saved = savedGroups.find((g) => g.id === group.id);
+    if (!saved) continue;
+    const urls = tabs.filter((t) => t.group === group.id && t.url).map((t) => t.url);
+    const changed = saved.name !== group.name || saved.color !== group.color || urls.join("\n") !== saved.tabs.map((t) => t.url).join("\n");
+    if (changed && urls.length) saveGroup(group, { quiet: true });
+  }
+}
+
+// Opens a saved group: shows it if it's open here already, else opens its
+// tabs as a group (the first one shown, the rest asleep until clicked).
+async function openSavedGroup(saved) {
+  const open = tabGroups.get(saved.id);
+  const first = tabs.find((t) => t.group === saved.id);
+  if (open && first) {
+    open.collapsed = false;
+    await activateTab(first.id);
+    return;
+  }
+  if (!saved.tabs.length) return;
+  const group = { id: saved.id, name: saved.name, color: saved.color, collapsed: false };
+  // The group once its first tab exists -- an empty group is dropped at the
+  // next redraw, and one can come while the tab is being made.
+  const id = await createTab(saved.tabs[0].url, null, { group: group.id });
+  tabGroups.set(group.id, group);
+  let anchor = findTab(id);
+  for (const t of saved.tabs.slice(1)) {
+    const placeholder = findTab(addPlaceholderTab(t.url, null, t.title || null, false, group.id));
+    moveTabAfter(placeholder, anchor);
+    anchor = placeholder;
+  }
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+}
+
 // Inserts as the first child rather than replacing innerHTML -- rail-shield
 // and rail-downloads already contain a badge <span> in the static HTML, and
 // clobbering it here would break the badge lookups later during init.
@@ -234,6 +616,9 @@ function paintStaticIcons() {
   iconFor("home-btn", icon("home", 17));
   iconFor("share-btn", icon("share", 15));
   iconFor("new-tab-btn", icon("plus", 16));
+  iconFor("tab-search-btn", icon("chevronDown", 15));
+  iconFor("tabs-scroll-left", icon("chevronLeft", 14));
+  iconFor("tabs-scroll-right", icon("chevronRight", 14));
   iconFor("lock-icon", icon("lock", 13));
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
@@ -288,7 +673,9 @@ function wireWindowControls() {
 let reportedInsets = { left: -1, top: -1 };
 
 function reportChromeInsets() {
-  const left = Math.ceil(document.getElementById("rail").getBoundingClientRect().right);
+  // Vertical tabs sit between the rail and the page.
+  const vtabs = document.getElementById("vtabs");
+  const left = Math.ceil((vtabs.hidden ? document.getElementById("rail") : vtabs).getBoundingClientRect().right);
   const bm = document.getElementById("bookmarks-bar");
   const lastChrome = bm.hidden ? document.getElementById("nav-bar") : bm;
   const top = Math.ceil(lastChrome.getBoundingClientRect().bottom);
@@ -300,7 +687,7 @@ function reportChromeInsets() {
 
 function wireChromeInsets() {
   const observer = new ResizeObserver(() => reportChromeInsets());
-  for (const id of ["rail", "tab-bar", "nav-bar", "bookmarks-bar"]) {
+  for (const id of ["rail", "vtabs", "tab-bar", "nav-bar", "bookmarks-bar"]) {
     observer.observe(document.getElementById(id));
   }
   window.addEventListener("resize", reportChromeInsets);
@@ -317,7 +704,8 @@ function pushToolbarSnapshot() {
   clearTimeout(snapshotTimer);
   snapshotTimer = setTimeout(() => {
     const snapshot = {
-      tabs: tabs.map(({ id, url, title, favicon, discarded, neverCreated, userTitled, account, pinned, muted }) => ({ id, url, title, favicon, discarded, neverCreated, userTitled, account, pinned, muted })),
+      tabs: tabs.map(({ id, url, title, favicon, discarded, neverCreated, userTitled, account, pinned, muted, group, audible, frozen }) => ({ id, url, title, favicon, discarded, neverCreated, userTitled, account, pinned, muted, group: group ?? null, audible, frozen })),
+      groups: [...tabGroups.values()],
       activeTabId,
       placeholderCounter,
     };
@@ -358,6 +746,7 @@ async function restoreAfterToolbarReload() {
   }
 
   tabs = restored;
+  for (const g of snapshot?.groups || []) tabGroups.set(g.id, { ...g });
   normalizeGroups();
   activeTabId = live.active ?? restored.find((t) => !t.discarded)?.id ?? null;
   placeholderCounter = Math.min(snapshot?.placeholderCounter ?? 0, ...restored.map((t) => t.id), 0);
@@ -376,8 +765,11 @@ function renderTabs() {
   const container = document.getElementById("tabs");
   container.innerHTML = "";
   for (const id of selectedTabs) if (!findTab(id) || id === activeTabId) selectedTabs.delete(id);
+  for (const id of [...tabGroups.keys()]) if (!tabs.some((t) => t.group === id)) tabGroups.delete(id); // emptied
+  const hoverCards = currentSettings()?.tab_hover_cards !== false;
   let prevGroup = null;
-  for (const tab of tabs) {
+  let prevUserGroup = null;
+  tabs.forEach((tab, i) => {
     // An account's tabs: a labelled chip in front, its colour on each tab,
     // and (folded) only the chip -- plus the active tab if it's in there.
     // Pinned tabs sit in front of everything, small, without a chip.
@@ -385,7 +777,13 @@ function renderTabs() {
     const grouped = account && !tab.pinned;
     if (grouped && account.id !== prevGroup) container.appendChild(groupChip(account));
     prevGroup = grouped ? account.id : null;
-    if (grouped && collapsedGroups.has(account.id) && tab.id !== activeTabId) continue;
+    if (grouped && collapsedGroups.has(account.id) && tab.id !== activeTabId) return;
+    // A tab group: its label first, a line in its colour under its tabs.
+    const group = groupOf(tab);
+    if (group && group.id !== prevUserGroup) container.appendChild(userGroupChip(group));
+    prevUserGroup = group?.id ?? null;
+    if (group?.collapsed && tab.id !== activeTabId) return;
+    const lastInGroup = group && tabs[i + 1]?.group !== group.id;
 
     const el = document.createElement("div");
     el.className = "tab" +
@@ -394,13 +792,21 @@ function renderTabs() {
       (tab.pinned ? " pinned" : "") +
       (tab.justCreated ? " tab-enter" : "") +
       (tab.discarded ? " discarded" : "") +
-      (account ? " grouped" : "");
+      (tab.frozen ? " frozen" : "") +
+      (tab.attention ? " attention" : "") +
+      (isHeavy(tab) ? " heavy" : "") +
+      (account ? " grouped" : "") +
+      (group ? " in-group" : "") +
+      (lastInGroup ? " group-end" : "");
     if (account) el.style.setProperty("--acct", account.color);
+    if (group) el.style.setProperty("--group", groupColor(group));
     tab.justCreated = false;
-    // The full title on hover -- the strip truncates it.
-    el.title = tab.discarded ? `${tab.title || ""}\nSleeping to save memory -- click to wake it up`.trim() : tab.title || "";
+    // The full title on hover -- the strip truncates it (hover cards say
+    // more, when they're on).
+    if (!hoverCards) el.title = tab.discarded ? `${tab.title || ""}\nSleeping to save memory -- click to wake it up`.trim() : tab.title || "";
     el.dataset.tabId = String(tab.id);
     el.draggable = true;
+    if (hoverCards) wireHoverCard(el, tab);
 
     const fav = document.createElement("span");
     fav.className = "tab-favicon" + (tab.loading ? " loading" : "");
@@ -410,6 +816,7 @@ function renderTabs() {
     title.className = "tab-title";
     title.textContent = tab.title || (tab.url ? hostOf(tab.url) : "New Tab");
     el.append(fav, title);
+    if (group) el.insertAdjacentHTML("beforeend", `<span class="group-line"></span>`);
 
     // Playing sound, or muted: a speaker to click (mute / unmute).
     if (tab.audible || tab.muted) {
@@ -450,12 +857,23 @@ function renderTabs() {
     });
     el.addEventListener("contextmenu", (e) => {
       e.preventDefault();
+      hideHoverCard();
       showTabContextMenu(tab, e.clientX, e.clientY);
     });
     wireTabDrag(el, tab);
 
     container.appendChild(el);
-  }
+  });
+  // The tab you're on stays in view in a strip too full to show every tab.
+  const active = container.querySelector(".tab.active");
+  if (active && !draggedTabId) active.scrollIntoView({ block: "nearest", inline: "nearest" });
+  updateStripOverflow();
+}
+
+// Using a lot of memory or CPU (see pollTabResources): a warning ring on
+// its icon, and the hover card says how much.
+function isHeavy(tab) {
+  return !tab.discarded && ((tab.memory ?? 0) > 1.5 * 1024 ** 3 || (tab.cpuHigh ?? 0) >= 2);
 }
 
 function faviconGlyph(tab) {
@@ -502,7 +920,8 @@ function wireTabDrag(el, tab) {
     const draggedEl = container.querySelector(`[data-tab-id="${draggedTabId}"]`);
     if (!draggedEl) return;
     const rect = el.getBoundingClientRect();
-    const before = e.clientX - rect.left < rect.width / 2;
+    // Down a vertical strip (pinned tabs still sit side by side there).
+    const before = isVerticalTabs() && !tab.pinned ? e.clientY - rect.top < rect.height / 2 : e.clientX - rect.left < rect.width / 2;
     container.insertBefore(draggedEl, before ? el : el.nextSibling);
   });
   el.addEventListener("dragend", (e) => {
@@ -514,18 +933,29 @@ function wireTabDrag(el, tab) {
     const shown = new Set(children.filter((c) => c.dataset.tabId).map((c) => parseInt(c.dataset.tabId, 10)));
     const order = [];
     for (const c of children) {
-      if (c.dataset.group) order.push(...tabs.filter((t) => t.account === c.dataset.group && !shown.has(t.id)));
+      if (c.dataset.group) order.push(...tabs.filter((t) => t.account === c.dataset.group && !t.pinned && !shown.has(t.id)));
+      else if (c.dataset.userGroup) order.push(...tabs.filter((t) => t.group === c.dataset.userGroup && !shown.has(t.id)));
       else if (c.dataset.tabId) order.push(findTab(parseInt(c.dataset.tabId, 10)));
     }
+    // Dropped between two tabs of a group: it joins that group. Dropped
+    // away from its own group: it leaves it.
+    const dropped = children.find((c) => c.dataset.tabId === String(tab.id));
+    const groupAt = (node) => node?.dataset.userGroup || (node?.dataset.tabId ? findTab(parseInt(node.dataset.tabId, 10))?.group : null) || null;
+    const before = groupAt(dropped?.previousElementSibling);
+    const after = dropped?.nextElementSibling?.dataset.tabId ? groupAt(dropped.nextElementSibling) : null;
+    const target = before && before === after ? tabGroups.get(before) : null;
+    if (target && !tab.pinned && tabs.some((t) => t.group === target.id && (t.account ?? null) === (tab.account ?? null))) tab.group = target.id;
+    else if (tab.group && before !== tab.group && after !== tab.group) tab.group = null;
     tabs = [...order.filter(Boolean), ...tabs.filter((t) => !order.includes(t))];
     normalizeGroups();
     syncTabOrder();
     renderTabs();
     persistSession();
-    // Dropped somewhere that isn't a tab strip -- below the toolbar (over
-    // the page) or outside the window: it moves into a window of its own.
-    // (Dropped on another window's strip, that window took it: "move".)
-    if (e.dataTransfer.dropEffect === "none" && (e.clientY > reportedInsets.top || isOutsideWindow(e))) {
+    // Dropped somewhere that isn't a tab strip -- over the page, or outside
+    // the window: it moves into a window of its own. (Dropped on another
+    // window's strip, that window took it: "move".)
+    const overPage = isVerticalTabs() ? e.clientX > reportedInsets.left : e.clientY > reportedInsets.top;
+    if (e.dataTransfer.dropEffect === "none" && (overPage || isOutsideWindow(e))) {
       moveTabToNewWindow(tab, e);
     }
   });
@@ -551,7 +981,7 @@ function wireTabDrops() {
       const els = [...strip.querySelectorAll(".tab")];
       const before = els.find((el) => {
         const r = el.getBoundingClientRect();
-        return e.clientX < r.left + r.width / 2;
+        return isVerticalTabs() ? e.clientY < r.top + r.height / 2 : e.clientX < r.left + r.width / 2;
       });
       try {
         const info = await invoke("adopt_tab", { id });
@@ -680,6 +1110,13 @@ async function tabMenuItems(tab) {
   const left = tabs.slice(0, first).filter((t) => !t.pinned && !picked.has(t));
   const others = tabs.filter((t) => !picked.has(t) && !t.pinned);
   const unpinned = tabs.filter((t) => !t.pinned);
+  const sleepable = live.filter((t) => t.id !== activeTabId && !t.audible);
+  // Tabs join groups of their own account; pinned ones join none.
+  const account = list.find((t) => !t.pinned)?.account ?? null;
+  const groupable = list.filter((t) => !t.pinned && (t.account ?? null) === account);
+  const otherGroups = [...tabGroups.values()].filter(
+    (g) => groupable.length && tabs.some((t) => t.group === g.id && (t.account ?? null) === account) && !groupable.every((t) => t.group === g.id)
+  );
   const otherWindows = (await invoke("get_windows").catch(() => [])).filter((w) => !w.current && w.private === !!WIN.private);
 
   const items = [
@@ -689,6 +1126,12 @@ async function tabMenuItems(tab) {
     { label: single ? "Duplicate" : `Duplicate ${tabCount(n)}`, iconName: "copy", keys: single && tab.id === activeTabId ? commandKeys("duplicate-tab") : undefined, disabled: !list.some((t) => t.url), action: () => duplicateTabs(list) },
     { label: `${allPinned ? "Unpin" : "Pin"} ${tabCount(n)}`, iconName: "pin", keys: single && tab.id === activeTabId ? commandKeys("pin-tab") : undefined, action: () => setPinned(list, !allPinned) },
     { label: `${allMuted ? "Unmute" : "Mute"} ${tabCount(n)}`, iconName: allMuted ? "volume" : "volumeOff", keys: single && tab.id === activeTabId ? commandKeys("mute-tab") : undefined, disabled: !live.length, action: () => toggleMute(live) },
+    { label: single ? "Put to sleep" : `Put ${tabCount(n)} to sleep`, iconName: "moon2", disabled: !sleepable.length, action: () => sleepTabs(sleepable) },
+    "-",
+    { label: single ? "Add tab to new group" : `Add ${tabCount(n)} to new group`, iconName: "layers", keys: single && tab.id === activeTabId ? commandKeys("add-tab-to-group") : undefined, disabled: !groupable.length, action: () => createGroup(groupable) },
+    ...otherGroups.map((g) => ({ label: `Add to group ${groupLabel(g)}`, swatch: groupColor(g), action: () => addToGroup(groupable, g) })),
+    ...(list.some((t) => t.group) ? [{ label: single ? "Remove from group" : "Remove from their groups", iconName: "ungroup", action: () => removeFromGroup(list) }] : []),
+    { label: "Group tabs by site", iconName: "grid", keys: commandKeys("group-tabs-by-site"), action: () => runCommand("group-tabs-by-site") },
     "-",
     { label: single ? "Bookmark tab" : `Bookmark ${tabCount(n)}`, iconName: "star", disabled: !web.length, action: () => bookmarkTabs(web) },
     { label: single ? "Copy link" : `Copy ${n} links`, iconName: "link", disabled: !web.length, action: () => copyTabLinks(web) },
@@ -856,11 +1299,14 @@ async function closeTabs(list) {
 async function moveTabsToNewWindow(list) {
   const live = list.filter((t) => t.id > 0 && !t.discarded);
   const sleeping = list.filter((t) => !(t.id > 0 && !t.discarded) && t.url);
+  const groupIds = new Set(list.map((t) => t.group).filter(Boolean));
   try {
     await invoke("move_tabs_to_new_window", {
       ids: live.map((t) => t.id),
-      sleeping: sleeping.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned })),
+      sleeping: sleeping.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group: t.group ?? null })),
       pinned: live.filter((t) => t.pinned).map((t) => t.id),
+      tabGroups: Object.fromEntries(live.filter((t) => t.group).map((t) => [String(t.id), t.group])),
+      groups: [...groupIds].map((id) => tabGroups.get(id)).filter(Boolean),
     });
     for (const t of sleeping) await closeTab(t.id, { remember: false });
   } catch (err) {
@@ -974,7 +1420,7 @@ async function activateTab(id) {
   // The Shields popup belongs to the tab it was opened for.
   invoke("close_shields_popup").catch(() => {});
 
-  // Stamp the tab we're leaving as "went idle now" -- wireTabDiscarding
+  // Stamp the tab we're leaving as "went idle now" -- lifecycleTick
   // measures elapsed time from this, not from when it was created.
   const prev = findTab(activeTabId);
   if (prev && prev.id !== id) prev.lastActiveAt = Date.now();
@@ -1002,36 +1448,49 @@ async function activateTab(id) {
     activeTabId = id;
     await invoke("switch_tab", { id });
   }
+  // Looked at: no news dot, and showing it unfroze it.
+  tab.attention = false;
+  tab.frozen = false;
+  tab.lastActiveAt = Date.now();
+  const group = groupOf(tab);
+  if (group?.collapsed) group.collapsed = false;
   renderTabs();
   updateAddressBarForActiveTab();
   persistSession();
+  enforceAwakeLimit();
 }
 
 // A new tab opens in the same account as the tab you're on (so "+" and
 // Ctrl+T inside an account's group stay signed in as that account), unless
 // `account` says otherwise (null = Main). `after`: right after that tab
-// instead of at the end; `pinned`: as a pinned tab.
-async function createTab(url, account = activeAccount(), { after = null, pinned = false } = {}) {
+// instead of at the end; `pinned`: as a pinned tab; `group`: in that tab
+// group.
+async function createTab(url, account = activeAccount(), { after = null, pinned = false, group = null } = {}) {
   account = accountById(account)?.id ?? null;
   const id = await invoke("new_tab", { url: url ?? null, account });
   // Resolve what Rust will actually open this tab to, so the omnibox/star/
   // pin logic below has an accurate url immediately -- don't wait on a
   // possibly-unreliable navigation event for internal kessel:// pages.
   const resolvedUrl = url ?? (currentSettings()?.homepage || "kessel://newtab");
-  const tab = { id, url: resolvedUrl, title: "New Tab", account, pinned, justCreated: true, loading: false, lastActiveAt: Date.now() };
+  const tab = { id, url: resolvedUrl, title: "New Tab", account, pinned, group: pinned ? null : group, justCreated: true, loading: false, lastActiveAt: Date.now() };
   insertTab(tab);
   if (after) moveTabAfter(tab, after);
-  else if (pinned) {
+  else if (pinned || group) {
     normalizeGroups();
     syncTabOrder();
   }
   if (account) collapsedGroups.delete(account);
+  if (tabGroups.get(tab.group)?.collapsed) tabGroups.get(tab.group).collapsed = false;
+  if (!group && !pinned) autoGroupTab(tab);
   clearSelection();
   activeTabId = id;
   renderTabs();
   updateAddressBarForActiveTab();
   persistSession();
   catchUpTab(id);
+  // Once more a little later, in case its reports crossed with this one.
+  setTimeout(() => findTab(id) && !findTab(id).userTitled && catchUpTab(id), 1500);
+  enforceAwakeLimit();
   return id;
 }
 
@@ -1054,8 +1513,9 @@ async function catchUpTab(id) {
   }
   // Only a real address -- right after creation the webview can still be on
   // about:blank, which isn't where the tab is going.
-  if (info.url && /^(https?|file):/.test(info.url) && info.url !== tab.url) {
-    tab.url = info.url;
+  const url = info.url && keepViewSource(tab, info.url);
+  if (url && /^(https?|file):/.test(url) && url !== tab.url) {
+    tab.url = url;
     changed = true;
     if (id === activeTabId) updateAddressBarForActiveTab();
   }
@@ -1065,9 +1525,15 @@ async function catchUpTab(id) {
   }
 }
 
+// WebView2 reports a view-source: tab by the address it shows the source
+// of; the tab (and its address bar) keep saying view-source:.
+function keepViewSource(tab, url) {
+  return tab?.url?.startsWith("view-source:") && tab.url.slice("view-source:".length) === url ? tab.url : url;
+}
+
 // Adds a tab entry with NO webview behind it yet -- used for session-restore
 // tabs you aren't looking at right now. Costs nothing until you click it.
-function addPlaceholderTab(url, account = null, title = null, pinned = false) {
+function addPlaceholderTab(url, account = null, title = null, pinned = false, group = null) {
   const id = nextPlaceholderId();
   tabs.push({
     id,
@@ -1076,6 +1542,7 @@ function addPlaceholderTab(url, account = null, title = null, pinned = false) {
     title: title || internalTitle(url) || hostOf(url),
     userTitled: !!title,
     pinned: !!pinned,
+    group: pinned ? null : group,
     discarded: true,
     neverCreated: true,
     loading: false,
@@ -1098,24 +1565,30 @@ async function openWindowInit(init) {
       if (i === active) {
         const id = await createTab(saved[i].url, saved[i].account ?? null);
         findTab(id).pinned = !!saved[i].pinned;
+        findTab(id).group = saved[i].pinned ? null : saved[i].group ?? null;
       } else {
-        addPlaceholderTab(saved[i].url, saved[i].account ?? null, saved[i].title, saved[i].pinned);
+        addPlaceholderTab(saved[i].url, saved[i].account ?? null, saved[i].title, saved[i].pinned, saved[i].group ?? null);
       }
     }
+    // Their groups, once every tab is back (an empty group is dropped).
+    for (const g of init.session.groups || []) if (g?.id) tabGroups.set(g.id, { ...g });
     normalizeGroups();
     syncTabOrder();
     renderTabs();
     return true;
   }
   // Tabs moved here from another window: the live ones with their pages,
-  // sleeping ones still asleep.
+  // sleeping ones still asleep; pinned and grouped as they were.
   if (init.adopt?.length || init.sleeping?.length) {
     const pinnedIds = new Set(init.pinned || []);
+    const groupOfId = new Map(Object.entries(init.tabGroups || {}).map(([id, g]) => [Number(id), g]));
     for (const info of init.adopt || []) {
       adoptTabInfo(info);
       if (pinnedIds.has(info.id)) findTab(info.id).pinned = true;
+      else if (groupOfId.has(info.id)) findTab(info.id).group = groupOfId.get(info.id);
     }
-    for (const t of init.sleeping || []) addPlaceholderTab(t.url, t.account ?? null, t.title, t.pinned);
+    for (const t of init.sleeping || []) addPlaceholderTab(t.url, t.account ?? null, t.title, t.pinned, t.group ?? null);
+    for (const g of init.groups || []) if (g?.id) tabGroups.set(g.id, { ...g });
     normalizeGroups();
     syncTabOrder();
     await activateTab((tabs.find((t) => !t.discarded) ?? tabs[0]).id);
@@ -1131,6 +1604,7 @@ async function openWindowInit(init) {
 async function closeTab(id, { remember = true } = {}) {
   const tab = tabs.find((t) => t.id === id);
   if (!tab) return;
+  if (hoverTab === id || hoverShown) hideHoverCard();
   if (!tab.neverCreated) {
     // A discarded-but-previously-real tab's id is still a valid u32 Rust
     // once knew (close_tab just no-ops if it's already gone) -- only a
@@ -1166,6 +1640,7 @@ async function closeTab(id, { remember = true } = {}) {
 // memory; reviving it in activateTab() above just reloads the page) -------
 
 async function discardTab(tab) {
+  if (tab.discarded || tab.id === activeTabId) return;
   try {
     await invoke("close_tab", { id: tab.id, url: null });
   } catch {
@@ -1173,21 +1648,73 @@ async function discardTab(tab) {
   }
   tab.discarded = true;
   tab.loading = false;
+  tab.audible = false;
+  tab.frozen = false;
+  tab.memory = null;
+  tab.cpu = null;
   renderTabs();
 }
 
-function wireTabDiscarding() {
-  setInterval(() => {
-    const minutes = currentSettings()?.discard_tabs_after_minutes ?? 0;
-    if (!minutes) return; // 0 = disabled
-    const cutoff = Date.now() - minutes * 60 * 1000;
-    for (const tab of tabs) {
-      if (tab.discarded || tab.id === activeTabId) continue;
-      if (tab.audible) continue; // playing music or a video you're listening to
-      if (SINGLETON_ROUTES.has(internalPageKey(tab.url))) continue; // never discard Settings/Passwords
-      if ((tab.lastActiveAt ?? 0) < cutoff) discardTab(tab);
+// --- A background tab's life -----------------------------------------------------
+// Hidden (throttled by the engine) as soon as you leave it -- see
+// lifecycle.rs -- then, as set in Settings -> Performance: frozen after a
+// while (scripts stop), asleep after longer (webview closed, reloads when
+// you come back), and no more than so many tabs awake at once. Never the
+// tab you're on, one playing sound, Kessel's own single pages, or a site
+// you listed as never to sleep.
+
+function neverSleeps(tab) {
+  if (tab.audible || SINGLETON_ROUTES.has(internalPageKey(tab.url))) return true;
+  const host = hostOf(tab.url || "");
+  return (currentSettings()?.never_sleep_sites || []).some((site) => {
+    const s = String(site).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    return s && (host === s || host.endsWith(`.${s}`));
+  });
+}
+
+function lifecycleTick() {
+  const settings = currentSettings() || {};
+  const now = Date.now();
+  const sleepAfter = (settings.discard_tabs_after_minutes ?? 0) * 60 * 1000;
+  const freezeAfter = (settings.freeze_tabs_after_minutes ?? 0) * 60 * 1000;
+  for (const tab of tabs) {
+    if (tab.discarded || tab.id <= 0 || tab.id === activeTabId || neverSleeps(tab)) continue;
+    const idle = now - (tab.lastActiveAt ?? now);
+    if (sleepAfter && idle >= sleepAfter) discardTab(tab);
+    else if (freezeAfter && idle >= freezeAfter && !tab.frozen && !tab.freezing) {
+      tab.freezing = true;
+      invoke("freeze_tab", { id: tab.id }).catch(() => {}).finally(() => (tab.freezing = false));
     }
-  }, 60 * 1000);
+  }
+  enforceAwakeLimit();
+}
+
+// "Keep at most N tabs awake": the ones you looked at longest ago go to
+// sleep first.
+function enforceAwakeLimit() {
+  const max = currentSettings()?.max_awake_tabs ?? 0;
+  if (!max) return;
+  const awake = tabs.filter((t) => !t.discarded && t.id > 0);
+  if (awake.length <= max) return;
+  const candidates = awake.filter((t) => t.id !== activeTabId && !neverSleeps(t)).sort((a, b) => (a.lastActiveAt ?? 0) - (b.lastActiveAt ?? 0));
+  for (const t of candidates.slice(0, awake.length - max)) discardTab(t);
+}
+
+function wireTabLifecycle() {
+  setInterval(lifecycleTick, 30 * 1000);
+}
+
+// Puts `list` to sleep now (the tab menu, "Put other tabs to sleep").
+async function sleepTabs(list) {
+  let count = 0;
+  for (const t of list) {
+    if (t.discarded || t.id <= 0 || t.id === activeTabId || t.audible) continue;
+    await discardTab(t);
+    count++;
+  }
+  clearSelection();
+  renderTabs();
+  toast(count ? `${count} tab${count === 1 ? "" : "s"} asleep -- ${count === 1 ? "it wakes" : "they wake"} up when you click ${count === 1 ? "it" : "them"}` : "Nothing to put to sleep");
 }
 
 // Settings and Passwords can still be reached as full tabs (e.g. typing
@@ -1257,6 +1784,14 @@ async function runCommand(id, ctx = {}) {
     }
     case "pin-tab": return picked.length && setPinned(picked, !picked.every((t) => t.pinned));
     case "mute-tab": return toggleMute(picked);
+    case "search-tabs": return toggleTabSearch();
+    case "add-tab-to-group": return picked.length && createGroup(picked);
+    case "group-tabs-by-site": {
+      const made = groupTabsBySite();
+      return toast(made ? `Made ${made} group${made === 1 ? "" : "s"} of tabs from the same site` : "No two ungrouped tabs are from the same site");
+    }
+    case "sleep-other-tabs": return sleepTabs(tabs.filter((t) => t.id !== activeTabId));
+    case "toggle-vertical-tabs": return saveSettings({ tab_layout: currentSettings()?.tab_layout === "vertical" ? "horizontal" : "vertical" });
     case "new-window": return invoke("new_window", { private: false });
     case "new-private-window": return invoke("new_window", { private: true });
     case "close-window": return appWindow.close();
@@ -1342,7 +1877,8 @@ async function goToTab(index) {
 // A tab in a folded group only shows as its group's chip -- unless it's
 // the active one.
 function isHiddenInGroup(tab) {
-  return !!(tab.account && collapsedGroups.has(tab.account) && tab.id !== activeTabId);
+  if (tab.id === activeTabId) return false;
+  return !!((tab.account && !tab.pinned && collapsedGroups.has(tab.account)) || groupOf(tab)?.collapsed);
 }
 
 // Ctrl+Shift+PageUp/PageDown: moves the active tab one place, within its
@@ -1488,9 +2024,11 @@ function persistSession() {
     // Settings/Passwords are excluded on purpose: restoring one as a plain
     // tab would bypass the singleton dedup the next time it's reopened.
     const kept = tabs.filter((t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(internalPageKey(t.url)));
-    const saved = kept.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned }));
+    const saved = kept.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group: groupOf(t)?.id ?? null }));
     const active = Math.max(0, kept.findIndex((t) => t.id === activeTabId));
-    invoke("save_window_session", { tabs: saved, active }).catch(() => {});
+    const groups = [...tabGroups.values()].filter((g) => kept.some((t) => t.group === g.id));
+    invoke("save_window_session", { tabs: saved, active, groups }).catch(() => {});
+    syncSavedGroups();
   }, 300);
 }
 
@@ -1508,8 +2046,38 @@ function renderBookmarksBar() {
   const bar = document.getElementById("bookmarks-bar");
   bar.hidden = currentSettings()?.bookmarks_bar === false;
   bar.innerHTML = "";
+  // Saved tab groups first: click opens the group (or shows it, if open).
+  for (const g of WIN.private ? [] : savedGroups) {
+    const chip = document.createElement("div");
+    chip.className = "bm-chip saved-group";
+    chip.dataset.savedGroup = g.id;
+    chip.style.setProperty("--group", (GROUP_COLORS[g.color] || GROUP_COLORS.grey)[1]);
+    chip.title = `Saved tab group${g.name ? ` “${g.name}”` : ""}: ${g.tabs.length} tab${g.tabs.length === 1 ? "" : "s"}\n${g.tabs.slice(0, 8).map((t) => t.title || hostOf(t.url)).join("\n")}`;
+    const dot = document.createElement("span");
+    dot.className = "saved-group-dot";
+    const title = document.createElement("span");
+    title.className = "bm-title";
+    title.textContent = g.name || `${g.tabs.length} tab${g.tabs.length === 1 ? "" : "s"}`;
+    chip.append(dot, title);
+    chip.addEventListener("click", () => openSavedGroup(g));
+    chip.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      showContextMenu(
+        [
+          { header: g.name || "Saved group" },
+          ...g.tabs.slice(0, 12).map((t) => ({ label: t.title || hostOf(t.url), iconName: "globe", action: () => createTab(t.url) })),
+          "-",
+          { label: "Open group", iconName: "layers", action: () => openSavedGroup(g) },
+          { label: "Delete saved group", iconName: "trash", danger: true, action: () => forgetSavedGroup(g.id) },
+        ],
+        e.clientX,
+        e.clientY
+      );
+    });
+    bar.appendChild(chip);
+  }
   if (!bookmarks.length) {
-    bar.innerHTML = `<span class="bm-empty">Bookmarks you star show up here</span>`;
+    if (!bar.children.length) bar.innerHTML = `<span class="bm-empty">Bookmarks you star show up here</span>`;
     return;
   }
   for (const b of bookmarks) {
@@ -1677,6 +2245,247 @@ function updatePanelHighlights() {
   renderPinned();
 }
 
+// --- A full tab strip -------------------------------------------------------------
+// Tabs shrink toward their icons as the strip fills (or, set to scroll, keep
+// their titles). Once they can't shrink any more the strip scrolls: with
+// the mouse wheel, or the arrows that appear at its ends; the tab you're
+// on is always scrolled into view, and tab search lists every tab.
+
+function updateStripOverflow() {
+  const strip = document.getElementById("tabs");
+  // Too narrow for a title: just the icon (and the close button, on the
+  // tab you're on).
+  const vertical = isVerticalTabs();
+  for (const el of strip.querySelectorAll(".tab:not(.pinned)")) el.classList.toggle("narrow", !vertical && el.getBoundingClientRect().width < 84);
+  const over = !vertical && strip.scrollWidth > strip.clientWidth + 1;
+  document.getElementById("tab-bar").classList.toggle("overflowing", over);
+  document.getElementById("tabs-scroll-left").hidden = !over || strip.scrollLeft <= 1;
+  document.getElementById("tabs-scroll-right").hidden = !over || strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+  const keys = commandKeys("search-tabs");
+  document.getElementById("tab-search-btn").title = `Search tabs${keys ? ` (${keys})` : ""} -- ${tabs.length} open`;
+}
+
+function wireStripScrolling() {
+  const strip = document.getElementById("tabs");
+  strip.addEventListener(
+    "wheel",
+    (e) => {
+      if (isVerticalTabs() || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      strip.scrollLeft += e.deltaY;
+    },
+    { passive: false }
+  );
+  strip.addEventListener("scroll", () => {
+    hideHoverCard();
+    updateStripOverflow();
+  });
+  document.getElementById("tabs-scroll-left").addEventListener("click", () => strip.scrollBy({ left: -strip.clientWidth * 0.75, behavior: "smooth" }));
+  document.getElementById("tabs-scroll-right").addEventListener("click", () => strip.scrollBy({ left: strip.clientWidth * 0.75, behavior: "smooth" }));
+  new ResizeObserver(updateStripOverflow).observe(strip);
+}
+
+// --- Tab search (tabsearch.html) -----------------------------------------------------
+// Every tab of every window, sleeping ones too, plus recently closed ones:
+// type to find one, Enter to go there.
+
+async function toggleTabSearch() {
+  hideHoverCard();
+  const rect = document.getElementById("tab-search-btn").getBoundingClientRect();
+  const width = 420;
+  // Under its button -- in a vertical strip, starting at it.
+  const x = isVerticalTabs() ? rect.left + width : rect.right;
+  await invoke("toggle_popup", { kind: "tabsearch", x, y: rect.bottom, width, height: 520, init: { window: WIN.label, toolbar: `toolbar-${WIN.number}` } }).catch(() => {});
+}
+
+// --- Vertical tabs ---------------------------------------------------------------------
+// The strip as a column between the rail and the page (Settings -> Tabs):
+// wide with titles, or collapsed to icons; its right edge drags wider.
+
+function isVerticalTabs() {
+  return document.documentElement.classList.contains("vertical-tabs");
+}
+
+function applyTabLayout() {
+  const s = currentSettings() || {};
+  const vertical = s.tab_layout === "vertical";
+  const collapsed = vertical && !!s.vertical_tabs_collapsed;
+  const root = document.documentElement;
+  const changed = root.classList.contains("vertical-tabs") !== vertical || root.classList.contains("vtabs-collapsed") !== collapsed;
+  root.classList.toggle("vertical-tabs", vertical);
+  root.classList.toggle("vtabs-collapsed", collapsed);
+  root.classList.toggle("tabs-scroll", s.tab_overflow === "scroll");
+  const vtabs = document.getElementById("vtabs");
+  vtabs.hidden = !vertical;
+  vtabs.style.width = collapsed ? "" : `${Math.round(Math.min(480, Math.max(160, s.vertical_tabs_width ?? 240)))}px`;
+  const strip = document.getElementById("tabs");
+  const newBtn = document.getElementById("new-tab-btn");
+  const searchBtn = document.getElementById("tab-search-btn");
+  if (vertical) {
+    document.getElementById("vtabs-list").appendChild(strip);
+    document.getElementById("vtabs-head").insertBefore(searchBtn, document.getElementById("vtabs-collapse"));
+    document.getElementById("vtabs-foot").appendChild(newBtn);
+  } else {
+    const bar = document.getElementById("tab-bar");
+    bar.insertBefore(strip, document.getElementById("tabs-scroll-right"));
+    bar.insertBefore(newBtn, document.getElementById("drag-space"));
+    bar.insertBefore(searchBtn, document.getElementById("drag-space"));
+  }
+  const collapse = document.getElementById("vtabs-collapse");
+  collapse.innerHTML = icon(collapsed ? "chevronRight" : "chevronLeft", 15);
+  collapse.title = collapsed ? "Show tab titles" : "Just icons";
+  if (changed) renderTabs();
+  reportChromeInsets();
+  updateStripOverflow();
+}
+
+function wireVerticalTabs() {
+  document.getElementById("vtabs-collapse").addEventListener("click", () => saveSettings({ vertical_tabs_collapsed: !currentSettings()?.vertical_tabs_collapsed }));
+  const vtabs = document.getElementById("vtabs");
+  const grip = document.getElementById("vtabs-resize");
+  grip.addEventListener("pointerdown", (e) => {
+    if (document.documentElement.classList.contains("vtabs-collapsed")) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = vtabs.getBoundingClientRect().width;
+    let width = startWidth;
+    const move = (ev) => {
+      width = Math.round(Math.min(480, Math.max(160, startWidth + ev.clientX - startX)));
+      vtabs.style.width = `${width}px`;
+      reportChromeInsets();
+    };
+    const up = () => {
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", up);
+      if (width !== startWidth) saveSettings({ vertical_tabs_width: width });
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", up);
+  });
+}
+
+// --- Hover cards (hovercard.html) --------------------------------------------------
+// Resting the mouse on a tab shows a card with its title, site, state and --
+// as set in Settings -> Tabs -- a preview of the page and its memory use.
+// The first takes a moment; moving along the strip, the next ones come at
+// once.
+
+let hoverTimer = null;
+let hoverTab = null; // the tab a card is (about to be) shown for
+let hoverShown = false;
+let hoverHiddenAt = 0;
+
+function wireHoverCard(el, tab) {
+  el.addEventListener("mouseenter", () => {
+    if (draggedTabId !== null) return;
+    clearTimeout(hoverTimer);
+    hoverTab = tab.id;
+    const warm = hoverShown || Date.now() - hoverHiddenAt < 900;
+    hoverTimer = setTimeout(() => showHoverCard(tab.id), warm ? 40 : 550);
+  });
+  el.addEventListener("mouseleave", hideHoverCard);
+  el.addEventListener("mousedown", hideHoverCard);
+}
+
+function hoverInfo(tab, preview) {
+  const s = currentSettings() || {};
+  const group = groupOf(tab);
+  const internal = !tab.url || tab.url.startsWith("kessel://");
+  return {
+    id: tab.id,
+    title: tab.title || (tab.url ? hostOf(tab.url) : "New Tab"),
+    host: internal ? "Kessel" : tab.url.startsWith("file:") ? "File on this PC" : hostOf(tab.url),
+    secure: /^https:/.test(tab.url || ""),
+    state: tab.discarded ? "sleeping" : tab.frozen ? "frozen" : null,
+    audible: !!tab.audible,
+    muted: !!tab.muted,
+    pinned: !!tab.pinned,
+    attention: !!tab.attention,
+    group: group ? { name: group.name, color: groupColor(group) } : null,
+    account: accountById(tab.account) ? { name: accountById(tab.account).name, color: accountById(tab.account).color } : null,
+    showMemory: s.hover_card_memory !== false && !tab.discarded && tab.id > 0,
+    memory: tab.memory ?? null,
+    cpu: tab.cpu ?? null,
+    heavy: isHeavy(tab),
+    preview,
+    thumbnail: null,
+  };
+}
+
+// The card's height for what it shows (hovercard.html lays it out to fit).
+function hoverCardHeight(info) {
+  let h = 24 + (info.title.length > 40 ? 38 : 20) + 20;
+  if (info.state || info.audible || info.muted || info.group || info.account || info.attention) h += 22;
+  if (info.showMemory) h += 20;
+  if (info.preview) h += 164;
+  return h;
+}
+
+async function showHoverCard(id) {
+  const tab = findTab(id);
+  const el = document.querySelector(`.tab[data-tab-id="${id}"]`);
+  if (!tab || !el || hoverTab !== id || draggedTabId !== null || currentSettings()?.tab_hover_cards === false) return;
+  // Not measured yet (just opened, or the last reading was a while ago).
+  if (tab.memory == null && tab.id > 0 && !tab.discarded && currentSettings()?.hover_card_memory !== false) await pollTabResources();
+  if (hoverTab !== id) return;
+  const preview = currentSettings()?.hover_card_preview !== false && tab.id > 0 && !tab.discarded;
+  const info = hoverInfo(tab, preview);
+  const width = 300;
+  const height = hoverCardHeight(info);
+  const rect = el.getBoundingClientRect();
+  let x;
+  let y;
+  if (isVerticalTabs()) {
+    x = document.getElementById("vtabs").getBoundingClientRect().right + 6;
+    y = Math.max(4, Math.min(rect.top, window.innerHeight - height - 8));
+  } else {
+    x = Math.max(4, Math.min(rect.left, window.innerWidth - width - 4));
+    y = rect.bottom + 4;
+  }
+  hoverShown = true;
+  await invoke("hover_card", { show: true, x, y, width, height, info }).catch(() => {});
+  if (!preview) return;
+  const thumbnail = await invoke("tab_thumbnail", { id: tab.id, fresh: tab.id === activeTabId }).catch(() => null);
+  if (hoverTab === id && hoverShown) {
+    await invoke("hover_card", { show: true, x, y, width, height, info: { ...hoverInfo(tab, preview), thumbnail: thumbnail || "none" } }).catch(() => {});
+  }
+}
+
+function hideHoverCard() {
+  clearTimeout(hoverTimer);
+  hoverTab = null;
+  if (!hoverShown) return;
+  hoverShown = false;
+  hoverHiddenAt = Date.now();
+  invoke("hover_card", { show: false, x: 0, y: 0, width: 0, height: 0, info: null }).catch(() => {});
+}
+
+// --- Memory and CPU -----------------------------------------------------------------------
+// Every few seconds, how much each awake tab's page uses (lifecycle.rs):
+// for hover cards, tab search, and a warning on tabs using a lot -- over
+// 1.5 GB, or most of a CPU core for 10 seconds.
+
+async function pollTabResources() {
+  const live = tabs.filter((t) => t.id > 0 && !t.discarded);
+  if (!live.length || document.hidden) return;
+  const usage = await invoke("tab_resources", { ids: live.map((t) => t.id) }).catch(() => null);
+  if (!usage) return;
+  let changed = false;
+  for (const t of live) {
+    const u = usage[String(t.id)];
+    if (!u) continue;
+    const wasHeavy = isHeavy(t);
+    t.memory = u.memory;
+    t.cpu = u.cpu;
+    t.cpuHigh = (u.cpu ?? 0) >= 60 ? (t.cpuHigh ?? 0) + 1 : 0;
+    if (isHeavy(t) !== wasHeavy) changed = true;
+  }
+  if (changed) renderTabs();
+}
+
 // --- Search engine menu ---------------------------------------------------
 
 // The address bar's engine button: which engine searches, as a dropdown
@@ -1711,12 +2520,27 @@ window.addEventListener("DOMContentLoaded", async () => {
   blockedCount = await invoke("get_blocked_count").catch(() => 0);
   updateShield();
   updateDownloadsBadge();
+  savedGroups = (await invoke("get_saved_groups").catch(() => [])) || [];
+  renderBookmarksBar();
 
-  // Before the first tab exists, so Rust places it below the real chrome.
+  // Before the first tab exists, so Rust places it below the real chrome
+  // (and beside vertical tabs).
+  wireVerticalTabs();
+  applyTabLayout();
   await wireChromeInsets();
 
-  wireTabDiscarding();
+  wireTabLifecycle();
   wireTabDrops();
+  wireStripScrolling();
+  setInterval(pollTabResources, 5000);
+  document.getElementById("tab-search-btn").addEventListener("click", toggleTabSearch);
+  window.addEventListener("kessel-settings", () => {
+    applyTabLayout();
+    renderTabs();
+  });
+  // The mouse left the window, or it lost the focus: no card left behind.
+  document.documentElement.addEventListener("mouseleave", hideHoverCard);
+  window.addEventListener("blur", hideHoverCard);
 
   document.getElementById("rail-home").addEventListener("click", () => createTab());
   document.getElementById("rail-add-pin").addEventListener("click", pinCurrentTab);
@@ -1798,6 +2622,22 @@ window.addEventListener("DOMContentLoaded", async () => {
     contextMenu = null;
     action?.();
   });
+  // A background tab was frozen (or couldn't be -- see freeze_tab).
+  await listen("tab-frozen", (event) => {
+    const tab = findTab(event.payload.id);
+    if (!tab || tab.id === activeTabId) return;
+    tab.frozen = !!event.payload.frozen;
+    renderTabs();
+  });
+  // Saved tab groups changed (here or in another window).
+  await listen("saved-groups-changed", (event) => {
+    savedGroups = event.payload || [];
+    renderBookmarksBar();
+    renderTabs();
+  });
+  // Tab search (tabsearch.html) picked or closed one of this window's tabs.
+  await listen("tab-search-activate", (event) => activateTab(event.payload.id));
+  await listen("tab-search-close", (event) => closeTab(event.payload.id));
   // A tab started or stopped playing sound, or was (un)muted.
   await listen("tab-audio", (event) => {
     const tab = findTab(event.payload.id);
@@ -1832,13 +2672,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     const { id, url } = event.payload;
     shieldsStats.delete(id); // a new page starts counting from zero
     const tab = findTab(id);
-    if (tab) {
-      tab.url = url;
+    const next = tab && keepViewSource(tab, url);
+    if (tab && next !== tab.url) {
+      tab.url = next;
       // Stale from whatever page this tab was on before -- the new page's
       // own title and icon follow from Rust as it loads (watch_page).
       tab.favicon = null;
       tab.title = hostOf(url);
       tab.userTitled = false;
+      autoGroupTab(tab);
     }
     if (id === activeTabId) updateAddressBarForActiveTab();
     renderTabs();
@@ -1862,12 +2704,19 @@ window.addEventListener("DOMContentLoaded", async () => {
     const { id, title } = event.payload;
     const tab = findTab(id);
     if (!tab || !title || (tab.title === title && tab.userTitled)) return;
+    // A tab in the background whose (loaded) page changes its title -- a
+    // new message, a finished upload -- gets a dot until you look at it.
+    const news = tab.userTitled && id !== activeTabId && tab.loadedAt && Date.now() - tab.loadedAt > 1500 && currentSettings()?.tab_attention_dots !== false;
     tab.title = title;
     tab.userTitled = true;
     const el = document.querySelector(`.tab[data-tab-id="${id}"]`);
     if (el) {
       el.querySelector(".tab-title").textContent = title;
-      if (!tab.discarded) el.title = title;
+      if (!tab.discarded && el.hasAttribute("title")) el.title = title;
+    }
+    if (news && !tab.attention) {
+      tab.attention = true;
+      el?.classList.add("attention");
     }
     pushToolbarSnapshot();
   });
@@ -1875,8 +2724,9 @@ window.addEventListener("DOMContentLoaded", async () => {
   // The page changed its address without loading a new one (YouTube,
   // Gmail...), or a navigation ended somewhere else than it started.
   await listen("tab-url-changed", (event) => {
-    const { id, url } = event.payload;
+    const { id } = event.payload;
     const tab = findTab(id);
+    const url = tab && keepViewSource(tab, event.payload.url);
     if (!tab || tab.url === url) return;
     tab.url = url;
     if (id === activeTabId) updateAddressBarForActiveTab();
@@ -1896,7 +2746,16 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   await listen("tab-load-finished", (event) => {
     const tab = findTab(event.payload.id);
-    if (tab) tab.loading = false;
+    if (tab) {
+      tab.loading = false;
+      tab.loadedAt = Date.now();
+      // A picture of the page you're looking at, once it's drawn -- for its
+      // hover card and tab search (another is taken as you leave it).
+      const id = tab.id;
+      setTimeout(() => {
+        if (id === activeTabId && currentSettings()?.hover_card_preview !== false) invoke("tab_thumbnail", { id, fresh: true }).catch(() => {});
+      }, 1000);
+    }
     if (event.payload.id === activeTabId) {
       showProgress(false);
       updateNavButtons();
@@ -1908,6 +2767,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     const { id, url, activate, account = null } = event.payload;
     if (!findTab(id)) {
       insertTab({ id, url, title: internalTitle(url) || hostOf(url), account, justCreated: true, loading: false, lastActiveAt: Date.now() });
+      autoGroupTab(findTab(id));
       if (activate) {
         activeTabId = id;
         if (account) collapsedGroups.delete(account);

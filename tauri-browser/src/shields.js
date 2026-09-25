@@ -4,7 +4,7 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { watchCustomWallpaper } from "./shared/glass.js";
-import { listenHere } from "./shared/api.js";
+import { listenHere, closeOwnPopup } from "./shared/api.js";
 
 const { invoke } = window.__TAURI__.core;
 // Only this window's stats -- each window has its own Shields popup.
@@ -12,7 +12,7 @@ const listen = listenHere;
 const tabId = window.__KESSEL_SHIELDS_TAB__ ?? 0;
 let info = null;
 
-const close = () => invoke("close_shields_popup").catch(() => {});
+const close = () => closeOwnPopup("close_shields_popup");
 
 function setSwitch(id, on) {
   const el = document.getElementById(id);

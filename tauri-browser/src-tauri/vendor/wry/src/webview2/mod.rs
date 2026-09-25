@@ -40,6 +40,15 @@ const PARENT_SUBCLASS_ID: u32 = WM_USER + 0x64;
 const PARENT_DESTROY_MESSAGE: u32 = WM_USER + 0x65;
 const MAIN_THREAD_DISPATCHER_SUBCLASS_ID: u32 = WM_USER + 0x66;
 static EXEC_MSG_ID: Lazy<u32> = Lazy::new(|| unsafe { RegisterWindowMessageA(s!("Wry::ExecMsg")) });
+// Kessel patch (see KESSEL-PATCH.md): every window with the main-thread
+// dispatcher, for a handler whose own window is gone by the time it's ready.
+static DISPATCH_WINDOWS: Lazy<std::sync::Mutex<Vec<isize>>> = Lazy::new(Default::default);
+// Kessel patch: webviews being made on this thread right now, and the
+// dispatched handlers held back until they are (see new_in_hwnd).
+thread_local! {
+  static CREATING: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+  static DEFERRED: std::cell::RefCell<Vec<Box<dyn FnOnce()>>> = std::cell::RefCell::new(Vec::new());
+}
 
 impl From<webview2_com::Error> for Error {
   fn from(err: webview2_com::Error) -> Self {
@@ -105,8 +114,33 @@ impl InnerWebView {
     Self::new_in_hwnd(parent, attributes, pl_attrs, true)
   }
 
-  #[inline]
+  // Kessel patch: while a webview is being made, wry pumps the message loop
+  // (waiting for WebView2); a reply for another webview's request handled in
+  // there (see main_thread_dispatcher_proc) could leave the new webview
+  // never loading anything. Such replies wait until it's made.
   fn new_in_hwnd(
+    parent: HWND,
+    attributes: WebViewAttributes,
+    pl_attrs: super::PlatformSpecificWebViewAttributes,
+    is_child: bool,
+  ) -> Result<Self> {
+    CREATING.with(|c| c.set(c.get() + 1));
+    let result = Self::new_in_hwnd_now(parent, attributes, pl_attrs, is_child);
+    let outermost = CREATING.with(|c| {
+      c.set(c.get() - 1);
+      c.get() == 0
+    });
+    if outermost {
+      let waiting = DEFERRED.with(|d| std::mem::take(&mut *d.borrow_mut()));
+      for function in waiting {
+        function();
+      }
+    }
+    result
+  }
+
+  #[inline]
+  fn new_in_hwnd_now(
     parent: HWND,
     mut attributes: WebViewAttributes,
     pl_attrs: super::PlatformSpecificWebViewAttributes,
@@ -1176,6 +1210,22 @@ impl InnerWebView {
 
     let _res = PostMessageW(Some(hwnd), *EXEC_MSG_ID, WPARAM(raw as _), LPARAM(0));
 
+    // Kessel patch: its webview closed while this was pending (closed while
+    // still loading). Dropped, the request it answers would stay open for
+    // good -- and the next webview made after that never loads. So it runs
+    // through another live window of the same (main) thread instead.
+    if _res.is_err() {
+      let mut windows = DISPATCH_WINDOWS.lock().unwrap();
+      windows.retain(|&h| IsWindow(Some(HWND(h as _))).as_bool());
+      let delivered = windows
+        .iter()
+        .rev()
+        .any(|&h| PostMessageW(Some(HWND(h as _)), *EXEC_MSG_ID, WPARAM(raw as _), LPARAM(0)).is_ok());
+      if delivered {
+        return;
+      }
+    }
+
     #[cfg(any(debug_assertions, feature = "tracing"))]
     if let Err(err) = _res {
       let msg = format!(
@@ -1200,6 +1250,11 @@ impl InnerWebView {
   ) -> LRESULT {
     if msg == *EXEC_MSG_ID {
       let function: Box<Box<dyn FnOnce()>> = Box::from_raw(wparam.0 as *mut _);
+      // Kessel patch: not in the middle of making a webview (see new_in_hwnd).
+      if CREATING.with(|c| c.get()) > 0 {
+        DEFERRED.with(|d| d.borrow_mut().push(*function));
+        return LRESULT(0);
+      }
       function();
       let _ = RedrawWindow(Some(hwnd), None, None, RDW_INTERNALPAINT);
       return LRESULT(0);
@@ -1209,6 +1264,7 @@ impl InnerWebView {
   }
 
   unsafe fn attach_main_thread_dispatcher(hwnd: HWND) {
+    DISPATCH_WINDOWS.lock().unwrap().push(hwnd.0 as isize);
     let _ = SetWindowSubclass(
       hwnd,
       Some(Self::main_thread_dispatcher_proc),

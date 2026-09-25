@@ -5,6 +5,7 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
 import { watchCustomWallpaper } from "./shared/glass.js";
+import { closeOwnPopup } from "./shared/api.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -16,7 +17,7 @@ let data = { accounts: [], current: null };
 let form = null;
 let formError = "";
 
-const close = () => invoke("close_accounts_popup").catch(() => {});
+const close = () => closeOwnPopup("close_accounts_popup");
 
 async function refresh() {
   data = (await invoke("get_accounts").catch(() => null)) || { accounts: [], current: null };

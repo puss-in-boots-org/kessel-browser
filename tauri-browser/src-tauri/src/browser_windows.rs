@@ -114,6 +114,9 @@ pub(crate) fn create_at(app: &tauri::AppHandle, private: bool, init: serde_json:
         }
         WindowEvent::Focused(true) => {
             *app2.state::<BrowserState>().focused_window.lock().unwrap() = Some(label2.clone());
+            // The keyboard focus back to the page (or wherever it was).
+            let (app3, label3) = (app2.clone(), label2.clone());
+            crate::later(&app2, move || crate::lifecycle::restore_focus(&app3, &label3));
         }
         WindowEvent::Destroyed => closed(&app2, &label2),
         _ => {}
@@ -140,9 +143,11 @@ fn session_from_snapshot(snapshot: &str) -> Option<WindowSession> {
             account: tab.get("account").and_then(|a| a.as_str()).map(str::to_string),
             title: tab.get("title").and_then(|t| t.as_str()).map(str::to_string),
             pinned: tab.get("pinned").and_then(|p| p.as_bool()).unwrap_or(false),
+            group: tab.get("group").and_then(|g| g.as_str()).map(str::to_string),
         });
     }
-    (!tabs.is_empty()).then_some(WindowSession { tabs, active })
+    let groups = value.get("groups").and_then(|g| g.as_array()).cloned().unwrap_or_default();
+    (!tabs.is_empty()).then_some(WindowSession { tabs, active, groups })
 }
 
 // A window closed (its close button, Alt+F4, Ctrl+Shift+W, its last tab
@@ -179,7 +184,7 @@ fn closed(app: &tauri::AppHandle, label: &str) {
     if !window.private {
         if let Some(session) = window.snapshot.as_deref().and_then(session_from_snapshot) {
             let mut closed = state.closed_windows.lock().unwrap();
-            closed.push(ClosedWindow { tabs: session.tabs, active: session.active, closed_at: now_unix(), closed_at_ms: millis_since_start() });
+            closed.push(ClosedWindow { tabs: session.tabs, active: session.active, groups: session.groups, closed_at: now_unix(), closed_at_ms: millis_since_start() });
             if closed.len() > CLOSED_WINDOWS_KEPT {
                 closed.remove(0);
             }
@@ -257,6 +262,7 @@ fn move_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32, target: &str)
         let webview = tabs.get(&id).ok_or("tab not found")?;
         webview.reparent(&target_window).map_err(|e| e.to_string())?;
         let _ = webview.set_position(LogicalPosition::new(OFFSCREEN_X, 0.0));
+        crate::lifecycle::hide(webview, id, true);
     }
     state.win(&from, |w| {
         w.order.retain(|&x| x != id);
@@ -304,6 +310,9 @@ pub(crate) async fn move_tabs_to_new_window(
     ids: Vec<u32>,
     sleeping: Vec<SessionTab>,
     pinned: Vec<u32>,
+    // Live tab id -> its tab group's id, and those groups.
+    tab_groups: Option<HashMap<String, String>>,
+    groups: Option<Vec<serde_json::Value>>,
 ) -> Result<String, String> {
     require_internal_page(&webview)?;
     let app2 = app.clone();
@@ -312,7 +321,8 @@ pub(crate) async fn move_tabs_to_new_window(
         let from = state.window_of(&webview).ok_or("that window is closed")?;
         let win = create(&app2, state.is_private(&from), serde_json::Value::Null)?;
         let adopt: Vec<serde_json::Value> = ids.iter().filter_map(|&id| move_tab(&app2, &state, id, &win).ok()).collect();
-        state.win(&win, |w| w.init = Some(serde_json::json!({ "adopt": adopt, "sleeping": sleeping, "pinned": pinned })));
+        let init = serde_json::json!({ "adopt": adopt, "sleeping": sleeping, "pinned": pinned, "tabGroups": tab_groups.unwrap_or_default(), "groups": groups.unwrap_or_default() });
+        state.win(&win, |w| w.init = Some(init));
         Ok(win)
     })
     .await
@@ -386,7 +396,7 @@ pub(crate) async fn reopen_closed_window(app: tauri::AppHandle, index: Option<us
             }
         };
         let Some(closed) = closed else { return Ok(None) };
-        let session = WindowSession { tabs: closed.tabs, active: closed.active };
+        let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups };
         create(&app2, false, serde_json::json!({ "session": session })).map(Some)
     })
     .await

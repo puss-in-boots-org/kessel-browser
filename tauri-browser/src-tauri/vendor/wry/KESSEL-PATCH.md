@@ -3,8 +3,10 @@
 This is [wry](https://github.com/tauri-apps/wry) 0.55.1 as published on
 crates.io (MIT / Apache-2.0, see the LICENSE files), used through
 `[patch.crates-io]` in `../../Cargo.toml`. Only the files needed to build it
-are here. One function is changed: `attach_ipc_handler` in
-`src/webview2/mod.rs`, marked `KESSEL PATCH`.
+are here. Two things are changed, both in `src/webview2/mod.rs`:
+`attach_ipc_handler` (marked `KESSEL PATCH`) and `dispatch_handler` (marked
+`Kessel patch`, with the list of windows it can fall back on,
+`DISPATCH_WINDOWS`).
 
 ## Why
 
@@ -25,6 +27,21 @@ handler did two things that broke Kessel:
 The patch makes the handler skip such messages (returning `Ok`) instead.
 Tauri's own IPC is unaffected: it only ever sends strings, from Kessel's own
 pages.
+
+## Replies for a webview that closed while loading
+
+WebView2 asks wry for every file of a Kessel page (its `tauri://` address)
+and waits for the answer. Tauri produces the answer on another thread; wry
+posts it to the webview's own window, to be handed over on the main thread.
+If the webview closed in the meantime (a menu closed as you picked from it,
+a new-tab page closed right away), that window is gone, the post failed, and
+the answer was dropped: WebView2 then waited for it for good, and the next
+webview Kessel made after that never started loading -- a tab stuck as
+"New Tab" that not even a reload could revive.
+
+The patch keeps a list of the windows that can take such posts (all on the
+main thread) and, when a post fails, sends it through the next live one
+instead, so every request gets its answer.
 
 ## Updating
 

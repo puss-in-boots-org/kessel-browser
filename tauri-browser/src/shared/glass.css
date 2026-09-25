@@ -219,13 +219,13 @@ html.glass .tab .tab-audio { color: var(--lg-text-dim); }
 html.glass .tab .tab-audio:hover { background: rgba(255, 255, 255, 0.18); color: var(--lg-text); }
 html.glass .tab .tab-audio.muted { color: #ff9b9b; }
 
-html.glass #new-tab-btn {
+html.glass :is(#new-tab-btn, #tab-search-btn, #vtabs-collapse) {
   width: 32px;
   height: 32px;
   border-radius: 50%;
   color: var(--lg-text-dim);
 }
-html.glass #new-tab-btn:hover { background: var(--lg-gloss), var(--lg-tint-hover); color: var(--lg-text); box-shadow: var(--lg-edge); }
+html.glass :is(#new-tab-btn, #tab-search-btn, #vtabs-collapse, .strip-scroll):hover { background: var(--lg-gloss), var(--lg-tint-hover); color: var(--lg-text); box-shadow: var(--lg-edge); }
 
 html.glass #window-controls {
   align-self: center;
@@ -327,3 +327,31 @@ html.glass .tab.grouped:not(.active):not(:hover) { background: color-mix(in srgb
 html.glass .tab.grouped.active { background: var(--lg-gloss), color-mix(in srgb, var(--acct) 30%, var(--lg-tint-strong)); }
 html.glass .tab.grouped::before { left: 14px; right: 14px; bottom: 2px; }
 html.glass #account-btn .acct-avatar.main { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.35); }
+
+/* Tab groups, a full strip and vertical tabs on glass (see style.css). */
+html.glass .tab:not(.pinned) { min-width: 44px; }
+html.glass.tabs-scroll .tab:not(.pinned) { min-width: 150px; }
+html.glass .strip-scroll { color: var(--lg-text-dim); border-radius: 50%; }
+html.glass .tab-group.user-group { border-radius: 9px; }
+html.glass .tab-group.user-group.editing { background: rgba(0, 0, 0, 0.35); }
+html.glass .group-name-input { color: var(--lg-text); }
+html.glass .tab .group-line { left: 10px; right: 10px; bottom: 1px; border-radius: 2px; }
+html.glass .tab.group-end .group-line { right: 10px; }
+html.glass .tab.attention .tab-favicon::after { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.35); }
+html.glass #vtabs { background: transparent; border: none; padding: 8px 0 8px 0; }
+html.glass #vtabs-list, html.glass #vtabs-head, html.glass #vtabs-foot { position: relative; }
+html.glass #vtabs::before {
+  content: "";
+  position: absolute;
+  inset: 8px 6px 8px 0;
+  border-radius: 20px;
+  background: var(--lg-gloss), var(--lg-tint);
+  box-shadow: var(--lg-edge);
+  pointer-events: none;
+}
+html.glass.vertical-tabs .tab { height: 34px; border-radius: 12px; }
+html.glass.vertical-tabs .tab .group-line { left: 0; right: auto; top: 8px; bottom: 8px; width: 3px; height: auto; }
+html.glass.vertical-tabs #new-tab-btn { width: 100%; border-radius: 12px; height: 34px; }
+html.glass .bm-chip .saved-group-dot { box-shadow: 0 0 6px color-mix(in srgb, var(--group) 60%, transparent); }
+html.glass.vertical-tabs .tab-group { color: var(--lg-text); background: color-mix(in srgb, var(--acct) 24%, transparent); box-shadow: inset 3px 0 0 var(--acct); height: 26px; line-height: 26px; }
+html.glass.vtabs-collapsed #vtabs .tab-group { height: 4px; line-height: 4px; background: var(--acct); box-shadow: none; }

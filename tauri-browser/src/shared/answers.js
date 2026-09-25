@@ -698,6 +698,12 @@ const COMMAND_WORDS = {
   "find": ["find in page"],
   "copy-link": ["copy link", "copy url", "copy address", "copy page link"],
   "share-page": ["share", "share page", "qr code", "send page"],
+  "search-tabs": ["search tabs", "find tab", "tab search", "list tabs", "all tabs"],
+  "group-tabs-by-site": ["group tabs", "organize tabs", "organise tabs", "tidy tabs", "sort tabs"],
+  "toggle-vertical-tabs": ["vertical tabs", "horizontal tabs", "side tabs"],
+  "sleep-other-tabs": ["sleep tabs", "free memory", "save memory", "suspend tabs"],
+  "pin-tab": ["pin tab", "unpin tab"],
+  "mute-tab": ["mute tab", "unmute tab", "mute", "unmute"],
 };
 
 // Commands whose name (or another word for it) starts with what you typed:

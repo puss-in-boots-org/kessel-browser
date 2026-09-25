@@ -4,12 +4,13 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
 import { watchCustomWallpaper } from "./shared/glass.js";
+import { closeOwnPopup } from "./shared/api.js";
 
 const { invoke } = window.__TAURI__.core;
 const info = window.__KESSEL_POPUP__ || { url: "", title: "" };
 const $ = (id) => document.getElementById(id);
 
-const close = () => invoke("close_popup").catch(() => {});
+const close = () => closeOwnPopup();
 
 function done(message) {
   const el = $("done");

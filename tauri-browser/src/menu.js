@@ -5,7 +5,7 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
 import { watchCustomWallpaper } from "./shared/glass.js";
-import { keyLabel } from "./shared/api.js";
+import { keyLabel, closeOwnPopup } from "./shared/api.js";
 
 const { invoke } = window.__TAURI__.core;
 const info = window.__KESSEL_POPUP__ || {};
@@ -61,7 +61,7 @@ const MENU_LABELS = {
 const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0];
 let zoom = info.zoom ?? 1;
 
-const close = () => invoke("close_popup").catch(() => {});
+const close = () => closeOwnPopup();
 
 async function run(id) {
   if (id === "exit") {

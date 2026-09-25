@@ -76,6 +76,11 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("close-other-tabs", "Close other tabs", "Tabs", &[]),
     cmd("close-tabs-right", "Close tabs to the right", "Tabs", &[]),
     cmd("close-tabs-left", "Close tabs to the left", "Tabs", &[]),
+    reserved(cmd("search-tabs", "Search tabs", "Tabs", &["Ctrl+Shift+A"])),
+    cmd("add-tab-to-group", "Add tab to a new group", "Tabs", &[]),
+    cmd("group-tabs-by-site", "Group tabs by site", "Tabs", &[]),
+    cmd("sleep-other-tabs", "Put other tabs to sleep", "Tabs", &[]),
+    cmd("toggle-vertical-tabs", "Vertical or horizontal tabs", "Tabs", &[]),
     // Windows
     reserved(cmd("new-window", "New window", "Windows", &["Ctrl+N"])),
     reserved(cmd("new-private-window", "New private window", "Windows", &["Ctrl+Shift+N"])),

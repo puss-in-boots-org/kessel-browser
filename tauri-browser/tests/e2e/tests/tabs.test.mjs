@@ -61,7 +61,11 @@ export const tests = [
       await pickItem(popup, "Duplicate");
       await popupClosed(k, waitFor);
       // The copy opens right after its original.
-      await waitFor(async () => (await titles(k)).join() === "New Tab,Alpha,Alpha,Beta", { message: "a duplicate next to Alpha" });
+      await waitFor(async () => (await titles(k)).join() === "New Tab,Alpha,Alpha,Beta", { message: "a duplicate next to Alpha" }).catch(async (e) => {
+        const strip = await k.tabs();
+        const rust = await Promise.all(strip.filter((t) => t.id > 0).map((t) => k.invoke("get_tab_info", { id: t.id })));
+        throw new Error(`${e.message}\n  strip: ${JSON.stringify(strip.map((t) => [t.id, t.title, t.url]))}\n  rust: ${JSON.stringify(rust)}`);
+      });
 
       // A second right-click (here on the first tab) shows that tab's menu
       // instead of closing the menu.

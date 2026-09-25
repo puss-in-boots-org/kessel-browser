@@ -11,6 +11,7 @@ const ACCENTS = ["#7c5cff", "#3b82f6", "#0ea5a4", "#f472b6", "#f97316", "#22c55e
 const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "search", label: "Search & Startup", icon: "search" },
+  { id: "tabs", label: "Tabs", icon: "tabs" },
   { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
   { id: "privacy", label: "Privacy & Security", icon: "shield" },
   { id: "performance", label: "Performance", icon: "bolt" },
@@ -277,7 +278,7 @@ function searchPanel(settings) {
     <div class="setting-card">
       ${settingRow({ title: "Default search engine", controlHtml: `<select class="field" id="engine-select" style="width:170px"></select>` })}
       ${settingRow({ title: "Homepage", desc: "Opened by new tabs and the home button", controlHtml: `<input class="field" id="homepage-input" style="width:220px" placeholder="kessel://newtab" />` })}
-      ${settingRow({ title: "Restore tabs on launch", desc: "Reopen last session's tabs instead of a fresh one", controlHtml: switchHtml("restore-tabs", settings.restore_tabs) })}
+      ${settingRow({ title: "Keep tabs when Kessel closes", desc: "Your windows and tabs come back the next time you open Kessel, instead of a fresh new-tab page", controlHtml: switchHtml("restore-tabs", settings.restore_tabs) })}
     </div>
 
     <div class="setting-card">
@@ -309,11 +310,103 @@ function searchPanel(settings) {
   homepage.value = settings.homepage;
   homepage.addEventListener("change", () => saveSettings({ homepage: homepage.value || "kessel://newtab" }));
 
-  const restoreTabs = p.querySelector("#restore-tabs");
-  restoreTabs.addEventListener("click", async () => {
-    const next = await saveSettings({ restore_tabs: !restoreTabs.classList.contains("on") });
-    restoreTabs.classList.toggle("on", next.restore_tabs);
+  wireSwitch(p, "restore-tabs", "restore_tabs");
+
+  return p;
+}
+
+// A switch bound to a setting -- kept in step when it changes elsewhere
+// (the same switch in another section, or another Settings page).
+// `defaultOn`: a setting that's on unless turned off.
+function wireSwitch(panel, id, key, { defaultOn = false } = {}) {
+  const btn = panel.querySelector(`#${id}`);
+  const isOn = (s) => (defaultOn ? s[key] !== false : !!s[key]);
+  btn.addEventListener("click", async () => {
+    const next = await saveSettings({ [key]: !btn.classList.contains("on") });
+    btn.classList.toggle("on", isOn(next));
+    btn.setAttribute("aria-checked", String(isOn(next)));
   });
+  window.addEventListener("kessel-settings", () => {
+    const s = currentSettings();
+    if (s) btn.classList.toggle("on", isOn(s));
+  });
+  return btn;
+}
+
+const GROUP_COLOR_VALUES = { grey: "#9aa0a6", blue: "#5b8def", red: "#ef5b5b", yellow: "#f2c14e", green: "#4fbf7f", pink: "#f06ab0", purple: "#a878f0", cyan: "#3fc5d4", orange: "#f59a42" };
+
+async function tabsPanel(settings) {
+  const p = el(`<div class="panel" id="panel-tabs">
+    <h2>Tabs</h2>
+    <p class="sub">How your tabs look, what hovering one shows, groups -- and keeping them when Kessel closes.</p>
+
+    <div class="setting-card">
+      ${settingRow({ title: "Keep tabs when Kessel closes", desc: "Your windows and tabs -- pinned tabs and tab groups too -- come back the next time you open Kessel. Tabs you weren't looking at come back asleep, so starting stays quick.", controlHtml: switchHtml("tabs-restore", settings.restore_tabs) })}
+    </div>
+
+    <div class="setting-card">
+      ${settingRow({ title: "Tab layout", desc: "Along the top, or in a column beside the page (it can be collapsed to icons, and dragged wider)", controlHtml: `<div class="segmented" id="tab-layout"><button data-v="horizontal">Top</button><button data-v="vertical">Side</button></div>` })}
+      ${settingRow({ title: "When the tab strip is full", desc: "Shrink tabs down to their icons, or keep their titles and scroll the strip (the mouse wheel scrolls it too)", controlHtml: `<select class="field" id="tab-overflow" style="width:170px"><option value="shrink">Shrink tabs</option><option value="scroll">Keep titles, scroll</option></select>` })}
+      ${settingRow({ title: "Hover cards", desc: "Resting the mouse on a tab shows its title, site and state", controlHtml: switchHtml("hover-cards", settings.tab_hover_cards !== false) })}
+      ${settingRow({ title: "Page preview in hover cards", desc: "A picture of the page, taken when you leave the tab", controlHtml: switchHtml("hover-preview", settings.hover_card_preview !== false) })}
+      ${settingRow({ title: "Memory use in hover cards", desc: "How much memory and CPU the tab's page is using. Tabs using a lot get an orange ring.", controlHtml: switchHtml("hover-memory", settings.hover_card_memory !== false) })}
+      ${settingRow({ title: "Show when a background tab changes", desc: "A dot on a tab whose page changed its title while you were elsewhere -- a new message, a finished upload", controlHtml: switchHtml("attention-dots", settings.tab_attention_dots !== false) })}
+    </div>
+
+    <div class="setting-card">
+      ${settingRow({ title: "Group tabs from the same site", desc: "Tabs of a site you have more than one of go into a group of their own, automatically. Or right-click a tab: Group tabs by site.", controlHtml: switchHtml("auto-group", !!settings.auto_group_tabs) })}
+      <div class="setting-row"><div class="info"><div class="title">Saved tab groups</div><div class="desc">Right-click a group's name, Save group: it stays on the bookmarks bar, to open again any time.</div></div></div>
+      <div id="saved-groups"></div>
+    </div>
+
+    <div class="setting-card">
+      <div class="setting-row"><div class="info"><div class="desc">Sleeping and paused background tabs, and how many tabs stay awake, are in <a href="#performance" id="to-performance">Performance</a>.</div></div></div>
+    </div>
+  </div>`);
+
+  wireSwitch(p, "tabs-restore", "restore_tabs");
+  wireSwitch(p, "hover-cards", "tab_hover_cards", { defaultOn: true });
+  wireSwitch(p, "hover-preview", "hover_card_preview", { defaultOn: true });
+  wireSwitch(p, "hover-memory", "hover_card_memory", { defaultOn: true });
+  wireSwitch(p, "attention-dots", "tab_attention_dots", { defaultOn: true });
+  wireSwitch(p, "auto-group", "auto_group_tabs");
+
+  const layout = p.querySelector("#tab-layout");
+  const showLayout = (v) => layout.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.v === v));
+  showLayout(settings.tab_layout || "horizontal");
+  layout.addEventListener("click", async (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    showLayout(b.dataset.v);
+    await saveSettings({ tab_layout: b.dataset.v });
+  });
+  const overflow = p.querySelector("#tab-overflow");
+  overflow.value = settings.tab_overflow || "shrink";
+  overflow.addEventListener("change", () => saveSettings({ tab_overflow: overflow.value }));
+  p.querySelector("#to-performance").addEventListener("click", (e) => {
+    e.preventDefault();
+    history.replaceState(null, "", "#performance");
+    showSection("performance", currentSettings());
+  });
+
+  const renderSaved = (groups) => {
+    const box = p.querySelector("#saved-groups");
+    if (!groups.length) {
+      box.innerHTML = `<div class="setting-row"><div class="info"><div class="desc faint">No saved groups yet</div></div></div>`;
+      return;
+    }
+    box.innerHTML = "";
+    for (const g of groups) {
+      const row = el(`<div class="setting-row saved-group-row"><div class="info"><div class="title"><span class="group-dot"></span><span class="name"></span></div><div class="desc"></div></div><div class="control"><button class="btn danger sm">Delete</button></div></div>`);
+      row.querySelector(".group-dot").style.background = GROUP_COLOR_VALUES[g.color] || GROUP_COLOR_VALUES.grey;
+      row.querySelector(".name").textContent = g.name || "Unnamed group";
+      row.querySelector(".desc").textContent = `${g.tabs.length} tab${g.tabs.length === 1 ? "" : "s"}: ${g.tabs.slice(0, 4).map((t) => t.title || hostOf(t.url)).join(", ")}${g.tabs.length > 4 ? "…" : ""}`;
+      row.querySelector("button").addEventListener("click", () => invoke("delete_saved_group", { id: g.id }).catch((err) => toast(String(err))));
+      box.appendChild(row);
+    }
+  };
+  renderSaved((await invoke("get_saved_groups").catch(() => [])) || []);
+  listen("saved-groups-changed", (event) => renderSaved(event.payload || []));
 
   return p;
 }
@@ -779,18 +872,34 @@ async function recordFor(p, commands, c, button) {
 function performancePanel(settings) {
   const p = el(`<div class="panel" id="panel-performance">
     <h2>Performance</h2>
-    <p class="sub">Kessel gives each tab its own real webview -- background tabs cost real memory until this reclaims it.</p>
+    <p class="sub">Kessel gives each tab its own real webview. A tab in the background is always slowed down, like in any browser; these save more for the tabs you haven't looked at in a while.</p>
 
     <div class="setting-card">
       ${settingRow({
-        title: "Discard inactive tabs",
-        desc: "A background tab's webview is destroyed after sitting idle this long, and quietly recreated -- reloading the page from scratch -- if you switch back to it. Doesn't check for audio/video playing, so a tab making sound can still be discarded.",
+        title: "Pause background tabs",
+        desc: "After this long in the background a tab's page is paused: its scripts stop until you come back (it doesn't reload). Tabs playing sound keep going.",
+        controlHtml: `<select class="field" id="freeze-minutes" style="width:150px">${[0, 1, 2, 5, 10, 15, 30, 60].map((m) => `<option value="${m}">${m ? `After ${m} min` : "Never"}</option>`).join("")}</select>`,
+      })}
+      ${settingRow({
+        title: "Put inactive tabs to sleep",
+        desc: "After sitting idle this long a background tab is closed to free its memory, and quietly reloaded when you switch back to it. Tabs playing sound never sleep.",
         controlHtml: `<input type="range" id="discard-minutes" min="0" max="60" step="5" /><span class="mono faint" id="discard-minutes-value" style="min-width:52px;display:inline-block;text-align:right"></span>`,
       })}
+      ${settingRow({
+        title: "Tabs kept awake at most",
+        desc: "Past this many open tabs, the ones you looked at longest ago go to sleep",
+        controlHtml: `<select class="field" id="max-awake" style="width:150px">${[0, 3, 5, 8, 10, 15, 20, 30, 50].map((n) => `<option value="${n}">${n ? `${n} tabs` : "No limit"}</option>`).join("")}</select>`,
+      })}
+      ${settingRow({ title: "Save memory in background tabs", desc: "Ask the engine to use less memory for tabs you're not looking at", controlHtml: switchHtml("reduce-memory", settings.reduce_background_memory !== false) })}
     </div>
 
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="desc">Settings and Passwords are never discarded (they're single-instance pages), and neither is whichever tab is currently active.</div></div></div>
+      ${settingRow({ title: "Never pause or put to sleep", desc: "Sites that must keep running in the background -- a chat, a music player", controlHtml: `<input class="field" id="never-sleep-input" style="width:200px" placeholder="e.g. music.youtube.com" /><button class="btn sm" id="never-sleep-add">Add</button>` })}
+      <div class="site-list" id="never-sleep-list"></div>
+    </div>
+
+    <div class="setting-card">
+      <div class="setting-row"><div class="info"><div class="desc">Never paused or put to sleep either: the tab you're on, tabs playing sound, and Kessel's own pages (Settings, History, Downloads...). Right-click a tab to put it to sleep yourself, or use "Put other tabs to sleep" in the address bar.</div></div></div>
     </div>
   </div>`);
 
@@ -801,6 +910,45 @@ function performancePanel(settings) {
   label.textContent = describe(slider.value);
   slider.addEventListener("input", () => (label.textContent = describe(slider.value)));
   slider.addEventListener("change", () => saveSettings({ discard_tabs_after_minutes: parseInt(slider.value, 10) }));
+
+  const freeze = p.querySelector("#freeze-minutes");
+  freeze.value = String(settings.freeze_tabs_after_minutes ?? 5);
+  freeze.addEventListener("change", () => saveSettings({ freeze_tabs_after_minutes: parseInt(freeze.value, 10) }));
+  const maxAwake = p.querySelector("#max-awake");
+  maxAwake.value = String(settings.max_awake_tabs ?? 0);
+  maxAwake.addEventListener("change", () => saveSettings({ max_awake_tabs: parseInt(maxAwake.value, 10) }));
+  wireSwitch(p, "reduce-memory", "reduce_background_memory", { defaultOn: true });
+
+  // Sites that never sleep: a site per chip.
+  const list = p.querySelector("#never-sleep-list");
+  const input = p.querySelector("#never-sleep-input");
+  const render = (sites) => {
+    list.innerHTML = sites.length ? "" : `<span class="faint" style="font-size:12px">None yet</span>`;
+    for (const site of sites) {
+      const chip = el(`<span class="site-chip"><span></span><button title="Remove">${icon("close", 11)}</button></span>`);
+      chip.querySelector("span").textContent = site;
+      chip.querySelector("button").addEventListener("click", async () => {
+        const next = await saveSettings({ never_sleep_sites: (currentSettings().never_sleep_sites || []).filter((s) => s !== site) });
+        render(next.never_sleep_sites || []);
+      });
+      list.appendChild(chip);
+    }
+  };
+  const add = async () => {
+    const site = input.value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    if (!site || !/^[a-z0-9.-]+(:\d+)?$/.test(site)) {
+      if (input.value.trim()) toast("That doesn't look like a site -- e.g. music.youtube.com");
+      return;
+    }
+    const sites = currentSettings().never_sleep_sites || [];
+    input.value = "";
+    if (sites.includes(site)) return;
+    const next = await saveSettings({ never_sleep_sites: [...sites, site] });
+    render(next.never_sleep_sites || []);
+  };
+  p.querySelector("#never-sleep-add").addEventListener("click", add);
+  input.addEventListener("keydown", (e) => e.key === "Enter" && add());
+  render(settings.never_sleep_sites || []);
 
   return p;
 }
@@ -1179,6 +1327,7 @@ async function buildPanel(id, settings) {
   switch (id) {
     case "appearance": return appearancePanel(settings);
     case "search": return searchPanel(settings);
+    case "tabs": return await tabsPanel(settings);
     case "shortcuts": return await keyboardPanel(settings);
     case "privacy": return await privacyPanel(settings);
     case "performance": return performancePanel(settings);

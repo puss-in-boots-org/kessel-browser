@@ -168,6 +168,17 @@
     .clear-note { color: var(--danger); font-size: 12px; min-height: 16px; margin: 10px 0 0; }
     .clear-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .clear-actions .spinner { width: 13px; height: 13px; border-width: 2px; }
+
+    /* Tabs and Performance: two-way choices, saved groups, site lists. */
+    .segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+    .segmented button { border: none; background: transparent; color: var(--text-dim); font: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 7px; cursor: pointer; }
+    .segmented button.active { background: var(--accent); color: #fff; }
+    .saved-group-row .title { display: flex; align-items: center; gap: 8px; }
+    .group-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .site-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 14px; }
+    .site-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12px; }
+    .site-chip button { border: none; background: transparent; color: var(--text-faint); cursor: pointer; display: flex; padding: 2px; border-radius: 50%; }
+    .site-chip button:hover { color: var(--danger); background: var(--surface-hover); }
   </style>
 </head>
 <body>

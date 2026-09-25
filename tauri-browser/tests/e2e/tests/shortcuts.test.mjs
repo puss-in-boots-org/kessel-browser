@@ -48,10 +48,13 @@ export const tests = [
     name: "a page that uses a key itself keeps it (F5 in a web app)",
     async run({ launch, site, assert, sleep }) {
       const k = await launch();
-      const { page } = await openPage(k, site, "App");
+      const { id, page } = await openPage(k, site, "App");
       await page.evaluate(`window.__mark = 1; addEventListener('keydown', e => { if (e.key === 'F5') { e.preventDefault(); window.__f5 = true; } })`);
-      await page.key("F5");
-      await sleep(600);
+      // A real key press, through Windows (a key injected through DevTools
+      // runs the engine's own F5 whatever the page does).
+      await k.invoke("page_action", { id, action: "focus", value: null });
+      k.realKeys(["F5"]);
+      await sleep(800);
       assert.equal(await page.evaluate(`window.__f5 === true && window.__mark === 1`), true, "the page got F5 and wasn't reloaded");
     },
   },
@@ -192,7 +195,9 @@ export const tests = [
       const k = await launch();
       const { id, page } = await openPage(k, site, "Findable");
       await page.evaluate(`(() => { const r = document.createRange(); const t = document.getElementById('p3').firstChild; const i = t.data.indexOf('lazy dog'); r.setStart(t, i); r.setEnd(t, i + 8); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
-      await page.key("Ctrl+F");
+      // As the page hands back a key it doesn't use (a key injected through
+      // DevTools now and then never reaches the page at all).
+      await k.press("Ctrl+F", { tab: id, page: true });
       const status = () => k.invoke("page_find_status", { id });
       const first = await waitFor(async () => {
         const s = await status();

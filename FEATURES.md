@@ -136,35 +136,35 @@ branch, one small commit per feature or group of features.
 | 2.16 | Close tabs to the right | ✅ | Tab menu, or a shortcut you give it |
 | 2.17 | Close tabs except pinned tabs | ✅ | Tab menu -> Close all but pinned tabs |
 | 2.18 | Bookmark all tabs | ✅ | Ctrl+Shift+D, and the menu |
-| 2.19 | Tab groups | 🟡 | Only per account so far |
-| 2.20 | Named tab groups | ⏳ | |
-| 2.21 | Colored tab groups | ⏳ | |
-| 2.22 | Collapsed tab groups | 🟡 | Account groups fold |
-| 2.23 | Persistent tab groups | ⏳ | |
-| 2.24 | Automatic tab grouping | ⏳ | |
-| 2.25 | Tab group saving | ⏳ | |
-| 2.26 | Tab group synchronization | ⏳ | |
-| 2.27 | Tab search | ⏳ | |
+| 2.19 | Tab groups | ✅ | Your own groups (right-click a tab), besides each account's tabs |
+| 2.20 | Named tab groups | ✅ | Typed right in the strip when you make one; double-click the name to rename |
+| 2.21 | Colored tab groups | ✅ | Nine colours, from the group's right-click menu; a line in its colour under its tabs |
+| 2.22 | Collapsed tab groups | ✅ | Click a group's name to fold it (Ctrl+Tab skips it); folding the group you're in moves you out |
+| 2.23 | Persistent tab groups | ✅ | Kept with the session, with each window, and when tabs move to another window |
+| 2.24 | Automatic tab grouping | ✅ | Group tabs by site (tab menu, address bar), or automatically for new tabs (Settings -> Tabs) |
+| 2.25 | Tab group saving | ✅ | Save group: a chip on the bookmarks bar reopens it; the saved copy follows changes to the group |
+| 2.26 | Tab group synchronization | ⏭️ | Needs an account and sync server Kessel doesn't have; saved groups stay in step across this PC's windows |
+| 2.27 | Tab search | ✅ | Ctrl+Shift+A or the arrow beside the tabs: every tab of every window, sleeping and recently closed ones, with memory use and a preview |
 | 2.28 | Recently closed tabs | ✅ | Ctrl+Shift+T; History -> Recently closed; Settings -> History |
 | 2.29 | Recently closed windows | ✅ | Ctrl+Shift+T when a window closed last; History -> Recently closed; the menu's Reopen closed window |
-| 2.30 | Vertical tabs | ⏳ | |
-| 2.31 | Horizontal tabs | 🟢 | |
-| 2.32 | Scrollable tab bar | ⏳ | |
-| 2.33 | Tab overflow management | ⏳ | |
-| 2.34 | Tab previews | ⏳ | |
-| 2.35 | Tab thumbnails | ⏳ | |
-| 2.36 | Hover cards | ⏳ | |
+| 2.30 | Vertical tabs | ✅ | Settings -> Tabs -> Side: a resizable column, collapsible to icons |
+| 2.31 | Horizontal tabs | ✅ | Along the top (the default) |
+| 2.32 | Scrollable tab bar | ✅ | Mouse wheel and arrows at its ends; the tab you're on stays in view |
+| 2.33 | Tab overflow management | ✅ | Tabs shrink toward their icons, or keep titles and scroll (Settings -> Tabs); tab search lists every tab |
+| 2.34 | Tab previews | ✅ | Hover cards show a picture of the page |
+| 2.35 | Tab thumbnails | ✅ | Taken as you leave a tab; in hover cards and tab search |
+| 2.36 | Hover cards | ✅ | Title, site, state, group, memory/CPU and a preview; on or off in Settings -> Tabs |
 | 2.37 | Tab audio indicators | ✅ | A speaker on tabs playing sound (crossed out when muted); click to mute or unmute; tabs playing sound never go to sleep |
-| 2.38 | Tab notification indicators | ⏳ | |
-| 2.39 | Sleeping tabs | 🟢 | Idle tabs are discarded (Settings -> Performance) |
-| 2.40 | Discarded tabs | 🟢 | |
-| 2.41 | Tab freezing | ⏳ | |
-| 2.42 | Tab memory usage indicators | ⏳ | |
-| 2.43 | Tab CPU usage indicators | ⏳ | |
-| 2.44 | Automatic resource throttling | ⏳ | |
-| 2.45 | Tab suspension | ⏳ | |
-| 2.46 | Background-tab limits | ⏳ | |
-| 2.47 | Tab lifecycle management | ⏳ | |
+| 2.38 | Tab notification indicators | ✅ | A dot on a background tab whose page changed its title |
+| 2.39 | Sleeping tabs | ✅ | Idle tabs go to sleep (Settings -> Performance); tab menu -> Put to sleep; never tabs playing sound or listed sites |
+| 2.40 | Discarded tabs | ✅ | Asleep tabs wake up (reload) when clicked |
+| 2.41 | Tab freezing | ✅ | Background tabs are paused after a while (Settings -> Performance): their scripts stop until you return |
+| 2.42 | Tab memory usage indicators | ✅ | Memory per tab in hover cards and tab search; an orange ring on tabs using over 1.5 GB |
+| 2.43 | Tab CPU usage indicators | ✅ | CPU per tab in hover cards; an orange ring on tabs busy for 10 s |
+| 2.44 | Automatic resource throttling | ✅ | Background tabs are hidden from the engine (timers throttled, nothing drawn) and asked to use less memory |
+| 2.45 | Tab suspension | ✅ | Paused tabs (scripts stopped) and sleeping tabs (webview closed) |
+| 2.46 | Background-tab limits | ✅ | Settings -> Performance: keep at most N tabs awake |
+| 2.47 | Tab lifecycle management | ✅ | Shown -> hidden -> paused -> asleep, with never-sleep sites and exemptions for sound |
 
 ### 3. Windows
 
