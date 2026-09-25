@@ -1,8 +1,9 @@
 // Pure-data persistence: settings, history, bookmarks, pinned sites and the
-// download log. Everything here is plain JSON files in the OS app-data dir --
-// no database needed at this scale, and it keeps the whole state human
-// readable / easy to back up or hand-edit.
+// download log. Mostly plain JSON files in the profile folder, easy to back
+// up or hand-edit; history, which grows with every page you visit, is a
+// SQLite database (see history.rs).
 
+use crate::history::History;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,15 +21,6 @@ fn write_json<T: Serialize>(path: &Path, value: &T) {
     if let Ok(s) = serde_json::to_string_pretty(value) {
         let _ = fs::write(path, s);
     }
-}
-
-// --- History -------------------------------------------------------------
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct HistoryEntry {
-    pub url: String,
-    pub title: String,
-    pub visited_at: u64,
 }
 
 // --- Bookmarks -------------------------------------------------------------
@@ -117,6 +109,19 @@ pub struct Settings {
     pub shields_tracking_prevention: String,
     // Ids from shields::FILTER_LISTS.
     pub filter_lists: Vec<String>,
+
+    // Your own keyboard shortcuts: command id (see commands.rs) -> its keys,
+    // replacing that command's defaults (an empty list = no shortcut).
+    pub shortcuts: std::collections::HashMap<String, Vec<String>>,
+    // Links opened with Ctrl+click stay in the background (Chrome) instead
+    // of coming to the front; Ctrl+Shift+click does the other one.
+    pub ctrl_click_background: bool,
+    // The same for the middle mouse button (and Shift+middle).
+    pub middle_click_background: bool,
+    // The zoom every site starts at, until you zoom it (see page.rs).
+    pub default_zoom: f64,
+    // How many days of history to keep (0 = forever).
+    pub history_days: u32,
 }
 
 impl Default for Settings {
@@ -147,6 +152,11 @@ impl Default for Settings {
             shields_fingerprinting: true,
             shields_tracking_prevention: "balanced".into(),
             filter_lists: crate::shields::default_list_ids(),
+            shortcuts: std::collections::HashMap::new(),
+            ctrl_click_background: false,
+            middle_click_background: true,
+            default_zoom: 1.0,
+            history_days: 90,
         }
     }
 }
@@ -166,14 +176,17 @@ pub struct Store {
     pub downloads: Mutex<Vec<DownloadEntry>>,
     pub adblock_lists: Mutex<AdblockLists>,
     pub blocked_count: std::sync::atomic::AtomicU32,
-    // History lives in memory; a background thread writes history.json
-    // whenever it changes (a burst of changes is one write), so recording a
-    // visit never makes a navigation wait on the disk.
-    history: Arc<Mutex<Vec<HistoryEntry>>>,
-    history_changed: Sender<()>,
+    // Reading history (the history page, address bar suggestions) goes
+    // straight to the database; recording visits goes through a background
+    // thread, so a navigation never waits on the disk.
+    pub history: Arc<History>,
+    history_writes: Sender<HistoryWrite>,
 }
 
-const HISTORY_LIMIT: usize = 500;
+enum HistoryWrite {
+    Visit { url: String, title: String, at: u64 },
+    Title { url: String, title: String },
+}
 
 impl Store {
     pub fn load(dir: PathBuf) -> Self {
@@ -181,15 +194,16 @@ impl Store {
         let pinned: Vec<PinnedSite> = read_json_or_default(&dir.join("pinned.json"));
         let downloads: Vec<DownloadEntry> = read_json_or_default(&dir.join("downloads.json"));
         let adblock_lists: AdblockLists = read_json_or_default(&dir.join("adblock_lists.json"));
-        let history_path = dir.join("history.json");
-        let history = Arc::new(Mutex::new(read_json_or_default::<Vec<HistoryEntry>>(&history_path)));
-        let (history_changed, changes) = channel::<()>();
-        let to_write = history.clone();
+        let history = Arc::new(History::open(&dir));
+        history.prune(settings.history_days, now_unix());
+        let (history_writes, writes) = channel::<HistoryWrite>();
+        let writer = history.clone();
         std::thread::spawn(move || {
-            while changes.recv().is_ok() {
-                while changes.try_recv().is_ok() {}
-                let snapshot = to_write.lock().unwrap().clone();
-                write_json(&history_path, &snapshot);
+            while let Ok(write) = writes.recv() {
+                match write {
+                    HistoryWrite::Visit { url, title, at } => writer.record(&url, &title, at),
+                    HistoryWrite::Title { url, title } => writer.set_title(&url, &title),
+                }
             }
         });
         Store {
@@ -200,7 +214,7 @@ impl Store {
             adblock_lists: Mutex::new(adblock_lists),
             blocked_count: std::sync::atomic::AtomicU32::new(0),
             history,
-            history_changed,
+            history_writes,
         }
     }
 
@@ -224,43 +238,13 @@ impl Store {
     // Visiting the page you're already on again (a reload, or clicking the
     // same link twice) refreshes its entry instead of adding another.
     pub fn record_history(&self, url: &str, title: &str) {
-        let mut history = self.history.lock().unwrap();
-        match history.last_mut() {
-            Some(last) if last.url == url => last.visited_at = now_unix(),
-            _ => history.push(HistoryEntry {
-                url: url.to_string(),
-                title: title.to_string(),
-                visited_at: now_unix(),
-            }),
-        }
-        if history.len() > HISTORY_LIMIT {
-            let excess = history.len() - HISTORY_LIMIT;
-            history.drain(0..excess);
-        }
-        drop(history);
-        let _ = self.history_changed.send(());
+        let _ = self.history_writes.send(HistoryWrite::Visit { url: url.to_string(), title: title.to_string(), at: now_unix() });
     }
 
     // A visit is recorded as the page starts loading, before it has a
     // title; this fills the title in once it has one.
     pub fn set_history_title(&self, url: &str, title: &str) {
-        let mut history = self.history.lock().unwrap();
-        let Some(entry) = history.iter_mut().rev().take(50).find(|e| e.url == url) else { return };
-        if entry.title == title {
-            return;
-        }
-        entry.title = title.to_string();
-        drop(history);
-        let _ = self.history_changed.send(());
-    }
-
-    pub fn get_history(&self) -> Vec<HistoryEntry> {
-        self.history.lock().unwrap().iter().rev().cloned().collect()
-    }
-
-    pub fn clear_history(&self) {
-        self.history.lock().unwrap().clear();
-        let _ = self.history_changed.send(());
+        let _ = self.history_writes.send(HistoryWrite::Title { url: url.to_string(), title: title.to_string() });
     }
 
     pub fn get_bookmarks(&self) -> Vec<Bookmark> {

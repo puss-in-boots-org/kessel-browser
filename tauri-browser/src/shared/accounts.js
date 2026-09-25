@@ -2,6 +2,8 @@
 // account is { id, name, color }; Main -- WebView2's normal sign-ins -- is
 // null everywhere.
 import { icon } from "./icons.js";
+import { escapeHtml } from "./api.js";
+export { escapeHtml };
 
 export const MAIN_NAME = "Main";
 
@@ -17,8 +19,4 @@ export function avatarHtml(account, size = 22) {
   }
   const letter = escapeHtml([...account.name.trim()][0]?.toUpperCase() || "?");
   return `<span class="acct-avatar" style="--size:${size}px;--acct:${escapeHtml(account.color)}">${letter}</span>`;
-}
-
-export function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }

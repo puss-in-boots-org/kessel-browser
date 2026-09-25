@@ -1,6 +1,6 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
-import { toast, debounce, confirmDialog } from "./shared/api.js";
+import { toast, debounce, confirmDialog, escapeHtml } from "./shared/api.js";
 
 const { invoke } = window.__TAURI__.core;
 
@@ -166,8 +166,8 @@ function renderList(list) {
   }
   container.innerHTML = "";
   for (const item of filtered) {
-    const row = el(`<div class="item-row" data-id="${item.id}">
-      <span class="item-avatar">${(item.site[0] || "?").toUpperCase()}</span>
+    const row = el(`<div class="item-row" data-id="${escapeHtml(item.id)}">
+      <span class="item-avatar">${escapeHtml((item.site[0] || "?").toUpperCase())}</span>
       <span class="item-info">
         <div class="item-site"></div>
         <div class="item-user"></div>

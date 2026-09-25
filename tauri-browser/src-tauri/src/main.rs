@@ -3,10 +3,15 @@
 
 mod accounts;
 mod adblock;
+mod bridge;
+mod browsing_data;
 mod browser_windows;
 mod commands;
+mod dialogs;
+mod history;
 mod import;
 mod keys;
+mod page;
 mod profile;
 mod shields;
 mod store;
@@ -18,7 +23,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, HistoryEntry, PinnedSite, Settings, Store};
+use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, PinnedSite, Settings, Store};
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{
     Emitter, LogicalPosition, LogicalSize, Manager, Webview, WebviewBuilder, WebviewUrl, Window,
@@ -84,21 +89,58 @@ const SIDE_PANEL_MAX_WIDTH: f64 = 2000.0;
 // A thin sliver at the side panel's right edge is deliberately left
 fn normalize_url(input: &str) -> String {
     let trimmed = input.trim();
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") || trimmed.starts_with("kessel://")
-    {
+    // Web pages, Kessel's own pages, local files (Ctrl+O) and a page's source
+    // (Ctrl+U) open as they are; anything else is taken as a web address.
+    let as_is = ["http://", "https://", "kessel://", "file:", "view-source:"];
+    if as_is.iter().any(|p| trimmed.len() >= p.len() && trimmed[..p.len()].eq_ignore_ascii_case(p)) {
         trimmed.to_string()
     } else {
         format!("https://{}", trimmed)
     }
 }
 
-fn internal_route(url: &str) -> Option<&'static str> {
-    match url {
-        "kessel://settings" => Some("settings.html"),
-        "kessel://passwords" => Some("passwords.html"),
-        "kessel://downloads" => Some("downloads.html"),
-        "kessel://newtab" | "kessel://home" => Some("newtab.html"),
-        _ => None,
+// Kessel's own pages: kessel://<name> and the file that shows it.
+const INTERNAL_PAGES: &[(&str, &str)] = &[
+    ("newtab", "newtab.html"),
+    ("home", "newtab.html"),
+    ("settings", "settings.html"),
+    ("passwords", "passwords.html"),
+    ("downloads", "downloads.html"),
+    ("history", "history.html"),
+    ("help", "help.html"),
+];
+
+// kessel://settings -> settings.html, kessel://settings/privacy ->
+// settings.html#privacy (a section of it), kessel://history?q=news ->
+// history.html?q=news.
+fn internal_route(url: &str) -> Option<String> {
+    let url = url.trim();
+    let prefix = "kessel://";
+    if url.len() < prefix.len() || !url[..prefix.len()].eq_ignore_ascii_case(prefix) {
+        return None;
+    }
+    let rest = &url[prefix.len()..];
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let (name, tail) = rest.split_at(end);
+    let file = INTERNAL_PAGES.iter().find(|(n, _)| n.eq_ignore_ascii_case(name))?.1;
+    let tail = match tail.strip_prefix('/') {
+        Some(section) if !section.is_empty() => format!("#{}", section),
+        Some(_) => String::new(),
+        None => tail.to_string(),
+    };
+    Some(format!("{}{}", file, tail))
+}
+
+// The page part of a kessel:// address: kessel://settings/privacy ->
+// kessel://settings. Each page is open in one tab at most (see
+// open_singleton_tab), whichever section it shows.
+fn internal_page_key(url: &str) -> String {
+    match url.strip_prefix("kessel://") {
+        Some(rest) => {
+            let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+            format!("kessel://{}", rest[..end].to_ascii_lowercase())
+        }
+        None => url.to_string(),
     }
 }
 
@@ -144,6 +186,10 @@ pub(crate) struct BrowserWindow {
     // When this toolbar last sent a heartbeat (ms since start), or a grace
     // deadline, which is why it can be ahead of "now" (see toolbar_watchdog).
     heartbeat: u64,
+    // Full screen because you pressed F11, and/or because a page asked (a
+    // video's full screen button) -- leaving the page's keeps yours.
+    user_fullscreen: bool,
+    page_fullscreen: bool,
 }
 
 pub(crate) struct BrowserState {
@@ -196,13 +242,17 @@ pub(crate) struct ClosedTab {
     account: Option<String>,
     // The window it was in, so reopening puts it back there if it's open.
     window: String,
+    #[serde(default)]
+    closed_at: u64,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ClosedWindow {
     tabs: Vec<SessionTab>,
     active: usize,
+    // Unix time (shown in lists), and ms since start (for "what closed last").
     closed_at: u64,
+    closed_at_ms: u64,
 }
 
 impl BrowserState {
@@ -286,6 +336,13 @@ struct PageState {
     favicon: String,
     // The history entry still waiting for this page's title.
     history: Option<HistoryWait>,
+    // Between WebView2's NavigationStarting and NavigationCompleted.
+    loading: bool,
+    // WebView2's id of the navigation under way. A page left while it was
+    // still loading reports its own NavigationCompleted after the next one
+    // started -- which must not end the new one's loading, nor give its
+    // history entry the old page's title.
+    navigation: u64,
 }
 
 struct HistoryWait {
@@ -473,9 +530,10 @@ fn create_tab_internal(
     let app_for_download = app.clone();
     let data_dir = state.data_dir.clone();
 
-    let builder = with_account(app, with_farbling(app, profile::webview(&label, webview_url)), account.as_deref())
+    let token = bridge::new_token();
+    let builder = with_account(app, with_farbling(app, content_webview(&label, webview_url, &token)), account.as_deref())
         .incognito(private)
-        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled, false))
+        .initialization_script(&adblock::build_content_script(&token, adblock_enabled, autofill_enabled, false))
         .on_new_window({
             let (app, account, opener) = (app.clone(), account.clone(), label.clone());
             move |url, features| open_new_window(&app, &opener, url, features, account.clone())
@@ -504,18 +562,14 @@ fn create_tab_internal(
             emit_to_tab_window(&app_for_nav, id, "tab-navigated", payload);
             true
         })
+        // The tab's own loading state comes from install_page_watchers
+        // (right as a navigation starts, and only for the navigation under
+        // way); this just sends Shields' final count, which the throttled
+        // live updates may not have sent yet.
         .on_page_load(move |_webview, payload| {
-            let event_name = match payload.event() {
-                PageLoadEvent::Started => "tab-load-started",
-                PageLoadEvent::Finished => {
-                    // The final count, which the throttled live updates may
-                    // not have sent yet.
-                    emit_shields_stats(&app_for_load, id, &app_for_load.state::<shields::Shields>().tab_stats(id));
-                    "tab-load-finished"
-                }
-            };
-            let p = serde_json::json!({ "id": id, "url": payload.url().to_string() });
-            emit_to_tab_window(&app_for_load, id, event_name, p);
+            if let PageLoadEvent::Finished = payload.event() {
+                emit_shields_stats(&app_for_load, id, &app_for_load.state::<shields::Shields>().tab_stats(id));
+            }
         })
         .on_download(move |_webview, event| {
             let st = app_for_download.state::<BrowserState>();
@@ -594,14 +648,15 @@ fn create_tab_internal(
         )
         .map_err(|e| e.to_string())?;
 
+    if private {
+        state.private_tabs.lock().unwrap().insert(id);
+    }
     attach_shields(app, &webview, id);
     watch_page(app, &webview, id);
     keys::install(app, &webview);
+    bridge::install(app, &webview, id, token);
     if let Some(account) = account {
         state.tab_accounts.lock().unwrap().insert(id, account);
-    }
-    if private {
-        state.private_tabs.lock().unwrap().insert(id);
     }
     state.tabs.lock().unwrap().insert(id, webview);
     state.win(win, |w| w.order.push(id));
@@ -707,21 +762,16 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
         )
         .map_err(|e| e.to_string())?;
 
-    // The regular per-tab script (ad block, autofill...) under the page's
-    // own id, whose title and icon the frame shows, plus the panel's half
-    // of the resize hand-off.
+    // The regular per-tab scripts (ad block, autofill, the resize hand-off)
+    // under the page's own id, whose title and icon the frame shows.
     let page_id = state.next_id.fetch_add(1, Ordering::SeqCst);
     let page_label = side_panel_label(win);
-    let script = format!(
-        "{}\n{}",
-        adblock::build_content_script(page_id, adblock_enabled, autofill_enabled, true),
-        SIDE_PANEL_RESIZE_HANDOFF_SCRIPT
-    );
+    let token = bridge::new_token();
     let app_for_nav = app.clone();
     let (label_for_nav, frame_for_nav) = (page_label.clone(), frame_label.clone());
-    let builder = with_farbling(app, profile::webview(&page_label, webview_url))
+    let builder = with_farbling(app, content_webview(&page_label, webview_url, &token))
         .incognito(private)
-        .initialization_script(&script)
+        .initialization_script(&adblock::build_content_script(&token, adblock_enabled, autofill_enabled, true))
         .on_new_window({
             let (app, opener) = (app.clone(), page_label.clone());
             move |url, features| open_new_window(&app, &opener, url, features, None)
@@ -744,13 +794,14 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
             return Err(e.to_string());
         }
     };
+    if private {
+        state.private_tabs.lock().unwrap().insert(page_id);
+    }
     attach_shields(app, &page, page_id);
     watch_page(app, &page, page_id);
     keys::install(app, &page);
     keys::install(app, &frame);
-    if private {
-        state.private_tabs.lock().unwrap().insert(page_id);
-    }
+    bridge::install(app, &page, page_id, token);
 
     state.win(win, |w| {
         w.side_panel_frame = Some(frame);
@@ -787,39 +838,44 @@ fn side_panel_current_url(state: &BrowserState, win: &str) -> Option<String> {
     live.or(opened)
 }
 
-// The panel's half of the resize hand-off. The drag itself starts on the
-// frame's grip (panel-frame.js); WebView2 stops delivering mouse events once
-// the cursor leaves the webview it pressed in, so every webview the cursor
-// can cross during the drag -- the frame, this page, the active tab (see
-// adblock::build_content_script) -- continues it from its own mousemove,
-// armed by the broadcast `side-panel-drag` event. Each reports the pointer's
-// x relative to the panel's left edge; Rust turns that into a width (see
-// resize_side_panel_live). This page sits PANEL_INSET px right of that edge.
-const SIDE_PANEL_RESIZE_HANDOFF_SCRIPT: &str = r#"
-(function () {
-  var PANEL_INSET = 8;
-  var armed = false;
-  function invoke(cmd, args) {
-    if (window.__TAURI__ && window.__TAURI__.core) {
-      return window.__TAURI__.core.invoke(cmd, args).catch(function () {});
+// The resize hand-off: the drag starts on the side panel frame's grip
+// (panel-frame.js); WebView2 stops delivering mouse events once the cursor
+// leaves the webview it pressed in, so every webview the cursor can cross
+// during the drag -- the frame, the panel's page, the active tab -- continues
+// it from its own mousemove while a drag is on. The pages report the
+// pointer's x relative to the panel's left edge over the page bridge
+// (adblock::build_content_script); this turns that into the panel's width.
+pub(crate) fn side_panel_drag(app: &tauri::AppHandle, label: &str, x: f64, done: bool) {
+    let (app2, label) = (app.clone(), label.to_string());
+    later(app, move || {
+        let state = app2.state::<BrowserState>();
+        let Some(win) = app2.get_webview(&label).map(|w| w.window().label().to_string()) else { return };
+        let width = side_panel_width_for_pointer(x);
+        state.store.settings.lock().unwrap().side_panel_width = width;
+        place_side_panel(&state, &win, width);
+        if done {
+            state.store.save_settings();
+            let settings = state.store.settings.lock().unwrap().clone();
+            let _ = app2.emit("settings-changed", &settings);
+            broadcast_panel_drag(&app2, &state, &win, false);
+        }
+    });
+}
+
+// Tells everything the cursor can cross in window `win` whether a side
+// panel drag is on: the internal pages through Tauri's event, web pages
+// (where Tauri's events don't reach) over the page bridge.
+fn broadcast_panel_drag(app: &tauri::AppHandle, state: &BrowserState, win: &str, dragging: bool) {
+    let _ = app.emit("side-panel-drag", dragging);
+    let event = serde_json::json!({ "kesselEvent": "side-panel-drag", "on": dragging });
+    let (active, panel) = state.win(win, |w| (w.active, w.side_panel.clone())).unwrap_or_default();
+    if let Some(tab) = active.and_then(|id| state.tabs.lock().unwrap().get(&id).cloned()) {
+        bridge::post_event(app, &tab, event.clone());
     }
-  }
-  if (window.__TAURI__ && window.__TAURI__.event) {
-    window.__TAURI__.event.listen('side-panel-drag', function (e) { armed = !!e.payload; });
-  }
-  document.addEventListener('mousemove', function (e) {
-    if (!armed) return;
-    var x = e.clientX + PANEL_INSET;
-    if (!(e.buttons & 1)) {
-      armed = false;
-      invoke('commit_side_panel_width', { width: x });
-      invoke('notify_side_panel_drag', { dragging: false });
-      return;
+    if let Some(panel) = panel {
+        bridge::post_event(app, &panel, event);
     }
-    invoke('resize_side_panel_live', { width: x });
-  }, true);
-})();
-"#;
+}
 
 // Tauri has no API to bring an existing webview to the front of its
 // siblings, and webviews stack in creation order -- so the only way to
@@ -877,14 +933,27 @@ pub(crate) struct Popout {
     account: Option<String>,
 }
 
+// Not a web page: one of Kessel's own pages (served from the app's own
+// origin -- tauri.localhost, or a local dev server), a page's source view,
+// about:blank and the like. These skip Shields and history. Local files are
+// pages like any other.
 fn is_internal_nav(nav_url: &tauri::Url) -> bool {
-    let scheme = nav_url.scheme();
-    let host = nav_url.host_str().unwrap_or("");
-    scheme != "http" && scheme != "https"
-        || host == "localhost"
-        || host == "127.0.0.1"
-        || host == "::1"
-        || host.ends_with(".localhost")
+    match nav_url.scheme() {
+        "http" | "https" => is_kessel_page(nav_url),
+        "file" => false,
+        _ => true,
+    }
+}
+
+// One of Kessel's own pages: the only pages allowed to change settings,
+// import data and the like (see require_internal_page).
+fn is_kessel_page(url: &tauri::Url) -> bool {
+    let host = url.host_str().unwrap_or("");
+    match url.scheme() {
+        "tauri" => true,
+        "http" | "https" => host == "localhost" || host == "127.0.0.1" || host == "::1" || host.ends_with(".localhost"),
+        _ => false,
+    }
 }
 
 fn create_popout_internal(
@@ -941,8 +1010,9 @@ fn create_popout_internal(
     let bar_label_for_nav = bar_label.clone();
     let content_label = format!("popout-content-{}", id);
     let content_label_for_nav = content_label.clone();
-    let content_builder = with_account(app, with_farbling(app, profile::webview(&content_label, webview_url)), account.as_deref())
-        .initialization_script(&adblock::build_content_script(id, adblock_enabled, autofill_enabled, false))
+    let token = bridge::new_token();
+    let content_builder = with_account(app, with_farbling(app, content_webview(&content_label, webview_url, &token)), account.as_deref())
+        .initialization_script(&adblock::build_content_script(&token, adblock_enabled, autofill_enabled, false))
         .on_new_window({
             let (app, account, opener) = (app.clone(), account.clone(), content_label.clone());
             move |url, features| open_new_window(&app, &opener, url, features, account.clone())
@@ -969,6 +1039,7 @@ fn create_popout_internal(
     watch_page(app, &content, id);
     keys::install(app, &content);
     keys::install(app, &bar);
+    bridge::install(app, &content, id, token);
 
     let window_for_events = window.clone();
     let app_for_events = app.clone();
@@ -1136,19 +1207,22 @@ fn toolbar_heartbeat(webview: Webview, state: tauri::State<BrowserState>) {
 }
 
 // kessel:// pages load from the app's own asset URL; map that back to the
-// logical url the toolbar knows them by.
+// logical url the toolbar knows them by (settings.html#privacy ->
+// kessel://settings/privacy).
 fn logical_tab_url(url: &tauri::Url) -> String {
     if is_internal_nav(url) {
         let page = url.path().trim_start_matches('/');
-        for (route, file) in [
-            ("kessel://newtab", "newtab.html"),
-            ("kessel://settings", "settings.html"),
-            ("kessel://passwords", "passwords.html"),
-            ("kessel://downloads", "downloads.html"),
-        ] {
-            if page == file {
-                return route.to_string();
+        if let Some((name, _)) = INTERNAL_PAGES.iter().find(|(_, file)| *file == page) {
+            let mut logical = format!("kessel://{}", name);
+            if let Some(section) = url.fragment().filter(|f| !f.is_empty()) {
+                logical.push('/');
+                logical.push_str(section);
             }
+            if let Some(query) = url.query().filter(|q| !q.is_empty()) {
+                logical.push('?');
+                logical.push_str(query);
+            }
+            return logical;
         }
     }
     url.to_string()
@@ -1201,8 +1275,8 @@ fn get_toolbar_snapshot(webview: Webview, state: tauri::State<BrowserState>) -> 
 // start them, never a website (every webview can reach invoke()).
 fn require_internal_page(webview: &Webview) -> Result<(), String> {
     match webview.url() {
-        Ok(url) if is_internal_nav(&url) => Ok(()),
-        _ => Err("Importing can only be started from Kessel's settings".into()),
+        Ok(url) if is_kessel_page(&url) => Ok(()),
+        _ => Err("Only Kessel's own pages can do that".into()),
     }
 }
 
@@ -1575,7 +1649,7 @@ fn open_new_window(
         let app2 = app.clone();
         let url = url.to_string();
         // After WebView2's event has returned: creating a tab re-enters it.
-        let _ = app.run_on_main_thread(move || {
+        later(app, move || {
             let _ = open_tab_in_front(&app2, &win, Some(url), account);
         });
         return NewWindowResponse::Deny;
@@ -1675,7 +1749,8 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
                 emit_shields_stats(app, id, &stats);
             }
             let (app2, label2) = (app.clone(), label.to_string());
-            let _ = app.run_on_main_thread(move || {
+            // Not from inside NavigationStarting (see later).
+            later(app, move || {
                 if let (Some(w), Ok(url)) = (app2.get_webview(&label2), tauri::Url::parse(&rw.url)) {
                     let _ = w.navigate(url);
                 }
@@ -1739,6 +1814,20 @@ fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
     let _ = (app, webview, id);
 }
 
+// Page `id` is at zoom `factor` now: `remember` it for its site (the user
+// zoomed, rather than Kessel putting the site's zoom back), and show it in
+// the address bar.
+pub(crate) fn page_zoomed(app: &tauri::AppHandle, id: u32, factor: f64, remember: bool) {
+    let st = app.state::<BrowserState>();
+    if remember {
+        let url = st.pages.lock().unwrap().get(&id).map(|p| p.url.clone()).unwrap_or_default();
+        let private = st.private_tabs.lock().unwrap().contains(&id);
+        let default = st.store.settings.lock().unwrap().default_zoom;
+        app.state::<page::ZoomLevels>().set(&page::host_of(&url), factor, default, private);
+    }
+    emit_to_tab_window(app, id, "zoom-changed", serde_json::json!({ "id": id, "factor": page::round_zoom(factor) }));
+}
+
 #[cfg(windows)]
 unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webview::PlatformWebview, id: u32) -> windows::core::Result<()> {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
@@ -1772,16 +1861,104 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
         )?;
     }
 
+    // A page starts loading: the tab shows it right away (the engine's own
+    // "loading" comes only once the server answers -- seconds later on a
+    // slow site), Escape can stop it now, and it gets its site's zoom before
+    // it draws anything (zoom belongs to the site, like Chrome).
+    let app_start = app.clone();
+    let controller = platform.controller();
+    core.add_NavigationStarting(
+        &webview2_com::NavigationStartingEventHandler::create(Box::new(move |_, args| {
+            let Some(args) = args else { return Ok(()) };
+            let mut cancelled = windows::core::BOOL::default();
+            args.Cancel(&mut cancelled)?;
+            if cancelled.as_bool() {
+                return Ok(()); // Shields rewrote it (see guard_navigation)
+            }
+            let mut uri = windows::core::PWSTR::null();
+            args.Uri(&mut uri)?;
+            let uri = webview2_com::take_pwstr(uri);
+            let mut navigation = 0u64;
+            args.NavigationId(&mut navigation)?;
+            let st = app_start.state::<BrowserState>();
+            {
+                let mut pages = st.pages.lock().unwrap();
+                let page = pages.entry(id).or_default();
+                page.loading = true;
+                page.navigation = navigation;
+            }
+            emit_to_tab_window(&app_start, id, "tab-load-started", serde_json::json!({ "id": id, "url": uri }));
+            if tauri::Url::parse(&uri).map(|u| !is_internal_nav(&u)).unwrap_or(false) {
+                let target = page::zoom_for(&app_start, id, &uri);
+                let mut current = 1.0f64;
+                controller.ZoomFactor(&mut current)?;
+                if (target - current).abs() > 0.001 {
+                    controller.SetZoomFactor(target)?;
+                    page_zoomed(&app_start, id, target, false);
+                }
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    // The page went full screen itself, or left it.
+    let app_fs = app.clone();
+    core.add_ContainsFullScreenElementChanged(
+        &webview2_com::ContainsFullScreenElementChangedEventHandler::create(Box::new(move |sender, _| {
+            let Some(core) = sender else { return Ok(()) };
+            let mut full = windows::core::BOOL::default();
+            core.ContainsFullScreenElement(&mut full)?;
+            let (app2, on) = (app_fs.clone(), full.as_bool());
+            later(&app_fs, move || page_fullscreen(&app2, id, on));
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    // Zoomed by the user -- Ctrl + mouse wheel or pinch. (Zoom set from
+    // here, Kessel's zoom commands included, raises no event: see
+    // page_zoomed's callers.)
+    let app_zoom = app.clone();
+    platform.controller().add_ZoomFactorChanged(
+        &webview2_com::ZoomFactorChangedEventHandler::create(Box::new(move |sender, _| {
+            let Some(controller) = sender else { return Ok(()) };
+            let mut factor = 1.0f64;
+            controller.ZoomFactor(&mut factor)?;
+            page_zoomed(&app_zoom, id, factor, true);
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
     // Neither event fires when a new page's title or icon happens to be the
     // same as the last page's, so both are re-sent once it has loaded --
     // with its final address, in case a redirect moved it or the navigation
     // never committed (a download).
     let app_done = app.clone();
     core.add_NavigationCompleted(
-        &NavigationCompletedEventHandler::create(Box::new(move |sender, _| {
+        &NavigationCompletedEventHandler::create(Box::new(move |sender, args| {
+            let mut navigation = 0u64;
+            if let Some(args) = &args {
+                let _ = args.NavigationId(&mut navigation);
+            }
+            {
+                let st = app_done.state::<BrowserState>();
+                let mut pages = st.pages.lock().unwrap();
+                let page = pages.entry(id).or_default();
+                if page.navigation != 0 && page.navigation != navigation {
+                    return Ok(()); // an earlier page, left before it finished
+                }
+                page.loading = false;
+            }
+            emit_to_tab_window(&app_done, id, "tab-load-finished", serde_json::json!({ "id": id }));
             if let Some(core) = sender {
-                page_url_changed(&app_done, id, &webview_source(&core)?, false);
-                page_title_changed(&app_done, id, &webview_title(&core)?, true);
+                if let Ok(source) = webview_source(&core) {
+                    page_url_changed(&app_done, id, &source, false);
+                }
+                if let Ok(title) = webview_title(&core) {
+                    page_title_changed(&app_done, id, &title, true);
+                }
                 send_page_favicon(&app_done, id, &core);
             }
             Ok(())
@@ -1958,6 +2135,18 @@ unsafe fn register_scriptlets(
         Ok(())
     }));
     let _ = core.AddScriptToExecuteOnDocumentCreated(&HSTRING::from(script), &handler);
+}
+
+// A webview that shows web pages -- a tab, a pop-out's content, a side panel
+// page: Kessel's frame script in every frame (keys the page doesn't use,
+// Ctrl/Shift/middle-click links, the mouse's back/forward buttons -- see
+// adblock::build_frame_script), the engine's own zoom (Ctrl+mouse wheel,
+// pinch; kept per site, see page.rs) and developer tools.
+fn content_webview(label: &str, url: WebviewUrl, token: &str) -> WebviewBuilder<tauri::Wry> {
+    profile::webview(label, url)
+        .initialization_script_for_all_frames(&adblock::build_frame_script(token))
+        .zoom_hotkeys_enabled(true)
+        .devtools(true)
 }
 
 // Fingerprinting protection runs in every frame -- third-party iframes are
@@ -2215,36 +2404,42 @@ struct CosmeticsReply {
     generichide: bool,
 }
 
-// Element hiding for the calling page. The URL comes from the webview
-// itself, never from the page.
-#[tauri::command]
-fn shields_cosmetics(webview: Webview, state: tauri::State<BrowserState>, shields: tauri::State<shields::Shields>) -> CosmeticsReply {
-    let Ok(url) = webview.url() else { return CosmeticsReply::default() };
+// Element hiding for the page at `url` -- which comes from WebView2 (see
+// bridge.rs) or the webview itself, never from the page.
+pub(crate) fn cosmetics_for(app: &tauri::AppHandle, url: &str) -> CosmeticsReply {
+    let state = app.state::<BrowserState>();
+    let Ok(url) = tauri::Url::parse(url) else { return CosmeticsReply::default() };
     if is_internal_nav(&url) || !shields_up_for(&state, url.host_str().unwrap_or("")) {
         return CosmeticsReply::default();
     }
-    let resources = shields.cosmetics(url.as_str());
+    let resources = app.state::<shields::Shields>().cosmetics(url.as_str());
+    let fingerprinting = state.store.settings.lock().unwrap().shields_fingerprinting;
     CosmeticsReply {
         enabled: true,
-        fingerprinting: state.store.settings.lock().unwrap().shields_fingerprinting,
+        fingerprinting,
         hide: resources.hide_selectors.into_iter().collect(),
         exceptions: resources.exceptions.into_iter().collect(),
         generichide: resources.generichide,
     }
 }
 
-// Generic element-hiding rules matching the classes/ids a page uses.
 #[tauri::command]
-fn shields_hidden_selectors(
-    shields: tauri::State<shields::Shields>,
-    classes: Vec<String>,
-    ids: Vec<String>,
-    exceptions: Vec<String>,
-) -> Vec<String> {
+fn shields_cosmetics(app: tauri::AppHandle, webview: Webview) -> CosmeticsReply {
+    let Ok(url) = webview.url() else { return CosmeticsReply::default() };
+    cosmetics_for(&app, url.as_str())
+}
+
+// Generic element-hiding rules matching the classes/ids a page uses.
+pub(crate) fn hidden_selectors_for(app: &tauri::AppHandle, classes: Vec<String>, ids: Vec<String>, exceptions: Vec<String>) -> Vec<String> {
     let exceptions: HashSet<String> = exceptions.into_iter().collect();
     let classes: Vec<String> = classes.into_iter().take(5_000).collect();
     let ids: Vec<String> = ids.into_iter().take(5_000).collect();
-    shields.hidden_selectors(&classes, &ids, &exceptions)
+    app.state::<shields::Shields>().hidden_selectors(&classes, &ids, &exceptions)
+}
+
+#[tauri::command]
+fn shields_hidden_selectors(app: tauri::AppHandle, classes: Vec<String>, ids: Vec<String>, exceptions: Vec<String>) -> Vec<String> {
+    hidden_selectors_for(&app, classes, ids, exceptions)
 }
 
 #[tauri::command]
@@ -2556,6 +2751,95 @@ async fn close_accounts_popup(app: tauri::AppHandle, webview: Webview) -> Result
     .await
 }
 
+// --- Popups (the Kessel menu and others) ------------------------------------
+//
+// A popup is a small webview created above everything else in its window
+// (a toolbar-drawn menu would be hidden behind the tab's webview), anchored
+// under the button that opened it: `x` is the button's right edge, `y` its
+// bottom, in window coordinates. Clicking the button again closes it. Its
+// page gets `init` as window.__KESSEL_POPUP__.
+
+static POPUP_CLOSED_AT: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+
+#[tauri::command]
+async fn toggle_popup(
+    app: tauri::AppHandle,
+    webview: Webview,
+    kind: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    init: serde_json::Value,
+) -> Result<bool, String> {
+    require_internal_page(&webview)?;
+    let page = match kind.as_str() {
+        "menu" => "menu.html",
+        _ => return Err("no such popup".into()),
+    };
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<bool, String> {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let label = popup_label(&kind, &win);
+        if let Some(existing) = app2.get_webview(&label) {
+            let _ = existing.close();
+            *POPUP_CLOSED_AT.lock().unwrap() = Some((label, Instant::now()));
+            return Ok(false);
+        }
+        // The click on the button that opened it first blurred (= closed) it.
+        let just_closed = POPUP_CLOSED_AT
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|(l, t)| l == &label && t.elapsed() < Duration::from_millis(400))
+            .unwrap_or(false);
+        if just_closed {
+            return Ok(false);
+        }
+        let (window, insets) = state.win(&win, |w| (w.window.clone(), w.insets)).ok_or("that window is closed")?;
+        let logical = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
+        let top = y + 6.0;
+        let height = height.min((logical.height - top - 8.0).max(160.0));
+        let left = (x - width).clamp(insets.0.min(8.0), (logical.width - width - 4.0).max(0.0));
+        let popup = window
+            .add_child(
+                profile::webview(&label, WebviewUrl::App(page.into()))
+                    .initialization_script(&format!("window.__KESSEL_POPUP__ = {};", init)),
+                LogicalPosition::new(left, top),
+                LogicalSize::new(width, height),
+            )
+            .map_err(|e| e.to_string())?;
+        keys::install(&app2, &popup);
+        let _ = popup.set_focus();
+        raise_resize_borders(&window);
+        Ok(true)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// Closes the caller's own popup (it lost the focus, or ran its command).
+#[tauri::command]
+async fn close_popup(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
+    on_main(&app, move || {
+        let label = webview.label().to_string();
+        if label.contains("-popup-") {
+            *POPUP_CLOSED_AT.lock().unwrap() = Some((label, Instant::now()));
+            let _ = webview.close();
+        }
+    })
+    .await
+}
+
+// Exit (the menu): closes every window.
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    app.exit(0);
+    Ok(())
+}
+
 // Kessel's own pages keep a few things in localStorage (the custom
 // wallpaper, its text tone, the toolbar's geometry -- see shared/glass.js).
 // An account tab's new-tab page runs in that account's data folder, whose
@@ -2599,6 +2883,19 @@ fn shared_page_storage(webview: Webview, state: tauri::State<BrowserState>) -> O
 // UI thread on Windows -- but Tauri runs command handlers on a worker
 // thread by default. `on_main` bridges back to the main thread and blocks
 // this worker thread until it's done, via a channel.
+//
+// `later` is for WebView2's event handlers (a key, a message from a page, a
+// new window...): it runs `f` on the main thread after the event has
+// returned. Tauri's run_on_main_thread can't do that -- called on the main
+// thread it runs `f` right away, inside the handler, where creating,
+// closing or navigating a webview deadlocks WebView2 or re-enters it.
+pub(crate) fn later(app: &tauri::AppHandle, f: impl FnOnce() + Send + 'static) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = app.run_on_main_thread(f);
+    });
+}
+
 pub(crate) async fn on_main<F, R>(app: &tauri::AppHandle, f: F) -> Result<R, String>
 where
     F: FnOnce() -> R + Send + 'static,
@@ -2664,9 +2961,24 @@ async fn open_singleton_tab(app: tauri::AppHandle, webview: Webview, route: Stri
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
-        let existing = state.singleton_tabs.lock().unwrap().get(&route).copied();
+        // kessel://settings/clear finds the Settings tab, whichever section
+        // it's showing, and turns it to that section.
+        let key = internal_page_key(&route);
+        let existing = state.singleton_tabs.lock().unwrap().get(&key).copied();
         if let Some(id) = existing {
-            if let Some(win) = state.tab_window(id) {
+            // Still showing that page? (You can click a link in History and
+            // the tab goes on to that site.)
+            let tab = state.tabs.lock().unwrap().get(&id).cloned();
+            let current = tab.as_ref().and_then(|t| t.url().ok());
+            let still_there = current.as_ref().is_some_and(|u| internal_page_key(&logical_tab_url(u)) == key);
+            if let (Some(win), true) = (state.tab_window(id), still_there) {
+                if route != key {
+                    if let (Some(tab), Some(file), Some(current)) = (tab, internal_route(&route), current) {
+                        if let Ok(url) = current.join(&file) {
+                            let _ = tab.navigate(url);
+                        }
+                    }
+                }
                 switch_tab_internal(&state, id)?;
                 emit_to_window(&app2, &win, "tab-focused", serde_json::json!({ "id": id }));
                 if let Some(window) = state.window_handle(&win) {
@@ -2674,13 +2986,14 @@ async fn open_singleton_tab(app: tauri::AppHandle, webview: Webview, route: Stri
                 }
                 return Ok(id);
             }
-            // Stale entry (tab was closed since) -- fall through and make a fresh one.
-            state.singleton_tabs.lock().unwrap().remove(&route);
+            // Stale entry (the tab was closed, or went on to another page)
+            // -- fall through and make a fresh one.
+            state.singleton_tabs.lock().unwrap().remove(&key);
         }
         let win = state.window_of(&webview).ok_or("that window is closed")?;
         let id = create_tab_internal(&app2, &state, &win, Some(route.clone()), None)?;
         switch_tab_internal(&state, id)?;
-        state.singleton_tabs.lock().unwrap().insert(route.clone(), id);
+        state.singleton_tabs.lock().unwrap().insert(key, id);
         let payload = serde_json::json!({ "id": id, "url": route, "activate": true });
         emit_to_window(&app2, &win, "tab-created", payload);
         Ok(id)
@@ -2727,7 +3040,7 @@ async fn close_tab(app: tauri::AppHandle, id: u32, url: Option<String>) -> Resul
         if let (Some(u), Some(window), false) = (url, win, private) {
             if u.starts_with("http://") || u.starts_with("https://") || u.starts_with("file:") {
                 let mut stack = state.closed_stack.lock().unwrap();
-                stack.push(ClosedTab { url: u, title, account, window });
+                stack.push(ClosedTab { url: u, title, account, window, closed_at: millis_since_start() });
                 if stack.len() > 25 {
                     stack.remove(0);
                 }
@@ -2755,18 +3068,31 @@ fn reopen_closed(app: &tauri::AppHandle, caller: Option<String>, closed: ClosedT
     Ok(id)
 }
 
+// Ctrl+Shift+T: brings back whatever you closed last -- a tab, or a whole
+// window if that was more recent, like Chrome. Returns what it reopened:
+// {"tab": id} or {"window": label}, or null when there's nothing left.
 #[tauri::command]
-async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<Option<u32>, String> {
+async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<serde_json::Value, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
         let caller = state.window_of(&webview);
+        let tab_at = state.closed_stack.lock().unwrap().last().map(|c| c.closed_at);
+        let window_at = state.closed_windows.lock().unwrap().last().map(|w| w.closed_at_ms);
+        if window_at.is_some() && window_at >= tab_at {
+            let closed = state.closed_windows.lock().unwrap().pop();
+            if let Some(closed) = closed {
+                let session = WindowSession { tabs: closed.tabs, active: closed.active };
+                let win = browser_windows::create(&app2, false, serde_json::json!({ "session": session }))?;
+                return Ok(serde_json::json!({ "window": win }));
+            }
+        }
         let closed = state.closed_stack.lock().unwrap().pop();
         match closed {
             // In its old window and account; open_tab_in_front also puts it
             // in the tab strip.
-            Some(closed) => reopen_closed(&app2, caller, closed).map(Some),
-            None => Ok(None),
+            Some(closed) => reopen_closed(&app2, caller, closed).map(|id| serde_json::json!({ "tab": id })),
+            None => Ok(serde_json::Value::Null),
         }
     })
     .await
@@ -2778,6 +3104,67 @@ async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<Op
 #[tauri::command]
 fn get_closed_tabs(state: tauri::State<BrowserState>) -> Vec<String> {
     state.closed_stack.lock().unwrap().iter().rev().map(|c| c.url.clone()).collect()
+}
+
+// Versions and where this profile lives -- for Help and Settings -> About.
+#[tauri::command]
+fn about_info(app: tauri::AppHandle) -> serde_json::Value {
+    let profile = profile::get();
+    serde_json::json!({
+        "version": app.package_info().version.to_string(),
+        "engine": tauri::webview_version().unwrap_or_default(),
+        "tauri": tauri::VERSION,
+        "profile": profile.name.clone().unwrap_or_else(|| if profile.custom { "custom".into() } else { "default".into() }),
+        "profile_dir": profile.data_dir.to_string_lossy(),
+        "arch": std::env::consts::ARCH,
+    })
+}
+
+// Recently closed tabs (with their titles) and windows, newest first -- for
+// the history page and the menu.
+#[tauri::command]
+fn get_recently_closed(state: tauri::State<BrowserState>) -> serde_json::Value {
+    let tabs: Vec<serde_json::Value> = state
+        .closed_stack
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .map(|c| serde_json::json!({ "url": c.url, "title": c.title, "closed_at": c.closed_at }))
+        .collect();
+    let windows = browser_windows::get_closed_windows(state);
+    serde_json::json!({ "tabs": tabs, "windows": windows })
+}
+
+// Opens `url` from one of Kessel's own pages (History, Bookmarks...):
+// `how` is "tab" (a new tab, shown), "background" (a new tab behind this
+// one), "window" or "private-window".
+#[tauri::command]
+async fn open_url(app: tauri::AppHandle, webview: Webview, url: String, how: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).or_else(|| state.current_window()).ok_or("that window is closed")?;
+        match how.as_str() {
+            "window" | "private-window" => {
+                let private = how == "private-window" || state.is_private(&win);
+                browser_windows::create(&app2, private, serde_json::json!({ "urls": [url] }))?;
+            }
+            _ => {
+                let id = create_tab_internal(&app2, &state, &win, Some(url.clone()), None)?;
+                let activate = how != "background";
+                if activate {
+                    switch_tab_internal(&state, id)?;
+                }
+                let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+                emit_to_window(&app2, &win, "tab-created", serde_json::json!({ "id": id, "url": url, "account": account, "activate": activate }));
+            }
+        }
+        Ok(())
+    })
+    .await
+    .and_then(|r| r)
 }
 
 // Reopens one specific entry from the closed-tabs list (not necessarily
@@ -2793,7 +3180,7 @@ async fn reopen_closed_tab_url(app: tauri::AppHandle, webview: Webview, url: Str
             let pos = stack.iter().rposition(|c| c.url == url);
             pos.map(|pos| stack.remove(pos))
         };
-        let closed = closed.unwrap_or(ClosedTab { url, title: String::new(), account: None, window: String::new() });
+        let closed = closed.unwrap_or(ClosedTab { url, title: String::new(), account: None, window: String::new(), closed_at: 0 });
         reopen_closed(&app2, caller, closed)
     })
     .await
@@ -2951,10 +3338,86 @@ fn page_header_label(state: &BrowserState, id: u32) -> Option<String> {
     }
 }
 
-#[tauri::command]
-fn report_ads_hidden(app: tauri::AppHandle, state: tauri::State<BrowserState>, count: u32) {
+pub(crate) fn count_ads_hidden(app: &tauri::AppHandle, count: u32) {
+    let state = app.state::<BrowserState>();
     let total = state.store.blocked_count.fetch_add(count, Ordering::SeqCst) + count;
     let _ = app.emit("adblock-count-changed", total);
+}
+
+#[tauri::command]
+fn report_ads_hidden(app: tauri::AppHandle, count: u32) {
+    count_ads_hidden(&app, count);
+}
+
+// The page page `id` is -- for the commands that act on "this page" when a
+// key was pressed in a side panel.
+impl BrowserState {
+    fn side_panel_page(&self, win: &str) -> Option<u32> {
+        self.win(win, |w| w.side_panel_id).filter(|&id| id != 0)
+    }
+}
+
+// Whether the page a key was pressed in is still loading (Escape stops it
+// then, and is the page's otherwise). Never for Kessel's own UI: Escape
+// there belongs to the address bar and popups.
+pub(crate) fn page_is_loading(app: &tauri::AppHandle, source: &keys::Source) -> bool {
+    let state = app.state::<BrowserState>();
+    let id = match source {
+        keys::Source::Tab(id) | keys::Source::Popout(id) => Some(*id),
+        keys::Source::SidePanel(win) => state.side_panel_page(win),
+        keys::Source::Toolbar(_) => None,
+    };
+    id.and_then(|id| state.pages.lock().unwrap().get(&id).map(|p| p.loading)).unwrap_or(false)
+}
+
+// A command in a pop-out window: its page commands act on its own page,
+// closing a tab closes the pop-out. Returns false for the rest, which run
+// in the browser window you used last.
+pub(crate) fn popout_command(app: &tauri::AppHandle, command: &str, id: u32) -> bool {
+    let state = app.state::<BrowserState>();
+    let window = state.popouts.lock().unwrap().get(&id).map(|p| p.window.clone());
+    let Some(window) = window else { return false };
+    match command {
+        "close-tab" | "close-window" => {
+            let _ = window.close();
+        }
+        "fullscreen" => {
+            let on = !window.is_fullscreen().unwrap_or(false);
+            let _ = window.set_fullscreen(on);
+        }
+        "back" | "forward" | "reload" | "hard-reload" | "stop" | "zoom-in" | "zoom-out" | "zoom-reset" | "print" | "save-page" | "devtools" => {
+            let _ = page::act(app, id, command, None);
+        }
+        _ => {
+            // Everything else happens in a browser window -- bring it forward.
+            if let Some(w) = state.current_window().and_then(|win| state.window_handle(&win)) {
+                let _ = w.set_focus();
+            }
+            return false;
+        }
+    }
+    true
+}
+
+// A saved login for the page at `url` (which comes from WebView2, never
+// the page): its user name -- and with `password`, the password too, which
+// the page script only asks for when you click its "fill" chip.
+pub(crate) fn autofill_for(app: &tauri::AppHandle, _id: u32, url: &str, password: bool) -> Option<serde_json::Value> {
+    let state = app.state::<BrowserState>();
+    if !state.store.settings.lock().unwrap().vault_autofill_enabled {
+        return None;
+    }
+    let url = tauri::Url::parse(url).ok()?;
+    if is_internal_nav(&url) {
+        return None;
+    }
+    let host = url.host_str()?.to_string();
+    let item = app.state::<Vault>().find_for_host(vault_timeout(&state), &host)?;
+    Some(if password {
+        serde_json::json!({ "username": item.username, "password": item.password })
+    } else {
+        serde_json::json!({ "username": item.username })
+    })
 }
 
 #[tauri::command]
@@ -2963,15 +3426,88 @@ fn get_blocked_count(state: tauri::State<BrowserState>) -> u32 {
 }
 
 // --- History / bookmarks -------------------------------------------------
+// The history commands are async so a big search never runs on the main
+// thread (sync commands do).
 
+// The most recent visits (Settings' short list).
 #[tauri::command]
-fn get_history(state: tauri::State<BrowserState>) -> Vec<HistoryEntry> {
-    state.store.get_history()
+async fn get_history(state: tauri::State<'_, BrowserState>) -> Result<Vec<history::Visit>, String> {
+    Ok(state.store.history.query("", None, None, None, 500, 0))
+}
+
+// The history page: visits matching `text`, between `from` and `to` (unix
+// seconds), on `site`, newest first.
+#[tauri::command]
+async fn query_history(
+    state: tauri::State<'_, BrowserState>,
+    text: Option<String>,
+    from: Option<u64>,
+    to: Option<u64>,
+    site: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<Vec<history::Visit>, String> {
+    Ok(state.store.history.query(
+        text.as_deref().unwrap_or(""),
+        from,
+        to,
+        site.as_deref(),
+        limit.unwrap_or(200),
+        offset.unwrap_or(0),
+    ))
 }
 
 #[tauri::command]
-fn clear_history(state: tauri::State<BrowserState>) {
-    state.store.clear_history();
+async fn history_sites(state: tauri::State<'_, BrowserState>, text: Option<String>, limit: Option<u32>) -> Result<Vec<history::SiteVisits>, String> {
+    Ok(state.store.history.sites(text.as_deref().unwrap_or(""), limit.unwrap_or(300)))
+}
+
+// Deletes visits: by id, everything in [from, to), or a whole site.
+#[tauri::command]
+async fn delete_history(
+    app: tauri::AppHandle,
+    webview: Webview,
+    state: tauri::State<'_, BrowserState>,
+    ids: Option<Vec<i64>>,
+    from: Option<u64>,
+    to: Option<u64>,
+    site: Option<String>,
+) -> Result<usize, String> {
+    require_internal_page(&webview)?;
+    let history = &state.store.history;
+    let mut deleted = 0;
+    if let Some(ids) = ids {
+        deleted += history.delete(&ids);
+    }
+    if let (Some(from), Some(to)) = (from, to) {
+        deleted += history.delete_range(from, to);
+    }
+    if let Some(site) = site {
+        deleted += history.delete_site(&site);
+    }
+    let _ = app.emit("history-changed", ());
+    Ok(deleted)
+}
+
+// Records a visit without going there -- for the end-to-end tests, which
+// can't visit a real search engine's result pages offline. Test runs only
+// (see profile::remote_debugging_port).
+#[tauri::command]
+fn test_record_visit(webview: Webview, state: tauri::State<BrowserState>, url: String, title: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    if profile::remote_debugging_port().is_none() {
+        return Err("only in a test run".into());
+    }
+    state.store.record_history(&url, &title);
+    Ok(())
+}
+
+#[tauri::command]
+async fn clear_history(app: tauri::AppHandle, webview: Webview, state: tauri::State<'_, BrowserState>) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    state.store.history.clear();
+    let _ = app.emit("history-changed", ());
+    Ok(())
 }
 
 #[tauri::command]
@@ -3063,6 +3599,9 @@ fn get_settings(state: tauri::State<BrowserState>) -> Settings {
 fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, settings: Settings) -> Result<(), String> {
     require_internal_page(&webview)?;
     let lists_changed = state.store.settings.lock().unwrap().filter_lists != settings.filter_lists;
+    if state.store.settings.lock().unwrap().shortcuts != settings.shortcuts {
+        commands::rebuild_keymap(&settings.shortcuts);
+    }
     *state.store.settings.lock().unwrap() = settings.clone();
     state.store.save_settings();
     let _ = app.emit("settings-changed", &settings);
@@ -3350,6 +3889,93 @@ async fn focus_main_window(app: tauri::AppHandle, webview: Webview) -> Result<()
     .and_then(|r| r)
 }
 
+// Moves the keyboard focus into the calling webview (the toolbar, before it
+// puts the cursor in its address bar -- the focus may be in a tab's page).
+#[tauri::command]
+fn focus_webview(webview: Webview) -> Result<(), String> {
+    webview.set_focus().map_err(|e| e.to_string())
+}
+
+// Full screen (F11) for the caller's window: the window covers the screen
+// and its toolbar hides its chrome, so the page gets all of it. `on`: None
+// toggles.
+#[tauri::command]
+async fn toggle_fullscreen(app: tauri::AppHandle, webview: Webview, on: Option<bool>) -> Result<bool, String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        set_window_fullscreen(&app2, &state, &win, on, false)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// `page`: a page asked (a video's full screen button) rather than you.
+fn set_window_fullscreen(app: &tauri::AppHandle, state: &BrowserState, win: &str, on: Option<bool>, page: bool) -> Result<bool, String> {
+    let window = state.window_handle(win).ok_or("that window is closed")?;
+    let on = on.unwrap_or(!window.is_fullscreen().unwrap_or(false));
+    let (user, page_full) = state
+        .win(win, |w| {
+            if page {
+                w.page_fullscreen = on;
+            } else {
+                w.user_fullscreen = on;
+            }
+            (w.user_fullscreen, w.page_fullscreen)
+        })
+        .unwrap_or((on, false));
+    // Full screen as long as either of you still wants it.
+    let full = user || page_full;
+    window.set_fullscreen(full).map_err(|e| e.to_string())?;
+    emit_to_window(app, win, "fullscreen-changed", serde_json::json!({ "on": full, "page": page_full }));
+    Ok(full)
+}
+
+// A page entered or left full screen itself (a video's button, or the
+// Fullscreen API). A pop-out's whole window follows; in a browser window
+// the toolbar hides its chrome so the page gets the whole screen.
+fn page_fullscreen(app: &tauri::AppHandle, id: u32, on: bool) {
+    let state = app.state::<BrowserState>();
+    let popout = state.popouts.lock().unwrap().get(&id).map(|p| p.window.clone());
+    if let Some(window) = popout {
+        let _ = window.set_fullscreen(on);
+        return;
+    }
+    if let Some(win) = state.tab_window(id) {
+        let _ = set_window_fullscreen(app, &state, &win, Some(on), true);
+    }
+}
+
+// Ctrl+O: Windows' Open dialog; the file you pick, as a file:// address.
+#[tauri::command]
+async fn open_file_dialog(app: tauri::AppHandle, webview: Webview) -> Result<Option<String>, String> {
+    require_internal_page(&webview)?;
+    // The end-to-end tests can't click through Windows' dialog: in a test
+    // run (see profile::remote_debugging_port) they name the file instead.
+    if profile::remote_debugging_port().is_some() {
+        if let Ok(path) = std::env::var("KESSEL_TEST_OPEN_FILE") {
+            return Ok(tauri::Url::from_file_path(path).ok().map(|u| u.to_string()));
+        }
+    }
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        #[cfg(windows)]
+        let owner = state.window_of(&webview).and_then(|w| state.window_handle(&w)).and_then(|w| w.hwnd().ok());
+        #[cfg(not(windows))]
+        let owner = None;
+        let filters = [
+            ("Pages and files Kessel can show", "*.htm;*.html;*.shtml;*.xhtml;*.mht;*.mhtml;*.pdf;*.svg;*.txt;*.md;*.json;*.xml;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.avif;*.bmp;*.ico;*.mp4;*.webm;*.mp3;*.ogg;*.wav;*.flac"),
+            ("Web pages", "*.htm;*.html;*.shtml;*.xhtml;*.mht;*.mhtml"),
+            ("All files", "*.*"),
+        ];
+        let path = dialogs::open_file(owner, "Open a file", &filters);
+        path.and_then(|p| tauri::Url::from_file_path(p).ok()).map(|u| u.to_string())
+    })
+    .await
+}
+
 // --- Side panel commands ----------------------------------------------
 
 // Opens `url` in the caller's window's side panel under the given `kind`
@@ -3491,17 +4117,22 @@ fn commit_side_panel_width(app: tauri::AppHandle, state: tauri::State<BrowserSta
     let _ = app.emit("settings-changed", &settings);
 }
 
-// Broadcasts the side panel's own drag state to every webview -- the panel's
-// own resize script and every tab's content script both listen. This is the
-// only signal the tab-side hand-off (see adblock::build_content_script)
-// trusts to decide whether a mousemove is a resize continuation. Deliberately
-// not a clientX-proximity guess: both the panel and every tab share the same
-// left-edge origin (chrome_left()), so a pure position heuristic would also
-// fire on ordinary clicks/drags near the tab's own left margin whenever the
-// panel is simply closed, silently overwriting the saved width.
+// Tells the caller's window that a side panel resize drag started or ended
+// -- the frame, the panel's page and the active tab all continue it (see
+// side_panel_drag). This is the only signal the page-side hand-off trusts
+// to decide whether a mousemove is a resize continuation. Deliberately not
+// a clientX-proximity guess: the panel and every tab share the same
+// left-edge origin, so a pure position heuristic would also fire on ordinary
+// clicks/drags near the tab's own left margin whenever the panel is simply
+// closed, silently overwriting the saved width.
 #[tauri::command]
-fn notify_side_panel_drag(app: tauri::AppHandle, dragging: bool) {
-    let _ = app.emit("side-panel-drag", dragging);
+fn notify_side_panel_drag(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, dragging: bool) {
+    match state.window_of(&webview) {
+        Some(win) => broadcast_panel_drag(&app, &state, &win, dragging),
+        None => {
+            let _ = app.emit("side-panel-drag", dragging);
+        }
+    }
 }
 
 // A toolbar reports its real rendered chrome size here (a ResizeObserver in
@@ -3630,6 +4261,10 @@ fn main() {
             close_tab,
             reopen_closed_tab,
             get_closed_tabs,
+            get_recently_closed,
+            open_url,
+            about_info,
+            browsing_data::clear_browsing_data,
             reopen_closed_tab_url,
             cycle_tab,
             switch_tab_by_index,
@@ -3642,6 +4277,10 @@ fn main() {
             report_ads_hidden,
             get_blocked_count,
             get_history,
+            query_history,
+            history_sites,
+            delete_history,
+            test_record_visit,
             clear_history,
             get_bookmarks,
             add_bookmark,
@@ -3678,6 +4317,21 @@ fn main() {
             vault_change_master_password,
             save_window_session,
             take_window_init,
+            commands::get_commands,
+            commands::run_command,
+            commands::record_shortcut,
+            commands::test_press,
+            page::page_action,
+            page::get_zoom_levels,
+            page::remove_zoom_level,
+            focus_webview,
+            toggle_fullscreen,
+            open_file_dialog,
+            page::page_selection,
+            page::page_find_status,
+            toggle_popup,
+            close_popup,
+            quit_app,
             browser_windows::new_window,
             browser_windows::close_window,
             browser_windows::get_windows,
@@ -3733,6 +4387,8 @@ fn main() {
             let store = Store::load(data_dir.clone());
             profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
             let restore = store.settings.lock().unwrap().restore_tabs;
+            commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);
+            app.manage(page::ZoomLevels::load(&data_dir));
 
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
@@ -3781,4 +4437,34 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kessel_pages_and_their_sections() {
+        assert_eq!(internal_route("kessel://settings").as_deref(), Some("settings.html"));
+        assert_eq!(internal_route("kessel://settings/").as_deref(), Some("settings.html"));
+        assert_eq!(internal_route("kessel://settings/clear").as_deref(), Some("settings.html#clear"));
+        assert_eq!(internal_route("KESSEL://History?q=news").as_deref(), Some("history.html?q=news"));
+        assert_eq!(internal_route("kessel://help#shortcuts").as_deref(), Some("help.html#shortcuts"));
+        assert_eq!(internal_route("kessel://home").as_deref(), Some("newtab.html"));
+        assert_eq!(internal_route("kessel://nope"), None);
+        assert_eq!(internal_route("https://example.com"), None);
+
+        assert_eq!(internal_page_key("kessel://settings/clear"), "kessel://settings");
+        assert_eq!(internal_page_key("kessel://history?q=x"), "kessel://history");
+        assert_eq!(internal_page_key("https://example.com/"), "https://example.com/");
+
+        let url = |u: &str| tauri::Url::parse(u).unwrap();
+        assert_eq!(logical_tab_url(&url("http://tauri.localhost/settings.html#privacy")), "kessel://settings/privacy");
+        assert_eq!(logical_tab_url(&url("http://tauri.localhost/history.html?q=news")), "kessel://history?q=news");
+        assert_eq!(logical_tab_url(&url("http://tauri.localhost/newtab.html")), "kessel://newtab");
+        assert_eq!(logical_tab_url(&url("https://example.com/help.html")), "https://example.com/help.html");
+        // Round trip: a section survives being shown and typed again.
+        let shown = logical_tab_url(&url("http://tauri.localhost/help.html#mouse"));
+        assert_eq!(internal_route(&shown).as_deref(), Some("help.html#mouse"));
+    }
 }

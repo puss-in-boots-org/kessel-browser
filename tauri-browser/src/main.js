@@ -6,7 +6,7 @@
 // src-tauri/src/main.rs.
 import { icon, faviconLetter } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
-import { ENGINES, resolveInput, toast, hostOf, listenHere } from "./shared/api.js";
+import { ENGINES, resolveInput, toast, hostOf, listenHere, internalTitle, internalPageKey, escapeHtml } from "./shared/api.js";
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 
@@ -50,7 +50,6 @@ let blockedCount = 0;
 let activeDownloads = 0;
 let openPanelKind = null; // e.g. "pinned:<id>" / "downloads" / "passwords" / "settings", or null
 
-const INTERNAL_TITLES = { "kessel://settings": "Settings", "kessel://passwords": "Passwords", "kessel://downloads": "Downloads" };
 
 // Real tab ids come from Rust as positive u32s -- negative numbers can
 // never collide with one, so they're a safe local-only key for a tab that
@@ -199,6 +198,7 @@ function paintStaticIcons() {
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
   iconFor("shields-btn", icon("shieldCheck", 16));
+  iconFor("menu-btn", icon("dotsV", 18));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -313,7 +313,7 @@ async function restoreAfterToolbarReload() {
     restored.push({ ...saved, url: tab.url, title: tab.title || saved.title, favicon: tab.favicon ?? saved.favicon, account: tab.account ?? null, loading: false, lastActiveAt: now });
   }
   for (const tab of liveById.values()) {
-    const title = tab.title || INTERNAL_TITLES[tab.url] || hostOf(tab.url);
+    const title = tab.title || internalTitle(tab.url) || hostOf(tab.url);
     restored.push({ id: tab.id, url: tab.url, title, favicon: tab.favicon, userTitled: !!tab.title, account: tab.account ?? null, loading: false, lastActiveAt: now });
   }
 
@@ -394,9 +394,9 @@ function renderTabs() {
 }
 
 function faviconGlyph(tab) {
-  if (tab.favicon) return `<img class="fav-img" data-tab-id="${tab.id}" src="${tab.favicon}" alt="" />`;
+  if (tab.favicon) return `<img class="fav-img" data-tab-id="${tab.id}" src="${escapeHtml(tab.favicon)}" alt="" />`;
   if (!tab.url || tab.url.startsWith("kessel://")) return icon("globe", 11);
-  return `<span>${faviconLetter(tab.url)}</span>`;
+  return `<span>${escapeHtml(faviconLetter(tab.url))}</span>`;
 }
 
 // A favicon URL that 404s or otherwise fails just falls back to the letter
@@ -507,7 +507,7 @@ function adoptTabInfo(info, beforeTab = null) {
   const tab = {
     id: info.id,
     url: info.url,
-    title: info.title || INTERNAL_TITLES[info.url] || hostOf(info.url),
+    title: info.title || internalTitle(info.url) || hostOf(info.url),
     userTitled: !!info.title,
     favicon: info.favicon ?? null,
     account: info.account ?? null,
@@ -653,18 +653,21 @@ function showContextMenu(items, x, y) {
   document.addEventListener("click", closeMenu, true);
 }
 
-function updateAddressBarForActiveTab() {
+// `force`: even while you're typing in it (Escape, undoing your edit).
+function updateAddressBarForActiveTab(force = false) {
   const tab = findTab(activeTabId);
   const input = document.getElementById("url-input");
-  if (document.activeElement !== input) {
+  if (force || document.activeElement !== input) {
     // Internal kessel:// pages show a blank omnibox, like a real browser's
     // new-tab/settings pages do -- there's nothing useful to type over.
     input.value = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : "";
+    input.classList.remove("search-mode");
   }
   updateStarButton();
   updateNavButtons();
   updateShieldsButton();
   updateAccountButton();
+  updateZoomIndicator();
 }
 
 // --- Shields button (address bar) -------------------------------------------
@@ -702,7 +705,15 @@ function updateNavButtons() {
   const hasTab = !!activeTabId;
   document.getElementById("back-btn").disabled = !hasTab;
   document.getElementById("forward-btn").disabled = !hasTab;
-  document.getElementById("reload-btn").disabled = !hasTab;
+  const reload = document.getElementById("reload-btn");
+  reload.disabled = !hasTab;
+  // While the page loads, it's a stop button (Escape does the same).
+  const loading = !!findTab(activeTabId)?.loading;
+  if (reload.dataset.mode !== (loading ? "stop" : "reload")) {
+    reload.dataset.mode = loading ? "stop" : "reload";
+    reload.innerHTML = icon(loading ? "close" : "reload", loading ? 16 : 17);
+    reload.title = loading ? "Stop loading (Esc)" : "Reload (F5)";
+  }
 }
 
 async function activateTab(id) {
@@ -799,7 +810,7 @@ function addPlaceholderTab(url, account = null, title = null) {
     id,
     url,
     account: accountById(account)?.id ?? null,
-    title: title || INTERNAL_TITLES[url] || hostOf(url),
+    title: title || internalTitle(url) || hostOf(url),
     userTitled: !!title,
     discarded: true,
     neverCreated: true,
@@ -894,7 +905,7 @@ function wireTabDiscarding() {
     const cutoff = Date.now() - minutes * 60 * 1000;
     for (const tab of tabs) {
       if (tab.discarded || tab.id === activeTabId) continue;
-      if (SINGLETON_ROUTES.has(tab.url)) continue; // never discard Settings/Passwords
+      if (SINGLETON_ROUTES.has(internalPageKey(tab.url))) continue; // never discard Settings/Passwords
       if ((tab.lastActiveAt ?? 0) < cutoff) discardTab(tab);
     }
   }, 60 * 1000);
@@ -904,7 +915,7 @@ function wireTabDiscarding() {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -917,7 +928,7 @@ async function navigateActiveTab(rawInput) {
   if (!tab) return;
   const url = resolveInput(rawInput, currentSettings()?.search_engine || "google");
   if (!url) return;
-  if (SINGLETON_ROUTES.has(url)) {
+  if (SINGLETON_ROUTES.has(internalPageKey(url))) {
     await openSingleton(url);
     return;
   }
@@ -934,13 +945,229 @@ async function navigateActiveTab(rawInput) {
 // This window's tabs, for restoring the session next time (and after a
 // crash). Private windows keep nothing.
 let sessionTimer = null;
+// --- Browser commands ---------------------------------------------------------
+// Every command -- from a shortcut (Rust sends "browser-command", see
+// src-tauri/src/commands.rs), the menu, the command palette or a button --
+// runs here. `ctx.page` is the page the key was pressed in (a tab, or the
+// side panel's page); without one, the active tab.
+
+let commandList = []; // [{ id, label, category, keys, ... }] from get_commands
+
+async function runCommand(id, ctx = {}) {
+  const page = ctx.page ?? (activeTabId > 0 ? activeTabId : null);
+  const act = (action, value = null) => (page ? invoke("page_action", { id: page, action, value }).catch((err) => toast(String(err))) : null);
+  const tabNumber = /^tab-([1-8])$/.exec(id);
+  if (tabNumber) return goToTab(parseInt(tabNumber[1], 10) - 1);
+  switch (id) {
+    case "new-tab": return createTab();
+    case "close-tab": return activeTabId != null && closeTab(activeTabId);
+    case "reopen-closed-tab": return reopenClosed();
+    case "next-tab": return cycleTabs(1);
+    case "prev-tab": return cycleTabs(-1);
+    case "last-tab": return goToTab(-1);
+    case "move-tab-left": return moveActiveTab(-1);
+    case "move-tab-right": return moveActiveTab(1);
+    case "duplicate-tab": {
+      const tab = findTab(activeTabId);
+      return tab && tab.url && createTab(tab.url, tab.account ?? null);
+    }
+    case "close-other-tabs": return closeOtherTabs(activeTabId);
+    case "new-window": return invoke("new_window", { private: false });
+    case "new-private-window": return invoke("new_window", { private: true });
+    case "close-window": return appWindow.close();
+    case "reopen-closed-window":
+      return invoke("reopen_closed_window", {}).then((w) => { if (!w) toast("No recently closed windows"); });
+    case "fullscreen": return invoke("toggle_fullscreen", {});
+    case "back":
+    case "forward":
+    case "reload":
+    case "hard-reload":
+    case "stop":
+    case "zoom-in":
+    case "zoom-out":
+    case "zoom-reset":
+    case "print":
+    case "save-page":
+    case "devtools":
+    case "task-manager":
+      return act(id);
+    case "home": return openInActiveTab(currentSettings()?.homepage || "kessel://newtab");
+    case "focus-address-bar": return focusAddressBar(false);
+    case "focus-search": return focusAddressBar(true);
+    case "find":
+    case "find-next":
+    case "find-prev":
+      return findInPage(id, page);
+    case "open-file": {
+      const url = await invoke("open_file_dialog").catch((err) => toast(String(err)));
+      if (url) await createTab(url);
+      return;
+    }
+    case "view-source": {
+      const tab = findTab(page) || findTab(activeTabId);
+      if (tab && /^(https?|file):/.test(tab.url)) await createTab(`view-source:${tab.url}`, tab.account ?? null);
+      else toast("This page has no source to show");
+      return;
+    }
+    case "bookmark": return toggleBookmark();
+    case "bookmark-all-tabs": return bookmarkAllTabs();
+    case "toggle-bookmarks-bar": return saveSettings({ bookmarks_bar: currentSettings()?.bookmarks_bar === false });
+    case "history": return openSingleton("kessel://history");
+    case "downloads": return openSingleton("kessel://downloads");
+    case "clear-browsing-data": return openSingleton("kessel://settings/clear");
+    case "settings": return openSingleton("kessel://settings");
+    case "help": return openSingleton("kessel://help");
+    case "menu": return toggleMainMenu();
+    case "passwords": return toggleSidePanel("passwords", "kessel://passwords");
+    case "side-panel":
+      await invoke("close_side_panel").catch(() => {});
+      openPanelKind = null;
+      updatePanelHighlights();
+      return;
+    default:
+      console.warn("unknown command", id);
+  }
+}
+
+// Ctrl+Tab / Ctrl+Shift+Tab: through every tab in the strip's order,
+// sleeping ones included (they wake up), wrapping around.
+async function cycleTabs(direction) {
+  const shown = tabs.filter((t) => !isHiddenInGroup(t));
+  if (shown.length < 2) return;
+  const at = shown.findIndex((t) => t.id === activeTabId);
+  const next = shown[(at + direction + shown.length) % shown.length];
+  await activateTab(next.id);
+}
+
+// Ctrl+1..8 -> that tab; Ctrl+9 (index -1) -> the last one.
+async function goToTab(index) {
+  const shown = tabs.filter((t) => !isHiddenInGroup(t));
+  if (!shown.length) return;
+  const tab = index < 0 ? shown[shown.length - 1] : shown[index];
+  if (tab) await activateTab(tab.id);
+}
+
+// A tab in a folded group only shows as its group's chip -- unless it's
+// the active one.
+function isHiddenInGroup(tab) {
+  return !!(tab.account && collapsedGroups.has(tab.account) && tab.id !== activeTabId);
+}
+
+// Ctrl+Shift+PageUp/PageDown: moves the active tab one place, within its
+// account's group.
+function moveActiveTab(direction) {
+  const at = tabs.findIndex((t) => t.id === activeTabId);
+  const to = at + direction;
+  if (at < 0 || to < 0 || to >= tabs.length || (tabs[to].account ?? null) !== (tabs[at].account ?? null)) return;
+  [tabs[at], tabs[to]] = [tabs[to], tabs[at]];
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+}
+
+async function closeOtherTabs(keepId) {
+  // Sequential on purpose -- closeTab() mutates the shared `tabs` array.
+  for (const other of tabs.filter((t) => t.id !== keepId)) await closeTab(other.id);
+}
+
+// Ctrl+Shift+T: the last closed tab -- or window, if that closed later.
+async function reopenClosed() {
+  const result = await invoke("reopen_closed_tab").catch(() => null);
+  if (!result) toast("Nothing to reopen");
+}
+
+async function bookmarkAllTabs() {
+  const pages = tabs.filter((t) => /^(https?|file):/.test(t.url || ""));
+  const known = new Set(bookmarks.map((b) => b.url));
+  let added = 0;
+  for (const t of pages) {
+    if (known.has(t.url)) continue;
+    await invoke("add_bookmark", { url: t.url, title: t.title || t.url });
+    known.add(t.url);
+    added++;
+  }
+  await refreshBookmarks();
+  toast(added ? `Bookmarked ${added} tab${added === 1 ? "" : "s"}` : "All tabs are already bookmarked");
+}
+
+// F6 / Ctrl+L / Alt+D -- or Ctrl+K / Ctrl+E, which start a search: like
+// Chrome, the address bar gets a "?" and whatever follows it is searched
+// for, even if it looks like an address.
+async function focusAddressBar(search) {
+  await invoke("focus_webview").catch(() => {});
+  if (search) {
+    urlInputEl().value = "? ";
+    urlInputEl().focus();
+    urlInputEl().setSelectionRange(2, 2);
+    urlInputEl().classList.add("search-mode");
+  } else {
+    urlInputEl().focus();
+    urlInputEl().select();
+  }
+}
+
+// Gives the keyboard back to the active tab's page.
+function focusPage() {
+  if (activeTabId > 0) invoke("page_action", { id: activeTabId, action: "focus", value: null }).catch(() => {});
+}
+
+function urlInputEl() {
+  return document.getElementById("url-input");
+}
+
+// Enter in the address bar: `where` is "here", "tab" (Alt+Enter) or
+// "window" (Shift+Enter).
+async function navigateFromAddressBar(text, where) {
+  const url = resolveInput(text, currentSettings()?.search_engine || "google");
+  if (!url) return;
+  urlInputEl().blur();
+  if (where === "tab") await createTab(url);
+  else if (where === "window") await invoke("new_window", { private: !!WIN.private, url });
+  else await navigateActiveTab(text);
+  if (where !== "window") focusPage();
+}
+
+// The Kessel menu (⋮, Alt+F, Alt+E, F10): a popup under its button.
+async function toggleMainMenu() {
+  const rect = document.getElementById("menu-btn").getBoundingClientRect();
+  const tab = findTab(activeTabId);
+  const init = {
+    zoom: tab?.zoom ?? currentSettings()?.default_zoom ?? 1,
+    web: !!(tab && /^(https?|file):/.test(tab.url || "")),
+  };
+  await invoke("toggle_popup", { kind: "menu", x: rect.right + 4, y: rect.bottom, width: 300, height: 700, init }).catch(() => {});
+}
+
+// Ctrl+F opens the engine's own find bar on the page (starting with the
+// selected text, like Chrome); F3 / Ctrl+G and Shift+F3 / Ctrl+Shift+G go to
+// the next / previous match -- starting a search if there isn't one yet.
+async function findInPage(command, page) {
+  if (!page) return;
+  const term = command === "find" ? await invoke("page_selection", { id: page }).catch(() => "") : null;
+  await invoke("page_action", { id: page, action: command, value: term || null }).catch((err) => toast(String(err)));
+}
+
+// The address bar's zoom badge: the active tab's zoom when it isn't the
+// default; clicking it resets it.
+function updateZoomIndicator() {
+  const btn = document.getElementById("zoom-btn");
+  if (!btn) return;
+  const tab = findTab(activeTabId);
+  const def = currentSettings()?.default_zoom ?? 1;
+  const zoom = tab?.zoom ?? def;
+  const show = Math.abs(zoom - def) > 0.001;
+  btn.hidden = !show;
+  btn.textContent = `${Math.round(zoom * 100)}%`;
+  btn.title = `Zoom: ${Math.round(zoom * 100)}% -- click to reset (Ctrl+0)`;
+}
+
 function persistSession() {
   if (WIN.private) return;
   clearTimeout(sessionTimer);
   sessionTimer = setTimeout(() => {
     // Settings/Passwords are excluded on purpose: restoring one as a plain
     // tab would bypass the singleton dedup the next time it's reopened.
-    const kept = tabs.filter((t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(t.url));
+    const kept = tabs.filter((t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(internalPageKey(t.url)));
     const saved = kept.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null }));
     const active = Math.max(0, kept.findIndex((t) => t.id === activeTabId));
     invoke("save_window_session", { tabs: saved, active }).catch(() => {});
@@ -1178,16 +1405,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("rail-settings").addEventListener("click", () => toggleSidePanel("settings", "kessel://settings"));
 
   document.getElementById("new-tab-btn").addEventListener("click", () => createTab());
-  document.getElementById("back-btn").addEventListener("click", () => {
-    if (activeTabId) invoke("go_back", { id: activeTabId });
-  });
-  document.getElementById("forward-btn").addEventListener("click", () => {
-    if (activeTabId) invoke("go_forward", { id: activeTabId });
-  });
-  document.getElementById("reload-btn").addEventListener("click", () => {
-    if (activeTabId) invoke("reload", { id: activeTabId });
-  });
+  document.getElementById("back-btn").addEventListener("click", () => runCommand("back"));
+  document.getElementById("forward-btn").addEventListener("click", () => runCommand("forward"));
+  // Reload, or stop while the page is still loading (like Chrome's button).
+  document.getElementById("reload-btn").addEventListener("click", () => runCommand(findTab(activeTabId)?.loading ? "stop" : "reload"));
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
+  document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
+  document.getElementById("zoom-btn").addEventListener("click", () => runCommand("zoom-reset"));
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
   document.getElementById("account-btn").addEventListener("click", toggleAccountsPopup);
   document.getElementById("engine-btn").addEventListener("click", (e) => {
@@ -1202,55 +1426,55 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  document.getElementById("url-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { navigateActiveTab(e.target.value); e.target.blur(); }
-    else if (e.key === "Escape") { updateAddressBarForActiveTab(); e.target.blur(); }
+  // The address bar's own keys. (Every browser shortcut -- Ctrl+T, F5... --
+  // is handled in Rust, see src-tauri/src/commands.rs, and arrives here as
+  // a "browser-command" event.)
+  //   Enter            go there / search
+  //   Alt+Enter        ...in a new tab
+  //   Shift+Enter      ...in a new window
+  //   Ctrl+Enter       add www. and .com ("kessel" -> www.kessel.com)
+  //   Escape           undo your edit; again: back to the page
+  const urlInput = document.getElementById("url-input");
+  urlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      let text = e.target.value;
+      if ((e.ctrlKey || e.metaKey) && text.trim() && !/[\s./:]/.test(text.trim())) text = `www.${text.trim()}.com`;
+      const where = e.altKey ? "tab" : e.shiftKey ? "window" : "here";
+      navigateFromAddressBar(text, where);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      const tab = findTab(activeTabId);
+      const shown = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : "";
+      if (e.target.value !== shown) {
+        updateAddressBarForActiveTab(true);
+        e.target.select();
+      } else {
+        e.target.blur();
+        focusPage();
+      }
+    }
   });
-  document.getElementById("url-input").addEventListener("focus", (e) => e.target.select());
+  urlInput.addEventListener("focus", (e) => e.target.select());
+  urlInput.addEventListener("blur", () => urlInput.classList.remove("search-mode"));
 
-  // Keyboard shortcuts (fire while focus is inside this toolbar webview --
-  // the same shortcuts also work from inside a loaded page, see
-  // src-tauri/src/adblock.rs::build_content_script).
-  document.addEventListener("keydown", (e) => {
-    const mod = e.ctrlKey || e.metaKey;
+  // Every shortcut, menu item and palette entry ends up here.
+  await listen("browser-command", (event) => runCommand(event.payload.command, event.payload));
+  commandList = await invoke("get_commands").catch(() => []);
+  window.addEventListener("kessel-settings", async () => {
+    commandList = await invoke("get_commands").catch(() => commandList);
+  });
 
-    if (mod && e.key === "t") { e.preventDefault(); createTab(); return; }
-    if (mod && e.key === "w") { e.preventDefault(); if (activeTabId) closeTab(activeTabId); return; }
-    if (mod && e.key === "l") {
-      e.preventDefault();
-      const input = document.getElementById("url-input");
-      input.focus();
-      input.select();
-      return;
-    }
-    if (e.key === "F5" || (mod && e.key === "r")) {
-      e.preventDefault();
-      if (activeTabId) invoke("reload", { id: activeTabId });
-      return;
-    }
-    if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); if (activeTabId) invoke("go_back", { id: activeTabId }); return; }
-    if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); if (activeTabId) invoke("go_forward", { id: activeTabId }); return; }
-    if (mod && e.key === "d") { e.preventDefault(); toggleBookmark(); return; }
-    if (mod && e.key === "Tab") { e.preventDefault(); invoke("cycle_tab", { direction: e.shiftKey ? -1 : 1 }); return; }
-    if (mod && e.shiftKey && e.key.toLowerCase() === "t") {
-      e.preventDefault();
-      invoke("reopen_closed_tab").then((id) => { if (id != null) toast("Reopened closed tab"); });
-      return;
-    }
-    if (mod && e.shiftKey && e.key.toLowerCase() === "l") { e.preventDefault(); toggleSidePanel("passwords", "kessel://passwords"); return; }
-    if (mod && e.key === "b") {
-      e.preventDefault();
-      invoke("close_side_panel").then(() => {
-        openPanelKind = null;
-        updatePanelHighlights();
-      });
-      return;
-    }
-    if (mod && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      invoke("switch_tab_by_index", { index: e.key === "9" ? -1 : parseInt(e.key, 10) - 1 });
-      return;
-    }
+  await listen("fullscreen-changed", (event) => {
+    document.documentElement.classList.toggle("fullscreen", !!event.payload.on);
+    reportChromeInsets();
+  });
+
+  await listen("zoom-changed", (event) => {
+    const tab = findTab(event.payload.id);
+    if (!tab) return;
+    tab.zoom = event.payload.factor;
+    if (tab.id === activeTabId) updateZoomIndicator();
   });
 
   // --- Backend events ----------------------------------------------------
@@ -1317,21 +1541,27 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("tab-load-started", (event) => {
     const tab = findTab(event.payload.id);
     if (tab) tab.loading = true;
-    if (event.payload.id === activeTabId) showProgress(true);
+    if (event.payload.id === activeTabId) {
+      showProgress(true);
+      updateNavButtons();
+    }
     renderTabs();
   });
 
   await listen("tab-load-finished", (event) => {
     const tab = findTab(event.payload.id);
     if (tab) tab.loading = false;
-    if (event.payload.id === activeTabId) showProgress(false);
+    if (event.payload.id === activeTabId) {
+      showProgress(false);
+      updateNavButtons();
+    }
     renderTabs();
   });
 
   await listen("tab-created", (event) => {
     const { id, url, activate, account = null } = event.payload;
     if (!findTab(id)) {
-      insertTab({ id, url, title: INTERNAL_TITLES[url] || hostOf(url), account, justCreated: true, loading: false, lastActiveAt: Date.now() });
+      insertTab({ id, url, title: internalTitle(url) || hostOf(url), account, justCreated: true, loading: false, lastActiveAt: Date.now() });
       if (activate) {
         activeTabId = id;
         if (account) collapsedGroups.delete(account);

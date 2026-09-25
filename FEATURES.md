@@ -29,58 +29,58 @@ branch, one small commit per feature or group of features.
 
 | Shortcut | Action | Status | Notes |
 |---|---|---|---|
-| F5 | Refresh | ⏳ | |
-| Ctrl + F5 | Refresh and bypass the cache for the current page | ⏳ | |
-| Alt + Left Arrow | Back | ⏳ | |
-| Alt + Right Arrow | Forward | ⏳ | |
-| Alt + Home | Go to the home page | ⏳ | |
-| Escape | Stop loading | ⏳ | |
-| F6 / Alt + D / Ctrl + L | Select the address bar | ⏳ | |
-| F11 | Full screen on/off | ⏳ | |
-| Home | Scroll to top of page | ⏳ | |
-| End | Scroll to bottom of page | ⏳ | |
-| Spacebar | Scroll down | ⏳ | |
-| Shift + Spacebar | Scroll up | ⏳ | |
-| Page Down / Page Up | Scroll down / up | ⏳ | |
-| Ctrl + C | Copy selected text | ⏳ | |
-| Ctrl + X | Cut selected text | ⏳ | |
-| Ctrl + V | Paste | ⏳ | |
-| Ctrl + D | Bookmark current page | ⏳ | |
-| F1 | Help page | ⏳ | |
-| F3 | Find in page / find next | ⏳ | |
-| Shift + F3 | Find previous | ⏳ | |
-| Ctrl + F | Find in page | ⏳ | |
-| Ctrl + G | Find next | ⏳ | |
-| Ctrl + Shift + G | Find previous | ⏳ | |
-| Ctrl + H | Browsing history | ⏳ | |
-| Ctrl + J | Downloads | ⏳ | |
-| Ctrl + O | Open a local file | ⏳ | |
-| Ctrl + S | Save the current page | ⏳ | |
-| Ctrl + P | Print | ⏳ | |
-| Ctrl + E / Ctrl + K | Select the search box | ⏳ | |
-| Ctrl + Shift + Del | Clear browsing data | ⏳ | |
-| Alt + Enter (address bar) | Open in a new tab | ⏳ | |
-| Ctrl + Enter (address bar) | Open the term as a website (www. + .com) | ⏳ | |
-| F12 | Developer tools | ⏳ | |
-| Ctrl + U | View source | ⏳ | |
-| Alt + F | Open the browser menu | ⏳ | |
-| Ctrl + N | New window | ⏳ | |
-| Ctrl + Tab | Next tab | ⏳ | |
-| Ctrl + Shift + Tab | Previous tab | ⏳ | |
-| Ctrl + F4 | Close the current tab | ⏳ | |
-| Ctrl + T | New tab | ⏳ | |
-| Ctrl + Shift + T | Reopen the last closed tab | ⏳ | |
-| Alt + F4 | Close the window | ⏳ | |
-| Ctrl + 1 ... 8 | Go to tab 1-8 | ⏳ | |
-| Ctrl + 9 | Go to the last tab | ⏳ | |
-| Ctrl + Mouse wheel | Zoom in / out | ⏳ | |
-| Ctrl + 0 | Reset zoom to 100% | ⏳ | |
-| Middle click | Close a tab / open a link in a new tab / autoscroll | ⏳ | |
-| Ctrl + Left click | Open link in a new tab | ⏳ | |
-| Shift + Left click | Open link in a new window | ⏳ | |
-| Ctrl + Shift + Left click | Open link in a new background tab | ⏳ | |
-| Ctrl + Z | Undo | ⏳ | |
-| Ctrl + Y | Redo | ⏳ | |
+| F5 | Refresh | ✅ | Reloads (also Ctrl+R); a web app that uses F5 itself keeps it, like in Chrome |
+| Ctrl + F5 | Refresh and bypass the cache for the current page | ✅ | Also Shift+F5 and Ctrl+Shift+R: fetches the page and everything on it fresh (no-cache) |
+| Alt + Left Arrow | Back | ✅ | Also the mouse's back button and the keyboard's Back key |
+| Alt + Right Arrow | Forward | ✅ | Also the mouse's forward button and the keyboard's Forward key |
+| Alt + Home | Go to the home page | ✅ | Opens your home page (Settings -> Search & Startup) |
+| Escape | Stop loading | ✅ | Stops a page that is loading; otherwise Escape stays the page's (closing its dialogs) |
+| F6 / Alt + D / Ctrl + L | Select the address bar | ✅ | Selects the whole address |
+| F11 | Full screen on/off | ✅ | Hides the toolbar too; F11 again (or a video leaving full screen) brings it back |
+| Home | Scroll to top of page | 🌐 | Tested with real key presses |
+| End | Scroll to bottom of page | 🌐 | Tested with real key presses |
+| Spacebar | Scroll down | 🌐 | Tested with real key presses |
+| Shift + Spacebar | Scroll up | 🌐 | Tested with real key presses |
+| Page Down / Page Up | Scroll down / up | 🌐 | Tested with real key presses |
+| Ctrl + C | Copy selected text | 🌐 | Tested with real key presses |
+| Ctrl + X | Cut selected text | 🌐 | Tested with real key presses |
+| Ctrl + V | Paste | 🌐 | Tested with real key presses |
+| Ctrl + D | Bookmark current page | ✅ | Bookmarks the page; Ctrl+Shift+D bookmarks every tab |
+| F1 | Help page | ✅ | kessel://help: every shortcut (yours included), mouse, address bar, privacy, troubleshooting, versions |
+| F3 | Find in page / find next | ✅ | The engine's own find bar (match count, highlight); starts a search if none is open |
+| Shift + F3 | Find previous | ✅ | |
+| Ctrl + F | Find in page | ✅ | Starts with the selected text, like Chrome |
+| Ctrl + G | Find next | ✅ | |
+| Ctrl + Shift + G | Find previous | ✅ | |
+| Ctrl + H | Browsing history | ✅ | New History page (kessel://history): search, by day, by site, your searches, recently closed; delete pages, sites, days |
+| Ctrl + J | Downloads | ✅ | Downloads page |
+| Ctrl + O | Open a local file | ✅ | Windows' Open dialog; the file opens in a new tab |
+| Ctrl + S | Save the current page | ✅ | The engine's Save As: complete page, HTML only, or a single file |
+| Ctrl + P | Print | ✅ | The engine's print preview (printers, PDF, layout) |
+| Ctrl + E / Ctrl + K | Select the search box | ✅ | Starts a search: '?' in the address bar searches even for what looks like an address |
+| Ctrl + Shift + Del | Clear browsing data | ✅ | Clear browsing data: time range; history, downloads, cookies and site data, cache, autofill, site settings; other accounts too if you want |
+| Alt + Enter (address bar) | Open in a new tab | ✅ | Opens it in a new tab; Shift+Enter in a new window |
+| Ctrl + Enter (address bar) | Open the term as a website (www. + .com) | ✅ | kessel -> www.kessel.com |
+| F12 | Developer tools | ✅ | Also Ctrl+Shift+I / J / C |
+| Ctrl + U | View source | ✅ | Opens the page's source in a new tab |
+| Alt + F | Open the browser menu | ✅ | The Kessel menu (also Alt+E, F10 and the menu button) |
+| Ctrl + N | New window | ✅ | Ctrl+Shift+N: a private window |
+| Ctrl + Tab | Next tab | ✅ | Also Ctrl+PageDown |
+| Ctrl + Shift + Tab | Previous tab | ✅ | Also Ctrl+PageUp |
+| Ctrl + F4 | Close the current tab | ✅ | Also Ctrl+W |
+| Ctrl + T | New tab | ✅ | |
+| Ctrl + Shift + T | Reopen the last closed tab | ✅ | Reopens a whole window, if a window closed last |
+| Alt + F4 | Close the window | ✅ | Closes the window like its X button (also Ctrl+Shift+W) |
+| Ctrl + 1 ... 8 | Go to tab 1-8 | ✅ | |
+| Ctrl + 9 | Go to the last tab | ✅ | |
+| Ctrl + Mouse wheel | Zoom in / out | ✅ | Zoom belongs to the site and is remembered; also Ctrl +/-; the address bar shows it |
+| Ctrl + 0 | Reset zoom to 100% | ✅ | Back to your default zoom (Settings -> Appearance) |
+| Middle click | Close a tab / open a link in a new tab / autoscroll | ✅ | Closes a tab; opens a link behind the current tab (Settings -> Keyboard & Mouse); autoscroll on the page |
+| Ctrl + Left click | Open link in a new tab | ✅ | In front or behind: Settings -> Keyboard & Mouse |
+| Shift + Left click | Open link in a new window | ✅ | |
+| Ctrl + Shift + Left click | Open link in a new background tab | ✅ | |
+| Ctrl + Z | Undo | 🌐 | Tested with real key presses |
+| Ctrl + Y | Redo | 🌐 | Tested with real key presses |
 
 ## Feature list
 
@@ -89,11 +89,11 @@ branch, one small commit per feature or group of features.
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 1.01 | Address bar / omnibox | 🟡 | URLs and searches worked before; commands/answers below |
-| 1.02 | Back | 🟡 | Button worked; shortcut failed on websites |
-| 1.03 | Forward | 🟡 | Button worked; shortcut failed on websites |
-| 1.04 | Reload | 🟡 | Button worked; shortcut failed on websites |
-| 1.05 | Hard reload | ⏳ | |
-| 1.06 | Stop loading | ⏳ | |
+| 1.02 | Back | ✅ | Button, Alt+Left, mouse back button |
+| 1.03 | Forward | ✅ | Button, Alt+Right, mouse forward button |
+| 1.04 | Reload | ✅ | Button, F5, Ctrl+R |
+| 1.05 | Hard reload | ✅ | Ctrl+F5, Shift+F5, Ctrl+Shift+R |
+| 1.06 | Stop loading | ✅ | Escape, or the reload button, which turns into a stop button while loading |
 | 1.07 | Home button | ⏳ | |
 | 1.08 | Home page | 🟢 | Settings -> Search & Startup |
 | 1.09 | New tab page | 🟢 | |
@@ -132,7 +132,7 @@ branch, one small commit per feature or group of features.
 | 2.15 | Close tabs to the left | ⏳ | |
 | 2.16 | Close tabs to the right | ⏳ | |
 | 2.17 | Close tabs except pinned tabs | ⏳ | |
-| 2.18 | Bookmark all tabs | ⏳ | |
+| 2.18 | Bookmark all tabs | ✅ | Ctrl+Shift+D, and the menu |
 | 2.19 | Tab groups | 🟡 | Only per account so far |
 | 2.20 | Named tab groups | ⏳ | |
 | 2.21 | Colored tab groups | ⏳ | |
@@ -142,8 +142,8 @@ branch, one small commit per feature or group of features.
 | 2.25 | Tab group saving | ⏳ | |
 | 2.26 | Tab group synchronization | ⏳ | |
 | 2.27 | Tab search | ⏳ | |
-| 2.28 | Recently closed tabs | 🟢 | Settings -> History |
-| 2.29 | Recently closed windows | 🟡 | Remembered and reopenable with all their tabs; a menu entry comes with the browser menu |
+| 2.28 | Recently closed tabs | ✅ | Ctrl+Shift+T; History -> Recently closed; Settings -> History |
+| 2.29 | Recently closed windows | ✅ | Ctrl+Shift+T when a window closed last; History -> Recently closed; the menu's Reopen closed window |
 | 2.30 | Vertical tabs | ⏳ | |
 | 2.31 | Horizontal tabs | 🟢 | |
 | 2.32 | Scrollable tab bar | ⏳ | |
@@ -211,18 +211,18 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 5.01 | Browsing history | 🟢 | |
-| 5.02 | History search | ⏳ | |
-| 5.03 | History by date | ⏳ | |
-| 5.04 | History by website | ⏳ | |
+| 5.01 | Browsing history | ✅ | Now a database (SQLite) instead of the last 500 visits; kept 90 days by default |
+| 5.02 | History search | ✅ | Every word must appear in the title or address |
+| 5.03 | History by date | ✅ | Grouped by day; Today, Yesterday, last 7 / 30 days, or any single day |
+| 5.04 | History by website | ✅ | History -> By site: visits per site; show or delete a whole site |
 | 5.05 | History by tab/window | ⏳ | |
-| 5.06 | Delete individual entries | ⏳ | |
-| 5.07 | Delete time ranges | ⏳ | |
-| 5.08 | Clear all browsing history | 🟢 | |
+| 5.06 | Delete individual entries | ✅ | A page's menu, or tick several and Delete |
+| 5.07 | Delete time ranges | ✅ | Clear browsing data (last hour ... all time); or a day's pages in History |
+| 5.08 | Clear all browsing history | ✅ | Clear browsing data -> All time |
 | 5.09 | Recently closed pages | 🟢 | |
 | 5.10 | Recently closed tabs | 🟢 | |
-| 5.11 | Recently closed windows | 🟡 | See 2.29 |
-| 5.12 | Search history | ⏳ | |
+| 5.11 | Recently closed windows | ✅ | See 2.29 |
+| 5.12 | Search history | ✅ | History -> Searches: what you searched on Google, Bing, DuckDuckGo, YouTube, Wikipedia, Amazon and more |
 | 5.13 | Download history | 🟢 | |
 | 5.14 | History synchronization | ⏳ | |
 | 5.15 | History suggestions | ⏳ | |
@@ -552,15 +552,15 @@ branch, one small commit per feature or group of features.
 | 17.09 | Grammar checking | ⏳ | |
 | 17.10 | Text-to-speech | ⏳ | |
 | 17.11 | Page narration | ⏳ | |
-| 17.12 | Find in page | ⏳ | |
-| 17.13 | Find next/previous | ⏳ | |
+| 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |
+| 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
 | 17.14 | Search selected text | ⏳ | |
 | 17.15 | Search image | ⏳ | |
 | 17.16 | Copy selected text | ⏳ | |
 | 17.17 | Highlight text | ⏳ | |
 | 17.18 | Page annotations | ⏳ | |
 | 17.19 | Web clipping | ⏳ | |
-| 17.20 | Print | ⏳ | |
+| 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
 | 17.21 | Save as PDF | ⏳ | |
 | 17.22 | Webpage screenshot | ⏳ | |
 
@@ -644,7 +644,7 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 22.01 | Page zoom | 🟡 | CSS zoom that failed on websites; being replaced by real browser zoom |
+| 22.01 | Page zoom | ✅ | The engine's real zoom, remembered per site; Settings -> Appearance: default zoom and each site's zoom |
 | 22.02 | Text-only zoom | ⏳ | |
 | 22.03 | Minimum font size | ⏳ | |
 | 22.04 | Custom fonts | ⏳ | |
@@ -658,8 +658,8 @@ branch, one small commit per feature or group of features.
 | 22.12 | Caption support | ⏳ | |
 | 22.13 | Accessibility tree | ⏳ | |
 | 22.14 | Color/contrast assistance | ⏳ | |
-| 22.15 | Keyboard shortcuts | ⏳ | |
-| 22.16 | Custom shortcut configuration | ⏳ | |
+| 22.15 | Keyboard shortcuts | ✅ | See the shortcut table above; the full list is in Help (F1) |
+| 22.16 | Custom shortcut configuration | ✅ | Settings -> Keyboard & Mouse: press the keys you want; conflicts are shown; reset one or all |
 
 ### 23. Appearance
 
@@ -758,17 +758,17 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 29.01 | Elements: HTML inspector, DOM tree | ⏳ | |
-| 29.02 | Elements: CSS inspector, CSS editing, computed styles | ⏳ | |
-| 29.03 | Elements: box model, layout, flexbox and grid inspectors | ⏳ | |
-| 29.04 | Elements: accessibility tree | ⏳ | |
-| 29.05 | Console: JavaScript console, logs, errors, warnings, stack traces, command execution | ⏳ | |
-| 29.06 | Network: request list, response, headers, cookies, timing, waterfall | ⏳ | |
-| 29.07 | Network: request blocking, throttling, HAR export | ⏳ | |
-| 29.08 | Performance: CPU profiling, rendering, memory, frame rate, timeline, long tasks | ⏳ | |
-| 29.09 | Storage: cookies, localStorage, sessionStorage, IndexedDB, Cache Storage, service workers, WebSQL | ⏳ | |
-| 29.10 | Application: manifest, service workers, cache, storage, permissions, background services | ⏳ | |
-| 29.11 | Debugging: breakpoints, conditional breakpoints, watch, call stack, source maps | ⏳ | |
+| 29.01 | Elements: HTML inspector, DOM tree | 🌐 | Edge DevTools (F12) |
+| 29.02 | Elements: CSS inspector, CSS editing, computed styles | 🌐 | Edge DevTools (F12) |
+| 29.03 | Elements: box model, layout, flexbox and grid inspectors | 🌐 | Edge DevTools (F12) |
+| 29.04 | Elements: accessibility tree | 🌐 | Edge DevTools (F12) |
+| 29.05 | Console: JavaScript console, logs, errors, warnings, stack traces, command execution | 🌐 | Edge DevTools (F12) |
+| 29.06 | Network: request list, response, headers, cookies, timing, waterfall | 🌐 | Edge DevTools (F12) |
+| 29.07 | Network: request blocking, throttling, HAR export | 🌐 | Edge DevTools (F12) |
+| 29.08 | Performance: CPU profiling, rendering, memory, frame rate, timeline, long tasks | 🌐 | Edge DevTools (F12) |
+| 29.09 | Storage: cookies, localStorage, sessionStorage, IndexedDB, Cache Storage, service workers, WebSQL | 🌐 | Edge DevTools (F12) |
+| 29.10 | Application: manifest, service workers, cache, storage, permissions, background services | 🌐 | Edge DevTools (F12) |
+| 29.11 | Debugging: breakpoints, conditional breakpoints, watch, call stack, source maps | 🌐 | Edge DevTools (F12) |
 
 ### 30. Web platform support
 
@@ -883,14 +883,14 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 37.01 | HTTP cache | ⏳ | |
-| 37.02 | Memory cache | ⏳ | |
-| 37.03 | Disk cache | ⏳ | |
+| 37.01 | HTTP cache | 🌐 | |
+| 37.02 | Memory cache | 🌐 | |
+| 37.03 | Disk cache | 🌐 | |
 | 37.04 | Cache inspection | ⏳ | |
-| 37.05 | Cache clearing | ⏳ | |
+| 37.05 | Cache clearing | ✅ | Clear browsing data -> Cached images and files, for a time range |
 | 37.06 | Per-site cache deletion | ⏳ | |
-| 37.07 | Full cache deletion | ⏳ | |
-| 37.08 | Cache-control handling | ⏳ | |
+| 37.07 | Full cache deletion | ✅ | Clear browsing data -> All time |
+| 37.08 | Cache-control handling | 🌐 | Ctrl+F5 skips it |
 | 37.09 | Offline cache | ⏳ | |
 | 37.10 | Service-worker cache | ⏳ | |
 
@@ -917,7 +917,7 @@ branch, one small commit per feature or group of features.
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 39.01 | Browser version | 🟢 | Settings -> About |
-| 39.02 | Engine version | ⏳ | |
+| 39.02 | Engine version | ✅ | Help and Settings -> About show the WebView2 version |
 | 39.03 | OS information | ⏳ | |
 | 39.04 | GPU information | ⏳ | |
 | 39.05 | CPU information | ⏳ | |
@@ -931,7 +931,7 @@ branch, one small commit per feature or group of features.
 | 39.13 | Certificate information | ⏳ | |
 | 39.14 | Storage usage | ⏳ | |
 | 39.15 | Site permissions | ⏳ | |
-| 39.16 | Process manager | ⏳ | |
+| 39.16 | Process manager | ✅ | Shift+Esc: the engine's task manager (end a stuck page's process) |
 
 ### 40. Built-in task management
 
@@ -1002,8 +1002,8 @@ branch, one small commit per feature or group of features.
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 44.01 | Multiple windows | ✅ | See 3.01 |
-| 44.02 | Keyboard shortcuts | ⏳ | |
-| 44.03 | Full developer tools | ⏳ | |
+| 44.02 | Keyboard shortcuts | ✅ | See the shortcut table |
+| 44.03 | Full developer tools | 🌐 | Edge DevTools (F12) |
 | 44.04 | Extensions | ⏳ | |
 | 44.05 | Vertical tabs | ⏳ | |
 | 44.06 | Sidebars | 🟢 | |
@@ -1013,48 +1013,48 @@ branch, one small commit per feature or group of features.
 | 44.10 | Desktop notifications | ⏳ | |
 | 44.11 | Hardware acceleration | ⏳ | |
 | 44.12 | Advanced downloads | ⏳ | |
-| 44.13 | Advanced DevTools | ⏳ | |
+| 44.13 | Advanced DevTools | 🌐 | Edge DevTools (F12) |
 
 ### 45. Keyboard shortcuts
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 45.01 | New tab | ⏳ | |
-| 45.02 | Close tab | ⏳ | |
-| 45.03 | Reopen tab | ⏳ | |
-| 45.04 | New window | ⏳ | |
-| 45.05 | Private window | ⏳ | |
-| 45.06 | Next tab | ⏳ | |
-| 45.07 | Previous tab | ⏳ | |
-| 45.08 | Jump to tab | ⏳ | |
+| 45.01 | New tab | ✅ | Ctrl+T |
+| 45.02 | Close tab | ✅ | Ctrl+W, Ctrl+F4 |
+| 45.03 | Reopen tab | ✅ | Ctrl+Shift+T |
+| 45.04 | New window | ✅ | Ctrl+N |
+| 45.05 | Private window | ✅ | Ctrl+Shift+N |
+| 45.06 | Next tab | ✅ | Ctrl+Tab, Ctrl+PageDown |
+| 45.07 | Previous tab | ✅ | Ctrl+Shift+Tab, Ctrl+PageUp |
+| 45.08 | Jump to tab | ✅ | Ctrl+1 ... 8, Ctrl+9 for the last |
 | 45.09 | New profile | ⏳ | |
-| 45.10 | Search | ⏳ | |
-| 45.11 | Find | ⏳ | |
-| 45.12 | Zoom | ⏳ | |
-| 45.13 | Reset zoom | ⏳ | |
-| 45.14 | Reload | ⏳ | |
-| 45.15 | Hard reload | ⏳ | |
-| 45.16 | Back | ⏳ | |
-| 45.17 | Forward | ⏳ | |
-| 45.18 | Bookmark | ⏳ | |
-| 45.19 | History | ⏳ | |
-| 45.20 | Downloads | ⏳ | |
-| 45.21 | Developer tools | ⏳ | |
-| 45.22 | Fullscreen | ⏳ | |
+| 45.10 | Search | ✅ | Ctrl+E, Ctrl+K |
+| 45.11 | Find | ✅ | Ctrl+F, F3 |
+| 45.12 | Zoom | ✅ | Ctrl +/-, Ctrl + wheel |
+| 45.13 | Reset zoom | ✅ | Ctrl+0 |
+| 45.14 | Reload | ✅ | F5, Ctrl+R |
+| 45.15 | Hard reload | ✅ | Ctrl+F5, Shift+F5 |
+| 45.16 | Back | ✅ | Alt+Left |
+| 45.17 | Forward | ✅ | Alt+Right |
+| 45.18 | Bookmark | ✅ | Ctrl+D |
+| 45.19 | History | ✅ | Ctrl+H |
+| 45.20 | Downloads | ✅ | Ctrl+J |
+| 45.21 | Developer tools | ✅ | F12 |
+| 45.22 | Fullscreen | ✅ | F11 |
 | 45.23 | Picture-in-picture | ⏳ | |
 | 45.24 | Screenshot | ⏳ | |
-| 45.25 | Tab switching | ⏳ | |
-| 45.26 | Tab movement | ⏳ | |
+| 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
+| 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
 | 45.27 | Tab grouping | ⏳ | |
-| 45.28 | Custom keyboard shortcuts | ⏳ | |
+| 45.28 | Custom keyboard shortcuts | ✅ | Settings -> Keyboard & Mouse |
 
 ### 46. Mouse / trackpad
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 46.01 | Middle-click new tab | ⏳ | |
+| 46.01 | Middle-click new tab | ✅ | Behind the current tab by default (Settings -> Keyboard & Mouse) |
 | 46.02 | Middle-click close tab | 🟢 | |
-| 46.03 | Ctrl-click links | ⏳ | |
+| 46.03 | Ctrl-click links | ✅ | Ctrl+click: new tab; Ctrl+Shift+click: behind; Shift+click: new window |
 | 46.04 | Drag links | ⏳ | |
 | 46.05 | Drag tabs | 🟢 | |
 | 46.06 | Mouse gestures | ⏳ | |

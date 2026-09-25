@@ -406,8 +406,10 @@ function letterTile(el, label) {
 }
 
 // Returns a <span class="app-icon"> squircle. `knownFavicon` (e.g. a tab's
-// reported favicon) is tried before guessing well-known paths.
-export function siteIcon(url, { label, knownFavicon } = {}) {
+// reported favicon) is tried before guessing well-known paths. Long lists
+// (History) pass guess: false -- only icons already known to work, or a
+// letter, so a page of 200 visits doesn't knock on 200 sites' doors.
+export function siteIcon(url, { label, knownFavicon, guess = true } = {}) {
   const el = document.createElement("span");
   el.className = "app-icon";
   const site = hostAndOrigin(url);
@@ -422,8 +424,12 @@ export function siteIcon(url, { label, knownFavicon } = {}) {
 
   const sources = [];
   if (knownFavicon) sources.push(["known", knownFavicon]);
-  sources.push(["touch", `${site.origin}/apple-touch-icon.png`]);
-  sources.push(["favicon", `${site.origin}/favicon.ico`]);
+  if (guess || cached === "touch") sources.push(["touch", `${site.origin}/apple-touch-icon.png`]);
+  if (guess || cached === "favicon") sources.push(["favicon", `${site.origin}/favicon.ico`]);
+  if (!sources.length) {
+    letterTile(el, site.host);
+    return el;
+  }
 
   if (cached === "letter" && !knownFavicon) {
     letterTile(el, site.host);
@@ -455,10 +461,11 @@ export function siteIcon(url, { label, knownFavicon } = {}) {
       img.src = sources[i][1];
     } else {
       img.remove();
-      if (!knownFavicon) rememberIcon(site.host, "letter");
+      if (!knownFavicon && guess) rememberIcon(site.host, "letter");
       letterTile(el, site.host);
     }
   };
+  if (!guess) img.loading = "lazy";
   img.src = sources[0][1];
   el.appendChild(img);
   return el;

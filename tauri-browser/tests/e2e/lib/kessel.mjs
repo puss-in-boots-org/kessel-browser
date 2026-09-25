@@ -274,6 +274,21 @@ export class Kessel {
     return toolbar.evaluate(`window.__kesselTest.createTab(${JSON.stringify(url)})`);
   }
 
+  // Presses `keys` ("Ctrl+T") through Kessel's own shortcut handling
+  // (src-tauri/src/commands.rs): in tab `tab`'s page, or in `window`'s
+  // toolbar. By default as WebView2 reports a real key press, before the
+  // page sees it; with `page: true` as a page hands back a key it didn't
+  // use. Returns whether Kessel kept the key from the page.
+  async press(keys, { tab = null, window = null, page = false } = {}) {
+    const label = tab != null ? `content-${tab}` : `toolbar-${(window || "win-1").replace(/^win-/, "")}`;
+    return this.invoke("test_press", { label, keys, page }, { window });
+  }
+
+  // The active tab of `window`, as its strip shows it.
+  async activeTab(window = null) {
+    return (await this.tabs(window)).find((t) => t.active);
+  }
+
   // Presses real keys through Windows in this Kessel's main window (see
   // realkeys.ps1) -- for WebView2's own keyboard handling, which
   // DevTools-protocol key events don't reach.
@@ -284,6 +299,17 @@ export class Kessel {
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, "-ProcessId", String(this.child.pid), "-Title", title, "-Keys", keys.join("|")],
       { encoding: "utf8" }
     );
+  }
+
+  // Windows' standard dialogs (Save As, Open...) Kessel is showing:
+  // [{ title, pid, class }]. `all`: every visible window of Kessel's and
+  // its WebView2 processes.
+  dialogs({ all = false } = {}) {
+    const script = path.join(here, "dialogs.ps1");
+    const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, "-ProcessId", String(this.child.pid)];
+    if (all) args.push("-All");
+    const out = execFileSync("powershell", args, { encoding: "utf8" });
+    return JSON.parse(out.trim() || "[]");
   }
 
   // Reads a file from this run's profile (e.g. "Data/settings.json").
@@ -313,7 +339,7 @@ let nextPort = 9400 + Math.floor(Math.random() * 400);
 // Launches Kessel on a fresh profile -- or on `profileDir`, an earlier
 // run's (kept) profile. `settings` are written to its settings.json first
 // (anything left out keeps Kessel's default).
-export async function launch({ settings = {}, args = [], profileDir = null, keepProfile = false } = {}) {
+export async function launch({ settings = {}, args = [], profileDir = null, keepProfile = false, env = {} } = {}) {
   if (!existsSync(EXE)) throw new Error(`test build not found: ${EXE}\nbuild it with scripts\\cargo-msvc.cmd build --features tauri/custom-protocol --target-dir target\\e2e`);
   const reuse = !!profileDir;
   profileDir = profileDir || mkdtempSync(path.join(tmpdir(), "kessel-e2e-"));
@@ -325,7 +351,7 @@ export async function launch({ settings = {}, args = [], profileDir = null, keep
   const port = nextPort++;
   const logs = [];
   const child = spawn(EXE, ["--profile-dir", profileDir, ...args], {
-    env: { ...process.env, KESSEL_REMOTE_DEBUGGING_PORT: String(port) },
+    env: { ...process.env, ...env, KESSEL_REMOTE_DEBUGGING_PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stdout.on("data", (d) => logs.push(d.toString()));

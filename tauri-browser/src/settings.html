@@ -134,6 +134,40 @@
     .wallpaper-swatch:hover .wp-preview { transform: translateY(-1px); }
     .wallpaper-swatch.selected .wp-preview { border: 2px solid var(--accent); }
     .wallpaper-swatch.selected { color: var(--text); }
+
+    /* Keyboard & Mouse */
+    .shortcut-category { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); padding: 14px 18px 4px; border-top: 1px solid var(--border); }
+    .shortcut-category[hidden], .shortcut-row[hidden] { display: none; }
+    .shortcut-row { padding-top: 9px; padding-bottom: 9px; }
+    .setting-row.shortcut-row + .setting-row.shortcut-row { border-top: none; }
+    .shortcut-keys { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .key-chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 8px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12px; }
+    .key-chip.recording { padding: 4px 10px; border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+    .key-chip.recording small { color: var(--text-faint); margin-left: 6px; }
+    .chip-x { display: inline-flex; border: none; background: none; padding: 3px; border-radius: 5px; cursor: pointer; color: var(--text-faint); }
+    .chip-x:hover { color: var(--danger); background: var(--surface-hover); }
+    kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border); border-bottom-width: 2px; background: var(--surface); font-family: inherit; font-size: 11.5px; font-weight: 600; text-align: center; }
+    .kbd-plus { color: var(--text-faint); margin: 0 2px; font-size: 11px; }
+    .always-tag { font-size: 10px; font-weight: 600; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; padding: 0 6px; margin-left: 4px; vertical-align: 1px; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); } }
+
+    .about-value { max-width: 360px; overflow-wrap: anywhere; text-align: right; font-size: 12.5px; }
+
+    /* Clear browsing data */
+    .clear-modal { padding: 20px 22px; width: min(480px, 94vw); }
+    .clear-modal h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font-size: 16px; }
+    .clear-range { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+    .clear-range select { width: 170px; }
+    .clear-kinds { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .clear-kind { display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; cursor: pointer; }
+    .clear-kind + .clear-kind { border-top: 1px solid var(--border); }
+    .clear-kind:hover { background: var(--surface-hover); }
+    .clear-kind input { margin-top: 2px; accent-color: var(--accent); width: 16px; height: 16px; flex-shrink: 0; }
+    .clear-kind b { display: block; font-size: 13px; font-weight: 500; }
+    .clear-kind small { display: block; font-size: 11.5px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
+    .clear-note { color: var(--danger); font-size: 12px; min-height: 16px; margin: 10px 0 0; }
+    .clear-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .clear-actions .spinner { width: 13px; height: 13px; border-width: 2px; }
   </style>
 </head>
 <body>

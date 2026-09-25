@@ -343,6 +343,50 @@ html, body { overflow: hidden; user-select: none; }
 #nav-cluster > button:hover { background: var(--surface-hover); color: var(--text); }
 #nav-cluster > button:disabled { opacity: 0.35; pointer-events: none; }
 
+/* The Kessel menu button, at the far right of the address bar row. */
+#menu-cluster { display: flex; align-items: center; flex-shrink: 0; }
+#menu-cluster > button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+#menu-cluster > button:hover { background: var(--surface-hover); color: var(--text); }
+
+/* The page's zoom, when it isn't the default; click to reset. */
+#zoom-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 9px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+#zoom-btn[hidden] { display: none; }
+#zoom-btn:hover { color: var(--text); }
+
+/* Ctrl+K / Ctrl+E: what you type is searched for. */
+#url-input.search-mode { font-weight: 500; }
+
+/* Full screen (F11, or a page's own full screen): no chrome at all -- the
+   page gets the whole window (the toolbar reports zero insets). */
+html.fullscreen #rail,
+html.fullscreen #tab-bar,
+html.fullscreen #nav-bar,
+html.fullscreen #bookmarks-bar,
+html.fullscreen #progress-bar { display: none !important; }
+
 #address-wrap {
   flex: 1;
   display: flex;

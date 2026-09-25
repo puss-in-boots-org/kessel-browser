@@ -1,6 +1,6 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
-import { toast, formatRelativeTime, hostOf } from "./shared/api.js";
+import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
 import { WALLPAPERS, setCustomWallpaper, clearCustomWallpaper, hasCustomWallpaper, wallpaperCss } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -11,6 +11,7 @@ const ACCENTS = ["#7c5cff", "#3b82f6", "#0ea5a4", "#f472b6", "#f97316", "#22c55e
 const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "search", label: "Search & Startup", icon: "search" },
+  { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
   { id: "privacy", label: "Privacy & Security", icon: "shield" },
   { id: "performance", label: "Performance", icon: "bolt" },
   { id: "pinned", label: "Pinned Sites", icon: "pin" },
@@ -72,7 +73,26 @@ function appearancePanel(settings) {
       ${settingRow({ title: "Interface size", desc: "Scale text and controls across the app", controlHtml: `<input type="range" id="font-scale" min="0.85" max="1.3" step="0.05" /><span class="mono faint" id="font-scale-value"></span>` })}
       ${settingRow({ title: "Reduce motion", desc: "Turn off non-essential animation", controlHtml: switchHtml("reduce-motion", settings.reduce_motion) })}
     </div>
+
+    <div class="setting-card" id="zoom-card">
+      ${settingRow({ title: "Page zoom", desc: "The size every site starts at. Zoom a site with Ctrl and + or −, or Ctrl and the mouse wheel, and Kessel keeps that size for the site.", controlHtml: `<select class="field" id="default-zoom" style="width:110px"></select>` })}
+      <div class="list-panel" id="site-zoom-list"></div>
+    </div>
   </div>`);
+
+  const zoomSelect = p.querySelector("#default-zoom");
+  for (const z of ZOOM_CHOICES) {
+    const opt = document.createElement("option");
+    opt.value = String(z);
+    opt.textContent = `${Math.round(z * 100)}%`;
+    zoomSelect.appendChild(opt);
+  }
+  zoomSelect.value = String(ZOOM_CHOICES.find((z) => Math.abs(z - (settings.default_zoom ?? 1)) < 0.001) ?? 1);
+  zoomSelect.addEventListener("change", async () => {
+    await saveSettings({ default_zoom: parseFloat(zoomSelect.value) });
+    toast("Applies to pages you open from now on");
+  });
+  renderSiteZoom(p);
 
   const themeOptions = p.querySelector("#theme-options");
   for (const mode of ["dark", "light", "custom"]) {
@@ -131,6 +151,26 @@ function appearancePanel(settings) {
   });
 
   return p;
+}
+
+const ZOOM_CHOICES = [0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+
+// Sites you zoomed, with their zoom -- remove one to put it back to the default.
+async function renderSiteZoom(p) {
+  const holder = p.querySelector("#site-zoom-list");
+  const levels = Object.entries(await invoke("get_zoom_levels").catch(() => ({}))).sort(([a], [b]) => a.localeCompare(b));
+  holder.innerHTML = levels.length ? "" : `<div class="empty" style="padding:14px">No sites with their own zoom yet.</div>`;
+  holder.style.display = "";
+  for (const [host, factor] of levels) {
+    const row = el(`<div class="list-row"><span class="lr-title"></span><span class="lr-sub mono"></span><button class="btn ghost icon-only sm" title="Back to the default zoom">${icon("trash", 13)}</button></div>`);
+    row.querySelector(".lr-title").textContent = host.replace(/^www\./, "");
+    row.querySelector(".lr-sub").textContent = `${Math.round(factor * 100)}%`;
+    row.querySelector("button").addEventListener("click", async () => {
+      await invoke("remove_zoom_level", { host }).catch((err) => toast(String(err)));
+      renderSiteZoom(p);
+    });
+    holder.appendChild(row);
+  }
 }
 
 function wireToggle(p, id, key) {
@@ -303,10 +343,20 @@ async function privacyPanel(settings) {
     </div>
 
     <div class="setting-card">
+      ${settingRow({ title: "Clear browsing data", desc: "History, cookies and site data, cached files and more -- for the last hour or all of it", controlHtml: `<button class="btn sm" id="clear-data-btn">${icon("broom", 13)} Clear…</button>` })}
+      ${settingRow({ title: "Keep history for", desc: "Visits older than this are forgotten automatically", controlHtml: `<select class="field" id="history-days" style="width:130px"><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="0">Forever</option></select>` })}
       ${settingRow({ title: "Vault auto-lock", desc: "Lock the password vault after this many minutes idle", controlHtml: `<input type="range" id="vault-timeout" min="1" max="60" step="1" /><span class="mono faint" id="vault-timeout-value"></span>` })}
-      ${settingRow({ title: "Clear browsing history", desc: "Removes all recorded history permanently", controlHtml: `<button class="btn danger sm" id="clear-history-btn">Clear</button>` })}
     </div>
   </div>`);
+
+  p.querySelector("#clear-data-btn").addEventListener("click", () => openClearDataDialog());
+  const historyDays = p.querySelector("#history-days");
+  historyDays.value = String(settings.history_days ?? 90);
+  if (!historyDays.value) historyDays.value = "90";
+  historyDays.addEventListener("change", async () => {
+    await saveSettings({ history_days: parseInt(historyDays.value, 10) });
+    toast(historyDays.value === "0" ? "History is kept until you delete it" : "Older visits are removed the next time Kessel starts");
+  });
 
   function wireSetting(id, key, message) {
     p.querySelector(`#${id}`).addEventListener("click", async () => {
@@ -412,12 +462,302 @@ async function privacyPanel(settings) {
   vaultTimeout.addEventListener("input", () => (vaultTimeoutValue.textContent = `${vaultTimeout.value}m`));
   vaultTimeout.addEventListener("change", () => saveSettings({ vault_lock_minutes: parseInt(vaultTimeout.value, 10) }));
 
-  p.querySelector("#clear-history-btn").addEventListener("click", async () => {
-    await invoke("clear_history");
-    toast("History cleared");
-  });
-
   return p;
+}
+
+// --- Clear browsing data (Ctrl+Shift+Del) ----------------------------------
+
+const CLEAR_RANGES = [
+  ["hour", "Last hour", 3600],
+  ["day", "Last 24 hours", 86400],
+  ["week", "Last 7 days", 7 * 86400],
+  ["month", "Last 4 weeks", 28 * 86400],
+  ["all", "All time", 0],
+];
+
+const CLEAR_KINDS = [
+  ["history", "Browsing history", "Pages you visited, searches, and recently closed tabs and windows", true],
+  ["downloads", "Download history", "The list of files you downloaded -- the files themselves stay", true],
+  ["cookies", "Cookies and other site data", "Signs you out of most sites", true],
+  ["cache", "Cached images and files", "Frees up space; some sites load a little slower the next time", true],
+  ["autofill", "Autofill form data", "What you typed into forms. Your saved passwords stay in the vault", false],
+  ["site_settings", "Site settings", "Each site's zoom, and permissions you gave sites", false],
+];
+
+const CLEAR_PREFS_KEY = "kessel.clearData";
+
+function loadClearPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(CLEAR_PREFS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+let clearDialogOpen = false;
+
+async function openClearDataDialog({ fromShortcut = false } = {}) {
+  if (clearDialogOpen) return;
+  clearDialogOpen = true;
+  const prefs = loadClearPrefs();
+  const accounts = (await invoke("get_accounts").catch(() => null))?.accounts ?? [];
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = `
+    <div class="modal clear-modal" role="dialog" aria-modal="true" aria-labelledby="clear-title">
+      <h3 id="clear-title">${icon("broom", 18)} Clear browsing data</h3>
+      <label class="clear-range">Time range
+        <select class="field" id="clear-range">${CLEAR_RANGES.map(([id, label]) => `<option value="${id}">${label}</option>`).join("")}</select>
+      </label>
+      <div class="clear-kinds">
+        ${CLEAR_KINDS.map(
+          ([id, label, desc, on]) => `<label class="clear-kind"><input type="checkbox" data-kind="${id}" ${(prefs[id] ?? on) ? "checked" : ""} />
+            <span><b>${label}</b><small>${desc}</small></span></label>`,
+        ).join("")}
+        ${
+          accounts.length
+            ? `<label class="clear-kind"><input type="checkbox" data-kind="accounts" ${prefs.accounts ? "checked" : ""} />
+            <span><b>Also for your other accounts</b><small>${escapeHtml(accounts.map((a) => a.name).join(", "))} -- otherwise only Main's</small></span></label>`
+            : ""
+        }
+      </div>
+      <p class="clear-note" id="clear-note"></p>
+      <div class="clear-actions">
+        <button class="btn ghost" id="clear-cancel">Cancel</button>
+        <button class="btn primary" id="clear-go">Clear data</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  requestAnimationFrame(() => backdrop.classList.add("open"));
+  const range = backdrop.querySelector("#clear-range");
+  range.value = CLEAR_RANGES.some(([id]) => id === prefs.range) ? prefs.range : "hour";
+  const go = backdrop.querySelector("#clear-go");
+  const note = backdrop.querySelector("#clear-note");
+  const boxes = [...backdrop.querySelectorAll("input[type=checkbox]")];
+  const chosen = () => Object.fromEntries(boxes.map((b) => [b.dataset.kind, b.checked]));
+  const refresh = () => {
+    const c = chosen();
+    go.disabled = !CLEAR_KINDS.some(([id]) => c[id]);
+  };
+  boxes.forEach((b) => b.addEventListener("change", refresh));
+  refresh();
+
+  const close = () => {
+    clearDialogOpen = false;
+    backdrop.classList.remove("open");
+    document.removeEventListener("keydown", onKey, true);
+    setTimeout(() => backdrop.remove(), 200);
+    if (location.hash === "#clear") history.replaceState(null, "", "#privacy");
+  };
+  function onKey(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  }
+  document.addEventListener("keydown", onKey, true);
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) close();
+  });
+  backdrop.querySelector("#clear-cancel").addEventListener("click", close);
+  go.addEventListener("click", async () => {
+    const c = chosen();
+    const seconds = CLEAR_RANGES.find(([id]) => id === range.value)[2];
+    const request = { ...c, from: seconds ? Math.floor(Date.now() / 1000) - seconds : null };
+    try {
+      localStorage.setItem(CLEAR_PREFS_KEY, JSON.stringify({ ...c, range: range.value }));
+    } catch {}
+    go.disabled = true;
+    go.innerHTML = `<span class="spinner"></span> Clearing…`;
+    // Kessel's own pages keep a few things in their site storage (your
+    // wallpaper, site icons, these choices): keep those across the clear.
+    const kept = c.cookies ? Object.fromEntries(Object.keys(localStorage).map((k) => [k, localStorage.getItem(k)])) : null;
+    try {
+      const report = await invoke("clear_browsing_data", { request });
+      if (kept) for (const [k, v] of Object.entries(kept)) localStorage.setItem(k, v);
+      if (report.failed.length) {
+        note.textContent = `Couldn't clear everything: ${report.failed.join("; ")}`;
+        go.disabled = false;
+        go.textContent = "Try again";
+        return;
+      }
+      close();
+      toast("Browsing data cleared");
+    } catch (err) {
+      if (kept) for (const [k, v] of Object.entries(kept)) localStorage.setItem(k, v);
+      note.textContent = String(err);
+      go.disabled = false;
+      go.textContent = "Clear data";
+    }
+  });
+  (fromShortcut ? range : go).focus();
+}
+
+// --- Keyboard & mouse -----------------------------------------------------------
+
+// A shortcut on its own key (no Ctrl or Alt) would stop you typing that
+// key, so only these can go without one.
+const LONE_KEYS = /^(F\d{1,2}|Browser\w+|Pause|Escape|Insert)$/;
+
+let recordingFor = null; // { command, done(keys | null) }
+
+async function keyboardPanel(settings) {
+  const p = el(`<div class="panel" id="panel-shortcuts">
+    <h2>Keyboard &amp; Mouse</h2>
+    <p class="sub">Change any shortcut: click <b>+</b> and press the keys. Shortcuts marked <span class="always-tag">always</span> work even on sites that use the same keys themselves.</p>
+
+    <div class="setting-card">
+      ${settingRow({ title: "Ctrl + click opens links in the background", desc: "Off: the new tab comes to the front. Ctrl + Shift + click does the other one.", controlHtml: switchHtml("ctrl-bg", settings.ctrl_click_background) })}
+      ${settingRow({ title: "Middle-click opens links in the background", desc: "Shift + middle-click does the other one", controlHtml: switchHtml("middle-bg", settings.middle_click_background) })}
+    </div>
+
+    <div class="setting-card">
+      <div class="setting-row">
+        <input class="field" id="shortcut-search" type="search" placeholder="Search shortcuts" style="max-width:320px" />
+        <div class="control"><button class="btn sm" id="shortcuts-reset-all">Reset all</button></div>
+      </div>
+      <div id="shortcut-list"></div>
+    </div>
+  </div>`);
+
+  for (const [id, key] of [["ctrl-bg", "ctrl_click_background"], ["middle-bg", "middle_click_background"]]) {
+    const btn = p.querySelector(`#${id}`);
+    btn.addEventListener("click", async () => {
+      const next = await saveSettings({ [key]: !btn.classList.contains("on") });
+      btn.classList.toggle("on", !!next[key]);
+    });
+  }
+
+  const search = p.querySelector("#shortcut-search");
+  search.addEventListener("input", () => filterShortcuts(p, search.value));
+  p.querySelector("#shortcuts-reset-all").addEventListener("click", async () => {
+    if (!(await confirmDialog("Put every shortcut back to Kessel's defaults?", "Reset all"))) return;
+    await saveSettings({ shortcuts: {} });
+    await renderShortcuts(p);
+    toast("Shortcuts reset");
+  });
+  await renderShortcuts(p);
+  return p;
+}
+
+// A re-render that came in while keys were being recorded: done once that's
+// over (drawing the list anew mid-recording would throw away its chip).
+let renderPending = false;
+
+async function renderShortcuts(p) {
+  const commands = await invoke("get_commands").catch(() => []);
+  if (recordingFor) {
+    renderPending = true;
+    return;
+  }
+  renderPending = false;
+  const list = p.querySelector("#shortcut-list");
+  list.innerHTML = "";
+  let category = null;
+  for (const c of commands) {
+    if (c.category !== category) {
+      category = c.category;
+      list.appendChild(el(`<div class="shortcut-category">${escapeHtml(category)}</div>`));
+    }
+    const custom = JSON.stringify(c.keys) !== JSON.stringify(c.default_keys);
+    const row = el(`<div class="setting-row shortcut-row" data-search="${escapeHtml(`${c.label} ${c.category} ${c.keys.map(keyLabel).join(" ")}`.toLowerCase())}">
+      <div class="info"><div class="title">${escapeHtml(c.label)}${c.reserved ? ` <span class="always-tag" title="Works even on sites that use these keys themselves">always</span>` : ""}</div></div>
+      <div class="control shortcut-keys"></div>
+    </div>`);
+    const keysEl = row.querySelector(".shortcut-keys");
+    for (const k of c.keys) {
+      const chip = el(`<span class="key-chip">${keycapsHtml(k)}<button class="chip-x" title="Remove this shortcut">${icon("close", 10)}</button></span>`);
+      chip.querySelector("button").addEventListener("click", () => setKeys(p, commands, c, c.keys.filter((x) => x !== k)));
+      keysEl.appendChild(chip);
+    }
+    if (!c.keys.length) keysEl.appendChild(el(`<span class="faint" style="font-size:12px">No shortcut</span>`));
+    const add = el(`<button class="btn ghost icon-only sm add-key" title="Add a shortcut">${icon("plus", 14)}</button>`);
+    add.addEventListener("click", () => recordFor(p, commands, c, add));
+    keysEl.appendChild(add);
+    if (custom) {
+      const reset = el(`<button class="btn ghost sm" title="Back to ${escapeHtml(c.default_keys.map(keyLabel).join(", ") || "no shortcut")}">Reset</button>`);
+      reset.addEventListener("click", () => setKeys(p, commands, c, null));
+      keysEl.appendChild(reset);
+    }
+    list.appendChild(row);
+  }
+  filterShortcuts(p, p.querySelector("#shortcut-search").value);
+}
+
+function filterShortcuts(p, text) {
+  const needle = text.trim().toLowerCase();
+  for (const row of p.querySelectorAll(".shortcut-row")) row.hidden = !!needle && !row.dataset.search.includes(needle);
+  for (const header of p.querySelectorAll(".shortcut-category")) {
+    let next = header.nextElementSibling;
+    let any = false;
+    while (next && !next.classList.contains("shortcut-category")) {
+      if (!next.hidden) any = true;
+      next = next.nextElementSibling;
+    }
+    header.hidden = !any;
+  }
+}
+
+// Saves command `c`'s keys (null = its defaults again).
+async function setKeys(p, commands, c, keys, alsoChange = []) {
+  const shortcuts = { ...(currentSettings()?.shortcuts || {}) };
+  const store = (command, list) => {
+    if (list === null || JSON.stringify(list) === JSON.stringify(command.default_keys)) delete shortcuts[command.id];
+    else shortcuts[command.id] = list;
+  };
+  store(c, keys);
+  for (const [other, list] of alsoChange) store(other, list);
+  await saveSettings({ shortcuts });
+  await renderShortcuts(p);
+}
+
+async function recordFor(p, commands, c, button) {
+  if (recordingFor) recordingFor.done(null);
+  const chip = el(`<span class="key-chip recording">Press a shortcut… <small>Esc to cancel</small></span>`);
+  button.replaceWith(chip);
+  const keys = await new Promise((resolve) => {
+    const unlistenP = listen("shortcut-recorded", (event) => finish(event.payload.cancelled ? null : event.payload.keys));
+    const onBlur = () => finish(null);
+    window.addEventListener("blur", onBlur);
+    function finish(value) {
+      if (!recordingFor) return;
+      recordingFor = null;
+      window.removeEventListener("blur", onBlur);
+      unlistenP.then((un) => un());
+      invoke("record_shortcut", { on: false }).catch(() => {});
+      resolve(value);
+    }
+    recordingFor = { done: finish };
+    invoke("record_shortcut", { on: true }).catch((err) => {
+      toast(String(err));
+      finish(null);
+    });
+  });
+  chip.replaceWith(button);
+  if (renderPending) await renderShortcuts(p);
+  if (!keys) return;
+  const parts = keys.split("+");
+  const key = parts[parts.length - 1];
+  const hasCtrlOrAlt = parts.includes("Ctrl") || parts.includes("Alt");
+  if (!hasCtrlOrAlt && !LONE_KEYS.test(key)) {
+    toast(`Add Ctrl or Alt: ${keyLabel(keys)} on its own would stop you typing it`);
+    return;
+  }
+  // Ctrl+Alt is AltGr on many keyboards (it types @, [, \ and € here).
+  if (parts.includes("Ctrl") && parts.includes("Alt") && !LONE_KEYS.test(key)) {
+    toast("Ctrl + Alt shortcuts would get in the way of AltGr -- try Ctrl + Shift instead");
+    return;
+  }
+  if (c.keys.includes(keys)) return;
+  const owner = commands.find((o) => o.id !== c.id && o.keys.includes(keys));
+  if (owner) {
+    const ok = await confirmDialog(`${keyLabel(keys)} already does “${owner.label}”. Use it for “${c.label}” instead?`, "Use it");
+    if (!ok) return;
+    await setKeys(p, commands, c, [...c.keys, keys], [[owner, owner.keys.filter((k) => k !== keys)]]);
+  } else {
+    await setKeys(p, commands, c, [...c.keys, keys]);
+  }
+  toast(`${c.label}: ${keyLabel(keys)}`);
 }
 
 function performancePanel(settings) {
@@ -464,7 +804,7 @@ async function pinnedPanel() {
   function render(items) {
     list.innerHTML = items.length ? "" : `<div class="empty">Nothing pinned yet.</div>`;
     for (const item of items) {
-      const row = el(`<div class="list-row"><span class="lr-title">${item.title || item.url}</span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
+      const row = el(`<div class="list-row"><span class="lr-title">${escapeHtml(item.title || item.url)}</span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
       row.querySelector("button").addEventListener("click", async () => {
         await invoke("remove_pinned", { id: item.id });
         render((await invoke("get_pinned")));
@@ -498,7 +838,7 @@ async function bookmarksPanel() {
   const list = p.querySelector("#bookmarks-list-settings");
   list.innerHTML = bookmarks.length ? "" : `<div class="empty">No bookmarks yet.</div>`;
   for (const b of bookmarks) {
-    const row = el(`<div class="list-row"><span class="lr-title">${b.title || b.url}</span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
+    const row = el(`<div class="list-row"><span class="lr-title">${escapeHtml(b.title || b.url)}</span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
     row.querySelector("button").addEventListener("click", async () => {
       await invoke("remove_bookmark", { url: b.url });
       row.remove();
@@ -509,10 +849,17 @@ async function bookmarksPanel() {
 }
 
 async function historyPanel() {
-  const [history, closedTabs] = await Promise.all([invoke("get_history"), invoke("get_closed_tabs")]);
+  const [history, closedTabs] = await Promise.all([
+    invoke("query_history", { limit: 30 }).catch(() => []),
+    invoke("get_closed_tabs").catch(() => []),
+  ]);
   const p = el(`<div class="panel" id="panel-history">
     <h2>History</h2>
-    <p class="sub">Most recent visits first.</p>
+    <p class="sub">Your latest visits. The full history -- search, by day, by site -- is on its own page.</p>
+
+    <div class="setting-card">
+      ${settingRow({ title: "All history", desc: "Search it, delete pages or whole sites (Ctrl+H)", controlHtml: `<button class="btn primary sm" id="open-history-btn">${icon("history", 13)} Open history</button>` })}
+    </div>
 
     <div class="setting-card" id="recently-closed-card" style="display:none">
       <div class="setting-row"><div class="info"><div class="title">Recently closed tabs</div></div></div>
@@ -521,15 +868,16 @@ async function historyPanel() {
 
     <div class="setting-card">
       <div class="list-panel" id="history-list" style="max-height:440px"></div>
-      <div class="add-row"><button class="btn danger sm block" id="clear-history-btn-2">Clear all history</button></div>
+      <div class="add-row"><button class="btn danger sm block" id="clear-history-btn-2">Clear browsing data…</button></div>
     </div>
   </div>`);
+  p.querySelector("#open-history-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://history" }));
 
   if (closedTabs.length) {
     p.querySelector("#recently-closed-card").style.display = "block";
     const closedList = p.querySelector("#recently-closed-list");
     for (const url of closedTabs) {
-      const row = el(`<div class="list-row"><span class="lr-title">${url}</span><button class="btn ghost sm">Reopen</button></div>`);
+      const row = el(`<div class="list-row"><span class="lr-title">${escapeHtml(url)}</span><button class="btn ghost sm">Reopen</button></div>`);
       row.querySelector("button").addEventListener("click", async () => {
         await invoke("reopen_closed_tab_url", { url });
         toast("Reopened");
@@ -540,15 +888,12 @@ async function historyPanel() {
 
   const list = p.querySelector("#history-list");
   list.innerHTML = history.length ? "" : `<div class="empty">No history yet.</div>`;
-  for (const h of history.slice(0, 300)) {
-    const row = el(`<div class="list-row"><span class="lr-title">${h.title || h.url}</span><span class="lr-sub">${formatRelativeTime(h.visited_at)}</span></div>`);
+  for (const h of history) {
+    const row = el(`<div class="list-row"><span class="lr-title">${escapeHtml(h.title || h.url)}</span><span class="lr-sub">${formatRelativeTime(h.visited_at)}</span></div>`);
+    row.title = h.url;
     list.appendChild(row);
   }
-  p.querySelector("#clear-history-btn-2").addEventListener("click", async () => {
-    await invoke("clear_history");
-    list.innerHTML = `<div class="empty">No history yet.</div>`;
-    toast("History cleared");
-  });
+  p.querySelector("#clear-history-btn-2").addEventListener("click", () => openClearDataDialog());
   return p;
 }
 
@@ -570,7 +915,7 @@ async function downloadsPanel() {
     list.innerHTML = items.length ? "" : `<div class="empty">No downloads yet.</div>`;
     for (const d of items) {
       const name = d.path.split(/[\\/]/).pop();
-      const row = el(`<div class="list-row"><span class="lr-title">${name}</span><span class="lr-sub">${d.finished ? (d.success ? "Done" : "Failed") : "In progress"}</span></div>`);
+      const row = el(`<div class="list-row"><span class="lr-title">${escapeHtml(name)}</span><span class="lr-sub">${d.finished ? (d.success ? "Done" : "Failed") : "In progress"}</span></div>`);
       list.appendChild(row);
     }
   }
@@ -789,18 +1134,27 @@ function loginsFromCsv(text) {
 }
 
 async function aboutPanel() {
-  const version = await window.__TAURI__.app.getVersion().catch(() => "");
-  return el(`<div class="panel" id="panel-about">
+  const info = await invoke("about_info").catch(() => ({}));
+  const row = (title, value) => `<div class="setting-row"><div class="info"><div class="title">${title}</div></div><div class="control muted about-value">${escapeHtml(value || "")}</div></div>`;
+  const p = el(`<div class="panel" id="panel-about">
     <h2>About Kessel</h2>
     <p class="sub">A real, working custom browser.</p>
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="title">Version</div></div><div class="control mono muted">${version}</div></div>
-      <div class="setting-row"><div class="info"><div class="title">Engine</div></div><div class="control muted">Tauri 2 + your OS's native WebView</div></div>
+      ${row("Version", info.version ? `Kessel ${info.version}` : "")}
+      ${row("Engine", info.engine ? `Microsoft Edge WebView2 ${info.engine}` : "Microsoft Edge WebView2")}
+      ${row("Built with", info.tauri ? `Tauri ${info.tauri}` : "Tauri 2")}
+      ${row("Profile", info.profile)}
+      ${row("Profile folder", info.profile_dir)}
     </div>
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="desc">Ad blocking works at the navigation level (blocking known ad/tracker domains outright) plus cosmetic hiding injected into every page. It cannot intercept individual sub-resource requests the way a browser-extension blocker can -- that hook isn't available for external sites in Tauri's current stable APIs.</div></div></div>
+      ${settingRow({ title: "Help and keyboard shortcuts", desc: "Everything Kessel can do, and how (F1)", controlHtml: `<button class="btn sm" id="open-help-btn">${icon("help", 13)} Open help</button>` })}
+    </div>
+    <div class="setting-card">
+      <div class="setting-row"><div class="info"><div class="desc">Shields block ads and trackers with the same filter lists Brave and uBlock Origin use, on every request a page makes, and hide the empty spaces ads leave behind.</div></div></div>
     </div>
   </div>`);
+  p.querySelector("#open-help-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://help" }));
+  return p;
 }
 
 // --- Shell ------------------------------------------------------------
@@ -809,6 +1163,7 @@ async function buildPanel(id, settings) {
   switch (id) {
     case "appearance": return appearancePanel(settings);
     case "search": return searchPanel(settings);
+    case "shortcuts": return await keyboardPanel(settings);
     case "privacy": return await privacyPanel(settings);
     case "performance": return performancePanel(settings);
     case "pinned": return await pinnedPanel();
@@ -843,10 +1198,30 @@ window.addEventListener("DOMContentLoaded", async () => {
   const nav = document.getElementById("nav-items");
   for (const section of SECTIONS) {
     const item = el(`<div class="nav-item" data-id="${section.id}">${icon(section.icon, 15)}<span>${section.label}</span></div>`);
-    item.addEventListener("click", () => showSection(section.id, currentSettings()));
+    item.addEventListener("click", () => {
+      history.replaceState(null, "", `#${section.id}`);
+      showSection(section.id, currentSettings());
+    });
     nav.appendChild(item);
   }
 
-  const hash = location.hash.replace("#", "");
-  await showSection(SECTIONS.some((s) => s.id === hash) ? hash : "appearance", settings);
+  // kessel://settings/<section> opens at that section (settings.html#<section>);
+  // kessel://settings/clear is Privacy with Clear browsing data open.
+  async function followHash() {
+    const hash = location.hash.replace("#", "");
+    if (hash === "clear") {
+      await showSection("privacy", currentSettings());
+      openClearDataDialog({ fromShortcut: true });
+      return;
+    }
+    await showSection(SECTIONS.some((s) => s.id === hash) ? hash : "appearance", currentSettings());
+  }
+  await followHash();
+  window.addEventListener("hashchange", followHash);
+
+  // Shortcuts changed elsewhere (another Settings, or a reset) show here too.
+  listen("settings-changed", () => {
+    const panel = document.getElementById("panel-shortcuts");
+    if (panel && !recordingFor) renderShortcuts(panel);
+  });
 });

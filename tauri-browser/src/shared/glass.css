@@ -59,6 +59,7 @@ html.glass[data-glass-tone="light"] {
 html.glass :where(
   #rail-capsule,
   #nav-cluster,
+  #menu-cluster,
   #address-wrap,
   #window-controls,
   .tab.active,
@@ -257,6 +258,10 @@ html.glass #nav-cluster > button {
   color: var(--lg-text);
 }
 html.glass #nav-cluster > button:hover { background: rgba(255, 255, 255, 0.16); }
+html.glass #menu-cluster { height: 36px; padding: 0 3px; border-radius: 18px; }
+html.glass #menu-cluster > button { width: 32px; height: 30px; border-radius: 15px; color: var(--lg-text); }
+html.glass #menu-cluster > button:hover { background: rgba(255, 255, 255, 0.16); }
+html.glass #zoom-btn { color: var(--lg-text); background: rgba(255, 255, 255, 0.14); }
 
 html.glass #address-wrap {
   background: var(--lg-gloss), var(--lg-tint);

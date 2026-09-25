@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kessel menu</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The Kessel menu: a popup webview under the address bar's menu button
+       (see toggle_popup in main.rs), also opened with Alt+F / Alt+E / F10. */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+    html.glass body { background: #0a1433; border: none; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }
+    html.glass #sheet {
+      position: fixed;
+      inset: 0;
+      background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 88%, transparent);
+      box-shadow: var(--lg-edge);
+    }
+    main { position: relative; height: 100%; overflow-y: auto; padding: 6px; color: var(--text); scrollbar-width: thin; }
+    html.glass main { color: var(--lg-text); }
+
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      cursor: default;
+      outline: none;
+    }
+    .item svg { flex-shrink: 0; opacity: 0.85; }
+    .item .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item .keys { font-size: 11px; opacity: 0.55; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .item:hover, .item.focused { background: var(--surface-hover); }
+    html.glass .item:hover, html.glass .item.focused { background: rgba(255, 255, 255, 0.12); }
+    .item.disabled { opacity: 0.4; pointer-events: none; }
+    .sep { height: 1px; margin: 5px 8px; background: var(--border); }
+    html.glass .sep { background: rgba(255, 255, 255, 0.14); }
+
+    .zoom { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12.5px; }
+    .zoom .label { flex: 1; }
+    .zoom button {
+      width: 30px;
+      height: 26px;
+      border: none;
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    html.glass .zoom button { background: rgba(255, 255, 255, 0.1); }
+    .zoom button:hover { background: var(--surface-hover); }
+    .zoom output { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
+  <main id="menu" role="menu"></main>
+  <script type="module" src="menu.js"></script>
+</body>
+</html>

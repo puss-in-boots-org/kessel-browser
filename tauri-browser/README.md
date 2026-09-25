@@ -265,11 +265,14 @@ click-tested in a running build yet.
   filenames), tracked with progress/success state, viewable from the
   rail's downloads popover or Settings → Downloads, with "open file" /
   "open folder" actions.
-- **Real tab titles**: each page's actual `document.title` is reported
-  back and kept live via a `MutationObserver`, replacing the old
-  "title is just the URL" placeholder.
-- **Real loading progress**: driven by Tauri's `on_page_load`
-  Started/Finished events instead of a fixed-duration animation guess.
+- **Real tab titles and icons**: straight from WebView2's own
+  title/favicon events, for every page.
+- **Real loading progress**: from WebView2's navigation events -- the tab
+  shows a page loading the moment it starts, not once the server answers.
+- **Every common shortcut**: F5, Ctrl+F5, Alt+Left, Ctrl+L, Ctrl+F, Ctrl+H,
+  Ctrl+Shift+T, Ctrl+1..9, Ctrl+wheel zoom and the rest -- handled in Rust
+  before the page sees the key (see `src-tauri/src/commands.rs`), all
+  changeable in Settings → Keyboard & Mouse, all listed in Help (F1).
 - **Session restore** (optional, in Settings → Search & Startup): reopen
   your last session's tabs instead of a fresh one.
 - **Rewritten settings page**: sectioned nav (Appearance, Search &

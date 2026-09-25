@@ -137,44 +137,174 @@ pub const BLOCKED_DOMAINS: &[&str] = &[
     "webminepool.com",
 ];
 
-// Injected into every content page at document-start (before the page's own
-// scripts run). Layers:
+// The start of both page scripts: the page bridge (see bridge.rs). The
+// token is only in this closure, and the channel's functions are captured
+// before any of the page's own scripts can run, so the page can neither
+// read the token nor fake Kessel's messages. `later` is captured for the
+// same reason -- the page may replace window.setTimeout.
+fn bridge_prelude(token: &str) -> String {
+    format!(
+        r#"
+  var BRIDGE = (function () {{
+    var wv = window.chrome && window.chrome.webview;
+    if (!wv || !wv.postMessage) return null;
+    var post = wv.postMessage.bind(wv);
+    var onMessage = wv.addEventListener.bind(wv);
+    var create = Object.create, keysOf = Object.keys;
+    var TOKEN = "{token}";
+    var waiting = create(null), nextId = 1, handlers = create(null);
+    // A message: an object (Tauri's IPC, on the same channel, only takes
+    // strings -- see vendor/wry/KESSEL-PATCH.md), made of prototype-less
+    // objects with functions taken before the page's scripts ran, so a page
+    // can't hook in (a setter on Object.prototype) to rewrite a request.
+    function pack(type, data, id, name) {{
+      var d = create(null);
+      if (data) {{
+        var keys = keysOf(data);
+        for (var i = 0; i < keys.length; i++) d[keys[i]] = data[keys[i]];
+      }}
+      if (name) d.name = name;
+      var m = create(null);
+      m.k = TOKEN; m.t = type; m.d = d;
+      if (id) m.r = id;
+      return m;
+    }}
+    onMessage('message', function (e) {{
+      var d = e.data;
+      if (!d || typeof d !== 'object') return;
+      if (d.kesselReply && waiting[d.kesselReply]) {{
+        var done = waiting[d.kesselReply];
+        delete waiting[d.kesselReply];
+        done(d.ok);
+      }} else if (d.kesselEvent && handlers[d.kesselEvent]) {{
+        handlers[d.kesselEvent](d);
+      }}
+    }});
+    return {{
+      send: function (type, data) {{ post(pack(type, data, 0)); }},
+      request: function (name, data) {{
+        return new Promise(function (resolve) {{
+          var id = nextId++;
+          waiting[id] = resolve;
+          post(pack('req', data, id, name));
+        }});
+      }},
+      on: function (event, fn) {{ handlers[event] = fn; }}
+    }};
+  }})();
+  var later = window.setTimeout.bind(window);
+"#,
+        token = token
+    )
+}
+
+// Injected into every frame of every content page (tabs, pop-outs, side
+// panel pages) at document start, before the page's own scripts:
+//  1. Keys the page doesn't use go back to Kessel, which runs whatever
+//     shortcut they are (see commands.rs -- the page gets the first go at
+//     everything except the browser's reserved shortcuts).
+//  2. Links opened like in any browser: Ctrl+click and the middle button
+//     open a new tab (in front or behind: a setting), Shift+click a new
+//     window, Ctrl+Shift the opposite of Ctrl.
+//  3. The mouse's back and forward buttons.
+// Each only acts once the page has had its turn: if the page's own
+// handlers called preventDefault, it's theirs.
+pub fn build_frame_script(token: &str) -> String {
+    format!(
+        r#"
+(function () {{
+{bridge}
+  if (!BRIDGE) return;
+
+  // --- Keys the page didn't use ---
+  // Only combinations with Ctrl/Alt, function keys, Escape and the
+  // keyboard's browser keys -- plain typing never leaves the page.
+  window.addEventListener('keydown', function (e) {{
+    var code = e.keyCode;
+    var fkey = code >= 112 && code <= 135;
+    var special = code === 27 || (code >= 166 && code <= 172);
+    if (!(e.ctrlKey || e.altKey || e.metaKey || fkey || special)) return;
+    if (code === 16 || code === 17 || code === 18 || code === 91 || code === 92) return;
+    var ev = e;
+    // After every listener has seen it -- the page's may run after this one.
+    later(function () {{
+      if (ev.defaultPrevented) return;
+      BRIDGE.send('key', {{ vk: code, ctrl: ev.ctrlKey || ev.metaKey, shift: ev.shiftKey, alt: ev.altKey, key: ev.key, repeat: ev.repeat }});
+    }}, 0);
+  }}, true);
+
+  // --- Links: Ctrl / Shift / middle click ---
+  function linkOf(e) {{
+    var t = e.target;
+    var a = t && t.closest ? t.closest('a[href], area[href]') : null;
+    if (!a) return null;
+    var href = a.href;
+    if (href && typeof href === 'object') href = href.baseVal; // SVG links
+    return typeof href === 'string' && /^(https?|file|ftp):/i.test(href) ? href : null;
+  }}
+  window.addEventListener('click', function (e) {{
+    if (e.button !== 0 || e.defaultPrevented || !(e.ctrlKey || e.shiftKey || e.metaKey) || e.altKey) return;
+    var url = linkOf(e);
+    if (!url) return;
+    e.preventDefault();
+    BRIDGE.send('link', {{ url: url, ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, button: 0 }});
+  }}, false);
+  window.addEventListener('auxclick', function (e) {{
+    if (e.button !== 1 || e.defaultPrevented) return;
+    var url = linkOf(e);
+    if (!url) return;
+    e.preventDefault();
+    BRIDGE.send('link', {{ url: url, ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, button: 1 }});
+  }}, false);
+  // Pressing the middle button on a link opens it; don't start autoscroll too.
+  window.addEventListener('mousedown', function (e) {{
+    if (e.button === 1 && linkOf(e)) e.preventDefault();
+  }}, true);
+
+  // --- The mouse's back / forward buttons ---
+  window.addEventListener('mouseup', function (e) {{
+    if (e.button !== 3 && e.button !== 4) return;
+    var ev = e;
+    later(function () {{
+      if (!ev.defaultPrevented) BRIDGE.send('nav', {{ back: ev.button === 3 }});
+    }}, 0);
+  }}, true);
+}})();
+"#,
+        bridge = bridge_prelude(token)
+    )
+}
+
+// Injected into the main frame of every content page at document start
+// (before the page's own scripts run), after the frame script above:
 //  1. Shields element hiding (if adblock_enabled), driven by the filter
 //     lists -- see shields.rs.
-//  2. Popup blocker: overrides window.open() to only allow it within ~800ms
-//     of a real click.
-//  3. Zoom controls: Ctrl/Cmd + "+"/"-"/"0".
-//  4. Middle-click / Ctrl-click a link -> open in a new background tab.
-//  5. Cross-window browser shortcuts (work no matter which webview has focus).
-//  6. Side panel resize hand-off: while the side panel's own drag handle is
+//  2. Popup blocker: window.open() only works within ~800ms of a real click.
+//  3. Password autofill chip.
+//  4. Side panel resize hand-off: while the side panel's own drag handle is
 //     being dragged wider than the panel itself, this tab picks up the same
 //     drag the moment the cursor enters it (see notes below).
 // (Page titles and icons come from WebView2's own events instead -- see
-// watch_page in main.rs.)
-pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bool, in_side_panel: bool) -> String {
+// watch_page in main.rs -- and zoom is the engine's own, per site.)
+pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled: bool, in_side_panel: bool) -> String {
     format!(
         r#"
 (function() {{
-  var KESSEL_TAB_ID = {id};
+  if (window.top !== window) return;
+{bridge}
   var ADBLOCK_ENABLED = {adblock};
   var AUTOFILL_ENABLED = {autofill};
   var IN_SIDE_PANEL = {side_panel};
-
-  function invoke(cmd, args) {{
-    if (window.__TAURI__ && window.__TAURI__.core) {{
-      return window.__TAURI__.core.invoke(cmd, args).catch(function() {{}});
-    }}
-  }}
+  if (!BRIDGE) return;
 
   // --- Shields: element hiding ---
   // The rules come from the same filter lists as the network blocking (see
-  // shields_cosmetics in main.rs): this site's own selectors right away, then
+  // cosmetics_for in main.rs): this site's own selectors right away, then
   // generic ones matched against the classes/ids this page actually uses,
   // re-checked as the page changes. Also tells the fingerprinting script
   // (shields.rs) to stand down where Shields are off for the site.
-  if (ADBLOCK_ENABLED && window.top === window) {{
-    var cosmetics = invoke('shields_cosmetics');
-    if (cosmetics) cosmetics.then(function (c) {{
+  if (ADBLOCK_ENABLED) {{
+    BRIDGE.request('cosmetics').then(function (c) {{
       if (!c || !c.enabled) {{ window.__kesselFarbleOff = true; return; }}
       if (!c.fingerprinting) window.__kesselFarbleOff = true;
       var style = document.createElement('style');
@@ -213,12 +343,11 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
       }}
       function flush() {{
         if (timer || (!newClasses.length && !newIds.length)) return;
-        timer = setTimeout(function () {{
+        timer = later(function () {{
           timer = null;
-          var request = invoke('shields_hidden_selectors', {{
+          BRIDGE.request('hidden-selectors', {{
             classes: newClasses.splice(0), ids: newIds.splice(0), exceptions: c.exceptions || []
-          }});
-          if (request) request.then(function (selectors) {{ if (selectors && selectors.length) hide(selectors); }});
+          }}).then(function (selectors) {{ if (selectors && selectors.length) hide(selectors); }});
           flush();
         }}, 120);
       }}
@@ -251,69 +380,13 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
     return null;
   }};
 
-  // --- Zoom controls (remembered per-site via localStorage, which is
-  // already scoped to this page's own origin -- no backend needed) ---
-  var ZOOM_KEY = 'kessel-zoom-level';
-  var zoom = 1;
-  try {{
-    var savedZoom = parseFloat(localStorage.getItem(ZOOM_KEY));
-    if (savedZoom && savedZoom > 0) {{
-      zoom = savedZoom;
-      document.documentElement.style.zoom = zoom;
-    }}
-  }} catch (e) {{}}
-  document.addEventListener('keydown', function(e) {{
-    var mod = e.ctrlKey || e.metaKey;
-    if (!mod) return;
-    if (e.key === '=' || e.key === '+') {{ zoom = Math.min(zoom + 0.1, 3); }}
-    else if (e.key === '-') {{ zoom = Math.max(zoom - 0.1, 0.3); }}
-    else if (e.key === '0') {{ zoom = 1; }}
-    else return;
-    e.preventDefault();
-    document.documentElement.style.zoom = zoom;
-    try {{ localStorage.setItem(ZOOM_KEY, String(zoom)); }} catch (e) {{}}
-  }}, true);
-
-  // --- Middle-click / Ctrl-click a link: open in a new background tab ---
-  document.addEventListener('mousedown', function(e) {{
-    if (e.button !== 1) return;
-    var a = e.target.closest('a[href]');
-    if (!a) return;
-    e.preventDefault();
-    invoke('open_background_tab', {{ url: a.href }});
-  }}, true);
-  document.addEventListener('click', function(e) {{
-    if (!(e.ctrlKey || e.metaKey)) return;
-    var a = e.target.closest('a[href]');
-    if (!a) return;
-    e.preventDefault();
-    invoke('open_background_tab', {{ url: a.href }});
-  }}, true);
-
-  // --- Browser shortcuts that work no matter which webview has focus ---
-  document.addEventListener('keydown', function(e) {{
-    var mod = e.ctrlKey || e.metaKey;
-    if (e.altKey && e.key === 'ArrowLeft') {{ e.preventDefault(); invoke('go_back', {{ id: KESSEL_TAB_ID }}); return; }}
-    if (e.altKey && e.key === 'ArrowRight') {{ e.preventDefault(); invoke('go_forward', {{ id: KESSEL_TAB_ID }}); return; }}
-    if (e.key === 'F5' || (mod && e.key === 'r')) {{ e.preventDefault(); invoke('reload', {{ id: KESSEL_TAB_ID }}); return; }}
-    if (mod && e.key === 't') {{ e.preventDefault(); invoke('new_tab', {{ url: null }}); return; }}
-    if (mod && e.key === 'w') {{ e.preventDefault(); invoke('close_tab', {{ id: KESSEL_TAB_ID, url: location.href }}); return; }}
-    if (mod && e.key === 'Tab') {{ e.preventDefault(); invoke('cycle_tab', {{ direction: e.shiftKey ? -1 : 1 }}); return; }}
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {{ e.preventDefault(); invoke('open_singleton_tab', {{ route: 'kessel://passwords' }}); return; }}
-    if (mod && /^[1-9]$/.test(e.key)) {{
-      e.preventDefault();
-      invoke('switch_tab_by_index', {{ index: e.key === '9' ? -1 : (parseInt(e.key, 10) - 1) }});
-      return;
-    }}
-  }}, true);
-
   // --- Password autofill: offer to fill a detected login form ---
   // Only ever checks when a password field actually exists on the page,
   // and only shows a clickable chip -- nothing is filled without you
-  // clicking it. The match itself is decided entirely server-side from
-  // this webview's real, current URL (see vault_autofill_match in
-  // main.rs), not from anything this script tells it, so a look-alike
-  // domain can't fish for credentials belonging to the real one.
+  // clicking it. Kessel decides the match from this page's real address
+  // (as WebView2 reports it), never from anything this script says, so a
+  // look-alike domain can't fish for another site's login. Until you click,
+  // only the user name comes back; the password only when you do.
   if (AUTOFILL_ENABLED) {{
     (function () {{
       var offered = false;
@@ -341,7 +414,7 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
       function offerAutofill() {{
         var pwField = document.querySelector('input[type="password"]');
         if (!pwField) return;
-        invoke('vault_autofill_match').then(function (match) {{
+        BRIDGE.request('autofill-match').then(function (match) {{
           if (!match) return;
           var userField = findUsernameField(pwField);
           var chip = document.createElement('div');
@@ -362,9 +435,12 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
           chip.addEventListener('click', function (e) {{
             e.preventDefault();
             e.stopPropagation();
-            if (userField) setNativeValue(userField, match.username);
-            setNativeValue(pwField, match.password);
             chip.remove();
+            BRIDGE.request('autofill-fill').then(function (login) {{
+              if (!login) return;
+              if (userField) setNativeValue(userField, login.username);
+              setNativeValue(pwField, login.password);
+            }});
           }});
           document.body.appendChild(chip);
           document.addEventListener('click', function onDocClick(e) {{
@@ -373,7 +449,7 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
               document.removeEventListener('click', onDocClick, true);
             }}
           }}, true);
-        }}).catch(function () {{}});
+        }});
       }}
 
       function tryOffer() {{
@@ -396,45 +472,40 @@ pub fn build_content_script(id: u32, adblock_enabled: bool, autofill_enabled: bo
         if (document.body) {{
           observer.observe(document.body, {{ childList: true, subtree: true }});
         }} else {{
-          setTimeout(startObserving, 50);
+          later(startObserving, 50);
         }}
       }})();
     }})();
   }}
 
-  // Side panel resize hand-off (see SIDE_PANEL_RESIZE_HANDLE_SCRIPT in
-  // main.rs): the panel and the active tab share the same left-edge screen
-  // origin, so once the panel's own drag crosses into this tab's webview,
-  // this tab's clientX already equals the desired panel width. Only trusts
-  // the 'side-panel-drag' event to know whether a mousemove is actually part
-  // of a resize -- never a clientX-proximity guess, which would misfire on
-  // ordinary clicks/drags near the page's own left margin whenever the panel
-  // is simply closed. This same function builds the side panel page's
-  // script too, which has its own half of the hand-off -- so this part
-  // never runs a second time inside the panel's own document.
-  if (!IN_SIDE_PANEL) {{
-    var sidePanelDragArmed = false;
-    if (window.__TAURI__ && window.__TAURI__.event) {{
-      window.__TAURI__.event.listen('side-panel-drag', function (e) {{
-        sidePanelDragArmed = !!e.payload;
-      }});
+  // --- Side panel resize hand-off ---
+  // The drag starts on the side panel frame's grip; WebView2 stops
+  // delivering mouse events once the cursor leaves the webview it pressed
+  // in, so every webview the cursor can cross -- this tab included --
+  // continues it from its own mousemove while Kessel says a drag is on (a
+  // 'side-panel-drag' event over the bridge; never a position guess, which
+  // would misfire on ordinary drags near the page's left edge). The panel's
+  // own page sits a few pixels right of the panel's edge; a tab starts
+  // exactly at it.
+  var PANEL_INSET = IN_SIDE_PANEL ? 8 : 0;
+  var panelDragArmed = false;
+  BRIDGE.on('side-panel-drag', function (e) {{ panelDragArmed = !!e.on; }});
+  document.addEventListener('mousemove', function (e) {{
+    if (!panelDragArmed) return;
+    var x = e.clientX + PANEL_INSET;
+    if (!(e.buttons & 1)) {{
+      panelDragArmed = false;
+      BRIDGE.send('panel-drag', {{ x: x, done: true }});
+      return;
     }}
-    document.addEventListener('mousemove', function (e) {{
-      if (!sidePanelDragArmed) return;
-      if (!(e.buttons & 1)) {{
-        sidePanelDragArmed = false;
-        invoke('commit_side_panel_width', {{ width: e.clientX }});
-        invoke('notify_side_panel_drag', {{ dragging: false }});
-        return;
-      }}
-      invoke('resize_side_panel_live', {{ width: e.clientX }});
-    }});
-  }}
+    BRIDGE.send('panel-drag', {{ x: x, done: false }});
+  }}, true);
 }})();
 "#,
-        id = id,
+        bridge = bridge_prelude(token),
         adblock = if adblock_enabled { "true" } else { "false" },
         autofill = if autofill_enabled { "true" } else { "false" },
         side_panel = if in_side_panel { "true" } else { "false" }
     )
 }
+

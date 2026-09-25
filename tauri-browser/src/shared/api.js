@@ -29,12 +29,86 @@ export function looksLikeUrl(input) {
 export function resolveInput(raw, engineKey) {
   const trimmed = raw.trim();
   if (!trimmed) return "";
+  const engine = ENGINES[engineKey] || ENGINES.google;
+  // "? something" is always a search (Ctrl+K / Ctrl+E start one like this).
+  if (trimmed.startsWith("?")) {
+    const query = trimmed.slice(1).trim();
+    return query ? engine.url(query) : "";
+  }
   if (trimmed.startsWith("kessel://")) return trimmed;
+  if (/^(view-source|file):/i.test(trimmed)) return trimmed;
   if (looksLikeUrl(trimmed)) {
     return /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   }
-  const engine = ENGINES[engineKey] || ENGINES.google;
   return engine.url(trimmed);
+}
+
+// Kessel's own pages, by address. kessel://settings/privacy is Settings
+// too (a section of it).
+export const INTERNAL_TITLES = {
+  "kessel://newtab": "New Tab",
+  "kessel://home": "New Tab",
+  "kessel://settings": "Settings",
+  "kessel://passwords": "Passwords",
+  "kessel://downloads": "Downloads",
+  "kessel://history": "History",
+  "kessel://help": "Help",
+};
+
+// kessel://settings/privacy -> kessel://settings.
+export function internalPageKey(url) {
+  const m = /^kessel:\/\/[^/?#]+/i.exec(url || "");
+  return m ? m[0].toLowerCase() : url;
+}
+
+export function internalTitle(url) {
+  return INTERNAL_TITLES[internalPageKey(url)] || "";
+}
+
+// A shortcut as people read it: "Ctrl+Plus" -> "Ctrl++", "Ctrl+Num1" ->
+// "Ctrl+Num 1", "Escape" -> "Esc".
+const KEY_NAMES = {
+  Plus: "+",
+  Minus: "-",
+  Escape: "Esc",
+  Delete: "Del",
+  Insert: "Ins",
+  PageUp: "PgUp",
+  PageDown: "PgDn",
+  Left: "←",
+  Right: "→",
+  Up: "↑",
+  Down: "↓",
+  Space: "Space",
+  NumMultiply: "Num *",
+  NumDecimal: "Num .",
+  NumDivide: "Num /",
+  BrowserBack: "Browser Back",
+  BrowserForward: "Browser Forward",
+  BrowserRefresh: "Browser Refresh",
+  BrowserStop: "Browser Stop",
+  BrowserSearch: "Browser Search",
+  BrowserHome: "Browser Home",
+  BrowserFavorites: "Browser Favorites",
+};
+
+export function keyParts(chord) {
+  if (!chord) return [];
+  // The key itself can be "+" only as "Plus", so splitting on + is safe.
+  return chord.split("+").map((part) => KEY_NAMES[part] || part.replace(/^Num(\d)$/, "Num $1"));
+}
+
+export function keyLabel(chord) {
+  return keyParts(chord).join("+");
+}
+
+// <kbd>Ctrl</kbd>+<kbd>T</kbd>
+export function keycapsHtml(chord) {
+  return keyParts(chord).map((k) => `<kbd>${escapeHtml(k)}</kbd>`).join("<span class=\"kbd-plus\">+</span>");
+}
+
+export function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
 export function hostOf(url) {

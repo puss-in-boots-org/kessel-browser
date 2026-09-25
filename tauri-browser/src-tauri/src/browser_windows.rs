@@ -93,6 +93,8 @@ pub(crate) fn create_at(app: &tauri::AppHandle, private: bool, init: serde_json:
         side_panel_id: 0,
         snapshot: None,
         heartbeat: millis_since_start() + TOOLBAR_LOAD_GRACE_MS,
+        user_fullscreen: false,
+        page_fullscreen: false,
     });
     *state.focused_window.lock().unwrap() = Some(label.clone());
 
@@ -176,7 +178,7 @@ fn closed(app: &tauri::AppHandle, label: &str) {
     if !window.private {
         if let Some(session) = window.snapshot.as_deref().and_then(session_from_snapshot) {
             let mut closed = state.closed_windows.lock().unwrap();
-            closed.push(ClosedWindow { tabs: session.tabs, active: session.active, closed_at: now_unix() });
+            closed.push(ClosedWindow { tabs: session.tabs, active: session.active, closed_at: now_unix(), closed_at_ms: millis_since_start() });
             if closed.len() > CLOSED_WINDOWS_KEPT {
                 closed.remove(0);
             }

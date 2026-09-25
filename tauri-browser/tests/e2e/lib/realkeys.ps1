@@ -1,6 +1,9 @@
 # Presses real keys in a running Kessel window, through Windows itself
 # (keybd_event), for the few tests that must go through WebView2's own
 # keyboard handling -- DevTools-protocol key events never reach it.
+# "WheelUp" / "WheelDown" (with modifiers: "Ctrl+WheelUp") turn the mouse
+# wheel once over the middle of the window's page area; the pointer goes
+# back where it was straight after.
 #
 # Safety: the keys are only sent while the target window really is the
 # foreground window; the check runs before every key, and the script stops
@@ -35,6 +38,26 @@ public static class KesselRealKeys {
   [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
   [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] static extern uint MapVirtualKey(uint code, uint mapType);
+  [DllImport("user32.dll")] static extern void mouse_event(uint flags, int dx, int dy, int data, UIntPtr extra);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+  [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT point);
+  [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+
+  // One notch of the wheel over the page area (the middle, two thirds of
+  // the way down -- below the toolbar), with `mods` held.
+  public static void Wheel(IntPtr hwnd, byte[] mods, int delta) {
+    RECT r; GetWindowRect(hwnd, out r);
+    POINT old; GetCursorPos(out old);
+    SetCursorPos((r.Left + r.Right) / 2, r.Top + (r.Bottom - r.Top) * 2 / 3);
+    System.Threading.Thread.Sleep(60);
+    foreach (var m in mods) keybd_event(m, (byte)MapVirtualKey(m, 0), 0, UIntPtr.Zero);
+    mouse_event(0x0800, 0, 0, delta, UIntPtr.Zero);
+    for (int i = mods.Length - 1; i >= 0; i--) keybd_event(mods[i], (byte)MapVirtualKey(mods[i], 0), 2, UIntPtr.Zero);
+    System.Threading.Thread.Sleep(60);
+    SetCursorPos(old.X, old.Y);
+  }
 
   public static IntPtr Find(int pid, string title) {
     IntPtr found = IntPtr.Zero;
@@ -88,11 +111,14 @@ foreach ($combo in $KeyList) {
   if (-not [KesselRealKeys]::Activate($hwnd)) { throw "Couldn't bring '$Title' to the front; not sending $combo" }
   $mods = New-Object System.Collections.Generic.List[byte]
   $key = $null
+  $wheel = 0
   foreach ($part in ($combo -split '\+' | Where-Object { $_ -ne '' })) {
     switch ($part.ToLower()) {
       "ctrl" { $mods.Add(0x11); continue }
       "shift" { $mods.Add(0x10); continue }
       "alt" { $mods.Add(0x12); continue }
+      "wheelup" { $wheel = 120; continue }
+      "wheeldown" { $wheel = -120; continue }
       default {
         $p = $part.ToLower()
         if ($named.ContainsKey($p)) { $key = [byte]$named[$p] }
@@ -102,10 +128,11 @@ foreach ($combo in $KeyList) {
       }
     }
   }
-  if ($null -eq $key) { throw "No key in '$combo'" }
+  if ($null -eq $key -and $wheel -eq 0) { throw "No key in '$combo'" }
   # Last check right before the keys go out.
   if ([KesselRealKeys]::GetForegroundWindow() -ne $hwnd) { throw "'$Title' lost the foreground; not sending $combo" }
-  [KesselRealKeys]::Press($mods.ToArray(), $key)
+  if ($wheel -ne 0) { [KesselRealKeys]::Wheel($hwnd, $mods.ToArray(), $wheel) }
+  else { [KesselRealKeys]::Press($mods.ToArray(), $key) }
   Start-Sleep -Milliseconds $DelayMs
 }
 "sent: $($KeyList -join ', ')"

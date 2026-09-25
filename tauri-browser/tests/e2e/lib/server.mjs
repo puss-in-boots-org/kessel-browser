@@ -4,6 +4,7 @@
 //
 //   /page/<name>          a long page titled <name>, with links and a form
 //   /slow/<ms>/<name>     the same, after a delay (for "stop loading")
+//   /frame/<name>         a page titled <name> showing /page/<name>-inner in an iframe
 //   /download/<name>      a small file served as an attachment
 //   /echo-headers         the request headers as JSON
 
@@ -25,13 +26,19 @@ ${paragraphs}
 }
 
 export async function startServer(host = "127.0.0.2") {
-  const server = http.createServer(async (req, res) => {
+  // Big enough for the tests' deliberately huge addresses.
+  const server = http.createServer({ maxHeaderSize: 1024 * 1024 }, async (req, res) => {
     const origin = `http://${req.headers.host}`;
     const url = new URL(req.url, origin);
     const parts = url.pathname.split("/").filter(Boolean);
     if (parts[0] === "page") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(page(decodeURIComponent(parts[1] || "page"), origin));
+    } else if (parts[0] === "frame") {
+      const name = decodeURIComponent(parts[1] || "frame");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head>
+<body><h1>${name}</h1><iframe id="inner" src="${origin}/page/${encodeURIComponent(name)}-inner" style="width:600px;height:400px"></iframe></body></html>`);
     } else if (parts[0] === "slow") {
       await new Promise((r) => setTimeout(r, parseInt(parts[1], 10) || 3000));
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });

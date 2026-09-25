@@ -48,4 +48,5 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   await listen("download-started", refresh);
   await listen("download-finished", refresh);
+  await listen("downloads-changed", refresh);
 });
