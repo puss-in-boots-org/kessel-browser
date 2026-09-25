@@ -6,9 +6,10 @@
 // src-tauri/src/main.rs.
 import { icon, faviconLetter } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
-import { ENGINES, resolveInput, toast, hostOf, listenHere, internalTitle, internalPageKey, escapeHtml } from "./shared/api.js";
+import { ENGINES, resolveInput, looksLikeUrl, toast, hostOf, listenHere, internalTitle, internalPageKey, escapeHtml } from "./shared/api.js";
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
+import { setupOmnibox } from "./omnibox.js";
 
 const { invoke } = window.__TAURI__.core;
 // Only events for this window's toolbar (and broadcasts) -- see listenHere.
@@ -193,6 +194,8 @@ function paintStaticIcons() {
   iconFor("back-btn", icon("back", 18));
   iconFor("forward-btn", icon("forward", 18));
   iconFor("reload-btn", icon("reload", 17));
+  iconFor("home-btn", icon("home", 17));
+  iconFor("share-btn", icon("share", 15));
   iconFor("new-tab-btn", icon("plus", 16));
   iconFor("lock-icon", icon("lock", 13));
   iconFor("engine-btn", icon("chevronDown", 13));
@@ -662,7 +665,9 @@ function updateAddressBarForActiveTab(force = false) {
     // new-tab/settings pages do -- there's nothing useful to type over.
     input.value = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : "";
     input.classList.remove("search-mode");
+    omnibox?.reset();
   }
+  document.getElementById("share-btn").hidden = !(tab && /^(https?|file):/.test(tab.url || ""));
   updateStarButton();
   updateNavButtons();
   updateShieldsButton();
@@ -932,14 +937,10 @@ async function navigateActiveTab(rawInput) {
     await openSingleton(url);
     return;
   }
-  if (url.startsWith("kessel://")) {
-    // kessel://newtab and friends: always open as a new tab rather than
-    // replacing the current one -- avoids guessing a platform-specific
-    // app-scheme URL for an already-loaded external webview.
-    await createTab(url);
-    return;
-  }
-  await invoke("navigate", { id: tab.id, url });
+  // An address typed without http(s):// goes to https first, and to http
+  // if the site has no https (like Chrome).
+  const typedBare = looksLikeUrl(rawInput) && !/^[a-z][a-z0-9+.-]*:/i.test(rawInput.trim());
+  await invoke("navigate", { id: tab.id, url, httpFallback: typedBare && url.startsWith("https://") });
 }
 
 // This window's tabs, for restoring the session next time (and after a
@@ -1009,6 +1010,13 @@ async function runCommand(id, ctx = {}) {
       else toast("This page has no source to show");
       return;
     }
+    case "copy-link": {
+      const tab = findTab(page) || findTab(activeTabId);
+      if (!tab || !/^(https?|file):/.test(tab.url || "")) return toast("This page has no link to copy");
+      await navigator.clipboard.writeText(tab.url).then(() => toast("Link copied"), () => toast("Couldn't copy -- clipboard unavailable"));
+      return;
+    }
+    case "share-page": return toggleSharePopup();
     case "bookmark": return toggleBookmark();
     case "bookmark-all-tabs": return bookmarkAllTabs();
     case "toggle-bookmarks-bar": return saveSettings({ bookmarks_bar: currentSettings()?.bookmarks_bar === false });
@@ -1127,6 +1135,33 @@ async function navigateFromAddressBar(text, where) {
   if (where !== "window") focusPage();
 }
 
+// Opens an address picked in the address bar: here, in a new tab, or in a
+// new window.
+async function openFromAddressBar(url, how = "here") {
+  if (!url) return;
+  urlInputEl().blur();
+  if (how === "tab") await createTab(url);
+  else if (how === "window") await invoke("new_window", { private: !!WIN.private, url });
+  else await navigateActiveTab(url);
+  if (how !== "window") focusPage();
+}
+
+let omnibox = null;
+
+// Settings that change the toolbar itself.
+function applyToolbarSettings() {
+  document.getElementById("home-btn").hidden = currentSettings()?.show_home_button === false;
+}
+
+// The address bar's share button: copy the link, its QR code, or Windows'
+// Share window (share.html).
+async function toggleSharePopup() {
+  const tab = findTab(activeTabId);
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) return;
+  const rect = document.getElementById("share-btn").getBoundingClientRect();
+  await invoke("toggle_popup", { kind: "share", x: rect.right + 60, y: rect.bottom, width: 300, height: 400, init: { url: tab.url, title: tab.title || "" } }).catch(() => {});
+}
+
 // The Kessel menu (⋮, Alt+F, Alt+E, F10): a popup under its button.
 async function toggleMainMenu() {
   const rect = document.getElementById("menu-btn").getBoundingClientRect();
@@ -1216,8 +1251,13 @@ function renderBookmarksBar() {
 
 async function openInActiveTab(url) {
   const tab = findTab(activeTabId);
-  if (!tab || tab.discarded || url.startsWith("kessel://")) {
+  if (!tab || tab.discarded) {
     await createTab(url);
+    return;
+  }
+  // Settings, History... are one tab each: go to that one.
+  if (SINGLETON_ROUTES.has(internalPageKey(url))) {
+    await openSingleton(url);
     return;
   }
   await invoke("navigate", { id: tab.id, url });
@@ -1410,6 +1450,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Reload, or stop while the page is still loading (like Chrome's button).
   document.getElementById("reload-btn").addEventListener("click", () => runCommand(findTab(activeTabId)?.loading ? "stop" : "reload"));
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
+  document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
+  document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
+  applyToolbarSettings();
+  window.addEventListener("kessel-settings", applyToolbarSettings);
   document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
   document.getElementById("zoom-btn").addEventListener("click", () => runCommand("zoom-reset"));
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
@@ -1457,6 +1501,22 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   urlInput.addEventListener("focus", (e) => e.target.select());
   urlInput.addEventListener("blur", () => urlInput.classList.remove("search-mode"));
+
+  // Suggestions, answers and in-place completion as you type (omnibox.js).
+  omnibox = setupOmnibox({
+    input: urlInput,
+    anchor: document.getElementById("address-wrap"),
+    win: WIN,
+    listen,
+    getSettings: currentSettings,
+    getBookmarks: () => bookmarks,
+    getCommands: () => commandList,
+    go: openFromAddressBar,
+    runCommand: (id) => runCommand(id),
+    copyText: (text) => navigator.clipboard.writeText(text).catch(() => toast("Couldn't copy -- clipboard unavailable")),
+    toast,
+    activeTabId: () => activeTabId,
+  });
 
   // Every shortcut, menu item and palette entry ends up here.
   await listen("browser-command", (event) => runCommand(event.payload.command, event.payload));

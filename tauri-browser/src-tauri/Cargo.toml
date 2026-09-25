@@ -22,6 +22,7 @@ base64 = "0.23.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 adblock = { version = "0.13.3", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 ureq = { version = "3.4.2", default-features = false, features = ["native-tls", "gzip"] }
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 [[bin]]
 name = "kessel"
@@ -29,7 +30,7 @@ path = "src/main.rs"
 
 [target."cfg(windows)".dependencies]
 webview2-com = "0.38"
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Com", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = ["ApplicationModel_DataTransfer", "Foundation", "Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Com", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_WindowsAndMessaging"] }
 
 # wry with a fix Kessel needs: page messages reach Kessel's page bridge, and a
 # page can no longer crash the browser through Tauri's IPC listener. See

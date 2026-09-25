@@ -27,6 +27,8 @@ const LAYOUT = [
   "-",
   ["print", "print"],
   ["save-page", "save"],
+  ["share-page", "share"],
+  ["copy-link", "link"],
   ["find", "find"],
   ["open-file", "file"],
   "-",
@@ -49,6 +51,7 @@ const MENU_LABELS = {
   "toggle-bookmarks-bar": "Show bookmarks bar",
   "print": "Print…",
   "save-page": "Save page as…",
+  "share-page": "Share…",
   "find": "Find…",
   "open-file": "Open file…",
   "clear-browsing-data": "Clear browsing data…",
@@ -124,7 +127,7 @@ function build(commands) {
     item.innerHTML = `${icon(iconName, 15)}<span class="label"></span><span class="keys"></span>`;
     item.querySelector(".label").textContent = label;
     item.querySelector(".keys").textContent = keyLabel(command?.keys?.[0] || "");
-    if ((id === "bookmark" || id === "view-source") && !info.web) item.classList.add("disabled");
+    if (["bookmark", "view-source", "share-page", "copy-link"].includes(id) && !info.web) item.classList.add("disabled");
     item.addEventListener("click", () => run(id));
     menu.appendChild(item);
   }

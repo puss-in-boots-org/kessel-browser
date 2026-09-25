@@ -15,6 +15,7 @@ mod page;
 mod profile;
 mod shields;
 mod store;
+mod suggest;
 mod vault;
 
 use std::collections::{HashMap, HashSet};
@@ -218,6 +219,9 @@ pub(crate) struct BrowserState {
     // into the omnibox) now that the rail opens these in the side panel
     // instead -- lets that fallback still avoid spawning a duplicate tab.
     singleton_tabs: Mutex<HashMap<String, u32>>,
+    // Pages (by id) Kessel itself is sending to one of its own pages -- a
+    // website can't send its tab there (see install_page_watchers).
+    internal_nav_allowed: Mutex<std::collections::HashSet<u32>>,
     // Torn-off pop-out windows, keyed by the id their content script reports
     // titles/favicons under (drawn from the same counter as tab ids, so the
     // two can never collide). See create_popout_internal.
@@ -945,6 +949,30 @@ fn is_internal_nav(nav_url: &tauri::Url) -> bool {
     }
 }
 
+// Exactly Kessel's own origin -- the one its toolbars are loaded from
+// (http://tauri.localhost, or the dev server) -- where is_kessel_page also
+// takes any localhost address. For telling Kessel's pages apart from a
+// local website (your own dev server on localhost:3000).
+fn is_app_origin(app: &tauri::AppHandle, url: &tauri::Url) -> bool {
+    static ORIGIN: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let origin = match ORIGIN.get() {
+        Some(o) => o.clone(),
+        None => {
+            let Some(o) = app
+                .webviews()
+                .into_iter()
+                .find(|(label, _)| label.starts_with("toolbar-"))
+                .and_then(|(_, w)| w.url().ok())
+                .map(|u| u.origin().ascii_serialization())
+            else {
+                return false;
+            };
+            ORIGIN.get_or_init(|| o).clone()
+        }
+    };
+    url.origin().ascii_serialization() == origin
+}
+
 // One of Kessel's own pages: the only pages allowed to change settings,
 // import data and the like (see require_internal_page).
 fn is_kessel_page(url: &tauri::Url) -> bool {
@@ -1252,6 +1280,41 @@ fn get_open_tabs(webview: Webview, state: tauri::State<BrowserState>) -> serde_j
     let (order, active, panel) = state.win(&win, |w| (w.order.clone(), w.active, w.side_panel_kind.clone())).unwrap_or_default();
     let list: Vec<serde_json::Value> = order.iter().filter_map(|&id| tab_info(&state, id)).collect();
     serde_json::json!({ "tabs": list, "active": active, "panel": panel })
+}
+
+// Every open tab of every window, with its window and whether that's
+// private -- the address bar's "Switch to tab".
+#[tauri::command]
+fn all_tabs(state: tauri::State<BrowserState>) -> Vec<serde_json::Value> {
+    let windows: Vec<(String, Vec<u32>, bool)> = state.windows.lock().unwrap().iter().map(|w| (w.label.clone(), w.order.clone(), w.private)).collect();
+    let mut out = Vec::new();
+    for (win, order, private) in windows {
+        for id in order {
+            if let Some(mut info) = tab_info(&state, id) {
+                info["window"] = serde_json::json!(win);
+                info["private"] = serde_json::json!(private);
+                out.push(info);
+            }
+        }
+    }
+    out
+}
+
+// Brings tab `id` to the front, in whichever window it is.
+#[tauri::command]
+async fn focus_tab(app: tauri::AppHandle, id: u32) -> Result<(), String> {
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let win = state.tab_window(id).ok_or("that tab is closed")?;
+        focus_tab_in_window(&app2, &state, &win, id)?;
+        if let Some(window) = state.window_handle(&win) {
+            let _ = window.set_focus();
+        }
+        Ok(())
+    })
+    .await
+    .and_then(|r| r)
 }
 
 #[tauri::command]
@@ -1881,6 +1944,29 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
             let mut navigation = 0u64;
             args.NavigationId(&mut navigation)?;
             let st = app_start.state::<BrowserState>();
+            // A website can't send its tab to one of Kessel's own pages
+            // (they change settings, show passwords...) -- only Kessel can.
+            // Going back or forward to one, or reloading it, is fine.
+            let kessel_asked = st.internal_nav_allowed.lock().unwrap().remove(&id);
+            if tauri::Url::parse(&uri).map(|u| is_app_origin(&app_start, &u)).unwrap_or(false) && !kessel_asked {
+                let previous = st.pages.lock().unwrap().get(&id).map(|p| p.url.clone()).unwrap_or_default();
+                let from_web = tauri::Url::parse(&previous)
+                    .map(|u| matches!(u.scheme(), "http" | "https" | "file") && !is_app_origin(&app_start, &u))
+                    .unwrap_or(false);
+                let new_document = args
+                    .cast::<ICoreWebView2NavigationStartingEventArgs3>()
+                    .ok()
+                    .map(|a| {
+                        let mut kind = COREWEBVIEW2_NAVIGATION_KIND::default();
+                        let _ = a.NavigationKind(&mut kind);
+                        kind == COREWEBVIEW2_NAVIGATION_KIND_NEW_DOCUMENT
+                    })
+                    .unwrap_or(true);
+                if from_web && new_document {
+                    args.SetCancel(true)?;
+                    return Ok(());
+                }
+            }
             {
                 let mut pages = st.pages.lock().unwrap();
                 let page = pages.entry(id).or_default();
@@ -1895,6 +1981,26 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
                 if (target - current).abs() > 0.001 {
                     controller.SetZoomFactor(target)?;
                     page_zoomed(&app_start, id, target, false);
+                }
+            }
+            Ok(())
+        })),
+        &mut token,
+    )?;
+
+    // Nor show one of Kessel's pages in a frame of its own (where it could
+    // trick you into clicking its buttons).
+    let app_frame = app.clone();
+    core.add_FrameNavigationStarting(
+        &webview2_com::NavigationStartingEventHandler::create(Box::new(move |_, args| {
+            let Some(args) = args else { return Ok(()) };
+            let mut uri = windows::core::PWSTR::null();
+            args.Uri(&mut uri)?;
+            let uri = webview2_com::take_pwstr(uri);
+            if tauri::Url::parse(&uri).map(|u| is_app_origin(&app_frame, &u)).unwrap_or(false) {
+                let top = app_frame.state::<BrowserState>().pages.lock().unwrap().get(&id).map(|p| p.url.clone()).unwrap_or_default();
+                if !top.starts_with("kessel://") {
+                    args.SetCancel(true)?;
                 }
             }
             Ok(())
@@ -2303,6 +2409,9 @@ unsafe fn install_shields_hooks(
             let mut status = COREWEBVIEW2_WEB_ERROR_STATUS::default();
             args.WebErrorStatus(&mut status)?;
             let https_problem = [
+                // What a server that only speaks http answers an https
+                // handshake with (ERR_SSL_PROTOCOL_ERROR).
+                COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN,
                 COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT,
                 COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED,
                 COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET,
@@ -2775,6 +2884,7 @@ async fn toggle_popup(
     require_internal_page(&webview)?;
     let page = match kind.as_str() {
         "menu" => "menu.html",
+        "share" => "share.html",
         _ => return Err("no such popup".into()),
     };
     let app2 = app.clone();
@@ -2814,6 +2924,65 @@ async fn toggle_popup(
         let _ = popup.set_focus();
         raise_resize_borders(&window);
         Ok(true)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// Puts `webview` above its window's other webviews (a tab made after it
+// would otherwise cover it): each child webview sits in its own little
+// window (wry's container), so this is just Windows' z-order.
+pub(crate) fn raise_webview(webview: &Webview) {
+    #[cfg(windows)]
+    let _ = webview.with_webview(|platform| unsafe {
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+        let mut hwnd = windows::Win32::Foundation::HWND::default();
+        if platform.controller().ParentWindow(&mut hwnd).is_ok() {
+            let _ = SetWindowPos(hwnd, Some(HWND_TOP), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    });
+}
+
+// The address bar's suggestions: a popup under it (suggest.html), made once
+// per window and from then on only moved, shown and hidden -- a new webview
+// per keystroke would be far too slow. It never takes the keyboard: the
+// address bar keeps it, and tells the popup what to show.
+#[tauri::command]
+async fn suggest_popup(app: tauri::AppHandle, webview: Webview, show: bool, x: f64, y: f64, width: f64, height: f64) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || -> Result<(), String> {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let label = popup_label("suggest", &win);
+        let existing = app2.get_webview(&label);
+        if !show {
+            if let Some(popup) = existing {
+                let _ = popup.hide();
+            }
+            return Ok(());
+        }
+        let popup = match existing {
+            Some(popup) => {
+                let _ = popup.set_position(LogicalPosition::new(x, y));
+                let _ = popup.set_size(LogicalSize::new(width, height));
+                popup
+            }
+            None => {
+                let window = state.window_handle(&win).ok_or("that window is closed")?;
+                let init = format!("window.__KESSEL_POPUP__ = {{ toolbar: {} }};", serde_json::to_string(&toolbar_label(&win)).unwrap_or_default());
+                window
+                    .add_child(
+                        profile::webview(&label, WebviewUrl::App("suggest.html".into())).initialization_script(&init),
+                        LogicalPosition::new(x, y),
+                        LogicalSize::new(width, height),
+                    )
+                    .map_err(|e| e.to_string())?
+            }
+        };
+        let _ = popup.show();
+        raise_webview(&popup);
+        Ok(())
     })
     .await
     .and_then(|r| r)
@@ -3262,15 +3431,33 @@ async fn switch_tab(app: tauri::AppHandle, id: u32) -> Result<(), String> {
 // main.js) -- rewriting an existing webview to an app-scheme URL would mean
 // guessing the platform-specific asset URL, which isn't worth the fragility
 // when "open in a new tab" is simpler and arguably better UX anyway.
+// `http_fallback`: an address you typed without http(s)://, sent to https
+// first -- if that can't connect, it goes to http instead (the same
+// fallback as Shields' HTTPS upgrade, see attach_shields).
 #[tauri::command]
-async fn navigate(app: tauri::AppHandle, id: u32, url: String) -> Result<(), String> {
+async fn navigate(app: tauri::AppHandle, id: u32, url: String, http_fallback: Option<bool>) -> Result<(), String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
         let tabs = state.tabs.lock().unwrap();
         let webview = tabs.get(&id).ok_or_else(|| "tab not found".to_string())?;
-        let normalized = normalize_url(&url);
-        let parsed = tauri::Url::parse(&normalized).map_err(|e| e.to_string())?;
+        // One of Kessel's own pages: it's served from the app's own origin,
+        // the one the toolbar itself was loaded from.
+        let parsed = match internal_route(&url) {
+            Some(route) => {
+                let win = webview.window().label().to_string();
+                let base = app2.get_webview(&toolbar_label(&win)).and_then(|t| t.url().ok()).ok_or("that window's toolbar is gone")?;
+                state.internal_nav_allowed.lock().unwrap().insert(id);
+                base.join(&route).map_err(|e| e.to_string())?
+            }
+            None => tauri::Url::parse(&normalize_url(&url)).map_err(|e| e.to_string())?,
+        };
+        if http_fallback == Some(true) && parsed.scheme() == "https" {
+            let mut http = parsed.clone();
+            if http.set_scheme("http").is_ok() {
+                app2.state::<shields::Shields>().https_pending.lock().unwrap().insert(webview.label().to_string(), http.to_string());
+            }
+        }
         webview.navigate(parsed).map_err(|e| e.to_string())
     })
     .await
@@ -3462,13 +3649,15 @@ async fn history_sites(state: tauri::State<'_, BrowserState>, text: Option<Strin
     Ok(state.store.history.sites(text.as_deref().unwrap_or(""), limit.unwrap_or(300)))
 }
 
-// Deletes visits: by id, everything in [from, to), or a whole site.
+// Deletes visits: by id, every visit to one address, everything in
+// [from, to), or a whole site.
 #[tauri::command]
 async fn delete_history(
     app: tauri::AppHandle,
     webview: Webview,
     state: tauri::State<'_, BrowserState>,
     ids: Option<Vec<i64>>,
+    url: Option<String>,
     from: Option<u64>,
     to: Option<u64>,
     site: Option<String>,
@@ -3478,6 +3667,9 @@ async fn delete_history(
     let mut deleted = 0;
     if let Some(ids) = ids {
         deleted += history.delete(&ids);
+    }
+    if let Some(url) = url {
+        deleted += history.delete_url(&url);
     }
     if let (Some(from), Some(to)) = (from, to) {
         deleted += history.delete_range(from, to);
@@ -4330,6 +4522,14 @@ fn main() {
             page::page_selection,
             page::page_find_status,
             toggle_popup,
+            suggest_popup,
+            suggest::history_suggest,
+            suggest::complete_address,
+            suggest::search_suggest,
+            suggest::currency_rates,
+            suggest::define_word,
+            suggest::qr_code,
+            suggest::share_page,
             close_popup,
             quit_app,
             browser_windows::new_window,
@@ -4364,6 +4564,8 @@ fn main() {
             toolbar_heartbeat,
             get_tab_info,
             get_open_tabs,
+            all_tabs,
+            focus_tab,
             set_toolbar_snapshot,
             get_toolbar_snapshot,
             detect_browsers,
@@ -4408,6 +4610,7 @@ fn main() {
                 data_dir: data_dir.clone(),
                 store,
                 singleton_tabs: Mutex::new(HashMap::new()),
+                internal_nav_allowed: Mutex::new(std::collections::HashSet::new()),
                 popouts: Mutex::new(HashMap::new()),
                 tab_meta: Mutex::new(HashMap::new()),
                 pages: Mutex::new(HashMap::new()),

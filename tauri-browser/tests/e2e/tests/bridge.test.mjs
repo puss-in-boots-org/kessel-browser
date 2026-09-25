@@ -75,6 +75,30 @@ export const tests = [
     },
   },
   {
+    name: "a website can't open Kessel's own pages, in its tab or in a frame",
+    async run({ launch, site, assert, sleep }) {
+      const k = await launch();
+      const appOrigin = new URL((await k.toolbar()).url).origin;
+      const [tab] = await k.tabs();
+      const url = `${site.origin}/page/Sneaky`;
+      await k.invoke("navigate", { id: tab.id, url });
+      const page = await k.page(url);
+      await page.waitFor(`document.readyState === 'complete'`);
+      // A frame first.
+      await page.evaluate(`(() => { const f = document.createElement('iframe'); f.id = 'framed'; f.src = ${JSON.stringify(`${appOrigin}/settings.html`)}; document.body.prepend(f); })()`);
+      await sleep(1500);
+      const { frameTree } = await page.session.send("Page.getFrameTree");
+      const childUrls = (frameTree.childFrames || []).map((f) => f.frame.url);
+      assert(!childUrls.some((u) => u.startsWith(appOrigin)), `no Kessel page in the frame (${childUrls.join(", ")})`);
+      // Then the whole tab.
+      await page.evaluate(`location.href = ${JSON.stringify(`${appOrigin}/settings.html#privacy`)}; 1`).catch(() => {});
+      await sleep(1500);
+      const now = (await k.tabs()).find((t) => t.id === tab.id);
+      assert.equal(now.url, url, "the tab stayed on the website");
+      assert(!(await k.targets()).some((t) => t.url.startsWith(`${appOrigin}/settings.html`)), "no Settings page anywhere");
+    },
+  },
+  {
     name: "a page can't fake Kessel's messages",
     async run({ launch, site, assert, sleep }) {
       const k = await launch();

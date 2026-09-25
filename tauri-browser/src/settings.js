@@ -60,6 +60,7 @@ function appearancePanel(settings) {
         ${settingRow({ title: "Refraction", desc: "Bend the background at the edges of buttons and tabs, like real glass", controlHtml: switchHtml("glass-refraction", settings.glass_refraction) })}
       </div>
       ${settingRow({ title: "Bookmarks bar", desc: "Show bookmarks under the address bar", controlHtml: switchHtml("bookmarks-bar-toggle", settings.bookmarks_bar) })}
+      ${settingRow({ title: "Home button", desc: "A button next to reload that opens your home page", controlHtml: switchHtml("home-button-toggle", settings.show_home_button !== false) })}
       <input type="file" id="wallpaper-file" accept="image/*" hidden />
     </div>
 
@@ -252,6 +253,7 @@ function wireGlassSettings(p, settings) {
   wireToggle(p, "glass-toggle", "glass_enabled");
   wireToggle(p, "glass-refraction", "glass_refraction");
   wireToggle(p, "bookmarks-bar-toggle", "bookmarks_bar");
+  wireToggle(p, "home-button-toggle", "show_home_button");
   p.querySelector("#glass-options").style.display = settings.glass_enabled ? "block" : "none";
 }
 
@@ -277,7 +279,21 @@ function searchPanel(settings) {
       ${settingRow({ title: "Homepage", desc: "Opened by new tabs and the home button", controlHtml: `<input class="field" id="homepage-input" style="width:220px" placeholder="kessel://newtab" />` })}
       ${settingRow({ title: "Restore tabs on launch", desc: "Reopen last session's tabs instead of a fresh one", controlHtml: switchHtml("restore-tabs", settings.restore_tabs) })}
     </div>
+
+    <div class="setting-card">
+      ${settingRow({ title: "Search suggestions", desc: "Show your search engine's suggestions as you type in the address bar. What you type is sent to it -- never from a private window.", controlHtml: switchHtml("search-suggestions", settings.search_suggestions !== false) })}
+      ${settingRow({ title: "Complete addresses as you type", desc: "Type “yout” and Kessel fills in youtube.com if you've been there; press Delete to keep what you typed", controlHtml: switchHtml("autocomplete-addresses", settings.autocomplete_addresses !== false) })}
+      ${settingRow({ title: "Answers in the address bar", desc: "Calculator, unit and currency conversion, definitions, the time anywhere, and more -- right as you type", controlHtml: switchHtml("address-answers", settings.address_answers !== false) })}
+    </div>
   </div>`);
+
+  for (const [id, key] of [["search-suggestions", "search_suggestions"], ["autocomplete-addresses", "autocomplete_addresses"], ["address-answers", "address_answers"]]) {
+    const btn = p.querySelector(`#${id}`);
+    btn.addEventListener("click", async () => {
+      const next = await saveSettings({ [key]: !btn.classList.contains("on") });
+      btn.classList.toggle("on", next[key] !== false);
+    });
+  }
 
   const select = p.querySelector("#engine-select");
   for (const [key, name] of Object.entries(engines)) {

@@ -29,8 +29,42 @@ pub struct SiteVisits {
     pub url: String,
 }
 
+// What the address bar completes to (see History::complete).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Completion {
+    pub text: String,
+    pub url: String,
+}
+
+// A page the address bar suggests from your history.
+#[derive(Serialize, Clone, Debug)]
+pub struct Suggestion {
+    pub url: String,
+    pub title: String,
+    pub visits: u64,
+    pub last_visit: u64,
+}
+
 pub struct History {
     conn: Mutex<Connection>,
+}
+
+// How much a visit this many days ago still counts (Firefox-style frecency:
+// often *and* lately beats often long ago).
+fn recency_weight(age_days: u64) -> f64 {
+    match age_days {
+        0..=4 => 100.0,
+        5..=14 => 70.0,
+        15..=31 => 50.0,
+        32..=90 => 30.0,
+        _ => 10.0,
+    }
+}
+
+// An address as people type it: no scheme, no "www.".
+fn bare(url: &str) -> &str {
+    let rest = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    rest.strip_prefix("www.").unwrap_or(rest)
 }
 
 // The site part of an address, without "www." (so www.youtube.com and
@@ -43,9 +77,13 @@ pub fn site_of(url: &str) -> String {
 }
 
 // For LIKE: % and _ in what you typed are literal.
+fn like_escape(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+// LIKE: contains `text`.
 fn like_pattern(text: &str) -> String {
-    let escaped = text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
-    format!("%{}%", escaped)
+    format!("%{}%", like_escape(text))
 }
 
 #[derive(Deserialize)]
@@ -171,6 +209,120 @@ impl History {
         .unwrap_or_default()
     }
 
+    // Pages for the address bar: every word of `text` in the title or the
+    // address, best first -- visited often and lately, and ones whose
+    // address starts with what you typed.
+    pub fn suggest(&self, text: &str, limit: u32, now: u64) -> Vec<Suggestion> {
+        let words: Vec<&str> = text.split_whitespace().take(8).collect();
+        if words.is_empty() {
+            return Vec::new();
+        }
+        let mut sql = String::from(
+            "SELECT url, COUNT(*), MAX(visited_at),
+                    (SELECT title FROM visits v2 WHERE v2.url = v.url AND v2.title != '' ORDER BY visited_at DESC LIMIT 1)
+             FROM visits v WHERE 1 = 1",
+        );
+        let mut args: Vec<rusqlite::types::Value> = Vec::new();
+        for word in &words {
+            sql.push_str(" AND (title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\')");
+            args.push(like_pattern(word).into());
+            args.push(like_pattern(word).into());
+        }
+        sql.push_str(" GROUP BY url ORDER BY MAX(visited_at) DESC LIMIT 400");
+        let rows: Vec<(String, u64, u64, String)> = {
+            let conn = self.conn.lock().unwrap();
+            let Ok(mut stmt) = conn.prepare(&sql) else { return Vec::new() };
+            stmt.query_map(params_from_iter(args), |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64, r.get::<_, Option<String>>(3)?.unwrap_or_default()))
+            })
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
+        };
+        let typed = text.trim().to_lowercase();
+        let typed = typed.strip_prefix("www.").unwrap_or(&typed).to_string();
+        let mut scored: Vec<(f64, Suggestion)> = rows
+            .into_iter()
+            .map(|(url, visits, last, title)| {
+                let mut score = recency_weight(now.saturating_sub(last) / 86_400) * (1.0 + (visits as f64).ln());
+                let address = bare(&url).to_lowercase();
+                if address.starts_with(&typed) {
+                    score *= 3.0;
+                } else if site_of(&url).starts_with(&typed) {
+                    score *= 2.0;
+                }
+                // The site's front page beats its deep pages.
+                if address.trim_end_matches('/').matches('/').count() == 0 {
+                    score *= 1.5;
+                }
+                (score, Suggestion { url, title, visits, last_visit: last })
+            })
+            .collect();
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.into_iter().take(limit as usize).map(|(_, s)| s).collect()
+    }
+
+    // What you most likely mean when you've typed `prefix`, for the
+    // address bar to complete in place: "yout" -> "youtube.com",
+    // "github.com/tau" -> "github.com/tauri-apps/". `text` is what the
+    // address bar shows (what you typed, as you typed it, and the rest);
+    // `url` is where it goes -- with the scheme, www. and port the site
+    // really had. None if nothing you visited starts that way.
+    pub fn complete(&self, prefix: &str) -> Option<Completion> {
+        let prefix = prefix.trim();
+        if prefix.is_empty() || prefix.contains(char::is_whitespace) || prefix.contains("://") {
+            return None;
+        }
+        // Typed "www.you": complete "you" and keep the "www." as typed.
+        let lower = prefix.to_lowercase();
+        let lower = lower.strip_prefix("www.").unwrap_or(&lower).to_string();
+        if lower.is_empty() {
+            return None;
+        }
+        let page = lower.contains('/');
+        let conn = self.conn.lock().unwrap();
+        // The site: the most visited one starting with what you typed (a
+        // page: the one you named, without its port).
+        let host = if page {
+            lower.split('/').next().unwrap_or("").split(':').next().unwrap_or("").to_string()
+        } else {
+            conn.query_row(
+                "SELECT host FROM visits WHERE host LIKE ?1 ESCAPE '\\' GROUP BY host ORDER BY COUNT(*) DESC, MAX(visited_at) DESC LIMIT 1",
+                params![format!("{}%", like_escape(lower.split(':').next().unwrap_or("")))],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()?
+        };
+        // Its addresses, most visited first: the first that starts with what
+        // you typed gives the completion -- to the end of the site's name,
+        // or one more step of the path, like Chrome.
+        let mut stmt = conn
+            .prepare("SELECT url FROM visits WHERE host = ?1 GROUP BY url ORDER BY COUNT(*) DESC, MAX(visited_at) DESC LIMIT 300")
+            .ok()?;
+        let urls: Vec<String> = stmt.query_map(params![host], |r| r.get::<_, String>(0)).ok()?.filter_map(Result::ok).collect();
+        for url in urls {
+            let b = bare(&url);
+            if b.len() < lower.len() || !b.is_char_boundary(lower.len()) || !b[..lower.len()].eq_ignore_ascii_case(&lower) {
+                continue;
+            }
+            let rest = &b[lower.len()..];
+            let cut = if page { rest.find('/').map(|i| i + 1).unwrap_or(rest.len()) } else { rest.find(['/', '?', '#']).unwrap_or(rest.len()) };
+            if cut == 0 {
+                continue; // nothing to add from this one
+            }
+            // `bare` is the end of the address: what comes before it is the
+            // scheme and any www.
+            let head = &url[..url.len() - b.len()];
+            let completed = &b[..lower.len() + cut];
+            return Some(Completion {
+                text: format!("{}{}", prefix, &rest[..cut]),
+                url: format!("{}{}{}", head, completed, if page { "" } else { "/" }),
+            });
+        }
+        None
+    }
+
     // Sites you've visited, most visited first (the "by site" view).
     pub fn sites(&self, text: &str, limit: u32) -> Vec<SiteVisits> {
         let conn = self.conn.lock().unwrap();
@@ -206,6 +358,12 @@ impl History {
     pub fn delete_range(&self, from: u64, to: u64) -> usize {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM visits WHERE visited_at >= ?1 AND visited_at < ?2", params![from as i64, to as i64]).unwrap_or(0)
+    }
+
+    // Every visit to one address (Shift+Delete on an address bar suggestion).
+    pub fn delete_url(&self, url: &str) -> usize {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM visits WHERE url = ?1", params![url]).unwrap_or(0)
     }
 
     pub fn delete_site(&self, site: &str) -> usize {
@@ -279,6 +437,41 @@ mod tests {
         assert_eq!(h.delete_range(0, 1_500), 1);
         assert_eq!(h.delete_site("en.wikipedia.org"), 1);
         assert_eq!(h.count(), 0);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn suggests_and_completes_addresses() {
+        let (h, dir) = temp_history();
+        let now = 100 * 86_400;
+        for i in 0..4 {
+            h.record("https://www.youtube.com/", "YouTube", now - 1000 + i);
+            h.record("https://www.youtube.com/watch?v=abc", "A video", now - 900 + i);
+        }
+        h.record("https://yourbank.example/", "Your Bank", now - 50 * 86_400);
+        h.record("https://github.com/tauri-apps/tauri", "Tauri", now - 100);
+        h.record("https://github.com/tauri-apps/wry", "wry", now - 90);
+        h.record("https://github.com/rust-lang/rust", "Rust", now - 80);
+
+        let s = h.suggest("you", 5, now);
+        assert_eq!(s[0].url, "https://www.youtube.com/", "the most visited matching site's front page first");
+        assert!(s.iter().any(|x| x.url.contains("yourbank")), "older matches too");
+        assert_eq!(s[0].visits, 4);
+        assert!(h.suggest("tauri wry", 5, now).iter().all(|x| x.url.ends_with("/wry")), "every word must match");
+        assert!(h.suggest("  ", 5, now).is_empty());
+
+        let text = |prefix: &str| h.complete(prefix).map(|c| c.text);
+        assert_eq!(h.complete("you"), Some(Completion { text: "youtube.com".into(), url: "https://www.youtube.com/".into() }), "the address the site really had");
+        assert_eq!(text("www.you").as_deref(), Some("www.youtube.com"), "keeps the www. you typed");
+        assert_eq!(text("YOU").as_deref(), Some("YOUtube.com"), "keeps what you typed as you typed it");
+        assert_eq!(h.complete("github.com/tau"), Some(Completion { text: "github.com/tauri-apps/".into(), url: "https://github.com/tauri-apps/".into() }), "one step at a time");
+        assert_eq!(h.complete("youtube.com"), None, "nothing to add");
+        assert_eq!(h.complete("nothing"), None);
+        assert_eq!(h.complete("you tube"), None, "a search, not an address");
+
+        h.record("http://127.0.0.2:5000/page/One", "One", now - 10);
+        assert_eq!(h.complete("127.0"), Some(Completion { text: "127.0.0.2:5000".into(), url: "http://127.0.0.2:5000/".into() }), "port and http kept");
+        assert_eq!(text("127.0.0.2:50").as_deref(), Some("127.0.0.2:5000"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

@@ -279,8 +279,8 @@ html.glass #address-wrap:focus-within {
 html.glass #url-input { color: var(--lg-text); text-shadow: var(--lg-legibility); }
 html.glass #url-input::placeholder { color: var(--lg-text-faint); }
 html.glass #lock-icon { color: #5ef0b4; }
-html.glass :is(#engine-btn, #star-btn) { color: var(--lg-text-dim); border-radius: 13px; }
-html.glass :is(#engine-btn, #star-btn):hover { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); }
+html.glass :is(#engine-btn, #star-btn, #share-btn) { color: var(--lg-text-dim); border-radius: 13px; }
+html.glass :is(#engine-btn, #star-btn, #share-btn):hover { background: rgba(255, 255, 255, 0.16); color: var(--lg-text); }
 html.glass #star-btn.starred { color: #ffd60a; }
 
 /* --- Bookmarks bar: bare labels that turn into glass pills on hover --- */

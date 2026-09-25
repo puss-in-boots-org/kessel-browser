@@ -2249,6 +2249,7 @@ dependencies = [
  "argon2",
  "base64 0.23.1",
  "hmac",
+ "qrcode",
  "rand",
  "rusqlite",
  "serde",
@@ -3150,6 +3151,12 @@ name = "psl-types"
 version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33cb294fe86a74cbcf50d4445b37da762029549ebeea341421c7c70370f86cac"
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quick-xml"

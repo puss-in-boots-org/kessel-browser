@@ -101,6 +101,8 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("save-page", "Save page as", "Page", &["Ctrl+S"]),
     cmd("open-file", "Open a file", "Page", &["Ctrl+O"]),
     cmd("view-source", "View page source", "Page", &["Ctrl+U"]),
+    cmd("copy-link", "Copy page link", "Page", &[]),
+    cmd("share-page", "Share this page", "Page", &[]),
     cmd("devtools", "Developer tools", "Page", &["F12", "Ctrl+Shift+I", "Ctrl+Shift+J", "Ctrl+Shift+C"]),
     // Bookmarks, history, downloads
     cmd("bookmark", "Bookmark this page", "Bookmarks & history", &["Ctrl+D"]),

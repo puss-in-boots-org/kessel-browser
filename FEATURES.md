@@ -20,9 +20,12 @@ branch, one small commit per feature or group of features.
 - Branch: `feature-list` (based on `dev-script-folder`).
 - Build (Visual Studio 2022 C++ tools + Windows SDK 10.0.19041, found automatically):
   `scripts\cargo-msvc.cmd build --features tauri/custom-protocol --target-dir target\e2e`
-- End-to-end tests: `node tauri-browser/tests/e2e/run.mjs` -- starts that build with a
-  throw-away profile (your real history/settings are never touched) and drives it
-  through the Chrome DevTools Protocol.
+- End-to-end tests: `node tauri-browser/tests/e2e/run.mjs [name filter]` -- starts that
+  build with a throw-away profile (your real history/settings are never touched) and
+  drives it through the Chrome DevTools Protocol. The front end is compiled into the
+  build, so rebuild after changing anything in `src/`.
+- Unit tests: `scripts\cargo-msvc.cmd test --target-dir target\e2e` (Rust) and
+  `node --test "tauri-browser/tests/unit/*.test.mjs"` (JavaScript).
 - Pick the first ⏳ row below, build it, test it, mark it, commit.
 
 ## Keyboard shortcuts (the requested table)
@@ -88,28 +91,28 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 1.01 | Address bar / omnibox | 🟡 | URLs and searches worked before; commands/answers below |
+| 1.01 | Address bar / omnibox | ✅ | Suggestions as you type (history, bookmarks, open tabs, your search engine), in-place completion, answers and commands; Up/Down, Enter, Alt/Shift+Enter, Tab, Shift+Delete |
 | 1.02 | Back | ✅ | Button, Alt+Left, mouse back button |
 | 1.03 | Forward | ✅ | Button, Alt+Right, mouse forward button |
 | 1.04 | Reload | ✅ | Button, F5, Ctrl+R |
 | 1.05 | Hard reload | ✅ | Ctrl+F5, Shift+F5, Ctrl+Shift+R |
 | 1.06 | Stop loading | ✅ | Escape, or the reload button, which turns into a stop button while loading |
-| 1.07 | Home button | ⏳ | |
+| 1.07 | Home button | ✅ | Next to reload (Settings -> Appearance can hide it); Alt+Home; stays in the same tab |
 | 1.08 | Home page | 🟢 | Settings -> Search & Startup |
 | 1.09 | New tab page | 🟢 | |
 | 1.10 | Search from address bar | 🟢 | |
-| 1.11 | URL suggestions | ⏳ | |
-| 1.12 | Search suggestions | ⏳ | |
-| 1.13 | Command suggestions | ⏳ | |
-| 1.14 | Calculator | ⏳ | |
-| 1.15 | Unit conversion | ⏳ | |
-| 1.16 | Currency conversion | ⏳ | |
-| 1.17 | Definitions | ⏳ | |
-| 1.18 | Quick answers | ⏳ | |
-| 1.19 | QR-code generation | ⏳ | |
-| 1.20 | Share page | ⏳ | |
-| 1.21 | Copy page link | ⏳ | |
-| 1.22 | Copy link as QR code | ⏳ | |
+| 1.11 | URL suggestions | ✅ | Your history (often and lately visited first), bookmarks and open tabs; "yout" completes to youtube.com in place |
+| 1.12 | Search suggestions | ✅ | From your search engine as you type (Google, Bing, DuckDuckGo, Brave, Ecosia, Startpage); off in private windows; Settings -> Search |
+| 1.13 | Command suggestions | ✅ | Kessel's commands by name or another word for them ("clear cache", "incognito"...), with their shortcut |
+| 1.14 | Calculator | ✅ | + - * / ^ % ! mod, sqrt, sin, log..., "15% of 80", "80 + 15%"; Enter copies the result |
+| 1.15 | Unit conversion | ✅ | Length, mass, volume, area, speed, time, data, energy, pressure, temperature ("10 km to miles") |
+| 1.16 | Currency conversion | ✅ | "100 usd to huf": the European Central Bank's daily rates (~30 currencies); last rates kept for offline |
+| 1.17 | Definitions | ✅ | "define serendipity", "ephemeral meaning": from Wiktionary |
+| 1.18 | Quick answers | ✅ | The time anywhere ("time in tokyo"), the date, coin, dice ("roll 2d6"), random numbers, UUID, strong password, colours (#hex / rgb), number bases |
+| 1.19 | QR-code generation | ✅ | Share button -> the page's QR code |
+| 1.20 | Share page | ✅ | Share button -> Share... opens Windows' Share window; also the menu |
+| 1.21 | Copy page link | ✅ | Share button -> Copy link (also as a Markdown link); the menu; a command you can give a shortcut |
+| 1.22 | Copy link as QR code | ✅ | Share button -> Copy QR code (an image) |
 
 ### 2. Tabs
 
@@ -225,8 +228,8 @@ branch, one small commit per feature or group of features.
 | 5.12 | Search history | ✅ | History -> Searches: what you searched on Google, Bing, DuckDuckGo, YouTube, Wikipedia, Amazon and more |
 | 5.13 | Download history | 🟢 | |
 | 5.14 | History synchronization | ⏳ | |
-| 5.15 | History suggestions | ⏳ | |
-| 5.16 | Address-bar history integration | ⏳ | |
+| 5.15 | History suggestions | ✅ | In the address bar, as you type |
+| 5.16 | Address-bar history integration | ✅ | See 1.11 |
 
 ### 6. Downloads
 

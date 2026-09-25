@@ -417,7 +417,7 @@ html.fullscreen #progress-bar { display: none !important; }
 }
 #url-input::placeholder { color: var(--text-faint); }
 
-#engine-btn, #star-btn {
+#engine-btn, #star-btn, #share-btn {
   background: none;
   border: none;
   color: var(--text-dim);
@@ -431,7 +431,8 @@ html.fullscreen #progress-bar { display: none !important; }
   justify-content: center;
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
-#engine-btn:hover, #star-btn:hover { background: var(--surface-hover); color: var(--text); }
+#share-btn[hidden], #home-btn[hidden] { display: none; }
+#engine-btn:hover, #star-btn:hover, #share-btn:hover { background: var(--surface-hover); color: var(--text); }
 #star-btn.starred { color: var(--warning); }
 #star-btn.starred:hover { transform: scale(1.1); }
 

@@ -122,6 +122,14 @@ pub struct Settings {
     pub default_zoom: f64,
     // How many days of history to keep (0 = forever).
     pub history_days: u32,
+    // The address bar: your search engine's suggestions as you type (never
+    // in private windows), completing addresses you've been to in place,
+    // and instant answers (calculator, conversions, definitions...).
+    pub search_suggestions: bool,
+    pub autocomplete_addresses: bool,
+    pub address_answers: bool,
+    // A home button next to reload.
+    pub show_home_button: bool,
 }
 
 impl Default for Settings {
@@ -157,6 +165,10 @@ impl Default for Settings {
             middle_click_background: true,
             default_zoom: 1.0,
             history_days: 90,
+            search_suggestions: true,
+            autocomplete_addresses: true,
+            address_answers: true,
+            show_home_button: true,
         }
     }
 }

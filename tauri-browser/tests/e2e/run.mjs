@@ -19,6 +19,9 @@ function assert(condition, message) {
 assert.equal = (actual, expected, message) => {
   if (actual !== expected) throw new Error(`assertion failed: ${message}\n  expected: ${JSON.stringify(expected)}\n  actual:   ${JSON.stringify(actual)}`);
 };
+assert.deepEqual = (actual, expected, message) => {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`assertion failed: ${message}\n  expected: ${JSON.stringify(expected)}\n  actual:   ${JSON.stringify(actual)}`);
+};
 
 const site = await startServer();
 const files = readdirSync(path.join(here, "tests")).filter((f) => f.endsWith(".test.mjs")).sort();
