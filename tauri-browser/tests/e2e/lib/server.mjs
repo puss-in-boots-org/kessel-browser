@@ -7,6 +7,8 @@
 //   /frame/<name>         a page titled <name> showing /page/<name>-inner in an iframe
 //   /download/<name>      a small file served as an attachment
 //   /echo-headers         the request headers as JSON
+//   /sound/<name>         a page titled <name> whose startSound() / stopSound()
+//                         play a barely audible tone
 
 import http from "node:http";
 
@@ -46,6 +48,26 @@ export async function startServer(host = "127.0.0.2") {
     } else if (parts[0] === "download") {
       res.writeHead(200, { "Content-Type": "text/plain", "Content-Disposition": `attachment; filename="${parts[1] || "file.txt"}"` });
       res.end("Kessel test download\n");
+    } else if (parts[0] === "sound") {
+      const name = decodeURIComponent(parts[1] || "sound");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      // Quiet on purpose: the tests run on someone's PC, speakers and all.
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head>
+<body><h1>${name}</h1><button id="play" onclick="startSound()">Play</button>
+<script>
+let ctx = null;
+async function startSound() {
+  ctx = new AudioContext();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  gain.gain.value = 0.003;
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  await ctx.resume();
+  return ctx.state;
+}
+function stopSound() { if (ctx) { ctx.close(); ctx = null; } }
+</script></body></html>`);
     } else if (parts[0] === "echo-headers") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(req.headers));

@@ -148,11 +148,17 @@ export class Page {
       autoRepeat: repeat,
       ...(printable ? { text: k.text, unmodifiedText: k.text } : {}),
     });
-    await this.session.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers, key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk });
-    for (const m of [...k.mods].reverse()) {
-      modifiers &= ~MOD_BITS[m];
-      const mk = MOD_KEYS[m];
-      await this.session.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers, key: mk.key, code: mk.code, windowsVirtualKeyCode: mk.vk, nativeVirtualKeyCode: mk.vk });
+    // The key may have closed the page (Escape in a menu): nothing left to
+    // let go of the keys in.
+    try {
+      await this.session.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers, key: k.key, code: k.code, windowsVirtualKeyCode: k.vk, nativeVirtualKeyCode: k.vk }, { timeout: 3000 });
+      for (const m of [...k.mods].reverse()) {
+        modifiers &= ~MOD_BITS[m];
+        const mk = MOD_KEYS[m];
+        await this.session.send("Input.dispatchKeyEvent", { type: "keyUp", modifiers, key: mk.key, code: mk.code, windowsVirtualKeyCode: mk.vk, nativeVirtualKeyCode: mk.vk }, { timeout: 3000 });
+      }
+    } catch (err) {
+      if (!/connection closed|no answer/.test(err.message)) throw err;
     }
   }
 

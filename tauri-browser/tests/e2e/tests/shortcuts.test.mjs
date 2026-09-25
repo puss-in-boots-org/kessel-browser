@@ -702,8 +702,8 @@ export const tests = [
       const k = await launch();
       const { id, page } = await openPage(k, site, "Editor");
       // Keep whatever was on the clipboard.
-      const { execFileSync } = await import("node:child_process");
-      const saved = execFileSync("powershell", ["-NoProfile", "-Command", "Get-Clipboard -Raw"], { encoding: "utf8" });
+      const clipboard = await import("../lib/clipboard.mjs");
+      const saved = clipboard.save();
       try {
         await k.invoke("page_action", { id, action: "focus", value: null });
         await page.evaluate(`(() => { const t = document.getElementById('text'); t.value = 'hello world'; t.focus(); t.select(); })()`);
@@ -720,7 +720,7 @@ export const tests = [
         await waitFor(async () => (await value()) === "hello worldhello world", { message: "paste what was cut" });
         assert(true, "all of them");
       } finally {
-        execFileSync("powershell", ["-NoProfile", "-Command", "Set-Clipboard -Value $input"], { input: saved.replace(/\r?\n$/, ""), encoding: "utf8" });
+        clipboard.restore(saved);
       }
     },
   },

@@ -20,6 +20,18 @@ exercised by a headless check — if something in the actual running window
 looks off, that's the next thing to iterate on.
 
 ## Unreleased
+- **Pinned tabs, muted tabs, picking several tabs, and a full tab menu.**
+  Pin a tab (tab menu) and it shrinks to its icon at the front of the
+  strip, loses its close button, survives "close other tabs" and comes back
+  pinned after a restart. Tabs playing sound show a speaker: click it (or
+  Ctrl+M, or the tab menu) to mute or unmute; tabs playing sound never go
+  to sleep. Ctrl+click and Shift+click pick several tabs, and the tab
+  menu and Ctrl+W then act on all of them. The tab menu has new tab to
+  the right, reload, duplicate (next to the original), pin, mute,
+  bookmark, copy link, move to a new or another window, and close
+  this / others / to the right / to the left / all but pinned tabs.
+  Right-click menus and the search-engine dropdown are now popups over
+  the page. The page used to hide them.
 - **Tab titles, icons and addresses stay current** (`watch_page` in
   `main.rs`). Tabs on websites used to keep saying "New Tab" or the host
   name: the page script reported titles and icons through IPC, which Tauri

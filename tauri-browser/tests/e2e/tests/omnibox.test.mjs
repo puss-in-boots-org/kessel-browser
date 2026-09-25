@@ -2,7 +2,7 @@
 // in-place completion, answers, commands, switching to a tab, and the Home
 // and Share buttons next to it.
 
-import { execFileSync } from "node:child_process";
+import * as clipboard from "../lib/clipboard.mjs";
 
 // Types `text` into the address bar as a person would (input events).
 async function typeInAddressBar(k, text) {
@@ -36,11 +36,6 @@ async function openPage(k, site, name, id = null) {
   await page.waitFor(`document.readyState === 'complete' && document.title === ${JSON.stringify(name)}`);
   return { id, page, url };
 }
-
-const clipboard = {
-  read: () => execFileSync("powershell", ["-NoProfile", "-Command", "Get-Clipboard -Raw"], { encoding: "utf8" }).replace(/\r?\n$/, ""),
-  write: (text) => execFileSync("powershell", ["-NoProfile", "-Command", "Set-Clipboard -Value $input"], { input: text, encoding: "utf8" }),
-};
 
 export const tests = [
   {
@@ -138,16 +133,16 @@ export const tests = [
     name: "an answer is copied with Enter",
     async run({ launch, assert, waitFor }) {
       const k = await launch({ settings: { search_suggestions: false } });
-      const saved = clipboard.read();
+      const saved = clipboard.save();
       try {
         const toolbar = await typeInAddressBar(k, "3*7");
         await suggestions(k, waitFor, (r) => r.some((x) => x.kind === "answer"), "the answer");
         await toolbar.key("down");
         await toolbar.key("Enter");
-        await waitFor(() => clipboard.read() === "21", { message: "21 on the clipboard" });
+        await waitFor(() => clipboard.readText() === "21", { message: "21 on the clipboard" });
         assert(true, "copied");
       } finally {
-        clipboard.write(saved);
+        clipboard.restore(saved);
       }
     },
   },
@@ -246,10 +241,10 @@ export const tests = [
       const share = await k.page("share.html");
       await share.waitFor(`!!document.querySelector('#qr svg')`, { message: "a QR code" });
       assert.equal(await share.evaluate(`document.getElementById('url').textContent`), url, "for this page");
-      const saved = clipboard.read();
+      const saved = clipboard.save();
       try {
         await share.clickSelector("#copy-link");
-        await waitFor(() => clipboard.read() === url, { message: "the link on the clipboard" });
+        await waitFor(() => clipboard.readText() === url, { message: "the link on the clipboard" });
         // The popup closes after copying; open it again for the QR image.
         await waitFor(async () => !(await k.targets()).some((t) => t.url.includes("share.html")), { message: "closed" });
         await sleep(500); // a click right as a popup closes is the click that closed it
@@ -257,10 +252,9 @@ export const tests = [
         const again = await k.page("share.html");
         await again.waitFor(`!!document.querySelector('#qr svg')`);
         await again.clickSelector("#copy-qr");
-        const imageSize = () => execFileSync("powershell", ["-NoProfile", "-Command", "Add-Type -AssemblyName System.Windows.Forms; $i = [System.Windows.Forms.Clipboard]::GetImage(); if ($i) { \"$($i.Width)x$($i.Height)\" }"], { encoding: "utf8" }).trim();
-        await waitFor(() => imageSize() === "512x512", { message: "the QR code as an image on the clipboard" });
+        await waitFor(() => clipboard.imageSize() === "512x512", { message: "the QR code as an image on the clipboard" });
       } finally {
-        clipboard.write(saved);
+        clipboard.restore(saved);
       }
       // Windows' own Share window opens for the page.
       await k.invoke("share_page", { url, title: "Shared Page" });

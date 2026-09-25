@@ -71,7 +71,11 @@ pub const COMMANDS: &[CommandDef] = &[
     repeating(cmd("move-tab-left", "Move tab left", "Tabs", &["Ctrl+Shift+PageUp"])),
     repeating(cmd("move-tab-right", "Move tab right", "Tabs", &["Ctrl+Shift+PageDown"])),
     cmd("duplicate-tab", "Duplicate tab", "Tabs", &["Ctrl+Shift+K"]),
+    cmd("pin-tab", "Pin or unpin tab", "Tabs", &[]),
+    cmd("mute-tab", "Mute or unmute tab", "Tabs", &["Ctrl+M"]),
     cmd("close-other-tabs", "Close other tabs", "Tabs", &[]),
+    cmd("close-tabs-right", "Close tabs to the right", "Tabs", &[]),
+    cmd("close-tabs-left", "Close tabs to the left", "Tabs", &[]),
     // Windows
     reserved(cmd("new-window", "New window", "Windows", &["Ctrl+N"])),
     reserved(cmd("new-private-window", "New private window", "Windows", &["Ctrl+Shift+N"])),

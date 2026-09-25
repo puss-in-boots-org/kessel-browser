@@ -52,7 +52,8 @@ export const tests = [
       const k = await launch();
       await k.createTab(`${site.origin}/page/Mover`);
       const page = await k.page(`${site.origin}/page/Mover`);
-      await page.waitFor(`document.readyState === 'complete'`);
+      // The page itself (not the blank document before it) has loaded.
+      await page.waitFor(`document.readyState === 'complete' && document.title === 'Mover'`);
       await page.evaluate(`window.__keptAlive = 42`);
       const mover = await waitFor(async () => (await k.tabs()).find((t) => t.url.includes("/page/Mover")), { message: "the tab in the strip" });
 

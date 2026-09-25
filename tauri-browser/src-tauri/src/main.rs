@@ -2008,6 +2008,43 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
         &mut token,
     )?;
 
+    // Sound: the tab strip shows which tabs play it, and which are muted.
+    if let Ok(core8) = core.cast::<ICoreWebView2_8>() {
+        let report = {
+            let app = app.clone();
+            move |core8: &ICoreWebView2_8| -> windows::core::Result<()> {
+                let (mut playing, mut muted) = (windows::core::BOOL::default(), windows::core::BOOL::default());
+                core8.IsDocumentPlayingAudio(&mut playing)?;
+                core8.IsMuted(&mut muted)?;
+                emit_to_tab_window(&app, id, "tab-audio", serde_json::json!({ "id": id, "playing": playing.as_bool(), "muted": muted.as_bool() }));
+                Ok(())
+            }
+        };
+        let on_audio = report.clone();
+        core8.add_IsDocumentPlayingAudioChanged(
+            &webview2_com::IsDocumentPlayingAudioChangedEventHandler::create(Box::new(move |sender, _| {
+                if let Some(core) = sender {
+                    if let Ok(core8) = core.cast::<ICoreWebView2_8>() {
+                        let _ = on_audio(&core8);
+                    }
+                }
+                Ok(())
+            })),
+            &mut token,
+        )?;
+        core8.add_IsMutedChanged(
+            &webview2_com::IsMutedChangedEventHandler::create(Box::new(move |sender, _| {
+                if let Some(core) = sender {
+                    if let Ok(core8) = core.cast::<ICoreWebView2_8>() {
+                        let _ = report(&core8);
+                    }
+                }
+                Ok(())
+            })),
+            &mut token,
+        )?;
+    }
+
     // The page went full screen itself, or left it.
     let app_fs = app.clone();
     core.add_ContainsFullScreenElementChanged(
@@ -2869,7 +2906,14 @@ async fn close_accounts_popup(app: tauri::AppHandle, webview: Webview) -> Result
 // page gets `init` as window.__KESSEL_POPUP__.
 
 static POPUP_CLOSED_AT: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+// Which kind ("context" / "dropdown") each window's menu popup was opened as
+// last: a dropdown's button toggles only its own menu.
+static CONTEXT_KIND: Mutex<std::collections::BTreeMap<String, String>> = Mutex::new(std::collections::BTreeMap::new());
 
+// `kind` "context" is a right-click menu (context.html): it opens at the
+// point (x, y) -- upward or leftward when there's no room -- and a new one
+// replaces the old instead of toggling it. "dropdown" is the same menu
+// under a button (x, y = its bottom left), and toggles like the others.
 #[tauri::command]
 async fn toggle_popup(
     app: tauri::AppHandle,
@@ -2885,17 +2929,29 @@ async fn toggle_popup(
     let page = match kind.as_str() {
         "menu" => "menu.html",
         "share" => "share.html",
+        "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
+    let at_point = kind == "context" || kind == "dropdown";
+    let toggles = kind != "context";
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
         let win = state.window_of(&webview).ok_or("that window is closed")?;
-        let label = popup_label(&kind, &win);
-        if let Some(existing) = app2.get_webview(&label) {
-            let _ = existing.close();
-            *POPUP_CLOSED_AT.lock().unwrap() = Some((label, Instant::now()));
-            return Ok(false);
+        // One right-click menu or dropdown at a time: both are context.html.
+        let label = popup_label(if at_point { "context" } else { &kind }, &win);
+        let reopened_kind = CONTEXT_KIND.lock().unwrap().insert(label.clone(), kind.clone());
+        let same_kind = reopened_kind.as_deref() == Some(kind.as_str());
+        let existing = app2.get_webview(&label);
+        if let Some(open) = &existing {
+            if toggles && same_kind {
+                let _ = open.close();
+                *POPUP_CLOSED_AT.lock().unwrap() = Some((label.clone(), Instant::now()));
+                return Ok(false);
+            }
+            if !at_point {
+                let _ = open.close();
+            }
         }
         // The click on the button that opened it first blurred (= closed) it.
         let just_closed = POPUP_CLOSED_AT
@@ -2904,14 +2960,34 @@ async fn toggle_popup(
             .as_ref()
             .map(|(l, t)| l == &label && t.elapsed() < Duration::from_millis(400))
             .unwrap_or(false);
-        if just_closed {
+        if just_closed && toggles && same_kind {
             return Ok(false);
         }
         let (window, insets) = state.win(&win, |w| (w.window.clone(), w.insets)).ok_or("that window is closed")?;
         let logical = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
-        let top = y + 6.0;
-        let height = height.min((logical.height - top - 8.0).max(160.0));
-        let left = (x - width).clamp(insets.0.min(8.0), (logical.width - width - 4.0).max(0.0));
+        let (left, top, height) = if at_point {
+            let height = height.min(logical.height - 16.0);
+            let top = if y + height > logical.height - 8.0 { (y - height).max(8.0) } else { y };
+            let left = if x + width > logical.width - 4.0 { (x - width).max(4.0) } else { x };
+            (left, top, height)
+        } else {
+            let top = y + 6.0;
+            let height = height.min((logical.height - top - 8.0).max(160.0));
+            let left = (x - width).clamp(insets.0.min(8.0), (logical.width - width - 4.0).max(0.0));
+            (left, top, height)
+        };
+        // A menu is already open (right-clicked again, or another dropdown):
+        // the same popup moves and shows the new one. Closing it and making
+        // another would race the old one's focus against the new one's --
+        // and a menu that loses the focus closes itself.
+        if let (true, Some(open)) = (at_point, existing) {
+            let _ = open.set_position(LogicalPosition::new(left, top));
+            let _ = open.set_size(LogicalSize::new(width, height));
+            open.eval(format!("window.__kesselShowMenu && window.__kesselShowMenu({});", init)).map_err(|e| e.to_string())?;
+            let _ = open.set_focus();
+            raise_webview(&open);
+            return Ok(true);
+        }
         let popup = window
             .add_child(
                 profile::webview(&label, WebviewUrl::App(page.into()))
@@ -4364,6 +4440,9 @@ pub(crate) struct SessionTab {
     account: Option<String>,
     #[serde(default)]
     title: Option<String>,
+    // Pinned tabs come back pinned.
+    #[serde(default)]
+    pinned: bool,
 }
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -4388,7 +4467,7 @@ fn read_session(state: &BrowserState) -> Vec<WindowSession> {
     // Saved before windows existed: one window's tabs -- or before accounts
     // existed: just the urls.
     let tabs = serde_json::from_str::<Vec<SessionTab>>(&text).or_else(|_| {
-        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None, title: None }).collect())
+        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None, title: None, pinned: false }).collect())
     });
     match tabs {
         Ok(tabs) if !tabs.is_empty() => vec![WindowSession { tabs, active: 0 }],
@@ -4536,6 +4615,7 @@ fn main() {
             browser_windows::close_window,
             browser_windows::get_windows,
             browser_windows::move_tab_to_new_window,
+            browser_windows::move_tabs_to_new_window,
             browser_windows::adopt_tab,
             browser_windows::send_tab_to_window,
             browser_windows::get_closed_windows,

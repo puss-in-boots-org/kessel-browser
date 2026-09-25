@@ -297,6 +297,41 @@ html, body { overflow: hidden; user-select: none; }
 .tab:hover .close-tab, .tab.active .close-tab { opacity: 0.7; }
 .tab .close-tab:hover { opacity: 1; background: var(--surface-hover); color: var(--danger); }
 
+/* Pinned: just the icon, at the front, no close button (and no title --
+   the tooltip has it). */
+.tab.pinned {
+  min-width: 0;
+  max-width: none;
+  flex-shrink: 0;
+  padding: 7px 10px;
+  gap: 4px;
+}
+.tab.pinned .tab-title { display: none; }
+.tab.pinned + .tab:not(.pinned),
+.tab.pinned + .tab-group { margin-left: 6px; }
+
+/* Picked with Ctrl/Shift+click: a right-click acts on all of them. */
+#tabs .tab.selected { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+#tabs .tab.selected:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.tab.selected .tab-title { color: var(--text); }
+
+/* Playing sound (click to mute), or muted (click to unmute). */
+.tab .tab-audio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tab .tab-audio:hover { background: var(--surface-hover); color: var(--text); }
+.tab .tab-audio.muted { color: var(--danger); opacity: 0.85; }
+.tab.pinned .tab-audio { width: 16px; height: 16px; }
+
 #new-tab-btn {
   background: transparent;
   border: none;
@@ -435,32 +470,6 @@ html.fullscreen #progress-bar { display: none !important; }
 #engine-btn:hover, #star-btn:hover, #share-btn:hover { background: var(--surface-hover); color: var(--text); }
 #star-btn.starred { color: var(--warning); }
 #star-btn.starred:hover { transform: scale(1.1); }
-
-.menu {
-  position: absolute;
-  top: 56px;
-  right: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 6px;
-  min-width: 170px;
-  z-index: 50;
-  animation: popIn var(--dur-fast) var(--ease);
-}
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 12.5px;
-  color: var(--text);
-}
-.menu-item:hover { background: var(--surface-hover); }
-.menu-item.selected { color: var(--accent); font-weight: 600; }
 
 /* --- Frameless window: drag space + window controls --- */
 #drag-space { flex: 1; min-width: 48px; align-self: stretch; }

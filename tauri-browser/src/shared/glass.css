@@ -212,6 +212,12 @@ html.glass .tab .tab-favicon {
 html.glass .tab .fav-img { width: 16px; height: 16px; border-radius: 4px; }
 html.glass .tab .close-tab { color: var(--lg-text-dim); }
 html.glass .tab .close-tab:hover { background: rgba(255, 255, 255, 0.18); color: var(--lg-text); }
+html.glass .tab.pinned { min-width: 0; max-width: none; padding: 0 9px; }
+html.glass #tabs .tab.selected:not(.active) { background: var(--lg-gloss), color-mix(in srgb, var(--accent) 26%, transparent); box-shadow: var(--lg-edge); }
+html.glass .tab.selected .tab-title { color: var(--lg-text); }
+html.glass .tab .tab-audio { color: var(--lg-text-dim); }
+html.glass .tab .tab-audio:hover { background: rgba(255, 255, 255, 0.18); color: var(--lg-text); }
+html.glass .tab .tab-audio.muted { color: #ff9b9b; }
 
 html.glass #new-tab-btn {
   width: 32px;
@@ -300,14 +306,7 @@ html.glass .bm-chip:hover { color: var(--lg-text); background: var(--lg-gloss), 
 html.glass .bm-chip .app-icon { width: 17px; height: 17px; }
 html.glass #bookmarks-bar .bm-empty { color: var(--lg-text-faint); text-shadow: var(--lg-legibility); }
 
-/* --- Menus / toasts --- */
-html.glass .menu {
-  border-radius: 16px;
-  background: var(--lg-gloss), var(--lg-menu-bg);
-  box-shadow: var(--lg-edge), var(--lg-shadow);
-}
-html.glass .menu-item { border-radius: 10px; color: var(--lg-text); }
-html.glass .menu-item:hover { background: rgba(255, 255, 255, 0.14); }
+/* --- Toasts --- */
 html.glass .toast {
   border-radius: 999px;
   color: var(--lg-text);

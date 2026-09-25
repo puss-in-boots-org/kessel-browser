@@ -122,19 +122,19 @@ branch, one small commit per feature or group of features.
 | 2.02 | Close tab | 🟢 | |
 | 2.03 | Duplicate tab | 🟢 | Tab right-click menu |
 | 2.04 | Reopen closed tab | 🟢 | |
-| 2.05 | Pin tab | ⏳ | |
-| 2.06 | Mute tab | ⏳ | |
-| 2.07 | Unmute tab | ⏳ | |
+| 2.05 | Pin tab | ✅ | Tab menu or a shortcut you give it: icon only, in front, no close button; comes back pinned after a restart |
+| 2.06 | Mute tab | ✅ | Ctrl+M, the tab menu, or a click on the tab's speaker |
+| 2.07 | Unmute tab | ✅ | Ctrl+M again, the tab menu, or the speaker; a sleeping muted tab wakes up muted |
 | 2.08 | Drag tabs to reorder | 🟢 | |
 | 2.09 | Drag tab into another window | ✅ | Drop a tab on another window's tab strip: the page moves along, no reload |
 | 2.10 | Drag tab out into a new window | ✅ | Drop a tab outside the strip: it moves into a new window where you let go (Pop out is in the tab menu) |
 | 2.11 | Move tab to another window | ✅ | Tab right-click: Move to new window / Move to window with ... |
-| 2.12 | Reload tab | ⏳ | |
-| 2.13 | Reload multiple tabs | ⏳ | |
-| 2.14 | Close other tabs | 🟢 | |
-| 2.15 | Close tabs to the left | ⏳ | |
-| 2.16 | Close tabs to the right | ⏳ | |
-| 2.17 | Close tabs except pinned tabs | ⏳ | |
+| 2.12 | Reload tab | ✅ | Tab menu -> Reload |
+| 2.13 | Reload multiple tabs | ✅ | Ctrl/Shift+click several tabs, then Reload N tabs; every tab action works on picked tabs |
+| 2.14 | Close other tabs | ✅ | Tab menu or a shortcut; pinned tabs stay |
+| 2.15 | Close tabs to the left | ✅ | Tab menu, or a shortcut you give it |
+| 2.16 | Close tabs to the right | ✅ | Tab menu, or a shortcut you give it |
+| 2.17 | Close tabs except pinned tabs | ✅ | Tab menu -> Close all but pinned tabs |
 | 2.18 | Bookmark all tabs | ✅ | Ctrl+Shift+D, and the menu |
 | 2.19 | Tab groups | 🟡 | Only per account so far |
 | 2.20 | Named tab groups | ⏳ | |
@@ -154,7 +154,7 @@ branch, one small commit per feature or group of features.
 | 2.34 | Tab previews | ⏳ | |
 | 2.35 | Tab thumbnails | ⏳ | |
 | 2.36 | Hover cards | ⏳ | |
-| 2.37 | Tab audio indicators | ⏳ | |
+| 2.37 | Tab audio indicators | ✅ | A speaker on tabs playing sound (crossed out when muted); click to mute or unmute; tabs playing sound never go to sleep |
 | 2.38 | Tab notification indicators | ⏳ | |
 | 2.39 | Sleeping tabs | 🟢 | Idle tabs are discarded (Settings -> Performance) |
 | 2.40 | Discarded tabs | 🟢 | |

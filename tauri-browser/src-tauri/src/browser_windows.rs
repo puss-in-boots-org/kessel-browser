@@ -139,6 +139,7 @@ fn session_from_snapshot(snapshot: &str) -> Option<WindowSession> {
             url: url.to_string(),
             account: tab.get("account").and_then(|a| a.as_str()).map(str::to_string),
             title: tab.get("title").and_then(|t| t.as_str()).map(str::to_string),
+            pinned: tab.get("pinned").and_then(|p| p.as_bool()).unwrap_or(false),
         });
     }
     (!tabs.is_empty()).then_some(WindowSession { tabs, active })
@@ -273,11 +274,11 @@ fn move_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32, target: &str)
     tab_info(state, id).ok_or_else(|| "tab not found".into())
 }
 
-// "Move tab to new window" / dragging a tab out of the strip: the tab keeps
-// its page and moves into a window of its own -- at (x, y) on screen when
-// it was dropped somewhere.
+// Dragging a tab out of the strip: the tab keeps its page and moves into a
+// window of its own -- at (x, y) on screen when it was dropped somewhere,
+// still `pinned` if it was.
 #[tauri::command]
-pub(crate) async fn move_tab_to_new_window(app: tauri::AppHandle, id: u32, x: Option<f64>, y: Option<f64>) -> Result<String, String> {
+pub(crate) async fn move_tab_to_new_window(app: tauri::AppHandle, id: u32, pinned: Option<bool>, x: Option<f64>, y: Option<f64>) -> Result<String, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
@@ -285,7 +286,33 @@ pub(crate) async fn move_tab_to_new_window(app: tauri::AppHandle, id: u32, x: Op
         let private = state.is_private(&from);
         let win = create_at(&app2, private, serde_json::Value::Null, x.zip(y))?;
         let info = move_tab(&app2, &state, id, &win)?;
-        state.win(&win, |w| w.init = Some(serde_json::json!({ "adopt": [info] })));
+        let pinned: Vec<u32> = if pinned.unwrap_or(false) { vec![id] } else { Vec::new() };
+        state.win(&win, |w| w.init = Some(serde_json::json!({ "adopt": [info], "pinned": pinned })));
+        Ok(win)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// Several picked tabs into one new window ("Move 3 tabs to new window"): the
+// live ones (`ids`) keep their pages, sleeping ones (`sleeping`, only the
+// toolbar knows them) come along asleep, and `pinned` ones stay pinned.
+#[tauri::command]
+pub(crate) async fn move_tabs_to_new_window(
+    app: tauri::AppHandle,
+    webview: Webview,
+    ids: Vec<u32>,
+    sleeping: Vec<SessionTab>,
+    pinned: Vec<u32>,
+) -> Result<String, String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let from = state.window_of(&webview).ok_or("that window is closed")?;
+        let win = create(&app2, state.is_private(&from), serde_json::Value::Null)?;
+        let adopt: Vec<serde_json::Value> = ids.iter().filter_map(|&id| move_tab(&app2, &state, id, &win).ok()).collect();
+        state.win(&win, |w| w.init = Some(serde_json::json!({ "adopt": adopt, "sleeping": sleeping, "pinned": pinned })));
         Ok(win)
     })
     .await
