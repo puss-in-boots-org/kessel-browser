@@ -23,6 +23,8 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 adblock = { version = "0.13.3", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 ureq = { version = "3.4.2", default-features = false, features = ["native-tls", "gzip"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+flate2 = "1.1"
+sha2 = "0.10"
 
 [[bin]]
 name = "kessel"

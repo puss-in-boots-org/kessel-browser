@@ -2,6 +2,7 @@ import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
 import { buildStyleSection } from "./appearance.js";
+import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -10,6 +11,8 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "search", label: "Search & Startup", icon: "search" },
   { id: "tabs", label: "Tabs", icon: "tabs" },
+  { id: "sidebar", label: "Side panel", icon: "sidebar" },
+  { id: "extensions", label: "Extensions", icon: "puzzle" },
   { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
   { id: "privacy", label: "Privacy & Security", icon: "shield" },
   { id: "performance", label: "Performance", icon: "bolt" },
@@ -1189,6 +1192,8 @@ async function buildPanel(id, settings) {
     case "appearance": return appearancePanel(settings);
     case "search": return searchPanel(settings);
     case "tabs": return await tabsPanel(settings);
+    case "sidebar": return await sidebarPanel(settings, { el, settingRow, switchHtml, wireSwitch });
+    case "extensions": return await extensionsPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "shortcuts": return await keyboardPanel(settings);
     case "privacy": return await privacyPanel(settings);
     case "performance": return performancePanel(settings);

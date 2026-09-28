@@ -119,4 +119,7 @@ pub fn webview(label: impl Into<String>, url: tauri::WebviewUrl) -> tauri::Webvi
     tauri::WebviewBuilder::new(label, url)
         .additional_browser_args(browser_args())
         .data_directory(get().local_dir.clone())
+        // Extensions run in every page (extensions.rs); WebView2 needs every
+        // webview sharing a data folder to agree on this.
+        .browser_extensions_enabled(true)
 }

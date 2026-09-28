@@ -442,7 +442,7 @@ pub struct Rewrite {
     pub stripped: bool,
 }
 
-fn is_local_host(host: &str) -> bool {
+pub(crate) fn is_local_host(host: &str) -> bool {
     host == "localhost"
         || host.ends_with(".localhost")
         || host.ends_with(".local")

@@ -501,23 +501,23 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 15.01 | Extension marketplace | ⏳ | |
-| 15.02 | Install extensions | ⏳ | |
-| 15.03 | Uninstall extensions | ⏳ | |
-| 15.04 | Enable/disable extensions | ⏳ | |
-| 15.05 | Extension permissions | ⏳ | |
-| 15.06 | Per-site extension permissions | ⏳ | |
-| 15.07 | Private-mode extension permissions | ⏳ | |
-| 15.08 | Extension updates | ⏳ | |
-| 15.09 | Automatic updates | ⏳ | |
-| 15.10 | Extension developer mode | ⏳ | |
-| 15.11 | Extension debugging | ⏳ | |
-| 15.12 | Extension packaging | ⏳ | |
-| 15.13 | Extension themes | ⏳ | |
-| 15.14 | Content blockers | ⏳ | |
-| 15.15 | Password-manager extensions | ⏳ | |
-| 15.16 | Productivity extensions | ⏳ | |
-| 15.17 | Developer extensions | ⏳ | |
+| 15.01 | Extension marketplace | ✅ | Chrome Web Store and Edge Add-ons: on an extension's page, "Add to Kessel" in the address bar; Settings -> Extensions links both stores |
+| 15.02 | Install extensions | ✅ | From a store (its .crx, over HTTPS; keeps its store id), from a .crx/.zip file, or unpacked from a folder. Run by WebView2 itself; Manifest V2 ones are refused (the engine no longer runs them) |
+| 15.03 | Uninstall extensions | ✅ | Settings -> Extensions -> Remove: its data goes with it |
+| 15.04 | Enable/disable extensions | ✅ | Settings -> Extensions, the side panel's Extensions page; takes effect at once, data kept |
+| 15.05 | Extension permissions | ✅ | What it may do, in words, before it's added and in Settings -> Extensions -> Details |
+| 15.06 | Per-site extension permissions | 🟡 | Every site / only sites you list / only when you open it: its scripts for pages obey at once (a guard in front of each); what it may fetch from sites follows after a restart. "When you open it" doesn't grant the page you're on, as Chrome's click does |
+| 15.07 | Private-mode extension permissions | ⏭️ | Private windows are the engine's private mode, where it doesn't run extensions and has no switch to let one in -- they stay out (Chrome's default) |
+| 15.08 | Extension updates | ✅ | Settings -> Extensions -> Update now; a new version keeps the extension's data. One that asks for more than before waits for you to look it over |
+| 15.09 | Automatic updates | ✅ | A little after starting, then every five hours (Settings -> Extensions can turn it off) |
+| 15.10 | Extension developer mode | ✅ | Developer mode: load unpacked (your folder, never changed), Reload after editing, id shown. Manifest changes finish on the next start (the engine reads manifests then) |
+| 15.11 | Extension debugging | 🟡 | Its options and popup pages open in a tab, where F12 DevTools works; why the engine won't run one is shown in Settings. Service workers can't be inspected (WebView2 has no chrome://inspect) |
+| 15.12 | Extension packaging | ✅ | Pack for a store: a .zip the Chrome Web Store and Edge Add-ons take (without the key Kessel adds) |
+| 15.13 | Extension themes | 🟡 | A Chrome theme's colours go onto the style you use (frame, toolbar, text, address bar, accent); its background pictures aren't used |
+| 15.14 | Content blockers | 🟡 | Shields is built in; Manifest V3 blockers (uBlock Origin Lite...) install from the store like any extension -- not tried with a real one yet |
+| 15.15 | Password-manager extensions | 🟡 | Install and run like any MV3 extension (their popups from the puzzle button, content scripts fill forms) -- not tried with a real one yet; the built-in vault is Passwords |
+| 15.16 | Productivity extensions | 🟡 | Install and run like any MV3 extension -- not tried with real ones yet. The engine has no chrome.tabs model of Kessel's tabs, so ones that manage tabs can't |
+| 15.17 | Developer extensions | 🟡 | Install and run like any MV3 extension; DevTools extensions (devtools_page) don't, as WebView2's DevTools has no panels for them |
 
 ### 16. Built-in content blocking
 
@@ -545,8 +545,8 @@ branch, one small commit per feature or group of features.
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 17.01 | Reader mode | ⏳ | |
-| 17.02 | Reading list | ⏳ | |
-| 17.03 | Save page for later | ⏳ | |
+| 17.02 | Reading list | ✅ | Side panel -> Reading list: unread/read, add the page you're on, or right-click a link: Add link to reading list |
+| 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
 | 17.04 | Offline pages | ⏳ | |
 | 17.05 | Reading progress | ⏳ | |
 | 17.06 | Page translation | ⏳ | |
@@ -562,7 +562,7 @@ branch, one small commit per feature or group of features.
 | 17.16 | Copy selected text | ⏳ | |
 | 17.17 | Highlight text | ⏳ | |
 | 17.18 | Page annotations | ⏳ | |
-| 17.19 | Web clipping | ⏳ | |
+| 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
 | 17.21 | Save as PDF | ⏳ | |
 | 17.22 | Webpage screenshot | ⏳ | |
@@ -733,29 +733,29 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 27.01 | Workspace creation | ⏳ | |
-| 27.02 | Workspace switching | ⏳ | |
-| 27.03 | Workspace tabs | ⏳ | |
-| 27.04 | Workspace-specific themes | ⏳ | |
-| 27.05 | Workspace-specific tab groups | ⏳ | |
-| 27.06 | Workspace persistence | ⏳ | |
-| 27.07 | Workspace sync | ⏳ | |
+| 27.01 | Workspace creation | ✅ | The side panel's Workspaces page, or Settings -> Side panel: a name, an icon and a colour |
+| 27.02 | Workspace switching | ✅ | The workspace buttons at the top of the rail (right-click for more), or the side panel |
+| 27.03 | Workspace tabs | ✅ | Each window shows one workspace's tabs; the others' tabs sleep (no memory) until you come back. The tab menu moves tabs between them |
+| 27.04 | Workspace-specific themes | 🟡 | A workspace's colour is its window's accent while you're in it |
+| 27.05 | Workspace-specific tab groups | ✅ | Tab groups go with their workspace's tabs |
+| 27.06 | Workspace persistence | ✅ | Every window's workspaces and their tabs come back with the session (Keep tabs when Kessel closes) |
+| 27.07 | Workspace sync | ⏭️ | Needs a sync server Kessel doesn't have |
 
 ### 28. Sidebar
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 28.01 | Bookmarks | ⏳ | |
-| 28.02 | History | ⏳ | |
+| 28.01 | Bookmarks | ✅ | Side panel -> Bookmarks: search, open (Ctrl/middle click: new tab), add the page you're on, remove |
+| 28.02 | History | ✅ | Side panel -> History: by day, search, open, remove, more as you scroll |
 | 28.03 | Downloads | 🟢 | |
-| 28.04 | Reading list | ⏳ | |
-| 28.05 | Notes | ⏳ | |
-| 28.06 | AI assistant | ⏳ | |
+| 28.04 | Reading list | ✅ | Side panel -> Reading list |
+| 28.05 | Notes | ✅ | Side panel -> Notes: write, pin, link to the page you're on, search; saved as you type |
+| 28.06 | AI assistant | ✅ | ChatGPT, Claude, Gemini, Copilot, Perplexity, Le Chat or your own (Settings -> Side panel) in the side panel; right-click "Ask AI about this" asks it |
 | 28.07 | Messaging services | 🟢 | Any pinned site opens in the side panel |
 | 28.08 | Web apps | 🟢 | Pinned sites |
-| 28.09 | Extensions | ⏳ | |
-| 28.10 | Search | ⏳ | |
-| 28.11 | Workspaces | ⏳ | |
+| 28.09 | Extensions | ✅ | Side panel -> Extensions; an extension's side panel page (or popup) opens in the side panel |
+| 28.10 | Search | ✅ | Side panel -> Search: open tabs, bookmarks, reading list, notes and history at once; Enter searches the web in the side panel |
+| 28.11 | Workspaces | ✅ | Side panel -> Workspaces, and their buttons at the top of the rail |
 
 ### 29. Developer tools
 
@@ -1087,14 +1087,14 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 48.01 | AI page summarization | ⏳ | |
-| 48.02 | AI webpage explanation | ⏳ | |
-| 48.03 | Ask about selected text | ⏳ | |
+| 48.01 | AI page summarization | 🟡 | Right-click a page: Ask AI about this page -- your assistant (side panel) is asked to summarize it |
+| 48.02 | AI webpage explanation | 🟡 | The same, then ask it anything about the page |
+| 48.03 | Ask about selected text | ✅ | Pick text, right-click: Ask AI about this -- the text goes to your assistant |
 | 48.04 | AI search | ⏳ | |
 | 48.05 | AI tab organization | ⏳ | |
 | 48.06 | AI tab grouping | ⏳ | |
 | 48.07 | AI history search | ⏳ | |
-| 48.08 | AI browsing assistant | ⏳ | |
+| 48.08 | AI browsing assistant | ✅ | Your AI assistant in the side panel, beside the page |
 | 48.09 | AI writing assistant | ⏳ | |
 | 48.10 | AI rewriting | ⏳ | |
 | 48.11 | AI translation | ⏳ | |

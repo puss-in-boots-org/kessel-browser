@@ -95,7 +95,10 @@ mod win32 {
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
     use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
-    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetCursorPos, GetSystemMetrics, GetWindowRect, IsIconic, IsWindowVisible, SM_SWAPBUTTON};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetCursorPos, GetShellWindow, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, SM_SWAPBUTTON, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+        WS_EX_TRANSPARENT,
+    };
 
     pub fn cursor() -> (i32, i32) {
         let mut p = POINT::default();
@@ -114,19 +117,34 @@ mod win32 {
         }
     }
 
-    // The topmost visible window at (x, y), not counting `skip` (the one
-    // being dragged, which is right under the pointer).
+    // The topmost window at (x, y) you could drop something onto, not
+    // counting `skip` (the one being dragged, which is right under the
+    // pointer) or what only floats over windows: click-through overlays,
+    // tool windows, and the shell's flyouts -- Windows 11's snap bar opens
+    // right where a maximized window's tab strip is.
     pub fn top_window_at(x: i32, y: i32, skip: isize) -> Option<isize> {
         struct Search {
             x: i32,
             y: i32,
             skip: isize,
+            shell: u32,
             found: Option<isize>,
         }
         unsafe extern "system" fn each(hwnd: HWND, lparam: LPARAM) -> BOOL {
             let search = unsafe { &mut *(lparam.0 as *mut Search) };
             if hwnd.0 as isize == search.skip || unsafe { !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() } {
                 return true.into();
+            }
+            let ex = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+            if ex & (WS_EX_TRANSPARENT.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0) != 0 {
+                return true.into();
+            }
+            if ex & WS_EX_TOPMOST.0 != 0 && search.shell != 0 {
+                let mut pid = 0u32;
+                unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+                if pid == search.shell {
+                    return true.into();
+                }
             }
             let mut cloaked = 0u32;
             let _ = unsafe { DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut cloaked as *mut u32 as _, 4) };
@@ -143,7 +161,9 @@ mod win32 {
             }
             true.into()
         }
-        let mut search = Search { x, y, skip, found: None };
+        let mut shell = 0u32;
+        unsafe { GetWindowThreadProcessId(GetShellWindow(), Some(&mut shell)) };
+        let mut search = Search { x, y, skip, shell, found: None };
         unsafe {
             let _ = EnumWindows(Some(each), LPARAM(&mut search as *mut Search as isize));
         }
@@ -366,41 +386,41 @@ mod foreign {
     use super::*;
     use windows::core::BSTR;
     use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, WPARAM};
-    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED};
     use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
     use windows::Win32::System::Variant::VARIANT;
     use windows::Win32::UI::Accessibility::*;
     use windows::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId, PostMessageW, EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZESTART, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_CLOSE};
 
-    // Executable -> the name Kessel says it came from, and whether it's
-    // Firefox-like (its address box and tabs are found differently).
-    const BROWSERS: &[(&str, &str, bool)] = &[
-        ("chrome.exe", "Chrome", false),
-        ("msedge.exe", "Edge", false),
-        ("brave.exe", "Brave", false),
-        ("opera.exe", "Opera", false),
-        ("vivaldi.exe", "Vivaldi", false),
-        ("chromium.exe", "Chromium", false),
-        ("yandex.exe", "Yandex", false),
-        ("thorium.exe", "Thorium", false),
-        ("firefox.exe", "Firefox", true),
-        ("zen.exe", "Zen", true),
-        ("librewolf.exe", "LibreWolf", true),
-        ("floorp.exe", "Floorp", true),
-        ("waterfox.exe", "Waterfox", true),
+    // Executable -> the name Kessel says it came from.
+    const BROWSERS: &[(&str, &str)] = &[
+        ("chrome.exe", "Chrome"),
+        ("msedge.exe", "Edge"),
+        ("brave.exe", "Brave"),
+        ("opera.exe", "Opera"),
+        ("vivaldi.exe", "Vivaldi"),
+        ("chromium.exe", "Chromium"),
+        ("yandex.exe", "Yandex"),
+        ("thorium.exe", "Thorium"),
+        ("firefox.exe", "Firefox"),
+        ("zen.exe", "Zen"),
+        ("librewolf.exe", "LibreWolf"),
+        ("floorp.exe", "Floorp"),
+        ("waterfox.exe", "Waterfox"),
     ];
 
-    // Held over a strip at least this long before letting go counts: a
-    // window just passing over Kessel on its way somewhere stays put.
-    const DWELL: Duration = Duration::from_millis(350);
+    // Over a strip this long before letting go counts: long enough for the
+    // gap where the tabs will land to have opened, too short to wait for.
+    const DWELL: Duration = Duration::from_millis(150);
 
     static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 
     struct Drag {
         hwnd: isize,
         name: &'static str,
-        firefox: bool,
         stop: Arc<AtomicBool>,
+        // Let go over a strip: its tabs are on their way (the gap stays).
+        dropped: Arc<AtomicBool>,
         // The strip it's over and where, once it has been there for DWELL.
         over: Arc<Mutex<Option<(String, serde_json::Value)>>>,
     }
@@ -414,7 +434,7 @@ mod foreign {
         }
     }
 
-    fn browser_of(hwnd: HWND) -> Option<(&'static str, bool)> {
+    pub(super) fn browser_of(hwnd: HWND) -> Option<&'static str> {
         unsafe {
             let mut pid = 0u32;
             GetWindowThreadProcessId(hwnd, Some(&mut pid));
@@ -431,7 +451,7 @@ mod foreign {
             }
             let path = String::from_utf16_lossy(&buf[..len as usize]).to_lowercase();
             let exe = path.rsplit('\\').next()?.to_string();
-            BROWSERS.iter().find(|(e, _, _)| *e == exe).map(|(_, name, ff)| (*name, *ff))
+            BROWSERS.iter().find(|(e, _)| *e == exe).map(|(_, name)| *name)
         }
     }
 
@@ -444,48 +464,41 @@ mod foreign {
             if !app.state::<BrowserState>().store.settings.lock().unwrap().pull_other_browsers {
                 return;
             }
-            let Some((name, firefox)) = browser_of(hwnd) else { return };
+            let Some(name) = browser_of(hwnd) else { return };
             let targets = drop_targets(app, "", false);
             if targets.is_empty() {
                 return;
             }
-            let stop = Arc::new(AtomicBool::new(false));
+            let (stop, dropped) = (Arc::new(AtomicBool::new(false)), Arc::new(AtomicBool::new(false)));
             let over = Arc::new(Mutex::new(None));
-            let drag = Drag { hwnd: hwnd.0 as isize, name, firefox, stop: stop.clone(), over: over.clone() };
+            let drag = Drag { hwnd: hwnd.0 as isize, name, stop: stop.clone(), dropped: dropped.clone(), over: over.clone() };
             if let Some(old) = DRAG.lock().unwrap().replace(drag) {
                 old.stop.store(true, Ordering::SeqCst);
             }
             let (app, handle) = (app.clone(), hwnd.0 as isize);
-            std::thread::spawn(move || follow(app, handle, name, targets, stop, over));
+            std::thread::spawn(move || follow(app, handle, name, targets, stop, dropped, over));
         } else if event == EVENT_SYSTEM_MOVESIZEEND {
             let Some(drag) = DRAG.lock().unwrap().take() else { return };
+            let over = if drag.hwnd == hwnd.0 as isize { drag.over.lock().unwrap().clone() } else { None };
+            drag.dropped.store(over.is_some(), Ordering::SeqCst);
             drag.stop.store(true, Ordering::SeqCst);
-            if drag.hwnd != hwnd.0 as isize {
-                return;
-            }
-            let Some((label, at)) = drag.over.lock().unwrap().take() else { return };
-            emit_to_window(app, &label, "foreign-drag-leave", ());
-            let app = app.clone();
-            let (handle, name, firefox) = (drag.hwnd, drag.name, drag.firefox);
-            std::thread::spawn(move || {
-                let urls = unsafe { read_tabs(HWND(handle as _), firefox) };
-                let count = urls.len();
-                emit_to_window(&app, &label, "foreign-tabs", serde_json::json!({ "urls": urls, "browser": name, "x": at["x"], "y": at["y"] }));
-                if count > 0 {
-                    unsafe {
-                        let _ = PostMessageW(Some(HWND(handle as _)), WM_CLOSE, WPARAM(0), LPARAM(0));
-                    }
-                }
-            });
+            let Some((label, at)) = over else { return };
+            let mut reading = at.clone();
+            reading["browser"] = drag.name.into();
+            reading["reading"] = true.into();
+            emit_to_window(app, &label, "foreign-drag-over", reading);
+            let (app, handle, name) = (app.clone(), drag.hwnd, drag.name);
+            std::thread::spawn(move || bring_in(app, handle, name, label, at));
         }
     }
 
     // While the other browser's window moves: which Kessel strip it's over.
-    fn follow(app: tauri::AppHandle, hwnd: isize, name: &'static str, targets: Vec<Target>, stop: Arc<AtomicBool>, over: Arc<Mutex<Option<(String, serde_json::Value)>>>) {
+    fn follow(app: tauri::AppHandle, hwnd: isize, name: &'static str, targets: Vec<Target>, stop: Arc<AtomicBool>, dropped: Arc<AtomicBool>, over: Arc<Mutex<Option<(String, serde_json::Value)>>>) {
         let mut current: Option<(usize, Instant)> = None;
         let mut last = (i32::MIN, i32::MIN);
+        let mut shown: Option<(usize, i32, i32, bool)> = None;
         while !stop.load(Ordering::SeqCst) {
-            std::thread::sleep(Duration::from_millis(12));
+            std::thread::sleep(Duration::from_millis(10));
             let (x, y) = win32::cursor();
             if (x, y) == last && current.is_none() {
                 continue;
@@ -498,42 +511,146 @@ mod foreign {
                     let ready = since.elapsed() >= DWELL;
                     let local = targets[i].local(x, y);
                     *over.lock().unwrap() = ready.then(|| (targets[i].label.clone(), local.clone()));
-                    let mut payload = local;
-                    payload["browser"] = name.into();
-                    payload["ready"] = ready.into();
-                    emit_to_window(&app, &targets[i].label, "foreign-drag-over", payload);
+                    // Only what changed: the strip hears about a move, or
+                    // about being ready to take the tabs.
+                    if shown != Some((i, x, y, ready)) && !stop.load(Ordering::SeqCst) {
+                        shown = Some((i, x, y, ready));
+                        let mut payload = local;
+                        payload["browser"] = name.into();
+                        payload["ready"] = ready.into();
+                        emit_to_window(&app, &targets[i].label, "foreign-drag-over", payload);
+                    }
                 }
                 (hit, _) => {
                     if let Some((j, _)) = current {
                         emit_to_window(&app, &targets[j].label, "foreign-drag-leave", ());
                     }
                     *over.lock().unwrap() = None;
+                    shown = None;
                     current = hit.map(|i| (i, Instant::now()));
                 }
             }
         }
         if let Some((j, _)) = current {
-            if over.lock().unwrap().is_none() {
+            if !dropped.load(Ordering::SeqCst) {
                 emit_to_window(&app, &targets[j].label, "foreign-drag-leave", ());
             }
         }
     }
 
-    // An address box's text as a web address (Chromium leaves off https://),
-    // or None for a browser's own pages and anything that isn't one.
-    fn web_address(value: &str) -> Option<String> {
-        let v = value.trim();
+    // Browser window `hwnd`, let go over Kessel window `label`'s strip at
+    // `at`: its tabs open there, and it closes -- unless a tab couldn't be
+    // read, then it stays as it was (nothing is lost; at worst doubled).
+    fn bring_in(app: tauri::AppHandle, hwnd: isize, name: &'static str, label: String, at: serde_json::Value) {
+        let read = unsafe { read_tabs(HWND(hwnd as _)) };
+        let urls: Vec<String> = {
+            let state = app.state::<BrowserState>();
+            let shields = app.state::<shields::Shields>();
+            let https = state.store.settings.lock().unwrap().shields_https_upgrade;
+            let failed = shields.https_failed.lock().unwrap().clone();
+            let upgrades = |host: &str| https && !failed.contains(host) && shields_up_for(&state, host);
+            read.pages.iter().filter_map(|p| p.url(&upgrades)).collect()
+        };
+        let close = read.complete && !urls.is_empty();
+        emit_to_window(&app, &label, "foreign-tabs", serde_json::json!({ "urls": urls, "browser": name, "x": at["x"], "y": at["y"], "missed": read.missed, "kept": !close }));
+        if close {
+            unsafe {
+                let _ = PostMessageW(Some(HWND(hwnd as _)), WM_CLOSE, WPARAM(0), LPARAM(0));
+            }
+        }
+    }
+
+    // One tab's address as read: the page's own, whole one, or what the
+    // address box shows (Chromium's leaves off https:// and www., Firefox's
+    // https://).
+    #[derive(Debug, PartialEq)]
+    pub(super) enum Page {
+        Whole(String),
+        Shown(String),
+    }
+
+    impl Page {
+        fn url(&self, upgrades: &dyn Fn(&str) -> bool) -> Option<String> {
+            match self {
+                Page::Whole(url) => Some(url.clone()),
+                Page::Shown(text) => web_address(text, upgrades),
+            }
+        }
+    }
+
+    fn has_web_scheme(text: &str) -> bool {
+        let lower = text.trim_start().to_ascii_lowercase();
+        lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("file:///")
+    }
+
+    // A web address from what an address box shows: as it is with its
+    // http(s)://, otherwise with the scheme a browser would put in front --
+    // http:// for local hosts and where Shields upgrades pages (`upgrades`)
+    // to https://, falling back to http:// for sites without it; https://
+    // anywhere else. None for a browser's own pages and for text that isn't
+    // an address.
+    pub(super) fn web_address(shown: &str, upgrades: &dyn Fn(&str) -> bool) -> Option<String> {
+        let v = shown.trim();
         if v.is_empty() || v.contains(char::is_whitespace) {
             return None;
         }
-        let lower = v.to_lowercase();
-        if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("file:///") {
+        if has_web_scheme(v) {
             return Some(v.to_string());
         }
-        if lower.contains("://") || lower.starts_with("about:") || lower.starts_with("chrome:") || lower.starts_with("edge:") {
+        let lower = v.to_ascii_lowercase();
+        let host_port = lower.split(['/', '?', '#']).next().unwrap_or("");
+        let host = if host_port.starts_with('[') {
+            host_port.split_inclusive(']').next().unwrap_or("")
+        } else {
+            match host_port.split_once(':') {
+                None => host_port,
+                Some((host, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => host,
+                // chrome://settings, about:blank, opera:...
+                Some(_) => return None,
+            }
+        };
+        if host.is_empty() || !(host.contains('.') || host == "localhost" || host.starts_with('[')) {
             return None;
         }
-        v.split('/').next().filter(|host| host.contains('.') || host.starts_with("localhost")).map(|_| format!("https://{}", v))
+        let scheme = if shields::is_local_host(host) || upgrades(host) { "http" } else { "https" };
+        Some(format!("{scheme}://{v}"))
+    }
+
+    // Address box text `shown` is page address `whole` with what address
+    // boxes leave off left off (the scheme, www., a last /) and escapes
+    // shown as the characters they stand for.
+    pub(super) fn same_page(shown: &str, whole: &str) -> bool {
+        fn strip<'a>(s: &'a str, prefix: &str) -> &'a str {
+            match s.get(..prefix.len()) {
+                Some(head) if head.eq_ignore_ascii_case(prefix) => &s[prefix.len()..],
+                _ => s,
+            }
+        }
+        fn bare(s: &str) -> String {
+            let s = s.trim();
+            let s = strip(strip(s, "https://"), "http://");
+            unescape(strip(s, "www.").trim_end_matches('/')).to_lowercase()
+        }
+        !whole.trim().is_empty() && bare(shown) == bare(whole)
+    }
+
+    fn unescape(s: &str) -> String {
+        let bytes = s.as_bytes();
+        let hex = |b: u8| (b as char).to_digit(16);
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                if let (Some(high), Some(low)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                    out.push((high * 16 + low) as u8);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
     }
 
     unsafe fn text_of(element: &IUIAutomationElement) -> String {
@@ -542,11 +659,6 @@ mod foreign {
             .and_then(|p| p.CurrentValue())
             .map(|b: BSTR| b.to_string())
             .unwrap_or_default()
-    }
-
-    unsafe fn find(uia: &IUIAutomation, root: &IUIAutomationElement, property: UIA_PROPERTY_ID, value: VARIANT) -> Option<IUIAutomationElement> {
-        let condition = uia.CreatePropertyCondition(property, &value).ok()?;
-        root.FindFirst(TreeScope_Descendants, &condition).ok()
     }
 
     unsafe fn select(tab: &IUIAutomationElement) {
@@ -572,60 +684,341 @@ mod foreign {
             .unwrap_or(false)
     }
 
-    // The web addresses of every tab in browser window `hwnd`, in order.
-    // One tab: its address box. Several: each is picked in turn and the box
-    // read (the window is closed afterwards anyway).
-    pub unsafe fn read_tabs(hwnd: HWND, firefox: bool) -> Vec<String> {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let Ok(uia) = CoCreateInstance::<_, IUIAutomation>(&CUIAutomation, None, CLSCTX_INPROC_SERVER) else { return Vec::new() };
-        let Ok(root) = uia.ElementFromHandle(hwnd) else { return Vec::new() };
-        let address = if firefox {
-            find(&uia, &root, UIA_AutomationIdPropertyId, VARIANT::from("urlbar-input"))
-        } else {
-            find(&uia, &root, UIA_ClassNamePropertyId, VARIANT::from("OmniboxViewViews"))
-        }
-        .or_else(|| find(&uia, &root, UIA_ControlTypePropertyId, VARIANT::from(UIA_EditControlTypeId.0)));
-        let Some(address) = address else { return Vec::new() };
+    // What a browser window's own interface (not the pages in it) has,
+    // walked in on-screen order through the raw tree: Edge marks its tabs as
+    // not being "controls", which hides them from the usual searches.
+    #[derive(Default)]
+    struct Survey {
+        // The address box: Chromium's omnibox, Opera's address field,
+        // Firefox's urlbar.
+        address: Option<IUIAutomationElement>,
+        // The other text boxes, for a browser whose address box isn't known.
+        edits: Vec<IUIAutomationElement>,
+        tabs: Vec<IUIAutomationElement>,
+        // A tab group folded away: its tabs aren't there to be read.
+        folded: bool,
+    }
 
-        // The tabs: inside the tab strip when it can be found (much faster
-        // than searching the whole window, pages included).
-        let strip = if firefox {
-            find(&uia, &root, UIA_AutomationIdPropertyId, VARIANT::from("tabbrowser-tabs"))
-        } else {
-            find(&uia, &root, UIA_ClassNamePropertyId, VARIANT::from("TabStripRegionView")).or_else(|| find(&uia, &root, UIA_ClassNamePropertyId, VARIANT::from("TabStrip")))
+    // One element met walking a window's tree.
+    struct Met<'a> {
+        element: &'a IUIAutomationElement,
+        parent: &'a IUIAutomationElement,
+        kind: UIA_CONTROLTYPE_ID,
+        class: String,
+        id: String,
+        depth: u32,
+    }
+
+    impl Met<'_> {
+        // A web page (Firefox's own interface is a document too, but right
+        // at the top).
+        fn is_page(&self) -> bool {
+            self.kind == UIA_DocumentControlTypeId && self.depth >= 3
         }
-        .unwrap_or_else(|| root.clone());
-        let mut tabs = Vec::new();
-        if let Ok(condition) = uia.CreatePropertyCondition(UIA_ControlTypePropertyId, &VARIANT::from(UIA_TabItemControlTypeId.0)) {
-            if let Ok(all) = strip.FindAll(TreeScope_Descendants, &condition) {
-                for i in 0..all.Length().unwrap_or(0).min(60) {
-                    if let Ok(tab) = all.GetElement(i) {
-                        tabs.push(tab);
-                    }
+    }
+
+    // Walks window `root`'s raw tree depth first, in on-screen order; `visit`
+    // says whether to go into what it's shown. `cache` brings each element's
+    // control type, class name and automation id along with it.
+    unsafe fn walk(uia: &IUIAutomation, root: &IUIAutomationElement, cache: &IUIAutomationCacheRequest, mut visit: impl FnMut(&Met) -> bool) {
+        let Ok(everything) = uia.CreateTrueCondition() else { return };
+        let started = Instant::now();
+        let mut seen = 0usize;
+        let mut stack = vec![(root.clone(), 0u32)];
+        while let Some((element, depth)) = stack.pop() {
+            if seen > 6000 || started.elapsed() > Duration::from_secs(3) {
+                return;
+            }
+            let Ok(kids) = element.FindAllBuildCache(TreeScope_Children, &everything, cache) else { continue };
+            let mut next = Vec::new();
+            for i in 0..kids.Length().unwrap_or(0) {
+                let Ok(kid) = kids.GetElement(i) else { continue };
+                seen += 1;
+                let met = Met {
+                    element: &kid,
+                    parent: &element,
+                    kind: kid.CachedControlType().unwrap_or_default(),
+                    class: kid.CachedClassName().map(|b| b.to_string()).unwrap_or_default(),
+                    id: kid.CachedAutomationId().map(|b| b.to_string()).unwrap_or_default(),
+                    depth: depth + 1,
+                };
+                if visit(&met) {
+                    next.push((kid, depth + 1));
                 }
             }
+            stack.extend(next.into_iter().rev());
         }
-        let mut urls = Vec::new();
-        if tabs.len() <= 1 {
-            urls.extend(web_address(&text_of(&address)));
-            return urls;
+    }
+
+    unsafe fn survey(uia: &IUIAutomation, root: &IUIAutomationElement, cache: &IUIAutomationCacheRequest) -> Survey {
+        let mut found = Survey::default();
+        walk(uia, root, cache, |met| {
+            if met.kind == UIA_TabItemControlTypeId {
+                found.tabs.push(met.element.clone());
+                return false;
+            }
+            if met.is_page() {
+                return false;
+            }
+            if met.class.contains("TabGroupHeader") {
+                let folded = met
+                    .element
+                    .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(UIA_ExpandCollapsePatternId)
+                    .and_then(|p| p.CurrentExpandCollapseState())
+                    .is_ok_and(|s| s == ExpandCollapseState_Collapsed);
+                found.folded |= folded;
+            }
+            if met.kind == UIA_EditControlTypeId {
+                let known = matches!(met.class.as_str(), "OmniboxViewViews" | "AddressTextfieldView") || met.id == "urlbar-input";
+                if known && found.address.is_none() {
+                    found.address = Some(met.element.clone());
+                } else {
+                    found.edits.push(met.element.clone());
+                }
+            }
+            true
+        });
+        found
+    }
+
+    // The addresses of browser window `hwnd`'s tabs, in order. Each tab is
+    // picked in turn (the window closes afterwards) and its address read:
+    // the address box, and where that leaves off https:// or www., the page's
+    // own address when the browser reports it in time.
+    pub(super) struct Read {
+        pub pages: Vec<Page>,
+        // Tabs that couldn't be read.
+        pub missed: usize,
+        // Every tab was read: the window can go.
+        pub complete: bool,
+    }
+
+    pub(super) unsafe fn read_tabs(hwnd: HWND) -> Read {
+        let mut read = Read { pages: Vec::new(), missed: 0, complete: false };
+        let com = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
+        let _ = read_into(hwnd, &mut read);
+        if com {
+            CoUninitialize();
         }
-        for tab in &tabs {
+        read
+    }
+
+    unsafe fn read_into(hwnd: HWND, read: &mut Read) -> Option<()> {
+        let uia: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok()?;
+        let root = uia.ElementFromHandle(hwnd).ok()?;
+        let cache = uia.CreateCacheRequest().ok()?;
+        cache.SetTreeFilter(&uia.RawViewCondition().ok()?).ok()?;
+        for property in [UIA_ControlTypePropertyId, UIA_ClassNamePropertyId, UIA_AutomationIdPropertyId] {
+            cache.AddProperty(property).ok()?;
+        }
+        let found = survey(&uia, &root, &cache);
+        let address = found
+            .address
+            .clone()
+            .or_else(|| found.edits.iter().find(|e| web_address(&text_of(e), &|_| false).is_some()).or(found.edits.first()).cloned())?;
+        let documents = uia.CreatePropertyCondition(UIA_ControlTypePropertyId, &VARIANT::from(UIA_DocumentControlTypeId.0)).ok()?;
+        let mut pages = Pages { uia: &uia, root: &root, address: &address, documents: &documents, cache: &cache, holders: Vec::new(), started: Instant::now(), asked: false, answered: false, last_page: None };
+
+        if found.tabs.is_empty() {
+            // No tabs to be found: the page it shows, and the window stays.
+            if let Ok(Some(page)) = pages.current() {
+                read.pages.push(page);
+            }
+            read.missed = 1;
+            return Some(());
+        }
+        let was_selected = found.tabs.iter().position(|t| is_selected(t));
+        for tab in &found.tabs {
             if !is_selected(tab) {
-                let before = text_of(&address);
                 select(tab);
                 let started = Instant::now();
-                while text_of(&address) == before && started.elapsed() < Duration::from_millis(400) {
-                    std::thread::sleep(Duration::from_millis(15));
+                while !is_selected(tab) && started.elapsed() < Duration::from_millis(800) {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                if !is_selected(tab) {
+                    read.missed += 1;
+                    continue;
                 }
             }
-            if let Some(url) = web_address(&text_of(&address)) {
-                if !urls.contains(&url) {
-                    urls.push(url);
-                }
+            match pages.current() {
+                Ok(Some(page)) => read.pages.push(page),
+                Ok(None) => {}
+                Err(()) => read.missed += 1,
             }
         }
-        urls
+        read.complete = read.missed == 0 && !found.folded;
+        if !read.complete {
+            if let Some(i) = was_selected {
+                select(&found.tabs[i]);
+            }
+        }
+        Some(())
+    }
+
+    // Reads the page a browser window shows right now.
+    struct Pages<'a> {
+        uia: &'a IUIAutomation,
+        root: &'a IUIAutomationElement,
+        address: &'a IUIAutomationElement,
+        documents: &'a IUIAutomationCondition,
+        cache: &'a IUIAutomationCacheRequest,
+        // What the pages were found in last time (a browser can have other
+        // pages than the tab's, hidden ones of its own included).
+        holders: Vec<IUIAutomationElement>,
+        started: Instant,
+        // Its pages' own addresses were asked for, and did come.
+        asked: bool,
+        answered: bool,
+        // The last page's own address, to tell a page that's gone from one
+        // that has come.
+        last_page: Option<String>,
+    }
+
+    impl Pages<'_> {
+        // The web pages the window has in it right now: looked for where
+        // they were last time, else all through its interface.
+        unsafe fn pages(&mut self) -> Vec<IUIAutomationElement> {
+            let mut found = Vec::new();
+            for holder in &self.holders {
+                if let Ok(docs) = holder.FindAllBuildCache(TreeScope_Children, self.documents, self.cache) {
+                    found.extend((0..docs.Length().unwrap_or(0)).filter_map(|i| docs.GetElement(i).ok()));
+                }
+            }
+            if !found.is_empty() {
+                return found;
+            }
+            let mut holders = Vec::new();
+            walk(self.uia, self.root, self.cache, |met| {
+                if met.is_page() {
+                    found.push(met.element.clone());
+                    holders.push(met.parent.clone());
+                    return false;
+                }
+                met.kind != UIA_TabItemControlTypeId
+            });
+            self.holders = holders;
+            found
+        }
+
+        // Ok(None) for a browser's own page (a new tab page, settings...),
+        // Err when there's no telling what the page is.
+        unsafe fn current(&mut self) -> Result<Option<Page>, ()> {
+            let shown = text_of(self.address).trim().to_string();
+            if shown.is_empty() {
+                return Ok(None);
+            }
+            if has_web_scheme(&shown) {
+                return Ok(Some(Page::Whole(shown)));
+            }
+            let address = web_address(&shown, &|_| false).is_some();
+            if !address && !shown.contains(char::is_whitespace) && shown.contains(':') {
+                return Ok(None);
+            }
+            // The first time, the browser turns on its pages' accessibility
+            // for us, which takes a moment; later only a short wait -- and
+            // none once it has shown it won't say (or it's taking too long).
+            let wait = if !self.asked {
+                Duration::from_millis(700)
+            } else if self.answered && self.started.elapsed() < Duration::from_secs(6) {
+                Duration::from_millis(250)
+            } else {
+                Duration::ZERO
+            };
+            self.asked = true;
+            let started = Instant::now();
+            let mut tries = 0;
+            loop {
+                // Where the pages were isn't where this one is (another tab's
+                // page may sit elsewhere): the next try looks everywhere.
+                if tries > 0 {
+                    self.holders.clear();
+                }
+                tries += 1;
+                let own: Vec<String> = self.pages().iter().map(|doc| text_of(doc)).filter(|own| has_web_scheme(own)).collect();
+                self.answered |= !own.is_empty();
+                let hit = if address {
+                    own.into_iter().find(|own| same_page(&shown, own))
+                } else if own.len() == 1 && self.last_page.as_ref() != own.first() {
+                    own.into_iter().next()
+                } else {
+                    None
+                };
+                if let Some(own) = hit {
+                    self.last_page = Some(own.clone());
+                    return Ok(Some(Page::Whole(own)));
+                }
+                if started.elapsed() >= wait {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            if address {
+                Ok(Some(Page::Shown(shown)))
+            } else {
+                Err(())
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn address_box_text_becomes_a_web_address() {
+            let upgraded = |_: &str| true;
+            let not_upgraded = |_: &str| false;
+            assert_eq!(web_address("https://example.com/a", &not_upgraded).as_deref(), Some("https://example.com/a"));
+            assert_eq!(web_address("HTTP://Example.com/A", &not_upgraded).as_deref(), Some("HTTP://Example.com/A"));
+            // No scheme: Shields' upgrade decides (it falls back to http).
+            assert_eq!(web_address("example.com/Path?q=1", &upgraded).as_deref(), Some("http://example.com/Path?q=1"));
+            assert_eq!(web_address("example.com/Path?q=1", &not_upgraded).as_deref(), Some("https://example.com/Path?q=1"));
+            // Local hosts stay on http.
+            assert_eq!(web_address("127.0.0.1:8765/page/Alpha", &not_upgraded).as_deref(), Some("http://127.0.0.1:8765/page/Alpha"));
+            assert_eq!(web_address("localhost:3000", &not_upgraded).as_deref(), Some("http://localhost:3000"));
+            assert_eq!(web_address("[::1]:8080/x", &not_upgraded).as_deref(), Some("http://[::1]:8080/x"));
+            // A browser's own pages and text that isn't an address.
+            for text in ["", "chrome://settings", "about:blank", "opera:settings", "edge://newtab", "cats and dogs", "nodot"] {
+                assert_eq!(web_address(text, &upgraded), None, "{text}");
+            }
+        }
+
+        #[test]
+        fn a_page_matches_what_the_address_box_shows() {
+            assert!(same_page("example.com", "https://www.example.com/"));
+            assert!(same_page("127.0.0.1:8765/page/Alpha", "http://127.0.0.1:8765/page/Alpha"));
+            assert!(same_page("hu.wikipedia.org/wiki/Budapest_(város)", "https://hu.wikipedia.org/wiki/Budapest_(v%C3%A1ros)"));
+            assert!(!same_page("example.com/b", "https://example.com/a"));
+            assert!(!same_page("example.com", ""));
+        }
+
+        // Reads a running browser's window, picking each of its tabs:
+        //   KESSEL_TEST_BROWSER=chrome cargo test read_a_running_browser -- --ignored --nocapture
+        #[test]
+        #[ignore]
+        fn read_a_running_browser() {
+            use windows::core::BOOL;
+            use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextLengthW, IsWindowVisible};
+            let want = std::env::var("KESSEL_TEST_BROWSER").unwrap_or_else(|_| "chrome".into()).to_lowercase();
+            unsafe extern "system" fn each(hwnd: HWND, lparam: LPARAM) -> BOOL {
+                let found = unsafe { &mut *(lparam.0 as *mut Vec<isize>) };
+                if unsafe { IsWindowVisible(hwnd).as_bool() && GetWindowTextLengthW(hwnd) > 0 } && browser_of(hwnd).is_some() {
+                    found.push(hwnd.0 as isize);
+                }
+                true.into()
+            }
+            let mut windows: Vec<isize> = Vec::new();
+            unsafe {
+                let _ = EnumWindows(Some(each), LPARAM(&mut windows as *mut Vec<isize> as isize));
+            }
+            let hwnd = windows.into_iter().find(|h| browser_of(HWND(*h as _)).is_some_and(|n| n.to_lowercase() == want)).expect("no such browser window open");
+            let started = Instant::now();
+            let read = unsafe { read_tabs(HWND(hwnd as _)) };
+            println!("{} ms, complete {}, missed {}", started.elapsed().as_millis(), read.complete, read.missed);
+            for page in &read.pages {
+                println!("  {page:?} -> {:?}", page.url(&|_| true));
+            }
+        }
     }
 }
 

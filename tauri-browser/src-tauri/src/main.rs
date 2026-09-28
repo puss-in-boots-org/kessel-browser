@@ -8,6 +8,7 @@ mod browsing_data;
 mod browser_windows;
 mod commands;
 mod dialogs;
+mod extensions;
 mod history;
 mod import;
 mod keys;
@@ -15,11 +16,13 @@ mod lifecycle;
 mod page;
 mod profile;
 mod shields;
+mod sidebar;
 mod split;
 mod store;
 mod suggest;
 mod tabdrag;
 mod vault;
+mod zip;
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -93,9 +96,10 @@ const SIDE_PANEL_MAX_WIDTH: f64 = 2000.0;
 // A thin sliver at the side panel's right edge is deliberately left
 fn normalize_url(input: &str) -> String {
     let trimmed = input.trim();
-    // Web pages, Kessel's own pages, local files (Ctrl+O) and a page's source
-    // (Ctrl+U) open as they are; anything else is taken as a web address.
-    let as_is = ["http://", "https://", "kessel://", "file:", "view-source:"];
+    // Web pages, Kessel's own pages, local files (Ctrl+O), a page's source
+    // (Ctrl+U) and extensions' pages open as they are; anything else is
+    // taken as a web address.
+    let as_is = ["http://", "https://", "kessel://", "file:", "view-source:", "chrome-extension://"];
     if as_is.iter().any(|p| trimmed.len() >= p.len() && trimmed[..p.len()].eq_ignore_ascii_case(p)) {
         trimmed.to_string()
     } else {
@@ -112,6 +116,7 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("downloads", "downloads.html"),
     ("history", "history.html"),
     ("help", "help.html"),
+    ("sidebar", "sidebar.html"),
 ];
 
 // kessel://settings -> settings.html, kessel://settings/privacy ->
@@ -667,6 +672,8 @@ fn create_tab_internal(
     watch_page(app, &webview, id);
     keys::install(app, &webview);
     bridge::install(app, &webview, id, token);
+    extensions::page_opened(app, &webview, private, account.as_deref());
+    sidebar::install_page_menu(app, &webview, id);
     if let Some(account) = account {
         state.tab_accounts.lock().unwrap().insert(id, account);
     }
@@ -713,11 +720,30 @@ fn resize_active_tab(state: &BrowserState, win: &str) -> Result<(), String> {
 // one webview across wildly different kinds of content -- a pinned site one
 // moment, the Settings page the next).
 
-fn side_panel_title(state: &BrowserState, kind: &str, url: &str) -> String {
+fn side_panel_title(app: &tauri::AppHandle, kind: &str, url: &str) -> String {
+    let state = app.state::<BrowserState>();
     match kind {
         "downloads" => "Downloads".into(),
         "passwords" => "Passwords".into(),
         "settings" => "Settings".into(),
+        _ if kind.starts_with("extension:") => {
+            let id = &kind["extension:".len()..];
+            extensions::name_of(app, id).unwrap_or_else(|| "Extension".into())
+        }
+        // The side panel's own pages (sidebar.html) -- each then says its
+        // own title as you move between them.
+        _ if kind.starts_with("sidebar:") => match &kind["sidebar:".len()..] {
+            "bookmarks" => "Bookmarks",
+            "reading" => "Reading list",
+            "history" => "History",
+            "notes" => "Notes",
+            "search" => "Search",
+            "workspaces" => "Workspaces",
+            "extensions" => "Extensions",
+            _ => "Side panel",
+        }
+        .into(),
+        _ if kind == "ai" || kind.starts_with("ai-ask:") => "AI assistant".into(),
         _ => kind
             .strip_prefix("pinned:")
             .and_then(|id| state.store.pinned.lock().unwrap().iter().find(|p| p.id == id).map(|p| p.title.clone()))
@@ -749,7 +775,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
         "window.__KESSEL_PANEL__ = {{ kind: {}, url: {}, title: {} }};",
         serde_json::to_string(kind).unwrap_or_default(),
         serde_json::to_string(url).unwrap_or_default(),
-        serde_json::to_string(&side_panel_title(state, kind, url)).unwrap_or_default()
+        serde_json::to_string(&side_panel_title(app, kind, url)).unwrap_or_default()
     );
     let frame = window
         .add_child(
@@ -799,6 +825,7 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
     keys::install(app, &page);
     keys::install(app, &frame);
     bridge::install(app, &page, page_id, token);
+    extensions::page_opened(app, &page, private, None);
 
     state.win(win, |w| {
         w.side_panel_frame = Some(frame);
@@ -1060,6 +1087,8 @@ fn create_popout_internal(
     watch_page(app, &content, id);
     keys::install(app, &content);
     keys::install(app, &bar);
+    extensions::page_opened(app, &content, false, account.as_deref());
+    sidebar::install_page_menu(app, &content, id);
     bridge::install(app, &content, id, token);
 
     let window_for_events = window.clone();
@@ -3037,6 +3066,7 @@ async fn toggle_popup(
         "menu" => "menu.html",
         "share" => "share.html",
         "tabsearch" => "tabsearch.html",
+        "extensions" => "extensions.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
@@ -3446,7 +3476,7 @@ async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<se
         if window_at.is_some() && window_at >= tab_at {
             let closed = state.closed_windows.lock().unwrap().pop();
             if let Some(closed) = closed {
-                let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups };
+                let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups, ..Default::default() };
                 let win = browser_windows::create(&app2, false, serde_json::json!({ "session": session }))?;
                 return Ok(serde_json::json!({ "window": win }));
             }
@@ -4372,6 +4402,10 @@ async fn open_file_dialog(app: tauri::AppHandle, webview: Webview) -> Result<Opt
 // "passwords", "settings".
 #[tauri::command]
 async fn toggle_side_panel(app: tauri::AppHandle, webview: Webview, kind: String, url: String) -> Result<bool, String> {
+    toggle_side_panel_for(&app, webview, kind, url).await
+}
+
+pub(crate) async fn toggle_side_panel_for(app: &tauri::AppHandle, webview: Webview, kind: String, url: String) -> Result<bool, String> {
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
@@ -4455,7 +4489,7 @@ async fn side_panel_pop_out(app: tauri::AppHandle, webview: Webview) -> Result<u
         let win = state.window_of(&webview).ok_or("that window is closed")?;
         let url = side_panel_current_url(&state, &win).ok_or("the side panel isn't open")?;
         let kind = state.win(&win, |w| w.side_panel_kind.clone()).flatten().unwrap_or_default();
-        let title = side_panel_title(&state, &kind, &url);
+        let title = side_panel_title(&app2, &kind, &url);
         let (x, y) = popout_origin(&state, &win, 40.0, 20.0);
         close_side_panel_internal(&app2, &state, &win)?;
         create_popout_internal(&app2, &state, url, title, x, y, None)
@@ -4552,7 +4586,7 @@ async fn set_chrome_insets(app: tauri::AppHandle, webview: Webview, left: f64, t
 // reported them -- sleeping ones included -- so the next launch can reopen
 // them, each window in its own window again.
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct SessionTab {
     url: String,
     #[serde(default)]
@@ -4564,6 +4598,12 @@ pub(crate) struct SessionTab {
     pinned: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     group: Option<String>,
+    // The workspace it's in (none: the window's first one), and whether it
+    // was the one you were on in that workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    workspace: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    current: bool,
 }
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -4575,6 +4615,9 @@ pub(crate) struct WindowSession {
     // The window's tab groups: [{ id, name, color, collapsed }].
     #[serde(default)]
     groups: Vec<serde_json::Value>,
+    // The workspace the window was showing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    workspace: Option<String>,
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -4591,10 +4634,10 @@ fn read_session(state: &BrowserState) -> Vec<WindowSession> {
     // Saved before windows existed: one window's tabs -- or before accounts
     // existed: just the urls.
     let tabs = serde_json::from_str::<Vec<SessionTab>>(&text).or_else(|_| {
-        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, account: None, title: None, pinned: false, group: None }).collect())
+        serde_json::from_str::<Vec<String>>(&text).map(|urls| urls.into_iter().map(|url| SessionTab { url, ..Default::default() }).collect())
     });
     match tabs {
-        Ok(tabs) if !tabs.is_empty() => vec![WindowSession { tabs, active: 0, groups: Vec::new() }],
+        Ok(tabs) if !tabs.is_empty() => vec![WindowSession { tabs, ..Default::default() }],
         _ => Vec::new(),
     }
 }
@@ -4609,14 +4652,14 @@ fn write_session(state: &BrowserState) {
 
 // A toolbar's current tabs, for session restore. Private windows keep none.
 #[tauri::command]
-fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs: Vec<SessionTab>, active: usize, groups: Option<Vec<serde_json::Value>>) {
+fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs: Vec<SessionTab>, active: usize, groups: Option<Vec<serde_json::Value>>, workspace: Option<String>) {
     let Some(win) = toolbar_window(&webview) else { return };
     if state.is_private(&win) {
         return;
     }
     {
         let mut sessions = state.sessions.lock().unwrap();
-        let session = WindowSession { tabs, active, groups: groups.unwrap_or_default() };
+        let session = WindowSession { tabs, active, groups: groups.unwrap_or_default(), workspace };
         match sessions.iter_mut().find(|(w, _)| w == &win) {
             Some((_, s)) => *s = session,
             None => sessions.push((win, session)),
@@ -4800,7 +4843,34 @@ fn main() {
             tabdrag::set_tab_strip,
             tabdrag::detach_tabs,
             tabdrag::drag_window,
-            tabdrag::absorb_window
+            tabdrag::absorb_window,
+            extensions::list_extensions,
+            extensions::preview_store_extension,
+            extensions::preview_extension_file,
+            extensions::confirm_extension_install,
+            extensions::cancel_extension_install,
+            extensions::load_unpacked_extension,
+            extensions::reload_extension,
+            extensions::remove_extension,
+            extensions::set_extension_enabled,
+            extensions::set_extension_access,
+            extensions::update_extensions,
+            extensions::pack_extension,
+            extensions::extension_theme,
+            extensions::open_extension_page,
+            extensions::open_extension_side_panel,
+            extensions::open_extension_popup,
+            sidebar::get_reading_list,
+            sidebar::add_to_reading_list,
+            sidebar::set_reading_read,
+            sidebar::remove_from_reading_list,
+            sidebar::get_notes,
+            sidebar::save_note,
+            sidebar::delete_note,
+            sidebar::active_tab_info,
+            sidebar::tell_toolbar,
+            sidebar::set_side_panel_kind,
+            sidebar::tell_side_panel
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -4817,6 +4887,8 @@ fn main() {
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
             app.manage(accounts::Accounts::load(&data_dir, profile.local_dir.join("accounts")));
+            app.manage(extensions::Extensions::load(&data_dir, &profile.local_dir));
+            app.manage(sidebar::Sidebar::load(&data_dir));
 
             let state = BrowserState {
                 windows: Mutex::new(Vec::new()),
@@ -4842,6 +4914,7 @@ fn main() {
             app.manage(Vault::new(data_dir));
             start_shields(app.handle());
             tabdrag::watch_other_browsers(app.handle());
+            extensions::schedule_updates(app.handle());
 
             // The windows of your last session (each with its own tabs), or
             // one window on the start page. The tabs themselves are opened by

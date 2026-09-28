@@ -182,6 +182,20 @@ pub struct Settings {
     pub strip_double_click: String,
     pub strip_middle_click: String,
     pub tab_drag_split: bool,
+    // Store extensions update themselves (extensions.rs).
+    pub extensions_auto_update: bool,
+    // The side panel's pages that have a button on the rail, in order
+    // ("bookmarks", "reading", "history", "notes", "ai", "search",
+    // "extensions", "workspaces").
+    pub sidebar_items: Vec<String>,
+    // The AI assistant the side panel opens: "chatgpt", "claude",
+    // "gemini", "copilot", "perplexity", "mistral", or "custom"
+    // (ai_custom_url).
+    pub ai_provider: String,
+    pub ai_custom_url: String,
+    // Workspaces: [{ id, name, icon, color }]. A window shows one at a time
+    // (its tabs); none means just the one, as before.
+    pub workspaces: serde_json::Value,
 }
 
 impl Default for Settings {
@@ -243,6 +257,11 @@ impl Default for Settings {
             strip_double_click: "maximize".into(),
             strip_middle_click: "none".into(),
             tab_drag_split: true,
+            extensions_auto_update: true,
+            sidebar_items: ["bookmarks", "reading", "history", "notes", "ai"].map(String::from).to_vec(),
+            ai_provider: "chatgpt".into(),
+            ai_custom_url: String::new(),
+            workspaces: serde_json::json!([]),
         }
     }
 }
