@@ -6,11 +6,13 @@ html, body { overflow: hidden; user-select: none; }
 }
 
 /* --- Left icon rail (Opera-GX style) --- */
+/* Sizes, fills and dividers below come from the UI style when there is one
+   (shared/styles.js); the fallbacks are the stock look. */
 #rail {
-  width: 52px;
+  width: var(--k-rail-w, 52px);
   flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: var(--k-rail-fill, var(--surface));
+  border-right: var(--k-divider-w, 1px) solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 10px 0 12px;
@@ -23,18 +25,19 @@ html, body { overflow: hidden; user-select: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: var(--k-rail-gap, 6px);
 }
 
-/* Only painted in Liquid Glass mode (shared/glass.css). */
+/* Only painted in Liquid Glass mode (shared/glass.css) or behind a style's
+   gradient/pattern/wallpaper background (shared/styles.css). */
 #wallpaper { display: none; }
 
 .rail-logo {
-  width: 34px;
-  height: 34px;
+  width: calc(var(--k-rail-icon, 36px) - 2px);
+  height: calc(var(--k-rail-icon, 36px) - 2px);
   border: none;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #6bd2ff));
+  border-radius: var(--k-btn-radius, 10px);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--accent-2, #6bd2ff)));
   color: #fff;
   cursor: pointer;
   margin-bottom: 6px;
@@ -57,12 +60,12 @@ html, body { overflow: hidden; user-select: none; }
 .rail-logo:active { transform: scale(0.95); }
 
 .rail-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--k-rail-icon, 36px);
+  height: var(--k-rail-icon, 36px);
   border: none;
   background: transparent;
   color: var(--text-dim);
-  border-radius: 10px;
+  border-radius: var(--k-btn-radius, 10px);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
   flex-shrink: 0;
@@ -105,7 +108,7 @@ html, body { overflow: hidden; user-select: none; }
 #pinned-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--k-rail-gap, 6px);
   align-items: center;
   overflow-y: auto;
   max-height: 40vh;
@@ -115,9 +118,9 @@ html, body { overflow: hidden; user-select: none; }
 #pinned-list::-webkit-scrollbar { display: none; }
 
 .pin-item {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: var(--k-rail-icon, 36px);
+  height: var(--k-rail-icon, 36px);
+  border-radius: var(--k-btn-radius, 10px);
   background: var(--surface-2);
   border: 1px solid transparent;
   color: var(--text);
@@ -170,7 +173,7 @@ html, body { overflow: hidden; user-select: none; }
   left: 0;
   height: 2.5px;
   width: 0%;
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, #6bd2ff));
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, var(--accent-2, #6bd2ff)));
   opacity: 0;
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
   transition: width 0.4s var(--ease), opacity 0.2s ease;
@@ -183,17 +186,17 @@ html, body { overflow: hidden; user-select: none; }
   from { opacity: 0; transform: scale(0.92) translateY(3px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-.tab-enter { animation: tabEnter 0.16s var(--ease); }
+.tab-enter { animation: var(--k-tab-anim, tabEnter) var(--k-tab-anim-dur, 0.16s) var(--ease); }
 
 #tab-bar {
-  height: 40px;
+  height: calc(var(--k-tab-h, 33px) + var(--k-tabbar-pad, 7px));
   flex-shrink: 0;
-  background: var(--bg);
+  background: var(--k-chrome-fill, var(--bg));
   display: flex;
   align-items: flex-end;
-  padding: 7px 8px 0;
+  padding: var(--k-tabbar-pad, 7px) 8px 0;
   gap: 4px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--k-divider-w, 1px) solid var(--border);
 }
 
 /* A private (InPrivate) window says so, right at the start of its tab bar. */
@@ -216,7 +219,7 @@ html, body { overflow: hidden; user-select: none; }
 
 #tabs {
   display: flex;
-  gap: 3px;
+  gap: var(--k-tab-gap, 3px);
   flex: 0 1 auto;
   overflow-x: auto;
   scrollbar-width: none;
@@ -228,34 +231,70 @@ html, body { overflow: hidden; user-select: none; }
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 8px 7px 10px;
-  border-radius: 9px 9px 0 0;
+  height: var(--k-tab-h, 33px);
+  padding: 0 var(--k-tab-pad, 8px) 0 calc(var(--k-tab-pad, 8px) + 2px);
+  border-radius: var(--k-tab-rad, 9px 9px 0 0);
+  clip-path: var(--k-tab-clip, none);
   background: transparent;
-  font-size: 12px;
-  max-width: 200px;
+  font-size: var(--k-tab-font, 12px);
+  max-width: var(--k-tab-w, 200px);
   min-width: 96px;
   cursor: default;
   transition: background var(--dur-fast) ease;
   position: relative;
 }
 .tab:hover { background: var(--surface); }
-.tab.active { background: var(--surface); }
+.tab.active { background: var(--k-tab-active-bg, var(--surface)); }
 .tab.active::after {
   content: "";
   position: absolute;
   left: 8px;
   right: 8px;
   bottom: 0;
-  height: 2px;
+  height: var(--k-ind, 2px);
   border-radius: 2px 2px 0 0;
-  background: var(--accent);
+  background: var(--k-accent-fill, var(--accent));
 }
 /* No live webview behind this tab right now (idle-discarded, or a restored
    session tab never actually opened yet) -- dimmed to signal it'll reload
    on click rather than switch instantly. */
 .tab.discarded { opacity: 0.5; }
 .tab.discarded:hover { opacity: 0.75; }
-.tab.dragging { opacity: 0.35; }
+/* --- Dragging tabs (main.js startDrag): the held tab rides above the rest,
+   which slide aside; let go, it glides into place. Transforms only, so a
+   drag never re-lays-out the strip. --- */
+html.tab-dragging, html.tab-dragging * { cursor: grabbing !important; }
+#tabs { position: relative; } /* tabs measure their place from it (revealTab) */
+#tabs > .tab, #tabs > .tab-group { position: relative; }
+#tabs > .dragging { z-index: 6; transition: none !important; box-shadow: var(--shadow); opacity: 0.96; will-change: transform; }
+#tabs > .drag-shift { transition: transform var(--dur) var(--ease) !important; will-change: transform; }
+html.tab-settling #tabs > * { transition: none !important; }
+/* A closed tab shrinks away. */
+#tabs > .tab.closing { pointer-events: none; overflow: hidden; }
+#tabs > .tab.closing.shrink { max-width: 0 !important; min-width: 0 !important; padding-left: 0 !important; padding-right: 0 !important; margin: 0 !important; opacity: 0; transition: max-width var(--dur) var(--ease), padding var(--dur) var(--ease), opacity var(--dur-fast) linear !important; }
+/* Something dragged over the strip: where it lands. */
+#tab-bar.drop-target, #vtabs.drop-target { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+#drop-marker { position: fixed; z-index: 40; pointer-events: none; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; color: var(--accent-text); background: var(--k-accent-fill, var(--accent)); box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 40%, transparent); animation: popIn var(--dur) var(--ease); }
+#drop-marker[hidden] { display: none; }
+.tab.drop-into { box-shadow: inset 0 0 0 2px var(--accent) !important; }
+
+/* --- Split view (split.rs): the divider between the two pages, the pair
+   joined in the strip, and where a tab held at an edge will open. --- */
+#split-divider { position: fixed; bottom: 0; width: 6px; z-index: 3; cursor: col-resize; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+#split-divider[hidden] { display: none; }
+#split-divider .split-grip { width: 3px; height: 42px; border-radius: 2px; background: var(--text-faint); opacity: 0.6; transition: background var(--dur-fast) ease, opacity var(--dur-fast) ease, height var(--dur) var(--ease); }
+#split-divider:hover .split-grip, #split-divider.dragging .split-grip { background: var(--accent); opacity: 1; height: 64px; }
+#split-divider button { width: 22px; height: 22px; flex-shrink: 0; border: none; border-radius: 50%; padding: 0; font-size: 13px; line-height: 1; color: var(--text-dim); background: var(--surface); box-shadow: var(--k-shadow-sm, 0 1px 4px rgb(0 0 0 / 0.3)); cursor: pointer; opacity: 0; transition: opacity var(--dur-fast) ease; }
+#split-divider:hover button { opacity: 1; }
+#split-divider button:hover { color: var(--text); background: var(--surface-hover); }
+.tab.split-left, .tab.split-right { box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+.tab.split-left::before, .tab.split-right::before { content: ""; position: absolute; top: 6px; bottom: 6px; width: 2px; border-radius: 1px; background: var(--accent); opacity: 0.7; }
+.tab.split-left::before { right: -2px; }
+.tab.split-right::before { left: -2px; }
+#split-hint { position: fixed; bottom: 0; z-index: 2; padding: 10px; pointer-events: none; }
+#split-hint[hidden] { display: none; }
+#split-hint .split-hint-card { height: 100%; border-radius: var(--k-panel-radius, 14px); border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-weight: 600; color: var(--text); animation: popIn var(--dur) var(--ease); }
+#split-hint small { font-weight: 400; color: var(--text-dim); }
 .tab .fav-img { width: 14px; height: 14px; border-radius: 3px; object-fit: contain; display: block; }
 .tab .tab-favicon {
   width: 16px;
@@ -303,7 +342,7 @@ html, body { overflow: hidden; user-select: none; }
   min-width: 0;
   max-width: none;
   flex-shrink: 0;
-  padding: 7px 10px;
+  padding: 0 calc(var(--k-tab-pad, 8px) + 2px);
   gap: 4px;
 }
 .tab.pinned .tab-title { display: none; }
@@ -337,9 +376,9 @@ html, body { overflow: hidden; user-select: none; }
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: calc(var(--k-tab-h, 33px) - 5px);
+  height: calc(var(--k-tab-h, 33px) - 5px);
+  border-radius: var(--k-btn-radius, 8px);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -352,13 +391,13 @@ html, body { overflow: hidden; user-select: none; }
 
 /* --- Nav bar / omnibox --- */
 #nav-bar {
-  height: 52px;
+  height: var(--k-nav-h, 52px);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 0 10px;
-  background: var(--bg);
+  background: var(--k-chrome-fill, var(--bg));
 }
 
 #nav-cluster { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -367,9 +406,9 @@ html, body { overflow: hidden; user-select: none; }
   background: transparent;
   border: none;
   color: var(--text-dim);
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: var(--k-btn, 32px);
+  height: var(--k-btn, 32px);
+  border-radius: var(--k-btn-radius, 9px);
   cursor: pointer;
   flex-shrink: 0;
   display: flex;
@@ -386,9 +425,9 @@ html, body { overflow: hidden; user-select: none; }
   background: transparent;
   border: none;
   color: var(--text-dim);
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: var(--k-btn, 32px);
+  height: var(--k-btn, 32px);
+  border-radius: var(--k-btn-radius, 9px);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -429,11 +468,12 @@ html.fullscreen #progress-bar { display: none !important; }
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 17px;
+  height: var(--k-address-h, 34px);
+  border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border);
+  border-radius: var(--k-address-rad, 17px);
+  clip-path: var(--k-address-clip, none);
   padding: 0 6px 0 13px;
-  background: var(--surface);
+  background: var(--k-address-bg, var(--surface));
   min-width: 0;
   margin: 0 4px;
   transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
@@ -447,7 +487,9 @@ html.fullscreen #progress-bar { display: none !important; }
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-family: var(--k-address-font, inherit);
+  font-size: var(--k-address-font-size, 13px);
+  text-align: var(--k-address-align, left);
   outline: none;
   min-width: 0;
   color: var(--text);
@@ -496,15 +538,15 @@ html.fullscreen #progress-bar { display: none !important; }
 
 /* --- Bookmarks bar --- */
 #bookmarks-bar {
-  height: 30px;
+  height: var(--k-bm-h, 30px);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 0 10px 4px;
-  background: var(--bg);
+  background: var(--k-chrome-fill, var(--bg));
   overflow: hidden;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--k-divider-w, 1px) solid var(--border);
 }
 #bookmarks-bar[hidden] { display: none; }
 #bookmarks-bar .bm-empty { font-size: 11.5px; color: var(--text-faint); padding: 0 6px; }
@@ -512,9 +554,9 @@ html.fullscreen #progress-bar { display: none !important; }
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: calc(var(--k-bm-h, 30px) - 6px);
   padding: 0 9px 0 5px;
-  border-radius: 12px;
+  border-radius: var(--k-btn-radius, 12px);
   font-size: 12px;
   color: var(--text-dim);
   cursor: pointer;
@@ -672,7 +714,7 @@ html.fullscreen #progress-bar { display: none !important; }
 /* --- A full strip: tabs shrink toward their icons, then it scrolls ---
    Every tab starts 200px wide and they shrink alike; one too narrow for
    its title (.narrow, see updateStripOverflow) shows just its icon. */
-.tab:not(.pinned) { width: 200px; flex: 0 1 auto; min-width: 44px; }
+.tab:not(.pinned) { width: var(--k-tab-w, 200px); flex: 0 1 auto; min-width: 44px; }
 html.tabs-scroll .tab:not(.pinned) { min-width: 150px; }
 .tab.narrow .tab-title { display: none; }
 .tab.narrow:not(.active) .close-tab { display: none; }
@@ -685,8 +727,8 @@ html.tabs-scroll .tab:not(.pinned) { min-width: 150px; }
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: var(--k-rail-fill, var(--surface));
+  border-right: var(--k-divider-w, 1px) solid var(--border);
   position: relative;
   z-index: 1;
 }

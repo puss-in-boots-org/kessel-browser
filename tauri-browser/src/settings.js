@@ -2,12 +2,10 @@ import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
 import { FEATURES } from "./shared/features.js";
-import { WALLPAPERS, setCustomWallpaper, clearCustomWallpaper, hasCustomWallpaper, wallpaperCss } from "./shared/glass.js";
+import { buildStyleSection } from "./appearance.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
-
-const ACCENTS = ["#7c5cff", "#3b82f6", "#0ea5a4", "#f472b6", "#f97316", "#22c55e", "#e11d48", "#eab308"];
 
 const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "palette" },
@@ -42,40 +40,20 @@ function switchHtml(id, on) {
 
 // --- Panel builders ------------------------------------------------------
 
+// The UI style and everything about it is appearance.js; what's here holds
+// for every style.
 function appearancePanel(settings) {
   const p = el(`<div class="panel" id="panel-appearance">
     <h2>Appearance</h2>
-    <p class="sub">Make Kessel look like yours.</p>
+    <p class="sub">Pick a style, then make it yours. Every option below belongs to the style you're on, and each style remembers its own changes.</p>
+    <div id="style-section"></div>
 
     <div class="setting-card">
-      <div class="theme-options" id="theme-options"></div>
-    </div>
-
-    <div class="setting-card">
-      <div class="accent-row" id="accent-row"></div>
-    </div>
-
-    <div class="setting-card">
-      ${settingRow({ title: "Liquid Glass", desc: "Translucent iOS-style toolbar and new tab page over a wallpaper", controlHtml: switchHtml("glass-toggle", settings.glass_enabled) })}
-      <div id="glass-options">
-        <div class="wallpaper-row" id="wallpaper-row"></div>
-        ${settingRow({ title: "Frost", desc: "How much the glass blurs what's behind it", controlHtml: `<input type="range" id="glass-blur" min="0" max="40" step="1" /><span class="mono faint" id="glass-blur-value"></span>` })}
-        ${settingRow({ title: "Refraction", desc: "Bend the background at the edges of buttons and tabs, like real glass", controlHtml: switchHtml("glass-refraction", settings.glass_refraction) })}
-      </div>
-      ${settingRow({ title: "Bookmarks bar", desc: "Show bookmarks under the address bar", controlHtml: switchHtml("bookmarks-bar-toggle", settings.bookmarks_bar) })}
-      ${settingRow({ title: "Home button", desc: "A button next to reload that opens your home page", controlHtml: switchHtml("home-button-toggle", settings.show_home_button !== false) })}
-      <input type="file" id="wallpaper-file" accept="image/*" hidden />
-    </div>
-
-    <div class="setting-card" id="custom-colors-card" style="display:none">
-      ${settingRow({ title: "Background", controlHtml: `<input type="color" class="accent-custom" id="custom-bg" />` })}
-      ${settingRow({ title: "Surface", controlHtml: `<input type="color" class="accent-custom" id="custom-surface" />` })}
-      ${settingRow({ title: "Text", controlHtml: `<input type="color" class="accent-custom" id="custom-text" />` })}
-    </div>
-
-    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Every style</span></div>
       ${settingRow({ title: "Interface size", desc: "Scale text and controls across the app", controlHtml: `<input type="range" id="font-scale" min="0.85" max="1.3" step="0.05" /><span class="mono faint" id="font-scale-value"></span>` })}
       ${settingRow({ title: "Reduce motion", desc: "Turn off non-essential animation", controlHtml: switchHtml("reduce-motion", settings.reduce_motion) })}
+      ${settingRow({ title: "Bookmarks bar", desc: "Show bookmarks under the address bar", controlHtml: switchHtml("bookmarks-bar-toggle", settings.bookmarks_bar) })}
+      ${settingRow({ title: "Home button", desc: "A button next to reload that opens your home page", controlHtml: switchHtml("home-button-toggle", settings.show_home_button !== false) })}
     </div>
 
     <div class="setting-card" id="zoom-card">
@@ -83,6 +61,8 @@ function appearancePanel(settings) {
       <div class="list-panel" id="site-zoom-list"></div>
     </div>
   </div>`);
+
+  p.querySelector("#style-section").replaceWith(buildStyleSection());
 
   const zoomSelect = p.querySelector("#default-zoom");
   for (const z of ZOOM_CHOICES) {
@@ -98,45 +78,6 @@ function appearancePanel(settings) {
   });
   renderSiteZoom(p);
 
-  const themeOptions = p.querySelector("#theme-options");
-  for (const mode of ["dark", "light", "custom"]) {
-    const sw = el(`<div class="theme-swatch ${settings.theme === mode ? "selected" : ""}" data-mode="${mode}">
-      <div class="theme-preview ${mode}"></div>${mode[0].toUpperCase() + mode.slice(1)}
-    </div>`);
-    sw.addEventListener("click", async () => {
-      const next = await saveSettings({ theme: mode });
-      refreshAppearance(next);
-    });
-    themeOptions.appendChild(sw);
-  }
-
-  const accentRow = p.querySelector("#accent-row");
-  for (const color of ACCENTS) {
-    const sw = el(`<div class="accent-swatch ${settings.accent === color ? "selected" : ""}" data-color="${color}" style="background:${color}"></div>`);
-    sw.addEventListener("click", async () => {
-      const next = await saveSettings({ accent: color });
-      refreshAppearance(next);
-    });
-    accentRow.appendChild(sw);
-  }
-  const customPicker = el(`<input type="color" class="accent-custom" value="${settings.accent}" title="Custom accent color" />`);
-  customPicker.addEventListener("input", async (e) => {
-    const next = await saveSettings({ accent: e.target.value });
-    refreshAppearance(next);
-  });
-  accentRow.appendChild(customPicker);
-
-  const bg = p.querySelector("#custom-bg");
-  const surface = p.querySelector("#custom-surface");
-  const text = p.querySelector("#custom-text");
-  bg.value = settings.custom_bg;
-  surface.value = settings.custom_surface;
-  text.value = settings.custom_text;
-  bg.addEventListener("input", () => saveSettings({ custom_bg: bg.value }));
-  surface.addEventListener("input", () => saveSettings({ custom_surface: surface.value }));
-  text.addEventListener("input", () => saveSettings({ custom_text: text.value }));
-  p.querySelector("#custom-colors-card").style.display = settings.theme === "custom" ? "block" : "none";
-
   const fontScale = p.querySelector("#font-scale");
   const fontScaleValue = p.querySelector("#font-scale-value");
   fontScale.value = settings.font_scale;
@@ -146,14 +87,9 @@ function appearancePanel(settings) {
   });
   fontScale.addEventListener("change", () => saveSettings({ font_scale: parseFloat(fontScale.value) }));
 
-  wireGlassSettings(p, settings);
-
-  const reduceMotion = p.querySelector("#reduce-motion");
-  reduceMotion.addEventListener("click", async () => {
-    const next = await saveSettings({ reduce_motion: !reduceMotion.classList.contains("on") });
-    reduceMotion.classList.toggle("on", next.reduce_motion);
-  });
-
+  wireSwitch(p, "reduce-motion", "reduce_motion");
+  wireSwitch(p, "bookmarks-bar-toggle", "bookmarks_bar");
+  wireSwitch(p, "home-button-toggle", "show_home_button", { defaultOn: true });
   return p;
 }
 
@@ -175,100 +111,6 @@ async function renderSiteZoom(p) {
     });
     holder.appendChild(row);
   }
-}
-
-function wireToggle(p, id, key) {
-  const btn = p.querySelector(`#${id}`);
-  btn.addEventListener("click", async () => {
-    const next = await saveSettings({ [key]: !btn.classList.contains("on") });
-    btn.classList.toggle("on", !!next[key]);
-    refreshAppearance(next);
-  });
-}
-
-function renderWallpapers(p, settings) {
-  const row = p.querySelector("#wallpaper-row");
-  row.innerHTML = "";
-  for (const [id, wp] of Object.entries(WALLPAPERS)) {
-    const sw = el(`<div class="wallpaper-swatch ${settings.wallpaper === id ? "selected" : ""}" title="${wp.name}"><div class="wp-preview"></div><span>${wp.name}</span></div>`);
-    sw.querySelector(".wp-preview").style.background = wp.css;
-    sw.addEventListener("click", async () => {
-      const next = await saveSettings({ wallpaper: id });
-      renderWallpapers(p, next);
-    });
-    row.appendChild(sw);
-  }
-
-  // Your own image: click to pick one, click again (once chosen) to use it.
-  const hasCustom = hasCustomWallpaper();
-  const custom = el(`<div class="wallpaper-swatch ${settings.wallpaper === "custom" ? "selected" : ""}" title="Use your own image">
-    <div class="wp-preview custom">${hasCustom ? "" : icon("plus", 16)}</div><span>${hasCustom ? "Your image" : "Choose…"}</span></div>`);
-  if (hasCustom) custom.querySelector(".wp-preview").style.background = wallpaperCss({ wallpaper: "custom" });
-  custom.addEventListener("click", async () => {
-    if (hasCustom && settings.wallpaper !== "custom") {
-      const next = await saveSettings({ wallpaper: "custom" });
-      renderWallpapers(p, next);
-    } else {
-      p.querySelector("#wallpaper-file").click();
-    }
-  });
-  row.appendChild(custom);
-
-  if (hasCustom) {
-    const remove = el(`<button class="btn ghost sm" title="Remove your image">${icon("trash", 14)}</button>`);
-    remove.addEventListener("click", async () => {
-      clearCustomWallpaper();
-      const next = settings.wallpaper === "custom" ? await saveSettings({ wallpaper: "nightfall" }) : settings;
-      renderWallpapers(p, next);
-    });
-    row.appendChild(remove);
-  }
-}
-
-function wireGlassSettings(p, settings) {
-  renderWallpapers(p, settings);
-
-  p.querySelector("#wallpaper-file").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    e.target.value = "";
-    if (!file) return;
-    try {
-      await setCustomWallpaper(file);
-      // Always re-save, even if "custom" was already selected, so every
-      // open page repaints with the new image.
-      const next = await saveSettings({ wallpaper: "custom" });
-      renderWallpapers(p, next);
-      toast("Wallpaper updated");
-    } catch (err) {
-      toast(err.message || String(err));
-    }
-  });
-
-  const blur = p.querySelector("#glass-blur");
-  const blurValue = p.querySelector("#glass-blur-value");
-  blur.value = settings.glass_blur;
-  blurValue.textContent = `${Math.round(settings.glass_blur)}px`;
-  blur.addEventListener("input", () => {
-    blurValue.textContent = `${blur.value}px`;
-  });
-  blur.addEventListener("change", () => saveSettings({ glass_blur: parseFloat(blur.value) }));
-
-  wireToggle(p, "glass-toggle", "glass_enabled");
-  wireToggle(p, "glass-refraction", "glass_refraction");
-  wireToggle(p, "bookmarks-bar-toggle", "bookmarks_bar");
-  wireToggle(p, "home-button-toggle", "show_home_button");
-  p.querySelector("#glass-options").style.display = settings.glass_enabled ? "block" : "none";
-}
-
-function refreshAppearance(settings) {
-  const p = document.getElementById("panel-appearance");
-  if (!p) return;
-  p.querySelectorAll(".theme-swatch").forEach((sw) => sw.classList.toggle("selected", sw.dataset.mode === settings.theme));
-  p.querySelectorAll(".accent-swatch").forEach((sw) => {
-    sw.classList.toggle("selected", (sw.dataset.color || "").toLowerCase() === settings.accent.toLowerCase());
-  });
-  p.querySelector("#custom-colors-card").style.display = settings.theme === "custom" ? "block" : "none";
-  p.querySelector("#glass-options").style.display = settings.glass_enabled ? "block" : "none";
 }
 
 function searchPanel(settings) {
@@ -347,6 +189,16 @@ async function tabsPanel(settings) {
     </div>
 
     <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Dragging, switching and the strip</span></div>
+      ${settingRow({ title: "Split view by dragging", desc: "Drag a tab to the left or right edge of the page to open it beside the one you're on", controlHtml: switchHtml("tab-drag-split", settings.tab_drag_split !== false) })}
+      ${settingRow({ title: "Bring in windows from other browsers", desc: "A Chrome, Edge, Brave, Opera, Vivaldi or Firefox window (or a tab dragged out of one) held over Kessel's tab strip and let go moves in as tabs", controlHtml: switchHtml("pull-other-browsers", settings.pull_other_browsers !== false) })}
+      ${settingRow({ title: "Ctrl+Tab in recently used order", desc: "Back to the tab you were on before -- press again quickly to go further back", controlHtml: switchHtml("tab-cycle-mru", !!settings.tab_cycle_mru) })}
+      ${settingRow({ title: "Mouse wheel switches tabs", desc: "Scroll over the tab strip to go through your tabs", controlHtml: switchHtml("tab-wheel-switch", !!settings.tab_wheel_switch) })}
+      ${settingRow({ title: "Double-click the strip's empty space", controlHtml: `<select class="field" id="strip-double-click" style="width:170px"><option value="maximize">Maximize the window</option><option value="new-tab">Open a new tab</option><option value="none">Nothing</option></select>` })}
+      ${settingRow({ title: "Middle-click the strip's empty space", controlHtml: `<select class="field" id="strip-middle-click" style="width:170px"><option value="none">Nothing</option><option value="new-tab">Open a new tab</option><option value="reopen">Reopen the last closed tab</option></select>` })}
+    </div>
+
+    <div class="setting-card">
       ${settingRow({ title: "Tab layout", desc: "Along the top, or in a column beside the page (it can be collapsed to icons, and dragged wider)", controlHtml: `<div class="segmented" id="tab-layout"><button data-v="horizontal">Top</button><button data-v="vertical">Side</button></div>` })}
       ${settingRow({ title: "When the tab strip is full", desc: "Shrink tabs down to their icons, or keep their titles and scroll the strip (the mouse wheel scrolls it too)", controlHtml: `<select class="field" id="tab-overflow" style="width:170px"><option value="shrink">Shrink tabs</option><option value="scroll">Keep titles, scroll</option></select>` })}
       ${settingRow({ title: "Hover cards", desc: "Resting the mouse on a tab shows its title, site and state", controlHtml: switchHtml("hover-cards", settings.tab_hover_cards !== false) })}
@@ -367,6 +219,15 @@ async function tabsPanel(settings) {
   </div>`);
 
   wireSwitch(p, "tabs-restore", "restore_tabs");
+  wireSwitch(p, "tab-drag-split", "tab_drag_split", { defaultOn: true });
+  wireSwitch(p, "pull-other-browsers", "pull_other_browsers", { defaultOn: true });
+  wireSwitch(p, "tab-cycle-mru", "tab_cycle_mru");
+  wireSwitch(p, "tab-wheel-switch", "tab_wheel_switch");
+  for (const [id, key, fallback] of [["strip-double-click", "strip_double_click", "maximize"], ["strip-middle-click", "strip_middle_click", "none"]]) {
+    const select = p.querySelector(`#${id}`);
+    select.value = settings[key] || fallback;
+    select.addEventListener("change", () => saveSettings({ [key]: select.value }));
+  }
   wireSwitch(p, "hover-cards", "tab_hover_cards", { defaultOn: true });
   wireSwitch(p, "hover-preview", "hover_card_preview", { defaultOn: true });
   wireSwitch(p, "hover-memory", "hover_card_memory", { defaultOn: true });

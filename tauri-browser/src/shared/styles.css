@@ -1,0 +1,454 @@
+/* Kessel UI styles -- the rules the style options switch on (the options and
+   the five styles themselves are in shared/styles.js, which sets
+   data-ui-style, data-k-* attributes, k-* classes and --k-* variables on
+   <html>).
+
+   Imported at the top of theme.css so every Kessel page has it. Being first,
+   a rule here has to be at least as specific as the page CSS it overrides,
+   hence the html[...] prefixes everywhere. html.k-solid = any style but
+   Liquid Glass (glass.css owns the glass toolbar). */
+
+@property --k-spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes k-tab-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes k-tab-slide { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes k-tab-drop { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes k-tab-flip { from { opacity: 0; transform: perspective(300px) rotateX(-75deg); } to { opacity: 1; transform: none; } }
+@keyframes k-spin { to { --k-spin: 360deg; } }
+@keyframes k-pulse { 50% { opacity: 0.35; } }
+@keyframes k-pulse-ring { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent); } }
+@keyframes k-drift {
+  from { transform: scale(1.25) translate(-6%, -4%); }
+  to { transform: scale(1.25) translate(6%, 4%); }
+}
+@keyframes k-glitch {
+  0%, 100% { text-shadow: none; transform: none; }
+  25% { text-shadow: -1.5px 0 var(--accent), 1.5px 0 var(--accent-2); transform: translateX(0.6px); }
+  50% { text-shadow: 1.5px 0 var(--accent), -1.5px 0 var(--accent-2); transform: translateX(-0.6px); }
+  75% { text-shadow: -1px 0 var(--accent-2), 1px 0 var(--accent); }
+}
+
+/* ===========================================================================
+   Everywhere: type, selection, icons, scrollbars
+   ========================================================================= */
+
+html[data-ui-style] body {
+  font-weight: var(--k-weight, 400);
+  letter-spacing: var(--k-letter, 0);
+  font-stretch: var(--k-stretch, 100%);
+}
+html[data-ui-style] :is(h1, h2, h3, h4) { font-weight: var(--k-weight-strong, 650); }
+html.k-label-case :is(h1, h2, h3, label.label, .shortcut-category, .k-label, .tab-group, .section h2) {
+  text-transform: var(--k-label-case);
+  font-variant-caps: var(--k-label-variant);
+}
+html.k-tab-case .tab-title {
+  text-transform: var(--k-tab-case);
+  font-variant-caps: var(--k-tab-variant);
+}
+html[data-ui-style] ::selection { background: color-mix(in srgb, var(--k-selection, var(--accent)) 35%, transparent); }
+html[data-ui-style] a { color: var(--k-link, var(--accent)); }
+
+/* Line icons (shared/icons.js) carry stroke-width="1.8"; CSS beats that. */
+html[data-ui-style] svg[stroke="currentColor"] { stroke-width: var(--k-icon-stroke, 1.8); }
+html[data-page="toolbar"] :is(#nav-cluster, #menu-cluster, #address-wrap, .rail-btn, #new-tab-btn, #tab-search-btn, #window-controls) svg { zoom: var(--k-icon-scale, 1); }
+
+html[data-ui-style] ::-webkit-scrollbar { width: var(--k-sb-w, 10px); height: var(--k-sb-w, 10px); }
+html[data-ui-style] ::-webkit-scrollbar-thumb {
+  background: var(--k-sb-thumb, var(--border));
+  background-clip: padding-box;
+  border-radius: var(--k-sb-rad, 10px);
+}
+html.k-sb-hidden ::-webkit-scrollbar { display: none; }
+
+/* ===========================================================================
+   Everywhere: components (theme.css) take the style's frame
+   ========================================================================= */
+
+html[data-ui-style] :is(.btn, .field, .card, .setting-card, .modal, .chip, .segmented, .key-chip, .site-chip) {
+  border-width: var(--k-border-w, 1px);
+  border-style: var(--k-border-style, solid);
+}
+html[data-ui-style] .btn.ghost { border-color: transparent; }
+html[data-ui-style] :is(.setting-card, .card) { border-radius: var(--k-panel-radius, 12px); }
+html[data-ui-style] .modal { border-radius: var(--k-panel-radius, 18px); }
+html[data-ui-style] .btn.primary {
+  background: var(--k-accent-fill, var(--accent));
+  border-color: transparent;
+  color: var(--accent-text);
+}
+html[data-ui-style] :is(.switch.on, .badge, .segmented button.active) { background: var(--k-accent-fill, var(--accent)); color: var(--accent-text); }
+
+/* Focus highlight on fields (the address bar: see the toolbar below). */
+html[data-k-focus="glow"] .field:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent); }
+html[data-k-focus="outline"] .field:focus { box-shadow: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+html[data-k-focus="underline"] .field:focus { border-color: var(--border); box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-k-focus="none"] .field:focus { border-color: var(--border); box-shadow: none; }
+
+/* Bevel and card shadows: raised things stand out, fields sink in. */
+html.k-bevel :is(.btn, .setting-card, .card, .chip, .segmented, .section) { box-shadow: var(--k-raise); }
+html.k-bevel .field:not(:focus) { box-shadow: var(--k-sunken); }
+html.k-gloss :is(.btn, .setting-card, .card, .section, .chip) { background-image: var(--k-gloss); }
+html.k-gloss .btn.primary { background: var(--k-gloss), var(--k-accent-fill, var(--accent)); }
+
+/* Site icons: shape and filter. */
+html[data-k-icon-shape]:not([data-k-icon-shape="squircle"]) .app-icon {
+  -webkit-mask: none;
+  mask: none;
+  border-radius: var(--k-icon-radius, 24%);
+  clip-path: var(--k-icon-clip, none);
+}
+html[data-k-icon-shape]:not([data-k-icon-shape="squircle"]) .rail-logo {
+  -webkit-mask: none;
+  mask: none;
+  border-radius: var(--k-icon-radius, 24%);
+  clip-path: var(--k-icon-clip, none);
+}
+html[data-ui-style] :is(.app-icon img, .fav-img, .tab-favicon img) { filter: var(--k-icon-filter, none); }
+
+/* Hover lift and press depth (translate/scale compose with the transforms
+   the pages already use). */
+html[data-ui-style] :is(.btn, .rail-btn, .pin-item, .tile, #nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .bm-chip, .tab) {
+  transition-property: background, background-color, color, border-color, box-shadow, transform, translate, scale, filter, opacity;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease);
+}
+html[data-ui-style] :is(.btn, .rail-btn, .pin-item, .tile, #nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .bm-chip):hover { translate: 0 calc(var(--k-lift, 0px) * -1); }
+html[data-ui-style] :is(.btn, .rail-btn, .pin-item, #nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .bm-chip, .tab):active { scale: var(--k-press, 0.96); }
+
+/* ===========================================================================
+   The toolbar (index.html) in the solid styles
+   ========================================================================= */
+
+/* Toolbar buttons: ghost (the stock look), raised plates, outlines, or
+   tinted fills. */
+html.k-solid[data-k-buttons="raised"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn) {
+  background: var(--surface-2);
+  border: var(--k-border-w, 1px) solid var(--border);
+  box-shadow: var(--k-raise);
+  background-image: var(--k-gloss, none);
+}
+html.k-solid[data-k-buttons="raised"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn):hover { background-color: var(--surface-hover); color: var(--text); }
+html.k-solid[data-k-buttons="raised"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn):active { box-shadow: var(--k-sunken); }
+html.k-solid[data-k-buttons="raised"] #nav-cluster { gap: 6px; }
+html.k-solid[data-k-buttons="outline"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn) {
+  border: 1px solid var(--border);
+  background: transparent;
+}
+html.k-solid[data-k-buttons="outline"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+html.k-solid[data-k-buttons="outline"] #nav-cluster { gap: 5px; }
+html.k-solid[data-k-buttons="filled"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+html.k-solid[data-k-buttons="filled"] :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn):hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* The active tab: its fill, lift and bevel. */
+html.k-solid .tab.active { box-shadow: var(--k-tab-shadow, none); }
+html.k-solid.k-bevel .tab.active { box-shadow: var(--k-raise), var(--k-tab-shadow, 0 0 #0000); }
+html.k-solid.k-gloss .tab.active { background-image: var(--k-gloss); }
+
+/* Slanted tabs need room for their sloped sides. */
+html[data-k-tab-shape="slanted"] .tab:not(.pinned) {
+  padding-left: calc(var(--k-tab-pad, 8px) + 10px);
+  padding-right: calc(var(--k-tab-pad, 8px) + 8px);
+}
+
+/* The active-tab marker. */
+html[data-k-indicator] .tab.active::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: auto;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  width: auto;
+  height: var(--k-ind, 2px);
+  border-radius: 2px;
+  background: var(--k-accent-fill, var(--accent));
+  box-shadow: none;
+}
+html[data-k-indicator="overline"] .tab.active::after { top: 0; bottom: auto; border-radius: 0 0 2px 2px; }
+html[data-k-indicator="glow"] .tab.active::after {
+  left: 14%;
+  right: 14%;
+  box-shadow: 0 0 6px 1px var(--k-glow-color, var(--accent)), 0 0 16px 2px color-mix(in srgb, var(--k-glow-color, var(--accent)) 45%, transparent);
+}
+html[data-k-indicator="side"] .tab.active::after { left: 0; right: auto; top: 22%; bottom: 22%; width: var(--k-ind, 2px); height: auto; border-radius: 0 2px 2px 0; }
+html[data-k-indicator="dot"] .tab.active::after { left: calc(50% - 2.5px); right: auto; width: 5px; height: 5px; bottom: 3px; border-radius: 50%; }
+html[data-k-indicator="none"] .tab.active::after { display: none; }
+html[data-k-indicator] .tab.grouped.active::after { background: var(--acct); }
+
+/* "Just a line": no tab fills at all, only the marker. */
+html[data-ui-style][data-k-tab-shape="underline"] .tab,
+html[data-ui-style][data-k-tab-shape="underline"] .tab:hover,
+html[data-ui-style][data-k-tab-shape="underline"] .tab.active {
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-ui-style][data-k-tab-shape="underline"] .tab:hover .tab-title { color: var(--text); }
+html[data-ui-style][data-k-tab-shape="underline"] .tab.active::after {
+  display: block;
+  top: auto;
+  bottom: 0;
+  left: 6px;
+  right: 6px;
+  width: auto;
+  height: var(--k-ind, 2px);
+}
+
+/* Close buttons. */
+html[data-k-close="always"] .tab .close-tab { opacity: 0.7; }
+html[data-k-close="active"] .tab:not(.active) .close-tab { display: none; }
+html[data-k-close="never"] .tab .close-tab { display: none; }
+
+/* Tab site icons off (pinned tabs keep theirs: it's all they show). */
+html.k-no-favicons .tab:not(.pinned) .tab-favicon { display: none; }
+
+/* Separators between two neighbouring background tabs. */
+html.k-tab-sep #tabs .tab:not(.active):not(:hover):not(.selected):not(.grouped) + .tab:not(.active):not(:hover):not(.selected):not(.grouped) {
+  background-image: linear-gradient(var(--border), var(--border));
+  background-repeat: no-repeat;
+  background-size: 1px 50%;
+  background-position: left center;
+}
+
+/* Address bar: focus highlight and shapes. */
+html.k-solid[data-k-focus="glow"] #address-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 50%, transparent); }
+html.k-solid[data-k-focus="outline"] #address-wrap:focus-within { box-shadow: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+html.k-solid[data-k-focus="underline"] #address-wrap:focus-within { border-color: var(--border); box-shadow: inset 0 -2px 0 var(--accent); }
+html.k-solid[data-k-focus="none"] #address-wrap:focus-within { border-color: var(--border); box-shadow: none; }
+/* A cut-corner bar clips anything drawn outside it: glow inward instead. */
+html.k-solid[data-k-address-shape="chamfer"] #address-wrap:focus-within { box-shadow: inset 0 0 0 1px var(--accent), inset 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent); outline: none; }
+html.k-solid[data-k-address-shape="underline"] #address-wrap {
+  background: transparent;
+  border-width: 0 0 max(var(--k-border-w, 1px), 1px) 0;
+  border-radius: 0;
+  padding-left: 4px;
+}
+html.k-bevel.k-solid:not([data-k-address-shape="underline"]) #address-wrap:not(:focus-within) { box-shadow: var(--k-sunken); }
+html.glass[data-k-address-shape="underline"] #address-wrap {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: inset 0 -1.5px 0 var(--lg-text-faint);
+}
+
+/* Window buttons. */
+html[data-k-winctl="mac"][data-ui-style] #window-controls {
+  gap: 8px;
+  padding: 0 12px 0 8px;
+  margin: 0;
+  align-self: center;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-k-winctl="mac"][data-ui-style] #window-controls button { width: 13px; height: 13px; padding: 0; border-radius: 50%; color: transparent; }
+html[data-k-winctl="mac"][data-ui-style] #window-controls button svg { zoom: 0.62; }
+html[data-k-winctl="mac"][data-ui-style] #window-controls #win-close { background: #ff5f57; order: 1; }
+html[data-k-winctl="mac"][data-ui-style] #window-controls #win-min { background: #febc2e; order: 2; }
+html[data-k-winctl="mac"][data-ui-style] #window-controls #win-max { background: #28c840; order: 3; }
+html[data-k-winctl="mac"][data-ui-style] #window-controls:hover button { color: rgb(0 0 0 / 0.6); }
+html[data-k-winctl="mac"][data-ui-style] #window-controls button:hover { filter: brightness(1.12); }
+html[data-k-winctl="minimal"][data-ui-style] #window-controls { background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-k-winctl="minimal"][data-ui-style] #window-controls button { width: 34px; background: none; color: var(--text-faint); }
+html[data-k-winctl="minimal"][data-ui-style].glass #window-controls button { color: var(--lg-text-faint); }
+html[data-k-winctl="minimal"][data-ui-style] #window-controls button:hover { background: none; color: var(--text); }
+html[data-k-winctl="minimal"][data-ui-style] #window-controls #win-close:hover { background: none; color: #ff453a; }
+html[data-k-winctl="outline"][data-ui-style] #window-controls { gap: 6px; margin: 0 2px 0 0; padding: 0; align-self: center; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+html[data-k-winctl="outline"][data-ui-style] #window-controls button { width: 30px; height: 24px; border: 1px solid var(--border); border-radius: var(--k-btn-radius, 6px); background: transparent; }
+html[data-k-winctl="outline"][data-ui-style] #window-controls button:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+html[data-k-winctl="outline"][data-ui-style] #window-controls #win-close:hover { border-color: #e81123; color: #fff; background: #e81123; }
+
+/* A band along the top edge of the window. */
+html[data-page="toolbar"]:not([data-k-stripe="none"]) body::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--k-stripe-h, 3px);
+  background: var(--k-stripe, none);
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* The rail as a floating capsule. */
+html.k-rail-float #rail {
+  background: transparent;
+  border-right: none;
+  padding: 8px 5px 8px 7px;
+  width: calc(var(--k-rail-w, 52px) + 10px);
+}
+html.k-rail-float #rail-capsule {
+  background: var(--k-rail-fill, var(--surface));
+  border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border);
+  border-radius: calc(var(--k-panel-radius, 14px) + 4px);
+  padding: 8px 0;
+  box-shadow: var(--k-shadow-sm, 0 0 #0000), var(--k-raise, 0 0 #0000);
+}
+html.k-no-logo .rail-logo { display: none; }
+
+/* A gradient, pattern or wallpaper behind the solid styles' toolbar
+   (painted into #wallpaper by glass.js; the bars go see-through). The new
+   tab page shows it too (newtab.html); menus and popups stay solid so their
+   text reads on anything. */
+html.k-wall[data-page="toolbar"] #wallpaper {
+  display: block;
+  position: fixed;
+  inset: var(--k-wall-inset, 0px);
+  z-index: 0;
+  pointer-events: none;
+  filter: var(--k-wall-filter, none);
+}
+html.k-wall[data-page="toolbar"] #app { position: relative; z-index: 1; }
+html.k-wall[data-page="toolbar"] #main-col { background: transparent; }
+html.k-ambient #wallpaper { animation: k-drift 60s ease-in-out var(--k-ambient-delay, 0s) infinite alternate; }
+
+/* ===========================================================================
+   Effects that work in every style
+   ========================================================================= */
+
+/* Glow around whatever is active or focused. */
+html.k-glow :is(.tab.active, #address-wrap:focus-within, #omnibox-wrap:focus-within, .btn.primary, .switch.on, .rail-logo, #progress-fill, .segmented button.active, .nav-item.active) {
+  filter: drop-shadow(0 0 calc(var(--k-glow, 0px) / 2) color-mix(in srgb, var(--k-glow-color, var(--accent)) 75%, transparent));
+}
+
+/* Neon text. */
+html.k-text-glow :is(.tab.active .tab-title, #url-input, .bm-chip:hover, #clock, #date, .panel > h2, .section h2, .nav-item.active) { text-shadow: var(--k-text-glow); }
+html.k-text-glow #url-input::placeholder { text-shadow: none; }
+
+/* Neon borders: the border colour is the accent's (styles.js); add a halo. */
+html.k-neon :is(.setting-card, .card, .modal, .section) {
+  box-shadow: var(--k-raise, 0 0 #0000), 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent), 0 0 14px -3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+html.k-neon.k-solid #address-wrap:not(:focus-within) { box-shadow: 0 0 10px -3px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* HUD corner brackets. */
+html.k-hud :is(.setting-card, .modal, .section, #omnibox-wrap),
+html.k-hud:not([data-k-address-shape="chamfer"]) #address-wrap { position: relative; }
+html.k-hud :is(.setting-card, .modal, .section, #omnibox-wrap)::after,
+html.k-hud:not([data-k-address-shape="chamfer"]) #address-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  --kb: var(--accent);
+  --kl: 11px;
+  --kt: 1.5px;
+  background:
+    linear-gradient(var(--kb), var(--kb)) top left / var(--kl) var(--kt),
+    linear-gradient(var(--kb), var(--kb)) top left / var(--kt) var(--kl),
+    linear-gradient(var(--kb), var(--kb)) top right / var(--kl) var(--kt),
+    linear-gradient(var(--kb), var(--kb)) top right / var(--kt) var(--kl),
+    linear-gradient(var(--kb), var(--kb)) bottom left / var(--kl) var(--kt),
+    linear-gradient(var(--kb), var(--kb)) bottom left / var(--kt) var(--kl),
+    linear-gradient(var(--kb), var(--kb)) bottom right / var(--kl) var(--kt),
+    linear-gradient(var(--kb), var(--kb)) bottom right / var(--kt) var(--kl);
+  background-repeat: no-repeat;
+}
+
+/* A light running around the address bar (and the new tab search) while
+   you type. */
+html.k-anim-border.k-solid #address-wrap:focus-within,
+html.k-anim-border #omnibox-wrap:focus-within {
+  border: max(var(--k-border-w, 1px), 1.5px) solid transparent;
+  background:
+    linear-gradient(var(--k-address-bg, var(--surface)), var(--k-address-bg, var(--surface))) padding-box,
+    conic-gradient(from var(--k-spin), var(--accent), var(--accent-2), transparent 35%, transparent 60%, var(--accent)) border-box;
+  animation: k-spin 3s linear infinite;
+}
+
+/* Rivets on panels and the rail. */
+html.k-rivets :is(.setting-card, .modal, .section) { position: relative; }
+html.k-rivets :is(.setting-card, .modal, .section)::before,
+html.k-rivets #rail::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  pointer-events: none;
+  z-index: 1;
+  --kr: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--text) 45%, var(--surface)) 0 1.4px, rgb(0 0 0 / 0.5) 2.1px, transparent 2.7px);
+  background: var(--kr) left top / 6px 6px, var(--kr) right top / 6px 6px, var(--kr) left bottom / 6px 6px, var(--kr) right bottom / 6px 6px;
+  background-repeat: no-repeat;
+}
+html.k-rivets #rail::after { inset: 4px 3px; }
+
+/* Ornaments around headings. */
+html.k-ornaments :is(.panel > h2, .section h2, #settings-nav h1, h1.k-orn)::before {
+  content: var(--k-ornament);
+  margin-right: 0.45em;
+  color: var(--accent);
+  opacity: 0.8;
+  font-weight: 400;
+}
+html.k-ornaments :is(.panel > h2, #settings-nav h1)::after {
+  content: var(--k-ornament);
+  display: inline-block;
+  margin-left: 0.45em;
+  color: var(--accent);
+  opacity: 0.8;
+  font-weight: 400;
+  transform: scaleX(-1);
+}
+html.k-ornaments[data-page="newtab"] #clock::after {
+  content: var(--k-ornament);
+  display: block;
+  margin-top: 10px;
+  font-size: 20px;
+  text-align: center;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+/* Glitch on hover. */
+html.k-glitch :is(.tab:hover .tab-title, .bm-chip:hover .bm-title, .nav-item:hover span, .tile:hover .tile-label) { animation: k-glitch 0.32s steps(2) 2; }
+
+/* Pulsing highlights. */
+html.k-pulse .tab.active::after { animation: k-pulse 2.4s ease-in-out infinite; }
+html.k-pulse.k-solid #address-wrap:focus-within,
+html.k-pulse .field:focus { animation: k-pulse-ring 2s ease-in-out infinite; }
+
+/* Grain, scanlines and vignette over the whole page (full pages only --
+   a menu's rounded corners would show the overlay's square ones). */
+html.k-overlay[data-page]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+  background-image: var(--k-overlay, none);
+  background-size: var(--k-overlay-size, auto);
+}
+
+/* Soft 3D (neumorphism): surfaces pressed out of the background, fields
+   and the active tab pressed into it. */
+html.k-soft :is(.setting-card, .card, .section, .btn:not(.ghost), .k-preset, .style-card, .modal) {
+  border-color: transparent;
+  box-shadow: 5px 5px 12px var(--k-soft-dark), -5px -5px 12px var(--k-soft-light);
+}
+html.k-soft.k-solid #address-wrap:not(:focus-within),
+html.k-soft .field:not(:focus) {
+  border-color: transparent;
+  box-shadow: inset 3px 3px 6px var(--k-soft-dark), inset -3px -3px 6px var(--k-soft-light);
+}
+html.k-soft.k-solid :is(#nav-cluster > button, #menu-cluster > button, .rail-btn, #new-tab-btn, #tab-search-btn):hover {
+  background: transparent;
+  box-shadow: 3px 3px 7px var(--k-soft-dark), -3px -3px 7px var(--k-soft-light);
+}
+html.k-soft.k-solid .tab.active { box-shadow: inset 2px 2px 5px var(--k-soft-dark), inset -2px -2px 5px var(--k-soft-light); }
+html.k-soft.k-rail-float #rail-capsule { border-color: transparent; box-shadow: 6px 6px 14px var(--k-soft-dark), -6px -6px 14px var(--k-soft-light); }

@@ -10,6 +10,7 @@ import { ENGINES, resolveInput, looksLikeUrl, toast, hostOf, listenHere, interna
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 import { setupOmnibox } from "./omnibox.js";
+import { playUiSound } from "./shared/sounds.js";
 
 const { invoke } = window.__TAURI__.core;
 // Only events for this window's toolbar (and broadcasts) -- see listenHere.
@@ -647,10 +648,21 @@ function wireWindowControls() {
   tabBar.addEventListener("mousedown", (e) => {
     if (e.button !== 0 || !isDragSurface(e.target)) return;
     if (e.detail === 2) {
-      appWindow.toggleMaximize();
+      // Double-click on the strip's empty space: maximize (as set in
+      // Settings -> Tabs), or a new tab like Chrome.
+      const action = currentSettings()?.strip_double_click || "maximize";
+      if (action === "maximize") appWindow.toggleMaximize();
+      else if (action === "new-tab") createTab();
       return;
     }
     appWindow.startDragging();
+  });
+  // Middle-click there: a new tab or the last closed one, if you want.
+  tabBar.addEventListener("auxclick", (e) => {
+    if (e.button !== 1 || !isDragSurface(e.target)) return;
+    const action = currentSettings()?.strip_middle_click || "none";
+    if (action === "new-tab") createTab();
+    else if (action === "reopen") reopenClosed();
   });
 
   const syncMaxIcon = async () => {
@@ -671,6 +683,7 @@ function wireWindowControls() {
 // shared with the new-tab page so its wallpaper lines up with ours.
 
 let reportedInsets = { left: -1, top: -1 };
+let reportedStrip = "";
 
 function reportChromeInsets() {
   // Vertical tabs sit between the rail and the page.
@@ -680,6 +693,14 @@ function reportChromeInsets() {
   const lastChrome = bm.hidden ? document.getElementById("nav-bar") : bm;
   const top = Math.ceil(lastChrome.getBoundingClientRect().bottom);
   writeChromeGeometry({ left, top, w: window.innerWidth, h: window.innerHeight });
+  // Where the tab strip is, for windows dragged onto it (tabdrag.rs).
+  const strip = document.getElementById(vtabs.hidden ? "tab-bar" : "vtabs").getBoundingClientRect();
+  const stripKey = `${strip.left}|${strip.top}|${strip.right}|${strip.bottom}`;
+  if (stripKey !== reportedStrip) {
+    reportedStrip = stripKey;
+    invoke("set_tab_strip", { left: strip.left, top: strip.top, right: strip.right, bottom: strip.bottom }).catch(() => {});
+  }
+  layoutSplitDivider();
   if (left === reportedInsets.left && top === reportedInsets.top) return Promise.resolve();
   reportedInsets = { left, top };
   return invoke("set_chrome_insets", { left, top }).catch(() => {});
@@ -760,13 +781,29 @@ async function restoreAfterToolbarReload() {
   return true;
 }
 
+// --- The tab strip ------------------------------------------------------------------
+// Redrawn by reconciling: each tab keeps its element from one redraw to the
+// next and only what changed on it is touched, so a title, spinner or icon
+// updating doesn't rebuild the strip -- hover states, animations and a drag
+// in progress survive, and a strip of a hundred tabs redraws in well under a
+// millisecond. Group labels are small and made afresh each time. Clicks,
+// right-clicks and presses are handled once, on the strip (wireTabStrip).
+
+const tabEls = new Map(); // tab id -> its element
+let lastScrolledTo = null;
+
 function renderTabs() {
   pushToolbarSnapshot();
+  // Mid-drag the strip belongs to the drag; it's redrawn when that ends.
+  if (drag) {
+    drag.redraw = true;
+    return;
+  }
   const container = document.getElementById("tabs");
-  container.innerHTML = "";
   for (const id of selectedTabs) if (!findTab(id) || id === activeTabId) selectedTabs.delete(id);
   for (const id of [...tabGroups.keys()]) if (!tabs.some((t) => t.group === id)) tabGroups.delete(id); // emptied
-  const hoverCards = currentSettings()?.tab_hover_cards !== false;
+  const wanted = [];
+  const seen = new Set();
   let prevGroup = null;
   let prevUserGroup = null;
   tabs.forEach((tab, i) => {
@@ -775,100 +812,1064 @@ function renderTabs() {
     // Pinned tabs sit in front of everything, small, without a chip.
     const account = accountById(tab.account);
     const grouped = account && !tab.pinned;
-    if (grouped && account.id !== prevGroup) container.appendChild(groupChip(account));
+    if (grouped && account.id !== prevGroup) wanted.push(groupChip(account));
     prevGroup = grouped ? account.id : null;
     if (grouped && collapsedGroups.has(account.id) && tab.id !== activeTabId) return;
     // A tab group: its label first, a line in its colour under its tabs.
     const group = groupOf(tab);
-    if (group && group.id !== prevUserGroup) container.appendChild(userGroupChip(group));
+    if (group && group.id !== prevUserGroup) wanted.push(userGroupChip(group));
     prevUserGroup = group?.id ?? null;
     if (group?.collapsed && tab.id !== activeTabId) return;
-    const lastInGroup = group && tabs[i + 1]?.group !== group.id;
-
-    const el = document.createElement("div");
-    el.className = "tab" +
-      (tab.id === activeTabId ? " active" : "") +
-      (selectedTabs.has(tab.id) ? " selected" : "") +
-      (tab.pinned ? " pinned" : "") +
-      (tab.justCreated ? " tab-enter" : "") +
-      (tab.discarded ? " discarded" : "") +
-      (tab.frozen ? " frozen" : "") +
-      (tab.attention ? " attention" : "") +
-      (isHeavy(tab) ? " heavy" : "") +
-      (account ? " grouped" : "") +
-      (group ? " in-group" : "") +
-      (lastInGroup ? " group-end" : "");
-    if (account) el.style.setProperty("--acct", account.color);
-    if (group) el.style.setProperty("--group", groupColor(group));
-    tab.justCreated = false;
-    // The full title on hover -- the strip truncates it (hover cards say
-    // more, when they're on).
-    if (!hoverCards) el.title = tab.discarded ? `${tab.title || ""}\nSleeping to save memory -- click to wake it up`.trim() : tab.title || "";
-    el.dataset.tabId = String(tab.id);
-    el.draggable = true;
-    if (hoverCards) wireHoverCard(el, tab);
-
-    const fav = document.createElement("span");
-    fav.className = "tab-favicon" + (tab.loading ? " loading" : "");
-    fav.innerHTML = tab.loading ? icon("reload", 11) : faviconGlyph(tab);
-
-    const title = document.createElement("span");
-    title.className = "tab-title";
-    title.textContent = tab.title || (tab.url ? hostOf(tab.url) : "New Tab");
-    el.append(fav, title);
-    if (group) el.insertAdjacentHTML("beforeend", `<span class="group-line"></span>`);
-
-    // Playing sound, or muted: a speaker to click (mute / unmute).
-    if (tab.audible || tab.muted) {
-      const audio = document.createElement("span");
-      audio.className = "tab-audio" + (tab.muted ? " muted" : "");
-      audio.title = tab.muted ? "Unmute this tab" : "Mute this tab";
-      audio.innerHTML = icon(tab.muted ? "volumeOff" : "volume", 13);
-      el.appendChild(audio);
-    }
-
-    if (!tab.pinned) {
-      const close = document.createElement("span");
-      close.className = "close-tab";
-      close.innerHTML = icon("close", 12);
-      el.appendChild(close);
-    }
-
-    el.addEventListener("click", (e) => {
-      if (e.target.closest(".close-tab")) {
-        e.stopPropagation();
-        closeTab(tab.id);
-      } else if (e.target.closest(".tab-audio")) {
-        e.stopPropagation();
-        toggleMute([tab]);
-      } else if (e.ctrlKey || e.metaKey) {
-        toggleSelected(tab);
-      } else if (e.shiftKey) {
-        selectRange(tab);
-      } else {
-        activateTab(tab.id);
-      }
-    });
-    el.addEventListener("auxclick", (e) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        closeTab(tab.id);
-      }
-    });
-    el.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      hideHoverCard();
-      showTabContextMenu(tab, e.clientX, e.clientY);
-    });
-    wireTabDrag(el, tab);
-
-    container.appendChild(el);
+    seen.add(tab.id);
+    wanted.push(tabElement(tab, account, group, !!group && tabs[i + 1]?.group !== group.id));
   });
+  for (const [id, el] of tabEls) {
+    if (!seen.has(id)) {
+      tabEls.delete(id);
+      retireTab(el);
+    }
+  }
+  for (const el of [...container.children]) if (!el.dataset.tabId && !el.classList.contains("closing")) el.remove(); // the last redraw's labels
+  // In order, moving only what's out of place (closing tabs keep theirs
+  // until they've shrunk away).
+  let cursor = container.firstElementChild;
+  for (const el of wanted) {
+    while (cursor && cursor.classList.contains("closing")) cursor = cursor.nextElementSibling;
+    if (cursor === el) cursor = cursor.nextElementSibling;
+    else container.insertBefore(el, cursor);
+  }
   // The tab you're on stays in view in a strip too full to show every tab.
-  const active = container.querySelector(".tab.active");
-  if (active && !draggedTabId) active.scrollIntoView({ block: "nearest", inline: "nearest" });
-  updateStripOverflow();
+  const scrollKey = `${activeTabId}|${tabs.length}|${isVerticalTabs()}`;
+  if (scrollKey !== lastScrolledTo) {
+    lastScrolledTo = scrollKey;
+    scrollActivePending = true;
+  }
+  markSplit();
+  scheduleStripOverflow();
 }
+
+function setStyleVar(el, name, value) {
+  if (!value) el.style.removeProperty(name);
+  else if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value);
+}
+
+// Tab `tab`'s element, made the first time and brought up to date after.
+function tabElement(tab, account, group, lastInGroup) {
+  let el = tabEls.get(tab.id);
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "tab";
+    el.dataset.tabId = String(tab.id);
+    el.innerHTML = `<span class="tab-favicon"></span><span class="tab-title"></span>`;
+    wireHoverCard(el);
+    tabEls.set(tab.id, el);
+    if (tab.justCreated) {
+      el.classList.add("tab-enter");
+      el.addEventListener("animationend", () => el.classList.remove("tab-enter"), { once: true });
+    }
+  }
+  tab.justCreated = false;
+  const c = el.classList;
+  c.toggle("active", tab.id === activeTabId);
+  c.toggle("selected", selectedTabs.has(tab.id));
+  c.toggle("pinned", !!tab.pinned);
+  c.toggle("discarded", !!tab.discarded);
+  c.toggle("frozen", !!tab.frozen);
+  c.toggle("attention", !!tab.attention);
+  c.toggle("heavy", isHeavy(tab));
+  c.toggle("grouped", !!account);
+  c.toggle("in-group", !!group);
+  c.toggle("group-end", !!lastInGroup);
+  setStyleVar(el, "--acct", account?.color);
+  setStyleVar(el, "--group", group ? groupColor(group) : null);
+  // The full title on hover -- the strip truncates it (hover cards say
+  // more, when they're on).
+  const tip = currentSettings()?.tab_hover_cards !== false ? null : tab.discarded ? `${tab.title || ""}\nSleeping to save memory -- click to wake it up`.trim() : tab.title || "";
+  if (tip === null) el.removeAttribute("title");
+  else if (el.title !== tip) el.title = tip;
+  const iconKey = tab.loading ? "loading" : tab.favicon ? `img ${tab.favicon}` : `${tab.url || ""}`;
+  if (el._icon !== iconKey) {
+    el._icon = iconKey;
+    const fav = el.firstElementChild;
+    fav.classList.toggle("loading", !!tab.loading);
+    fav.innerHTML = tab.loading ? icon("reload", 11) : faviconGlyph(tab);
+  }
+  const text = tab.title || (tab.url ? hostOf(tab.url) : "New Tab");
+  const title = el.children[1];
+  if (title.textContent !== text) title.textContent = text;
+  // The rest -- group line, speaker, close button -- only redone when what
+  // it holds changes.
+  const tail = `${group ? "g" : ""}|${tab.muted ? "m" : tab.audible ? "a" : ""}|${tab.pinned ? "" : "x"}`;
+  if (el._tail !== tail) {
+    el._tail = tail;
+    while (el.children.length > 2) el.lastElementChild.remove();
+    if (group) el.insertAdjacentHTML("beforeend", `<span class="group-line"></span>`);
+    if (tab.audible || tab.muted) {
+      el.insertAdjacentHTML("beforeend", `<span class="tab-audio${tab.muted ? " muted" : ""}" title="${tab.muted ? "Unmute this tab" : "Mute this tab"}">${icon(tab.muted ? "volumeOff" : "volume", 13)}</span>`);
+    }
+    if (!tab.pinned) el.insertAdjacentHTML("beforeend", `<span class="close-tab">${icon("close", 12)}</span>`);
+  }
+  return el;
+}
+
+// A tab that left the strip shrinks away (a sideways strip only; it just
+// goes when motion is reduced or the strip runs down the side).
+function retireTab(el) {
+  if (!el.isConnected || isVerticalTabs() || document.documentElement.classList.contains("reduce-motion") || drag) {
+    el.remove();
+    return;
+  }
+  el.style.maxWidth = `${el.getBoundingClientRect().width}px`;
+  el.classList.add("closing");
+  el.offsetWidth; // start from its width
+  el.classList.add("shrink");
+  const done = () => el.remove();
+  el.addEventListener("transitionend", done, { once: true });
+  setTimeout(done, 400);
+}
+
+// Scrolls the strip just enough to show tab element `el` -- from its layout
+// position, not its box on screen, which a tab still popping in (scaled
+// down) would get wrong.
+function revealTab(el) {
+  if (!el) return;
+  const strip = document.getElementById("tabs");
+  const vertical = isVerticalTabs();
+  const start = vertical ? el.offsetTop : el.offsetLeft;
+  const size = vertical ? el.offsetHeight : el.offsetWidth;
+  const view = vertical ? strip.clientHeight : strip.clientWidth;
+  const pos = vertical ? strip.scrollTop : strip.scrollLeft;
+  const next = start < pos ? start : start + size > pos + view ? start + size - view : pos;
+  if (next === pos) return;
+  if (vertical) strip.scrollTop = next;
+  else strip.scrollLeft = next;
+}
+
+let overflowFrame = 0;
+let scrollActivePending = false;
+function scheduleStripOverflow() {
+  if (!overflowFrame) {
+    overflowFrame = requestAnimationFrame(() => {
+      overflowFrame = 0;
+      updateStripOverflow();
+      // After the tabs have their sizes: the one you're on in view.
+      if (scrollActivePending) {
+        scrollActivePending = false;
+        revealTab(tabEls.get(activeTabId));
+      }
+    });
+  }
+}
+
+function tabFromEvent(e) {
+  const el = e.target.closest?.(".tab");
+  return el && !el.classList.contains("closing") ? findTab(parseInt(el.dataset.tabId, 10)) : null;
+}
+
+function wireTabStrip() {
+  const strip = document.getElementById("tabs");
+  // A drag that just ended isn't a click.
+  strip.addEventListener(
+    "click",
+    (e) => {
+      if (performance.now() < suppressClickUntil) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+    true
+  );
+  strip.addEventListener("click", (e) => {
+    const tab = tabFromEvent(e);
+    if (!tab) return;
+    if (e.target.closest(".close-tab")) {
+      e.stopPropagation();
+      closeTab(tab.id);
+    } else if (e.target.closest(".tab-audio")) {
+      e.stopPropagation();
+      toggleMute([tab]);
+    } else if (e.ctrlKey || e.metaKey) {
+      toggleSelected(tab);
+    } else if (e.shiftKey) {
+      selectRange(tab);
+    } else if (tab.id !== activeTabId) {
+      activateTab(tab.id);
+    }
+  });
+  strip.addEventListener("auxclick", (e) => {
+    const tab = e.button === 1 && tabFromEvent(e);
+    if (!tab) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeTab(tab.id);
+  });
+  strip.addEventListener("contextmenu", (e) => {
+    const tab = tabFromEvent(e);
+    if (!tab) return;
+    e.preventDefault();
+    hideHoverCard();
+    showTabContextMenu(tab, e.clientX, e.clientY);
+  });
+  strip.addEventListener("pointerdown", onStripPointerDown);
+  wireExternalDrops();
+  wireSplitDivider();
+}
+
+// --- Dragging tabs and groups ---------------------------------------------------------
+// A tab (with any others picked alongside it), a group's label (the whole
+// group) or an account's label (its tabs) follows the pointer, and the rest
+// of the strip slides aside to show where it will land. Pulled out of the
+// strip it leaves in a window of its own that keeps following the pointer --
+// let go over another window's strip, it joins that one (tabdrag.rs). Held
+// at the page's left or right edge, it opens beside the tab you're on
+// (split view). Ctrl held when letting go copies instead of moving.
+
+const DRAG_THRESHOLD = 5;
+const DETACH_DISTANCE = 44;
+let press = null; // a press that isn't a drag (yet)
+let drag = null;
+let suppressClickUntil = 0;
+
+function onStripPointerDown(e) {
+  if (e.button !== 0 || groupEdit || e.target.closest(".close-tab, .tab-audio, input")) return;
+  const item = e.target.closest(".tab, .tab-group");
+  if (!item || item.classList.contains("closing")) return;
+  // Like Chrome: a tab comes up as you press it, not when you let go.
+  if (item.classList.contains("tab") && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+    const id = parseInt(item.dataset.tabId, 10);
+    if (id !== activeTabId && findTab(id)) activateTab(id);
+  }
+  press = { item, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+  window.addEventListener("pointermove", onPressMove);
+  window.addEventListener("pointerup", endPress);
+  window.addEventListener("pointercancel", endPress);
+}
+
+function onPressMove(e) {
+  if (!press) return;
+  if (Math.abs(e.clientX - press.x) + Math.abs(e.clientY - press.y) < DRAG_THRESHOLD) return;
+  const p = press;
+  endPress();
+  startDrag(p, e);
+}
+
+function endPress() {
+  press = null;
+  window.removeEventListener("pointermove", onPressMove);
+  window.removeEventListener("pointerup", endPress);
+  window.removeEventListener("pointercancel", endPress);
+}
+
+// Several picked tabs travel together: gathered, in strip order, where the
+// first of the rest after the one you hold was.
+function gatherTabs(list, held) {
+  const moving = new Set(list);
+  const rest = tabs.filter((t) => !moving.has(t));
+  let at = rest.indexOf(tabs.slice(tabs.indexOf(held)).find((t) => !moving.has(t)));
+  if (at < 0) at = rest.length;
+  rest.splice(at, 0, ...list);
+  tabs = rest;
+  normalizeGroups();
+  renderTabs();
+}
+
+function startDrag(p, e) {
+  const { item } = p;
+  if (!item.isConnected) return;
+  hideHoverCard();
+  const strip = document.getElementById("tabs");
+  let kind;
+  let moving;
+  let group = null;
+  if (item.classList.contains("tab")) {
+    const held = findTab(parseInt(item.dataset.tabId, 10));
+    if (!held) return;
+    kind = "tabs";
+    moving = targetsFor(held).filter((t) => !!t.pinned === !!held.pinned && (t.account ?? null) === (held.account ?? null) && !isHiddenInGroup(t));
+    if (!moving.includes(held)) moving = [held];
+    if (moving.length > 1) gatherTabs(moving, held);
+  } else if (item.dataset.userGroup) {
+    group = tabGroups.get(item.dataset.userGroup);
+    if (!group) return;
+    kind = "group";
+    moving = tabs.filter((t) => t.group === group.id);
+  } else if (item.dataset.group) {
+    kind = "account";
+    moving = tabs.filter((t) => t.account === item.dataset.group && !t.pinned);
+  } else {
+    return;
+  }
+  if (!moving.length) return;
+  const vertical = isVerticalTabs();
+  const pinnedLane = kind === "tabs" && !!moving[0].pinned;
+  const axis = vertical && !pinnedLane ? "y" : "x";
+  const ids = new Set(moving.map((t) => t.id));
+  const inBlock = (el) =>
+    el.dataset.tabId ? ids.has(parseInt(el.dataset.tabId, 10)) : (kind === "group" && el.dataset.userGroup === group.id) || (kind === "account" && el.dataset.group === item.dataset.group);
+  const scroll0 = axis === "x" ? strip.scrollLeft : strip.scrollTop;
+  const items = [...strip.children]
+    .filter((el) => !el.classList.contains("closing") && (!vertical || el.classList.contains("pinned") === pinnedLane))
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      const tab = el.dataset.tabId ? findTab(parseInt(el.dataset.tabId, 10)) : null;
+      const groupAccount = el.dataset.userGroup ? tabs.find((t) => t.group === el.dataset.userGroup)?.account ?? null : null;
+      return {
+        el,
+        start: (axis === "x" ? r.left : r.top) + scroll0,
+        size: axis === "x" ? r.width : r.height,
+        block: inBlock(el),
+        pinned: el.classList.contains("pinned"),
+        acct: tab ? (tab.pinned ? null : tab.account ?? null) : el.dataset.group || groupAccount,
+        accountChip: !!el.dataset.group,
+        grp: tab ? tab.group ?? null : el.dataset.userGroup || null,
+      };
+    });
+  const block = items.filter((m) => m.block);
+  if (!block.length) return;
+  const others = items.filter((m) => !m.block);
+  const blockStart = Math.min(...block.map((m) => m.start));
+  const blockEnd = Math.max(...block.map((m) => m.start + m.size));
+  const gap = parseFloat(getComputedStyle(strip)[axis === "x" ? "columnGap" : "rowGap"]) || 0;
+  const acct = kind === "account" ? item.dataset.group : pinnedLane ? null : moving[0].account ?? null;
+  const rules = { kind, pinned: pinnedLane, acct, ownAcct: !!acct && others.some((o) => o.acct === acct && !o.pinned), pinnedBefore: others.filter((o) => o.pinned).length };
+  const allowed = [];
+  for (let k = 0; k <= others.length; k++) allowed.push(slotAllowed(k, others, rules));
+  const first = block[0].el.getBoundingClientRect();
+  const index0 = others.filter((o) => o.start < blockStart).length;
+  drag = {
+    kind,
+    group,
+    moving,
+    ids,
+    block,
+    others,
+    allowed,
+    axis,
+    vertical,
+    index0,
+    k: index0,
+    blockStart,
+    blockSize: blockEnd - blockStart,
+    step: blockEnd - blockStart + gap,
+    laneStart: Math.min(...items.map((m) => m.start)),
+    laneEnd: Math.max(...items.map((m) => m.start + m.size)),
+    origin: (axis === "x" ? p.x : p.y) + scroll0,
+    // Where the pointer holds the first dragged element (for a new window).
+    grab: { x: p.x - first.left, y: p.y - first.top, top: first.top, left: first.left },
+    stripRect: strip.getBoundingClientRect(),
+    barRect: document.getElementById(vertical ? "vtabs" : "tab-bar").getBoundingClientRect(),
+    pointer: { x: e.clientX, y: e.clientY },
+    pointerId: p.pointerId,
+    frame: 0,
+    redraw: false,
+    splitSide: null,
+    detaching: false,
+  };
+  try {
+    strip.setPointerCapture(p.pointerId);
+  } catch {}
+  document.documentElement.classList.add("tab-dragging");
+  for (const m of block) m.el.classList.add("dragging");
+  for (const o of others) o.el.classList.add("drag-shift");
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", onDragEnd);
+  window.addEventListener("pointercancel", onDragCancel);
+  window.addEventListener("keydown", onDragKey, true);
+  playSound("lift");
+  applyDrag();
+}
+
+// Whether the dragged block may land before the k-th of the other items.
+function slotAllowed(k, others, rules) {
+  const left = others[k - 1];
+  const right = others[k];
+  // Pinned tabs stay among the pinned, the rest after them.
+  if (rules.pinned ? k > rules.pinnedBefore : k < rules.pinnedBefore) return false;
+  if (rules.pinned) return true;
+  const la = left && !left.pinned ? left.acct : null;
+  const ra = right ? right.acct : null;
+  // An account's tabs stay together: nothing lands inside them, and theirs
+  // land nowhere else (never in front of their label).
+  if (rules.ownAcct) {
+    if (la !== rules.acct && ra !== rules.acct) return false;
+    if (right?.accountChip && la !== rules.acct) return false;
+  } else if (la && la === ra) {
+    return false;
+  }
+  // A whole group or account doesn't land inside a group.
+  if (rules.kind !== "tabs" && left?.grp && left.grp === right?.grp) return false;
+  return true;
+}
+
+function nearestSlot(d, k) {
+  if (d.allowed[k]) return k;
+  for (let i = 1; i <= d.others.length; i++) {
+    if (d.allowed[k - i]) return k - i;
+    if (d.allowed[k + i]) return k + i;
+  }
+  return d.index0;
+}
+
+function onDragMove(e) {
+  if (!drag) return;
+  drag.pointer = { x: e.clientX, y: e.clientY };
+  if (!drag.frame) drag.frame = requestAnimationFrame(applyDrag);
+}
+
+function onDragKey(e) {
+  if (e.key !== "Escape" || !drag) return;
+  e.preventDefault();
+  e.stopPropagation();
+  cancelDrag();
+}
+
+function applyDrag() {
+  const d = drag;
+  if (!d || d.detaching) return;
+  d.frame = 0;
+  const strip = document.getElementById("tabs");
+  const { x, y } = d.pointer;
+  if (leaveStrip(d, x, y)) return;
+  const scroll = d.axis === "x" ? strip.scrollLeft : strip.scrollTop;
+  const p = (d.axis === "x" ? x : y) + scroll;
+  const delta = Math.min(Math.max(p - d.origin, d.laneStart - d.blockStart), d.laneEnd - d.blockStart - d.blockSize);
+  // Its leading edge passing a neighbour's middle swaps them (so it can
+  // reach either end even though it can't go past the strip's ends).
+  const lead = d.blockStart + delta;
+  const trail = lead + d.blockSize;
+  const mid = (o) => o.start + o.size / 2;
+  let k = 0;
+  while (k < d.index0 && mid(d.others[k]) <= lead) k++;
+  if (k === d.index0) while (k < d.others.length && mid(d.others[k]) < trail) k++;
+  k = nearestSlot(d, k);
+  const move = d.axis === "x" ? "translateX" : "translateY";
+  if (k !== d.k) {
+    d.k = k;
+    d.others.forEach((o, i) => {
+      const shift = i >= k && i < d.index0 ? d.step : i >= d.index0 && i < k ? -d.step : 0;
+      o.el.style.transform = shift ? `${move}(${shift}px)` : "";
+    });
+    previewGroupJoin(d);
+  }
+  for (const m of d.block) m.el.style.transform = `${move}(${delta}px)`;
+  // Near an end of a strip too long to show: it scrolls along.
+  const r = d.stripRect;
+  const [lo, hi, pos, room] = d.axis === "x" ? [r.left, r.right, x, strip.scrollWidth - strip.clientWidth] : [r.top, r.bottom, y, strip.scrollHeight - strip.clientHeight];
+  if (room > 0) {
+    const speed = pos < lo + 30 ? -(lo + 30 - pos) * 0.5 : pos > hi - 30 ? (pos - hi + 30) * 0.5 : 0;
+    if (speed) {
+      if (d.axis === "x") strip.scrollLeft += speed;
+      else strip.scrollTop += speed;
+      d.frame = requestAnimationFrame(applyDrag);
+    }
+  }
+}
+
+// The group a dragged tab would join where it is now: it shows that group's
+// line while held there.
+function previewGroupJoin(d) {
+  if (d.kind !== "tabs" || d.moving[0].pinned) return;
+  const left = d.others[d.k - 1];
+  const right = d.others[d.k];
+  const joining = left?.grp && left.grp === right?.grp ? tabGroups.get(left.grp) : null;
+  for (const m of d.block) {
+    const own = groupOf(findTab(parseInt(m.el.dataset.tabId, 10)));
+    const shown = joining || own;
+    m.el.classList.toggle("in-group", !!shown);
+    setStyleVar(m.el, "--group", shown ? groupColor(shown) : null);
+  }
+}
+
+// Past the strip: beside the page (split view), or out into a window.
+// Over the page, a moment's grace before leaving: long enough to carry a
+// tab across to an edge -- pulled far down or out of the window, it goes
+// at once.
+function leaveStrip(d, x, y) {
+  const side = splitSideAt(d, x, y);
+  if (side !== d.splitSide) setSplitSide(d, side);
+  if (side) {
+    d.outSince = 0;
+    return true;
+  }
+  const b = d.barRect;
+  const outOfWindow = x < -DETACH_DISTANCE || y < -DETACH_DISTANCE || x > innerWidth + DETACH_DISTANCE || y > innerHeight + DETACH_DISTANCE;
+  const past = d.vertical ? x - b.right : y - b.bottom;
+  if (!outOfWindow && past <= DETACH_DISTANCE) {
+    d.outSince = 0;
+    return false;
+  }
+  // Heading sideways (toward an edge, for split view) keeps it in the
+  // window; heading down, or stopping, lets it go.
+  const dx = x - (d.lastX ?? x);
+  const dy = y - (d.lastY ?? y);
+  d.lastX = x;
+  d.lastY = y;
+  d.sideways = (d.sideways ?? 0) * 0.6 + (Math.abs(dx) - Math.abs(dy)) * 0.4;
+  const now = performance.now();
+  if (!d.outSince || (d.sideways > 1 && !d.vertical)) d.outSince = now;
+  if (outOfWindow || past > Math.max(220, (innerHeight - b.bottom) * 0.45) || now - d.outSince > 260) {
+    detachDrag(d);
+  } else if (!d.frame) {
+    d.frame = requestAnimationFrame(applyDrag); // decides again once the grace is up
+  }
+  return true;
+}
+
+// The tab the one you drag would open beside: the tab you're on -- or, when
+// that's the one being dragged, the one you were on before.
+function splitPartner(tab) {
+  const live = (t) => t && t !== tab && t.id > 0 && !t.discarded;
+  const active = findTab(activeTabId);
+  if (live(active)) return active;
+  return recentTabs.map(findTab).find(live) || null;
+}
+
+function splitSideAt(d, x, y) {
+  if (d.kind !== "tabs" || d.moving.length !== 1 || currentSettings()?.tab_drag_split === false) return null;
+  const tab = d.moving[0];
+  if (!(tab.id > 0) || tab.discarded || !splitPartner(tab)) return null;
+  const left = reportedInsets.left;
+  const top = reportedInsets.top;
+  if (y < top + 24 || y > innerHeight || x < left || x > innerWidth) return null;
+  const zone = Math.max(90, (innerWidth - left) * 0.16);
+  if (x > innerWidth - zone) return "right";
+  if (!d.vertical && x < left + zone) return "left";
+  return null;
+}
+
+// Shows (or takes away) where a tab held at a page edge will open: the page
+// steps aside and the toolbar underneath shows the spot.
+function setSplitSide(d, side) {
+  d.splitSide = side;
+  const hint = document.getElementById("split-hint");
+  invoke("split_preview", { side }).catch(() => {});
+  if (!side) {
+    hint.hidden = true;
+    return;
+  }
+  const left = reportedInsets.left;
+  const half = Math.round((innerWidth - left - SPLIT_GAP) / 2);
+  hint.style.top = `${reportedInsets.top}px`;
+  hint.style.left = `${side === "right" ? left + half + SPLIT_GAP : left}px`;
+  hint.style.width = `${half}px`;
+  hint.querySelector(".split-hint-title").textContent = d.moving[0].title || hostOf(d.moving[0].url || "") || "This tab";
+  hint.hidden = false;
+  playSound("hover");
+}
+
+function onDragEnd(e) {
+  const d = drag;
+  if (!d) return;
+  if (d.detaching) return;
+  if (d.splitSide) {
+    const side = d.splitSide;
+    const tab = d.moving[0];
+    setSplitSide(d, null);
+    restoreDrag(d);
+    finishDrag(d);
+    openSplit(tab, side);
+    return;
+  }
+  if (d.frame) {
+    cancelAnimationFrame(d.frame);
+    d.frame = 0;
+    applyDrag();
+  }
+  if (drag === d) commitDrag(d, e.ctrlKey && d.kind === "tabs");
+}
+
+function onDragCancel() {
+  if (drag && !drag.detaching) cancelDrag();
+}
+
+function cancelDrag() {
+  const d = drag;
+  if (!d) return;
+  if (d.splitSide) setSplitSide(d, null);
+  restoreDrag(d);
+  finishDrag(d);
+}
+
+// Everything slides back to where it was.
+function restoreDrag(d) {
+  for (const m of [...d.others, ...d.block]) {
+    m.el.classList.add("drag-shift");
+    m.el.style.transform = "";
+  }
+}
+
+function finishDrag(d) {
+  if (d.frame) cancelAnimationFrame(d.frame);
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", onDragEnd);
+  window.removeEventListener("pointercancel", onDragCancel);
+  window.removeEventListener("keydown", onDragKey, true);
+  try {
+    document.getElementById("tabs").releasePointerCapture(d.pointerId);
+  } catch {}
+  document.documentElement.classList.remove("tab-dragging");
+  for (const m of d.block) m.el.classList.remove("dragging");
+  setTimeout(() => {
+    if (!drag) for (const m of [...d.others, ...d.block]) m.el.classList.remove("drag-shift");
+  }, 320);
+  suppressClickUntil = performance.now() + 60;
+  if (drag === d) drag = null;
+  if (d.redraw) renderTabs();
+}
+
+// Let go in the strip: the block takes its new place (gliding in from where
+// it was let go), and the tab list follows.
+function commitDrag(d, copy) {
+  const strip = document.getElementById("tabs");
+  const axisKey = d.axis === "x" ? "left" : "top";
+  const move = d.axis === "x" ? "translateX" : "translateY";
+  if (copy || d.k === d.index0) {
+    restoreDrag(d);
+    finishDrag(d);
+    if (copy) copyTabsTo(d.moving, d.others[d.k - 1]?.el);
+    else playSound("drop");
+    return;
+  }
+  const from = d.block.map((m) => m.el.getBoundingClientRect()[axisKey]);
+  const lastOther = d.others[d.others.length - 1]?.el;
+  const anchor = d.others[d.k]?.el ?? lastOther?.nextSibling ?? null;
+  const root = document.documentElement;
+  root.classList.add("tab-settling");
+  for (const m of d.block) strip.insertBefore(m.el, anchor);
+  for (const m of [...d.others, ...d.block]) m.el.style.transform = "";
+  const to = d.block.map((m) => m.el.getBoundingClientRect()[axisKey]);
+  d.block.forEach((m, i) => {
+    if (Math.abs(from[i] - to[i]) > 0.5) m.el.style.transform = `${move}(${from[i] - to[i]}px)`;
+  });
+  strip.offsetWidth;
+  root.classList.remove("tab-settling");
+  for (const m of d.block) m.el.classList.add("drag-shift");
+  finishDrag(d);
+  requestAnimationFrame(() => {
+    for (const m of d.block) m.el.style.transform = "";
+  });
+  applyStripOrder(d);
+  playSound("drop");
+}
+
+// The tab list takes the strip's order (a folded group's hidden tabs stay
+// right behind its label); a dragged tab dropped between two tabs of a
+// group joins it, one dropped away from its own group leaves it.
+function applyStripOrder(d) {
+  const children = [...document.getElementById("tabs").children].filter((c) => !c.classList.contains("closing"));
+  const shown = new Set(children.filter((c) => c.dataset.tabId).map((c) => parseInt(c.dataset.tabId, 10)));
+  const order = [];
+  for (const c of children) {
+    if (c.dataset.group) order.push(...tabs.filter((t) => t.account === c.dataset.group && !t.pinned && !shown.has(t.id)));
+    else if (c.dataset.userGroup) order.push(...tabs.filter((t) => t.group === c.dataset.userGroup && !shown.has(t.id)));
+    else if (c.dataset.tabId) order.push(findTab(parseInt(c.dataset.tabId, 10)));
+  }
+  if (d.kind === "tabs" && !d.moving[0].pinned) {
+    const els = d.block.map((m) => m.el);
+    const groupAt = (node) => node?.dataset.userGroup || (node?.dataset.tabId ? findTab(parseInt(node.dataset.tabId, 10))?.group : null) || null;
+    const before = groupAt(els[0].previousElementSibling);
+    const nextEl = els[els.length - 1].nextElementSibling;
+    const after = nextEl?.dataset.tabId ? groupAt(nextEl) : null;
+    const target = before && before === after ? tabGroups.get(before) : null;
+    for (const tab of d.moving) {
+      if (target && tabs.some((t) => t.group === target.id && !d.ids.has(t.id) && (t.account ?? null) === (tab.account ?? null))) tab.group = target.id;
+      else if (tab.group && before !== tab.group && after !== tab.group) tab.group = null;
+    }
+  }
+  tabs = [...order.filter(Boolean), ...tabs.filter((t) => !order.includes(t))];
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+}
+
+// Ctrl+drop: copies of the dragged tabs open where they were let go.
+async function copyTabsTo(list, afterEl) {
+  let anchor = afterEl?.dataset.tabId ? findTab(parseInt(afterEl.dataset.tabId, 10)) : null;
+  for (const t of list.filter((x) => x.url)) {
+    const id = await createTab(t.url, t.account ?? null, { after: anchor || undefined, pinned: !!t.pinned });
+    anchor = findTab(id);
+  }
+  toast(list.length === 1 ? "Tab copied" : `${list.length} tabs copied`);
+}
+
+// Out of the strip: the dragged tabs leave in a window of their own that
+// follows the pointer (or, when they're all this window has, the window
+// itself does).
+async function detachDrag(d) {
+  d.detaching = true;
+  if (d.splitSide) setSplitSide(d, null);
+  const everything = d.moving.length === tabs.length;
+  const s = d.stripRect;
+  // The new window's point under the pointer: the first dragged element
+  // sits at the start of its strip there, at the same height as here.
+  const grabX = d.vertical ? d.grab.left + d.grab.x : s.left + d.grab.x;
+  const grabY = d.vertical ? s.top + d.grab.y : d.grab.top + d.grab.y;
+  for (const o of d.others) {
+    o.el.classList.add("drag-shift");
+    o.el.style.transform = "";
+  }
+  for (const m of d.block) {
+    m.el.style.transform = "";
+    if (!everything) m.el.style.visibility = "hidden";
+  }
+  finishDrag(d);
+  playSound("detach");
+  const live = d.moving.filter((t) => t.id > 0 && !t.discarded);
+  const sleeping = d.moving.filter((t) => !(t.id > 0 && !t.discarded) && t.url);
+  const groupIds = new Set(d.moving.map((t) => t.group).filter(Boolean));
+  try {
+    if (everything) {
+      await invoke("drag_window");
+    } else {
+      await invoke("detach_tabs", {
+        ids: live.map((t) => t.id),
+        sleeping: sleeping.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group: t.group ?? null })),
+        pinned: live.filter((t) => t.pinned).map((t) => t.id),
+        tabGroups: Object.fromEntries(live.filter((t) => t.group).map((t) => [String(t.id), t.group])),
+        groups: [...groupIds].map((id) => tabGroups.get(id)).filter(Boolean),
+        grabX,
+        grabY,
+      });
+      for (const t of sleeping) await closeTab(t.id, { remember: false });
+    }
+  } catch (err) {
+    for (const m of d.block) m.el.style.visibility = "";
+    toast(`Couldn't move ${tabCount(d.moving.length, "the tab")}: ${err}`);
+  }
+}
+
+// Tabs moved into this window from another (a window dropped on the strip),
+// put in before `beforeTab`: {tabs: [{info} | {sleep}], pinned, tabGroups,
+// groups, active}.
+function insertMovedTabs(got, beforeTab) {
+  const pinnedIds = new Set(got.pinned || []);
+  const groupOfId = new Map(Object.entries(got.tabGroups || {}).map(([id, g]) => [Number(id), g]));
+  for (const g of got.groups || []) if (g?.id && !tabGroups.has(g.id)) tabGroups.set(g.id, { ...g });
+  const incoming = [];
+  for (const entry of got.tabs || []) {
+    if (entry.info && !findTab(entry.info.id)) {
+      const info = entry.info;
+      incoming.push({
+        id: info.id,
+        url: info.url,
+        title: info.title || internalTitle(info.url) || hostOf(info.url),
+        userTitled: !!info.title,
+        favicon: info.favicon ?? null,
+        account: info.account ?? null,
+        pinned: pinnedIds.has(info.id),
+        group: pinnedIds.has(info.id) ? null : groupOfId.get(info.id) ?? null,
+        justCreated: true,
+        loading: false,
+        lastActiveAt: Date.now(),
+      });
+    } else if (entry.sleep?.url) {
+      const s = entry.sleep;
+      incoming.push(makePlaceholder(s.url, s.account ?? null, s.title ?? null, !!s.pinned, s.group ?? null));
+    }
+  }
+  if (!incoming.length) return;
+  let at = beforeTab ? tabs.indexOf(beforeTab) : -1;
+  if (at < 0) at = tabs.length;
+  tabs.splice(at, 0, ...incoming);
+  normalizeGroups();
+  syncTabOrder();
+  const show = incoming.find((t) => t.id === got.active) ?? incoming.find((t) => !t.discarded) ?? incoming[0];
+  activateTab(show.id);
+}
+
+// Puts a live tab that moved in from another window into the strip, before
+// `beforeTab` (or at the end).
+function adoptTabInfo(info, beforeTab = null) {
+  if (findTab(info.id)) return;
+  const tab = {
+    id: info.id,
+    url: info.url,
+    title: info.title || internalTitle(info.url) || hostOf(info.url),
+    userTitled: !!info.title,
+    favicon: info.favicon ?? null,
+    account: info.account ?? null,
+    justCreated: true,
+    loading: false,
+    lastActiveAt: Date.now(),
+  };
+  const at = beforeTab ? tabs.indexOf(beforeTab) : -1;
+  if (at >= 0) tabs.splice(at, 0, tab);
+  else tabs.push(tab);
+  normalizeGroups();
+  syncTabOrder();
+}
+
+// --- Dropping onto the strip ------------------------------------------------------------
+// A window dragged over this strip (another Kessel window, or another
+// browser's), or a link, address or text dragged from anywhere: the strip
+// opens a gap where it will land.
+
+let dropGap = null; // { k, els, before, shown }
+
+function stripItems() {
+  const vertical = isVerticalTabs();
+  return [...document.getElementById("tabs").children].filter((el) => !el.classList.contains("closing") && (!vertical || !el.classList.contains("pinned")));
+}
+
+function showDropGap(x, y, label) {
+  const vertical = isVerticalTabs();
+  const els = stripItems();
+  const pos = vertical ? y : x;
+  let k = els.findIndex((el) => {
+    const r = el.getBoundingClientRect();
+    return pos < (vertical ? r.top + r.height / 2 : r.left + r.width / 2);
+  });
+  if (k < 0) k = els.length;
+  const marker = document.getElementById("drop-marker");
+  marker.textContent = label || "";
+  marker.hidden = !label;
+  document.getElementById(vertical ? "vtabs" : "tab-bar").classList.add("drop-target");
+  if (dropGap?.k === k && dropGap.els.length === els.length) return;
+  const size = vertical ? 36 : 110;
+  els.forEach((el, i) => {
+    el.classList.add("drag-shift");
+    el.style.transform = i >= k ? `translate${vertical ? "Y" : "X"}(${size}px)` : "";
+  });
+  const shown = !!dropGap?.shown;
+  dropGap = { k, els, before: els.slice(k).find((el) => el.dataset.tabId || el.dataset.userGroup || el.dataset.group) || null, shown: true };
+  const at = els[k - 1]?.getBoundingClientRect();
+  const strip = document.getElementById("tabs").getBoundingClientRect();
+  marker.style.left = `${vertical ? strip.left + 8 : (at ? at.right : strip.left) + 8}px`;
+  marker.style.top = `${vertical ? (at ? at.bottom : strip.top) + 4 : strip.top + 2}px`;
+  if (!shown) playSound("hover");
+}
+
+function hideDropGap() {
+  document.getElementById("drop-marker").hidden = true;
+  document.getElementById("tab-bar").classList.remove("drop-target");
+  document.getElementById("vtabs").classList.remove("drop-target");
+  if (!dropGap) return;
+  const els = dropGap.els;
+  for (const el of els) el.style.transform = "";
+  setTimeout(() => els.forEach((el) => !drag && el.classList.remove("drag-shift")), 320);
+  dropGap = null;
+}
+
+// The tab something dropped at the gap goes in front of.
+function dropGapTab() {
+  const el = dropGap?.before;
+  if (!el) return null;
+  if (el.dataset.tabId) return findTab(parseInt(el.dataset.tabId, 10));
+  if (el.dataset.userGroup) return tabs.find((t) => t.group === el.dataset.userGroup) || null;
+  if (el.dataset.group) return tabs.find((t) => t.account === el.dataset.group && !t.pinned) || null;
+  return null;
+}
+
+// Links, addresses and text dragged in from a page, another app or another
+// browser's address bar. Onto a tab: that tab goes there. Between tabs: new
+// tabs open there (text that isn't an address is searched for).
+function wireExternalDrops() {
+  const readDrop = (dt) => {
+    const list = (dt.getData("text/uri-list") || "").split(/\r?\n/).map((s) => s.trim()).filter((s) => s && !s.startsWith("#"));
+    if (list.length) return list;
+    const moz = (dt.getData("text/x-moz-url") || "").split(/\r?\n/)[0]?.trim();
+    if (moz) return [moz];
+    const text = (dt.getData("text/plain") || "").trim();
+    return text ? [resolveInput(text, currentSettings()?.search_engine || "google")] : [];
+  };
+  const accepts = (e) => !drag && [...(e.dataTransfer?.types || [])].some((t) => t === "text/uri-list" || t === "text/plain" || t === "text/x-moz-url");
+  let overTab = null;
+  const markTab = (el) => {
+    if (overTab === el) return;
+    overTab?.classList.remove("drop-into");
+    overTab = el;
+    el?.classList.add("drop-into");
+  };
+  for (const zone of [document.getElementById("tab-bar"), document.getElementById("vtabs")]) {
+    zone.addEventListener("dragover", (e) => {
+      if (!accepts(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      // Over the middle of a tab: into that tab. Otherwise a gap.
+      const el = e.target.closest?.(".tab");
+      const r = el?.getBoundingClientRect();
+      const middle = el && (isVerticalTabs() ? Math.abs(e.clientY - (r.top + r.height / 2)) < r.height * 0.3 : Math.abs(e.clientX - (r.left + r.width / 2)) < r.width * 0.3);
+      if (middle && !el.classList.contains("closing")) {
+        hideDropGap();
+        markTab(el);
+      } else {
+        markTab(null);
+        showDropGap(e.clientX, e.clientY, "Open here");
+      }
+    });
+    zone.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget && zone.contains(e.relatedTarget)) return;
+      markTab(null);
+      hideDropGap();
+    });
+    zone.addEventListener("drop", async (e) => {
+      if (!accepts(e)) return;
+      e.preventDefault();
+      const urls = readDrop(e.dataTransfer).slice(0, 20);
+      const into = overTab && findTab(parseInt(overTab.dataset.tabId, 10));
+      const before = dropGapTab();
+      markTab(null);
+      hideDropGap();
+      if (!urls.length) return;
+      playSound("drop");
+      if (into && into.id > 0 && !into.discarded) {
+        invoke("navigate", { id: into.id, url: urls[0] }).catch((err) => toast(String(err)));
+        if (into.id !== activeTabId) activateTab(into.id);
+        urls.shift();
+      }
+      for (const url of urls) {
+        const id = await createTab(url);
+        placeBefore(findTab(id), before);
+      }
+    });
+  }
+}
+
+// Moves `tab` in front of `before` (or leaves it where it is).
+function placeBefore(tab, before) {
+  if (!tab || !before || tab === before || !tabs.includes(before)) return;
+  tabs.splice(tabs.indexOf(tab), 1);
+  tabs.splice(tabs.indexOf(before), 0, tab);
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+}
+
+// Another browser's window, let go over this strip (tabdrag.rs): its tabs
+// open here -- the first one live, the rest asleep until you look at them.
+async function openForeignTabs({ urls, browser }) {
+  const before = dropGap ? dropGapTab() : null;
+  hideDropGap();
+  if (!urls?.length) {
+    toast(`Couldn't read that ${browser} window's tabs`);
+    return;
+  }
+  playSound("attach");
+  const id = await createTab(urls[0], null);
+  const first = findTab(id);
+  placeBefore(first, before);
+  let at = tabs.indexOf(first) + 1;
+  for (const url of urls.slice(1)) tabs.splice(at++, 0, makePlaceholder(url));
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
+  toast(urls.length === 1 ? `Moved the tab over from ${browser}` : `Moved ${urls.length} tabs over from ${browser}`);
+}
+
+// --- Split view ------------------------------------------------------------------------
+// Two tabs side by side (split.rs). Rust places the pages; the toolbar draws
+// the divider in the gap between them and keeps the pair side by side in
+// the strip.
+
+const SPLIT_GAP = 6;
+let split = null; // { left, right, ratio } while there is one
+
+function splitShown() {
+  return !!split && (activeTabId === split.left || activeTabId === split.right);
+}
+
+function markSplit() {
+  for (const [id, el] of tabEls) {
+    el.classList.toggle("split-left", split?.left === id);
+    el.classList.toggle("split-right", split?.right === id);
+  }
+  layoutSplitDivider();
+}
+
+function layoutSplitDivider() {
+  const divider = document.getElementById("split-divider");
+  if (!splitShown() || document.documentElement.classList.contains("fullscreen")) {
+    divider.hidden = true;
+    return;
+  }
+  const left = reportedInsets.left;
+  const usable = innerWidth - left - SPLIT_GAP;
+  divider.style.left = `${left + Math.round(usable * split.ratio)}px`;
+  divider.style.top = `${reportedInsets.top}px`;
+  divider.hidden = false;
+}
+
+// Tab `tab` opens beside the one you're on, on `side`.
+async function openSplit(tab, side = "right") {
+  const partner = splitPartner(tab);
+  if (!partner || !tab || !(tab.id > 0) || tab.discarded) return;
+  // Side by side in the strip too.
+  tabs.splice(tabs.indexOf(tab), 1);
+  tabs.splice(tabs.indexOf(partner) + (side === "right" ? 1 : 0), 0, tab);
+  if (tab.group !== partner.group) tab.group = partner.pinned ? null : partner.group ?? null;
+  normalizeGroups();
+  syncTabOrder();
+  const [left, right] = side === "right" ? [partner, tab] : [tab, partner];
+  split = { left: left.id, right: right.id, ratio: 0.5 };
+  activeTabId = tab.id;
+  renderTabs();
+  updateAddressBarForActiveTab();
+  persistSession();
+  playSound("attach");
+  await invoke("split_tabs", { left: left.id, right: right.id, focus: tab.id }).catch((err) => toast(String(err)));
+}
+
+function wireSplitDivider() {
+  const divider = document.getElementById("split-divider");
+  divider.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || !split || e.target.closest("button")) return;
+    e.preventDefault();
+    divider.setPointerCapture(e.pointerId);
+    divider.classList.add("dragging");
+    let sending = false;
+    let again = false;
+    const send = (done) => {
+      if (sending && !done) {
+        again = true;
+        return;
+      }
+      sending = true;
+      invoke("set_split_ratio", { ratio: split.ratio, done }).finally(() => {
+        sending = false;
+        if (again && !done) {
+          again = false;
+          send(false);
+        }
+      });
+    };
+    const move = (ev) => {
+      if (!split) return;
+      const left = reportedInsets.left;
+      const usable = innerWidth - left - SPLIT_GAP;
+      split.ratio = Math.min(0.85, Math.max(0.15, (ev.clientX - left - SPLIT_GAP / 2) / usable));
+      layoutSplitDivider();
+      send(false);
+    };
+    const up = () => {
+      divider.classList.remove("dragging");
+      divider.removeEventListener("pointermove", move);
+      divider.removeEventListener("pointerup", up);
+      divider.removeEventListener("pointercancel", up);
+      if (split) send(true);
+    };
+    divider.addEventListener("pointermove", move);
+    divider.addEventListener("pointerup", up);
+    divider.addEventListener("pointercancel", up);
+  });
+  divider.querySelector(".split-swap").addEventListener("click", () => invoke("swap_split").catch(() => {}));
+  divider.querySelector(".split-close").addEventListener("click", () => invoke("unsplit").catch(() => {}));
+  divider.addEventListener("dblclick", () => {
+    if (!split) return;
+    split.ratio = 0.5;
+    layoutSplitDivider();
+    invoke("set_split_ratio", { ratio: 0.5, done: true }).catch(() => {});
+  });
+}
+
+// --- Sounds ---------------------------------------------------------------------------------
+
+function playSound(name) {
+  playUiSound(name, window.__kesselStyle?.values);
+}
+
 
 // Using a lot of memory or CPU (see pollTabResources): a warning ring on
 // its icon, and the hover card says how much.
@@ -897,142 +1898,6 @@ document.addEventListener(
   true
 );
 
-// --- Drag-to-reorder tabs --------------------------------------------------
-// Moves DOM nodes directly on dragover (rather than re-rendering, which
-// would recreate the dragged element mid-drag and abort the drag session),
-// then reconciles the `tabs` array order from the final DOM order once.
-
-let draggedTabId = null;
-
-function wireTabDrag(el, tab) {
-  el.addEventListener("dragstart", (e) => {
-    draggedTabId = tab.id;
-    el.classList.add("dragging");
-    // A private type only, so web pages under the cursor ignore the drag
-    // instead of e.g. navigating to a dropped URL.
-    e.dataTransfer.setData("application/x-kessel-tab", String(tab.id));
-    e.dataTransfer.effectAllowed = "move";
-  });
-  el.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    if (draggedTabId === null || draggedTabId === tab.id) return;
-    const container = document.getElementById("tabs");
-    const draggedEl = container.querySelector(`[data-tab-id="${draggedTabId}"]`);
-    if (!draggedEl) return;
-    const rect = el.getBoundingClientRect();
-    // Down a vertical strip (pinned tabs still sit side by side there).
-    const before = isVerticalTabs() && !tab.pinned ? e.clientY - rect.top < rect.height / 2 : e.clientX - rect.left < rect.width / 2;
-    container.insertBefore(draggedEl, before ? el : el.nextSibling);
-  });
-  el.addEventListener("dragend", (e) => {
-    el.classList.remove("dragging");
-    draggedTabId = null;
-    // The strip's new order. A folded group's hidden tabs aren't in the
-    // DOM -- they stay right behind their group's chip.
-    const children = Array.from(document.getElementById("tabs").children);
-    const shown = new Set(children.filter((c) => c.dataset.tabId).map((c) => parseInt(c.dataset.tabId, 10)));
-    const order = [];
-    for (const c of children) {
-      if (c.dataset.group) order.push(...tabs.filter((t) => t.account === c.dataset.group && !t.pinned && !shown.has(t.id)));
-      else if (c.dataset.userGroup) order.push(...tabs.filter((t) => t.group === c.dataset.userGroup && !shown.has(t.id)));
-      else if (c.dataset.tabId) order.push(findTab(parseInt(c.dataset.tabId, 10)));
-    }
-    // Dropped between two tabs of a group: it joins that group. Dropped
-    // away from its own group: it leaves it.
-    const dropped = children.find((c) => c.dataset.tabId === String(tab.id));
-    const groupAt = (node) => node?.dataset.userGroup || (node?.dataset.tabId ? findTab(parseInt(node.dataset.tabId, 10))?.group : null) || null;
-    const before = groupAt(dropped?.previousElementSibling);
-    const after = dropped?.nextElementSibling?.dataset.tabId ? groupAt(dropped.nextElementSibling) : null;
-    const target = before && before === after ? tabGroups.get(before) : null;
-    if (target && !tab.pinned && tabs.some((t) => t.group === target.id && (t.account ?? null) === (tab.account ?? null))) tab.group = target.id;
-    else if (tab.group && before !== tab.group && after !== tab.group) tab.group = null;
-    tabs = [...order.filter(Boolean), ...tabs.filter((t) => !order.includes(t))];
-    normalizeGroups();
-    syncTabOrder();
-    renderTabs();
-    persistSession();
-    // Dropped somewhere that isn't a tab strip -- over the page, or outside
-    // the window: it moves into a window of its own. (Dropped on another
-    // window's strip, that window took it: "move".)
-    const overPage = isVerticalTabs() ? e.clientX > reportedInsets.left : e.clientY > reportedInsets.top;
-    if (e.dataTransfer.dropEffect === "none" && (overPage || isOutsideWindow(e))) {
-      moveTabToNewWindow(tab, e);
-    }
-  });
-}
-
-// A tab from another Kessel window dropped on this strip moves here, page
-// and all (see adopt_tab in browser_windows.rs).
-function wireTabDrops() {
-  const strip = document.getElementById("tabs");
-  const isForeignTab = (e) => draggedTabId === null && e.dataTransfer.types.includes("application/x-kessel-tab");
-  for (const target of [strip, document.getElementById("tab-bar")]) {
-    target.addEventListener("dragover", (e) => {
-      if (!isForeignTab(e)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    });
-    target.addEventListener("drop", async (e) => {
-      if (!isForeignTab(e)) return;
-      e.preventDefault();
-      const id = parseInt(e.dataTransfer.getData("application/x-kessel-tab"), 10);
-      if (!(id > 0) || findTab(id)) return;
-      // Where it was dropped: before the first tab whose middle is right of the cursor.
-      const els = [...strip.querySelectorAll(".tab")];
-      const before = els.find((el) => {
-        const r = el.getBoundingClientRect();
-        return isVerticalTabs() ? e.clientY < r.top + r.height / 2 : e.clientX < r.left + r.width / 2;
-      });
-      try {
-        const info = await invoke("adopt_tab", { id });
-        adoptTabInfo(info, before ? findTab(parseInt(before.dataset.tabId, 10)) : null);
-        await activateTab(info.id);
-        await appWindow.setFocus();
-      } catch (err) {
-        toast(String(err));
-      }
-    });
-  }
-}
-
-// Puts a live tab that moved in from another window into the strip, before
-// `beforeTab` (or at the end).
-function adoptTabInfo(info, beforeTab = null) {
-  if (findTab(info.id)) return;
-  const tab = {
-    id: info.id,
-    url: info.url,
-    title: info.title || internalTitle(info.url) || hostOf(info.url),
-    userTitled: !!info.title,
-    favicon: info.favicon ?? null,
-    account: info.account ?? null,
-    justCreated: true,
-    loading: false,
-    lastActiveAt: Date.now(),
-  };
-  const at = beforeTab ? tabs.indexOf(beforeTab) : -1;
-  if (at >= 0) tabs.splice(at, 0, tab);
-  else tabs.push(tab);
-  normalizeGroups();
-  syncTabOrder();
-}
-
-// Dragging a tab out: the tab keeps its page and moves into a new window (at
-// the drop point, when there is one). A sleeping tab has no page to move, so
-// a new window just opens its address.
-async function moveTabToNewWindow(tab, e = null) {
-  const at = e && (e.screenX || e.screenY) ? { x: e.screenX - 90, y: e.screenY - 18 } : {};
-  try {
-    if (tab.discarded || tab.id < 0) {
-      await invoke("new_window", { private: !!WIN.private, url: tab.url });
-      await closeTab(tab.id, { remember: false });
-    } else if (tabs.length > 1) {
-      await invoke("move_tab_to_new_window", { id: tab.id, pinned: !!tab.pinned, ...at });
-    }
-  } catch (err) {
-    toast(`Couldn't move the tab: ${err}`);
-  }
-}
 
 // "Move to window ▸": sends a live tab to another open window.
 async function sendTabToWindow(tab, target) {
@@ -1138,6 +2003,25 @@ async function tabMenuItems(tab) {
     "-",
     { label: single ? "Move to new window" : `Move ${tabCount(n)} to new window`, iconName: "popOut", disabled: n >= tabs.length, action: () => moveTabsToNewWindow(list) },
   ];
+  // Split view: beside the tab you're on, or out of it.
+  const inSplit = split && (tab.id === split.left || tab.id === split.right);
+  if (inSplit) {
+    items.push({ label: "Swap sides", iconName: "arrowRight", action: () => invoke("swap_split").catch(() => {}) }, { label: "Exit split view", iconName: "window", action: () => invoke("unsplit").catch(() => {}) });
+  } else if (single && tab.id > 0 && !tab.discarded && splitPartner(tab)) {
+    items.push({ label: tab.id === activeTabId ? "Split view with the previous tab" : "Open side by side with this tab", iconName: "sidebar", action: () => openSplit(tab, "right") });
+  }
+  // Tidying up: the same page open twice, and the strip in order.
+  const seenUrls = new Set();
+  const duplicates = tabs.filter((t) => {
+    if (!t.url || t.pinned || t.url.startsWith("kessel://")) return false;
+    if (seenUrls.has(t.url)) return t.id !== activeTabId;
+    seenUrls.add(t.url);
+    return false;
+  });
+  items.push(
+    { label: duplicates.length ? `Close ${tabCount(duplicates.length, "duplicate tab")}` : "Close duplicate tabs", iconName: "copy", disabled: !duplicates.length, action: () => closeTabs(duplicates) },
+    { label: "Sort tabs by site", iconName: "grid", disabled: tabs.filter((t) => !t.pinned).length < 2, action: () => sortTabs() }
+  );
   if (live.length) {
     for (const w of otherWindows) {
       const name = w.title ? `“${w.title.length > 28 ? w.title.slice(0, 27) + "…" : w.title}”` : "another window";
@@ -1168,6 +2052,24 @@ async function tabMenuItems(tab) {
   if (tabs.some((t) => t.pinned)) items.push({ label: "Close all but pinned tabs", iconName: "pin", disabled: !unpinned.length, action: () => closeTabs(unpinned) });
   items.push("-", { label: "Reopen closed tab", iconName: "history", keys: commandKeys("reopen-closed-tab"), action: reopenClosed });
   return items;
+}
+
+// The strip's unpinned tabs by site, then title -- within their account and
+// group, which stay together where they are.
+function sortTabs() {
+  const key = (t) => `${hostOf(t.url || "").replace(/^www\./, "")}\u0000${(t.title || "").toLowerCase()}`;
+  const blocks = [];
+  for (const t of tabs) {
+    const id = t.pinned ? "pinned" : `${t.account ?? ""}|${t.group ?? ""}`;
+    const last = blocks[blocks.length - 1];
+    if (last?.id === id) last.tabs.push(t);
+    else blocks.push({ id, tabs: [t] });
+  }
+  tabs = blocks.flatMap((b) => (b.id === "pinned" ? b.tabs : [...b.tabs].sort((a, c) => key(a).localeCompare(key(c)))));
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  persistSession();
 }
 
 // --- Pinned, muted and picked tabs ----------------------------------------------
@@ -1425,6 +2327,20 @@ async function activateTab(id) {
   const prev = findTab(activeTabId);
   if (prev && prev.id !== id) prev.lastActiveAt = Date.now();
 
+  // The strip and address bar show it straight away; the page follows as
+  // soon as Rust has swapped it in (no waiting on the round trip to look
+  // like it switched).
+  activeTabId = id;
+  noteRecent(id);
+  // Looked at: no news dot, and showing it unfroze it.
+  tab.attention = false;
+  tab.frozen = false;
+  tab.lastActiveAt = Date.now();
+  const group = groupOf(tab);
+  if (group?.collapsed) group.collapsed = false;
+  renderTabs();
+  updateAddressBarForActiveTab();
+  playSound("switch");
   if (tab.discarded) {
     // No live webview behind this one (idle-discarded, or a restored
     // session tab that was never actually opened) -- (re)create it fresh.
@@ -1443,21 +2359,21 @@ async function activateTab(id) {
     // to match the toolbar's visual order so Ctrl+Tab / Ctrl+1..9 don't
     // drift from what's actually on screen.
     syncTabOrder();
-    activeTabId = newId;
+    if (activeTabId === id) activeTabId = newId;
+    noteRecent(newId);
+    renderTabs();
   } else {
-    activeTabId = id;
-    await invoke("switch_tab", { id });
+    await invoke("switch_tab", { id }).catch(() => {});
   }
-  // Looked at: no news dot, and showing it unfroze it.
-  tab.attention = false;
-  tab.frozen = false;
-  tab.lastActiveAt = Date.now();
-  const group = groupOf(tab);
-  if (group?.collapsed) group.collapsed = false;
-  renderTabs();
-  updateAddressBarForActiveTab();
   persistSession();
   enforceAwakeLimit();
+}
+
+// Tabs by when you last looked at them, most recent first (split view's
+// partner, Ctrl+Tab in "recently used" order).
+let recentTabs = [];
+function noteRecent(id) {
+  recentTabs = [id, ...recentTabs.filter((x) => x !== id && findTab(x))].slice(0, 50);
 }
 
 // A new tab opens in the same account as the tab you're on (so "+" and
@@ -1488,6 +2404,7 @@ async function createTab(url, account = activeAccount(), { after = null, pinned 
   updateAddressBarForActiveTab();
   persistSession();
   catchUpTab(id);
+  playSound("open");
   // Once more a little later, in case its reports crossed with this one.
   setTimeout(() => findTab(id) && !findTab(id).userTitled && catchUpTab(id), 1500);
   enforceAwakeLimit();
@@ -1534,9 +2451,14 @@ function keepViewSource(tab, url) {
 // Adds a tab entry with NO webview behind it yet -- used for session-restore
 // tabs you aren't looking at right now. Costs nothing until you click it.
 function addPlaceholderTab(url, account = null, title = null, pinned = false, group = null) {
-  const id = nextPlaceholderId();
-  tabs.push({
-    id,
+  const tab = makePlaceholder(url, account, title, pinned, group);
+  tabs.push(tab);
+  return tab.id;
+}
+
+function makePlaceholder(url, account = null, title = null, pinned = false, group = null) {
+  return {
+    id: nextPlaceholderId(),
     url,
     account: accountById(account)?.id ?? null,
     title: title || internalTitle(url) || hostOf(url),
@@ -1547,8 +2469,7 @@ function addPlaceholderTab(url, account = null, title = null, pinned = false, gr
     neverCreated: true,
     loading: false,
     lastActiveAt: Date.now(),
-  });
-  return id;
+  };
 }
 
 // What this window opens first (see take_window_init in main.rs): the tabs
@@ -1605,33 +2526,26 @@ async function closeTab(id, { remember = true } = {}) {
   const tab = tabs.find((t) => t.id === id);
   if (!tab) return;
   if (hoverTab === id || hoverShown) hideHoverCard();
+  // Gone from the strip at once, and the next tab shown before this one's
+  // page is torn down -- never a frame without a page.
+  const idx = tabs.indexOf(tab);
+  tabs.splice(idx, 1);
+  recentTabs = recentTabs.filter((x) => x !== id);
+  playSound("close");
+  const last = tabs.length === 0;
+  if (!last && activeTabId === id) activateTab(tabs[Math.max(0, idx - 1)].id);
+  else if (!last) renderTabs();
   if (!tab.neverCreated) {
     // A discarded-but-previously-real tab's id is still a valid u32 Rust
     // once knew (close_tab just no-ops if it's already gone) -- only a
     // never-created placeholder's negative synthetic id can't be sent to a
     // u32-typed command at all.
     const closedUrl = tab.discarded || !remember ? null : tab.url;
-    await invoke("close_tab", { id, url: closedUrl || null });
+    await invoke("close_tab", { id, url: closedUrl || null }).catch(() => {});
   }
-  // Recompute the index at removal time by identity, not from a value
-  // captured before the await above -- if another closeTab() call ran
-  // concurrently (e.g. "close other tabs") and already spliced entries
-  // out from under this one, a pre-await index would now point at the
-  // wrong element.
-  const idx = tabs.indexOf(tab);
-  if (idx === -1) return; // something else already removed it
-  tabs.splice(idx, 1);
-
-  if (tabs.length === 0) {
+  if (last) {
     await createTab();
     return;
-  }
-
-  if (activeTabId === id) {
-    const next = tabs[Math.max(0, idx - 1)];
-    await activateTab(next.id);
-  } else {
-    renderTabs();
   }
   persistSession();
 }
@@ -1858,7 +2772,29 @@ async function runCommand(id, ctx = {}) {
 
 // Ctrl+Tab / Ctrl+Shift+Tab: through every tab in the strip's order,
 // sleeping ones included (they wake up), wrapping around.
+// With "recently used order" on (Settings -> Tabs), Ctrl+Tab goes back to
+// the tab you were on before, and pressing it again soon after goes further
+// back through the ones before that.
+let cycleWalk = null; // { list, at, until }
 async function cycleTabs(direction) {
+  if (currentSettings()?.tab_cycle_mru) {
+    const now = Date.now();
+    if (!cycleWalk || now > cycleWalk.until) {
+      const list = recentTabs.filter((id) => findTab(id) && !isHiddenInGroup(findTab(id)));
+      for (const t of tabs) if (!list.includes(t.id) && !isHiddenInGroup(t)) list.push(t.id);
+      cycleWalk = { list, at: 0 };
+    }
+    cycleWalk.until = now + 1100;
+    const n = cycleWalk.list.length;
+    if (n < 2) return;
+    cycleWalk.at = (cycleWalk.at + (direction > 0 ? 1 : -1) + n) % n;
+    const target = cycleWalk.list[cycleWalk.at];
+    const walk = cycleWalk;
+    await activateTab(target);
+    // activateTab put it first in recentTabs; the walk keeps its own order.
+    cycleWalk = walk;
+    return;
+  }
   const shown = tabs.filter((t) => !isHiddenInGroup(t));
   if (shown.length < 2) return;
   const at = shown.findIndex((t) => t.id === activeTabId);
@@ -2265,11 +3201,31 @@ function updateStripOverflow() {
   document.getElementById("tab-search-btn").title = `Search tabs${keys ? ` (${keys})` : ""} -- ${tabs.length} open`;
 }
 
+let lastWheelSwitch = 0;
+
+// Through the strip in its order (the wheel), whatever Ctrl+Tab is set to.
+function cycleTabsInOrder(direction) {
+  const shown = tabs.filter((t) => !isHiddenInGroup(t));
+  if (shown.length < 2) return;
+  const at = shown.findIndex((t) => t.id === activeTabId);
+  activateTab(shown[(at + direction + shown.length) % shown.length].id);
+}
+
 function wireStripScrolling() {
   const strip = document.getElementById("tabs");
   strip.addEventListener(
     "wheel",
     (e) => {
+      // The wheel switches tabs, if you want it to (Settings -> Tabs).
+      if (currentSettings()?.tab_wheel_switch && !e.ctrlKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        const now = performance.now();
+        if (now - lastWheelSwitch > 60) {
+          lastWheelSwitch = now;
+          cycleTabsInOrder(e.deltaY > 0 ? 1 : -1);
+        }
+        return;
+      }
       if (isVerticalTabs() || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
       e.preventDefault();
       strip.scrollLeft += e.deltaY;
@@ -2378,13 +3334,14 @@ let hoverTab = null; // the tab a card is (about to be) shown for
 let hoverShown = false;
 let hoverHiddenAt = 0;
 
-function wireHoverCard(el, tab) {
+function wireHoverCard(el) {
   el.addEventListener("mouseenter", () => {
-    if (draggedTabId !== null) return;
+    if (drag || press || currentSettings()?.tab_hover_cards === false) return;
+    const id = parseInt(el.dataset.tabId, 10);
     clearTimeout(hoverTimer);
-    hoverTab = tab.id;
+    hoverTab = id;
     const warm = hoverShown || Date.now() - hoverHiddenAt < 900;
-    hoverTimer = setTimeout(() => showHoverCard(tab.id), warm ? 40 : 550);
+    hoverTimer = setTimeout(() => showHoverCard(id), warm ? 40 : 550);
   });
   el.addEventListener("mouseleave", hideHoverCard);
   el.addEventListener("mousedown", hideHoverCard);
@@ -2427,7 +3384,7 @@ function hoverCardHeight(info) {
 async function showHoverCard(id) {
   const tab = findTab(id);
   const el = document.querySelector(`.tab[data-tab-id="${id}"]`);
-  if (!tab || !el || hoverTab !== id || draggedTabId !== null || currentSettings()?.tab_hover_cards === false) return;
+  if (!tab || !el || hoverTab !== id || drag || currentSettings()?.tab_hover_cards === false) return;
   // Not measured yet (just opened, or the last reading was a while ago).
   if (tab.memory == null && tab.id > 0 && !tab.discarded && currentSettings()?.hover_card_memory !== false) await pollTabResources();
   if (hoverTab !== id) return;
@@ -2530,7 +3487,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await wireChromeInsets();
 
   wireTabLifecycle();
-  wireTabDrops();
+  wireTabStrip();
   wireStripScrolling();
   setInterval(pollTabResources, 5000);
   document.getElementById("tab-search-btn").addEventListener("click", toggleTabSearch);
@@ -2825,6 +3782,47 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("tab-moved-in", async (event) => {
     adoptTabInfo(event.payload);
     await activateTab(event.payload.id);
+  });
+
+  // Another Kessel window being dragged over this strip (tabdrag.rs): a gap
+  // opens where its tabs would land; let go there, they move in.
+  await listen("tab-drag-over", (event) => showDropGap(event.payload.x, event.payload.y, "Drop to move here"));
+  await listen("tab-drag-leave", hideDropGap);
+  await listen("absorb-window", async (event) => {
+    const before = dropGap ? dropGapTab() : null;
+    hideDropGap();
+    try {
+      const got = await invoke("absorb_window", { source: event.payload.source });
+      insertMovedTabs(got, before);
+      playSound("attach");
+    } catch (err) {
+      toast(String(err));
+    }
+  });
+  // Another browser's window held over this strip, then let go.
+  await listen("foreign-drag-over", (event) => {
+    const { x, y, browser, ready } = event.payload;
+    showDropGap(x, y, ready ? `Let go to move this ${browser} window into Kessel` : `Hold to move this ${browser} window in…`);
+  });
+  await listen("foreign-drag-leave", hideDropGap);
+  await listen("foreign-tabs", (event) => openForeignTabs(event.payload));
+  // Split view started, ended or changed (split.rs); a click into the
+  // other half makes that tab the active one.
+  await listen("split-changed", (event) => {
+    split = event.payload || null;
+    markSplit();
+  });
+  await listen("split-focus", (event) => {
+    if (!findTab(event.payload.id)) return;
+    activeTabId = event.payload.id;
+    noteRecent(activeTabId);
+    renderTabs();
+    updateAddressBarForActiveTab();
+  });
+  window.addEventListener("resize", layoutSplitDivider);
+  // Typing sounds, when the style has them.
+  document.getElementById("url-input").addEventListener("keydown", (e) => {
+    if (e.key.length === 1 || e.key === "Backspace" || e.key === "Enter") playSound(e.key === "Enter" ? "enter" : "key");
   });
 
   await listen("pinned-changed", (event) => {

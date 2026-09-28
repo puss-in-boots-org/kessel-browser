@@ -20,15 +20,80 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{LogicalPosition, LogicalSize, Manager, Webview, WebviewUrl};
 
-// Tab id -> its last picture, as a data: URL.
-static THUMBNAILS: Mutex<Option<HashMap<u32, String>>> = Mutex::new(None);
+// Tab id -> its last picture, as a data: URL, and when it was taken.
+static THUMBNAILS: Mutex<Option<HashMap<u32, (String, Instant)>>> = Mutex::new(None);
+
+// A picture younger than this is good enough: leaving the tab doesn't take
+// another.
+const THUMBNAIL_FRESH: Duration = Duration::from_secs(8);
 
 fn store_thumbnail(id: u32, url: String) {
-    THUMBNAILS.lock().unwrap().get_or_insert_with(HashMap::new).insert(id, url);
+    THUMBNAILS.lock().unwrap().get_or_insert_with(HashMap::new).insert(id, (url, Instant::now()));
 }
 
 pub fn thumbnail(id: u32) -> Option<String> {
-    THUMBNAILS.lock().unwrap().as_ref()?.get(&id).cloned()
+    THUMBNAILS.lock().unwrap().as_ref()?.get(&id).map(|(url, _)| url.clone())
+}
+
+fn thumbnail_is_fresh(id: u32) -> bool {
+    THUMBNAILS.lock().unwrap().as_ref().and_then(|t| t.get(&id)).is_some_and(|(_, at)| at.elapsed() < THUMBNAIL_FRESH)
+}
+
+fn previews_wanted(app: &tauri::AppHandle) -> bool {
+    app.state::<BrowserState>().store.settings.lock().unwrap().hover_card_preview
+}
+
+// You switched away from tab `id`. Switching does no extra work: the tab is
+// hidden at once -- unless its picture (hover cards, tab search) is old,
+// in which case one is taken first, a moment later, once the page you
+// switched to has drawn.
+pub fn leave(webview: &Webview, id: u32) {
+    let app = webview.app_handle().clone();
+    if !previews_wanted(&app) || thumbnail_is_fresh(id) {
+        hide(webview, id, false);
+        return;
+    }
+    let webview = webview.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio_sleep(Duration::from_millis(160)).await;
+        let app = webview.app_handle().clone();
+        let _ = app.run_on_main_thread(move || {
+            if !is_active(webview.app_handle(), id) {
+                hide(&webview, id, true);
+            }
+        });
+    });
+}
+
+// Tab `id` was just shown: its picture is taken a second later (if it's
+// still the one you're on), so its hover card is current when you've moved
+// on.
+pub fn picture_soon(webview: &Webview, id: u32) {
+    #[cfg(windows)]
+    {
+        if !previews_wanted(webview.app_handle()) || thumbnail_is_fresh(id) {
+            return;
+        }
+        let webview = webview.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio_sleep(Duration::from_millis(1100)).await;
+            let app = webview.app_handle().clone();
+            let _ = app.run_on_main_thread(move || {
+                if !is_active(webview.app_handle(), id) {
+                    return;
+                }
+                let _ = webview.with_webview(move |platform| unsafe {
+                    if let Ok(core) = platform.controller().CoreWebView2() {
+                        capture_preview(&core, move |picture| {
+                            if let Some(picture) = picture {
+                                store_thumbnail(id, picture);
+                            }
+                        });
+                    }
+                });
+            });
+        });
+    }
 }
 
 // Tab `id` is gone.
@@ -429,6 +494,11 @@ pub fn track_focus(webview: &Webview) {
                 &webview2_com::FocusChangedEventHandler::create(Box::new(move |_, _| {
                     let window = tracked.window().label().to_string();
                     LAST_FOCUSED.lock().unwrap().get_or_insert_with(HashMap::new).insert(window, tracked.label().to_string());
+                    // Clicked into the other half of a split view: that tab
+                    // is the active one now.
+                    if let Some(id) = tracked.label().strip_prefix("content-").and_then(|id| id.parse::<u32>().ok()) {
+                        crate::split::focused(tracked.app_handle(), id);
+                    }
                     Ok(())
                 })),
                 &mut token,

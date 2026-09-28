@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page="popout">
 <head>
   <meta charset="UTF-8" />
   <title>Pop-out</title>
@@ -22,7 +22,7 @@
     #sheet {
       position: fixed;
       inset: 3px;
-      border-radius: 16px;
+      border-radius: var(--k-panel-radius, 16px);
       background: var(--surface);
       border: 1px solid var(--border);
     }

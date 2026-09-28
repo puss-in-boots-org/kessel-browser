@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-glass-role="page">
+<html lang="en" data-glass-role="page" data-page="newtab">
 <head>
   <meta charset="UTF-8" />
   <title>New Tab</title>
@@ -23,9 +23,18 @@
        (glass.js alignToChrome shifts it by the toolbar's insets), so it
        continues seamlessly out of the toolbar's copy above/left of us. */
     #wallpaper { display: none; }
-    html.glass #wallpaper { display: block; position: fixed; z-index: -1; pointer-events: none; }
-    html.glass body { background: transparent; }
+    html:is(.glass, .k-wall) #wallpaper { display: block; position: fixed; z-index: -1; pointer-events: none; filter: var(--k-wall-filter, none); }
+    html:is(.glass, .k-wall) body { background: transparent; }
     html.glass { background: #0a1433; }
+    html.k-wall { background: var(--bg); }
+
+    /* Settings -> Appearance -> New tab page (shared/styles.js). */
+    html.k-nt-center body { justify-content: center; padding-top: 24px; }
+    html.k-nt-no-clock #clock, html.k-nt-no-date #date { display: none; }
+    html.k-nt-no-clock:not(.k-nt-no-date) #date { margin-bottom: 24px; }
+    html.k-nt-no-speed #speed-dial, html.k-nt-no-bm #bookmarks-section { display: none; }
+    html.k-nt-bare .section { background: none; border: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    html.k-nt-bare .section::before, html.k-nt-bare .section::after { display: none; }
 
     #date {
       font-size: 15px;
@@ -35,8 +44,8 @@
       animation: fadeUp 0.4s var(--ease);
     }
     #clock {
-      font-size: 84px;
-      font-weight: 250;
+      font-size: var(--k-clock-size, 84px);
+      font-weight: var(--k-clock-weight, 250);
       line-height: 1;
       letter-spacing: -0.02em;
       margin: 4px 0 32px;
@@ -47,15 +56,17 @@
     html.glass #date { color: var(--lg-text-dim); }
 
     #omnibox-wrap {
-      width: min(600px, 88vw);
+      width: min(var(--k-nt-search-w, 600px), 88vw);
       height: 52px;
       margin-bottom: 40px;
       position: relative;
       display: flex;
       align-items: center;
-      border-radius: 26px;
-      background: var(--surface);
-      border: 1px solid var(--border);
+      /* Shaped like the address bar. */
+      border-radius: var(--k-address-rad, 26px);
+      clip-path: var(--k-address-clip, none);
+      background: var(--k-address-bg, var(--surface));
+      border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border);
       transition: box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
     }
     html.glass #omnibox-wrap { border: none; background: var(--lg-gloss), var(--lg-tint); }
@@ -85,9 +96,9 @@
       width: min(760px, 92vw);
       margin-bottom: 18px;
       padding: 16px 18px 12px;
-      border-radius: 28px;
+      border-radius: min(calc(var(--k-panel-radius, 14px) * 2), 28px);
       background: var(--surface);
-      border: 1px solid var(--border);
+      border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border);
       animation: fadeUp 0.45s var(--ease) both;
     }
     .section:nth-of-type(2) { animation-delay: 0.05s; }
@@ -112,17 +123,18 @@
       align-items: center;
       gap: 8px;
       padding: 10px 4px 8px;
-      border-radius: 20px;
+      border-radius: min(calc(var(--k-panel-radius, 14px) * 1.4), 20px);
       cursor: pointer;
       text-align: center;
       transition: background var(--dur) var(--ease);
     }
     .tile:hover { background: var(--surface-hover); }
     html.glass .tile:hover { background: rgba(255, 255, 255, 0.1); }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(calc(var(--k-nt-tile, 60px) + 32px), 1fr)); }
     .tile .app-icon {
-      width: 60px;
-      height: 60px;
-      font-size: 24px;
+      width: var(--k-nt-tile, 60px);
+      height: var(--k-nt-tile, 60px);
+      font-size: calc(var(--k-nt-tile, 60px) * 0.4);
       filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3));
       transition: transform 0.3s var(--ease);
     }
@@ -140,8 +152,8 @@
 
     /* The "add" tile: a frosted squircle with a plus, like an empty dock slot */
     .add-glyph {
-      width: 60px;
-      height: 60px;
+      width: var(--k-nt-tile, 60px);
+      height: var(--k-nt-tile, 60px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -172,12 +184,12 @@
     <input id="omnibox" type="text" placeholder="Search or enter address" autofocus autocomplete="off" spellcheck="false" />
   </div>
 
-  <div class="section lg">
+  <div class="section lg" id="speed-dial">
     <h2>Speed Dial</h2>
     <div class="grid" id="pinned-grid"></div>
   </div>
 
-  <div class="section lg">
+  <div class="section lg" id="bookmarks-section">
     <h2>Bookmarks</h2>
     <div class="grid" id="bookmarks-grid"></div>
   </div>

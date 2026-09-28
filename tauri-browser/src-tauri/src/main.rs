@@ -15,8 +15,10 @@ mod lifecycle;
 mod page;
 mod profile;
 mod shields;
+mod split;
 mod store;
 mod suggest;
+mod tabdrag;
 mod vault;
 
 use std::collections::{HashMap, HashSet};
@@ -192,6 +194,10 @@ pub(crate) struct BrowserWindow {
     // video's full screen button) -- leaving the page's keeps yours.
     user_fullscreen: bool,
     page_fullscreen: bool,
+    // Two tabs side by side (see split.rs), and while a tab is dragged to a
+    // page edge, which side it would take (true = right).
+    split: Option<split::Split>,
+    split_preview: Option<bool>,
 }
 
 pub(crate) struct BrowserState {
@@ -678,42 +684,20 @@ fn create_tab_internal(
 // off-screen -- and gives it the keyboard focus.
 fn switch_tab_internal(state: &BrowserState, id: u32) -> Result<(), String> {
     let win = state.tab_window(id).ok_or("tab not found")?;
-    let (window, insets, prev) =
-        state.win(&win, |w| (w.window.clone(), w.insets, w.active)).ok_or("that window is closed")?;
-    let (prev_tab, target) = {
-        let tabs = state.tabs.lock().unwrap();
-        let prev_tab = prev.filter(|&p| p != id).and_then(|p| tabs.get(&p).cloned());
-        (prev_tab, tabs.get(&id).cloned().ok_or_else(|| "tab not found".to_string())?)
-    };
-    if let Some(w) = &prev_tab {
-        let _ = w.set_position(LogicalPosition::new(OFFSCREEN_X, 0.0));
-    }
-    let (position, size) = content_bounds(&window, insets).map_err(|e| e.to_string())?;
-    target.set_position(position).map_err(|e| e.to_string())?;
-    target.set_size(size).map_err(|e| e.to_string())?;
-    state.win(&win, |w| w.active = Some(id));
-    // The engine draws and runs the tab you're on at full speed; the one
-    // you left is pictured (hover cards) and then hidden, so it's
-    // throttled like any browser's background tab.
-    lifecycle::show(&target);
-    let _ = target.set_focus();
-    if let (Some(w), Some(prev)) = (&prev_tab, prev) {
-        lifecycle::hide(w, prev, true);
-    }
+    let target = state.tabs.lock().unwrap().get(&id).cloned().ok_or("tab not found")?;
+    // The tab you go to is drawn and run at full speed -- with its split
+    // partner, if it has one -- before the one you left is parked and
+    // hidden (throttled like any browser's background tab).
+    let before = split::shown(state, &win);
+    split::show_tab(state, &win, id, &before)?;
+    lifecycle::picture_soon(&target, id);
     Ok(())
 }
 
-// Re-applies the active tab's bounds in window `win` -- after the window or
+// Re-applies the shown tabs' bounds in window `win` -- after the window or
 // its chrome changes size.
 fn resize_active_tab(state: &BrowserState, win: &str) -> Result<(), String> {
-    let Some((window, insets, Some(id))) = state.win(win, |w| (w.window.clone(), w.insets, w.active)) else {
-        return Ok(());
-    };
-    let tabs = state.tabs.lock().unwrap();
-    let Some(target) = tabs.get(&id) else { return Ok(()) };
-    let (position, size) = content_bounds(&window, insets).map_err(|e| e.to_string())?;
-    target.set_position(position).map_err(|e| e.to_string())?;
-    target.set_size(size).map_err(|e| e.to_string())?;
+    split::apply(state, win);
     Ok(())
 }
 
@@ -3271,16 +3255,14 @@ where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
 {
-    let (tx, rx) = std::sync::mpsc::channel();
+    // Awaited directly -- not by parking a blocking-pool thread on it -- so
+    // a command's answer is back the moment the main thread has run it.
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
     app.run_on_main_thread(move || {
-        let _ = tx.send(f());
+        let _ = tx.try_send(f());
     })
     .map_err(|e| e.to_string())?;
-
-    tauri::async_runtime::spawn_blocking(move || rx.recv())
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+    rx.recv().await.ok_or_else(|| "the main thread dropped the call".to_string())
 }
 
 // --- Tab commands ------------------------------------------------------
@@ -3374,6 +3356,17 @@ async fn open_singleton_tab(app: tauri::AppHandle, webview: Webview, route: Stri
 
 // Forgets everything Kessel kept about tab `id` (its webview is gone).
 fn forget_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32) {
+    let split_in: Vec<String> = state
+        .windows
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|w| w.split.is_some_and(|s| s.left == id || s.right == id))
+        .map(|w| w.label.clone())
+        .collect();
+    for win in split_in {
+        split::tab_gone(app, state, &win, id);
+    }
     for w in state.windows.lock().unwrap().iter_mut() {
         w.order.retain(|&x| x != id);
         if w.active == Some(id) {
@@ -4798,7 +4791,16 @@ fn main() {
             shields_tab_info,
             shields_set_site,
             toggle_shields_popup,
-            close_shields_popup
+            close_shields_popup,
+            split::split_tabs,
+            split::unsplit,
+            split::swap_split,
+            split::set_split_ratio,
+            split::split_preview,
+            tabdrag::set_tab_strip,
+            tabdrag::detach_tabs,
+            tabdrag::drag_window,
+            tabdrag::absorb_window
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -4839,6 +4841,7 @@ fn main() {
             app.manage(state);
             app.manage(Vault::new(data_dir));
             start_shields(app.handle());
+            tabdrag::watch_other_browsers(app.handle());
 
             // The windows of your last session (each with its own tabs), or
             // one window on the start page. The tabs themselves are opened by
