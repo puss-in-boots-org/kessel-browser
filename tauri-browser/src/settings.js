@@ -1,6 +1,7 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
+import { FEATURES } from "./shared/features.js";
 import { WALLPAPERS, setCustomWallpaper, clearCustomWallpaper, hasCustomWallpaper, wallpaperCss } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -21,6 +22,7 @@ const SECTIONS = [
   { id: "downloads", label: "Downloads", icon: "download" },
   { id: "passwords", label: "Passwords", icon: "key" },
   { id: "import", label: "Import", icon: "arrowRight" },
+  { id: "features", label: "All features", icon: "help" },
   { id: "about", label: "About", icon: "bolt" },
 ];
 
@@ -1323,6 +1325,22 @@ async function aboutPanel() {
 
 // --- Shell ------------------------------------------------------------
 
+// Every feature and how to use it, searchable (shared/features.js).
+function featuresPanel() {
+  const p = el(`<div class="panel" id="panel-features"><h2>All features</h2><p class="sub">Everything Kessel does, and how to use it.</p>
+    <input class="field" id="features-q" placeholder="Search features" style="width:100%;margin-bottom:14px" /><div id="features-list"></div></div>`);
+  const list = p.querySelector("#features-list");
+  const render = (q) => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    list.innerHTML = FEATURES.map(([group, items]) => {
+      const rows = items.filter(([n, h]) => words.every((w) => `${n} ${h} ${group}`.toLowerCase().includes(w)));
+      return rows.length ? `<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">${escapeHtml(group)}</div></div></div>${rows.map(([n, h]) => settingRow({ title: escapeHtml(n), desc: escapeHtml(h), controlHtml: "" })).join("")}</div>` : "";
+    }).join("") || `<p class="sub">No feature matches.</p>`;
+  };
+  p.querySelector("#features-q").addEventListener("input", (e) => render(e.target.value));
+  render("");
+  return p;
+}
 async function buildPanel(id, settings) {
   switch (id) {
     case "appearance": return appearancePanel(settings);
@@ -1337,6 +1355,7 @@ async function buildPanel(id, settings) {
     case "downloads": return await downloadsPanel();
     case "passwords": return passwordsPanel(settings);
     case "import": return await importPanel();
+    case "features": return featuresPanel();
     case "about": return await aboutPanel();
     default: return el(`<div class="panel"></div>`);
   }

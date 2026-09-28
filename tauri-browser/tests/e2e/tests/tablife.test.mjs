@@ -130,4 +130,17 @@ export const tests = [
       await waitFor(async () => (await k.invoke("get_settings")).tab_hover_cards === false, { message: "hover cards off" });
     },
   },
+{
+    name: "Settings -> All features lists every feature and how to use it, searchable",
+    async run({ launch, assert }) {
+      const k = await launch();
+      const toolbar = await k.toolbar();
+      await toolbar.evaluate(`window.__kesselTest.createTab("kessel://settings/features")`);
+      const settings = await k.page((t) => t.url.includes("settings.html"));
+      await settings.waitFor(`document.querySelectorAll('#features-list .setting-row').length > 40`, { message: "the list" });
+      await settings.evaluate(`(() => { const q = document.getElementById('features-q'); q.value = 'vertical'; q.dispatchEvent(new Event('input')); })()`);
+      const shown = await settings.evaluate(`[...document.querySelectorAll('#features-list .setting-row .title')].map(e => e.textContent)`);
+      assert(shown.includes("Vertical tabs") && shown.length <= 4, `searching narrows it (${shown.join(", ")})`);
+    },
+  },
 ];
