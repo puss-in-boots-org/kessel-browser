@@ -10,11 +10,22 @@ function go(url) {
   window.location.href = url;
 }
 
+// The clock's format comes from the UI style (Settings -> Appearance -> New
+// tab page): 24- or 12-hour, with or without seconds.
+function clockOptions() {
+  const v = window.__kesselStyle?.values || {};
+  return { twelve: v.clockFormat === "12h", seconds: !!v.clockSeconds };
+}
+
 function tick() {
   const now = new Date();
-  const h = String(now.getHours()).padStart(2, "0");
+  const { twelve, seconds } = clockOptions();
+  const hours = twelve ? now.getHours() % 12 || 12 : now.getHours();
+  const h = twelve ? String(hours) : String(hours).padStart(2, "0");
   const m = String(now.getMinutes()).padStart(2, "0");
-  document.getElementById("clock").textContent = `${h}:${m}`;
+  const s = seconds ? `:${String(now.getSeconds()).padStart(2, "0")}` : "";
+  const suffix = twelve ? ` ${now.getHours() < 12 ? "AM" : "PM"}` : "";
+  document.getElementById("clock").textContent = `${h}:${m}${s}${suffix}`;
   document.getElementById("date").textContent = now.toLocaleDateString(undefined, {
     weekday: "long", month: "long", day: "numeric",
   });
@@ -56,8 +67,15 @@ window.addEventListener("DOMContentLoaded", async () => {
   watchCustomWallpaper(currentSettings);
   document.getElementById("omnibox-icon").innerHTML = icon("search", 18);
 
-  tick();
-  setInterval(tick, 15000);
+  // Once a second only while the clock shows seconds.
+  let clockTimer = null;
+  const startClock = () => {
+    tick();
+    clearInterval(clockTimer);
+    clockTimer = setInterval(tick, clockOptions().seconds ? 1000 : 15000);
+  };
+  startClock();
+  window.addEventListener("kessel-settings", startClock);
 
   document.getElementById("omnibox").addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;

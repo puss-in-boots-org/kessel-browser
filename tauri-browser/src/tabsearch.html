@@ -9,7 +9,7 @@
     /* Tab search (Ctrl+Shift+A, or the button beside the tabs): every tab
        of every window and the recently closed ones, filtered as you type. */
     html, body { height: 100%; overflow: hidden; }
-    body { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; color: var(--text); }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 14px); color: var(--text); }
     html.glass body { background: #0a1433; border: none; color: var(--lg-text); }
     #wallpaper { display: none; }
     html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }

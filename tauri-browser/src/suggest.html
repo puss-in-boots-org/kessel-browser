@@ -10,7 +10,7 @@
        suggest_popup in main.rs). The address bar keeps the keyboard and
        sends what to show (see omnibox.js). */
     html, body { height: 100%; overflow: hidden; user-select: none; background: transparent; }
-    body { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 14px); }
     html.glass body { background: #0a1433; border: none; }
     #wallpaper { display: none; }
     html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }

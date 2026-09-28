@@ -156,6 +156,32 @@ pub struct Settings {
     pub reduce_background_memory: bool,
     pub max_awake_tabs: u32,
     pub never_sleep_sites: Vec<String>,
+
+    // The UI style (src/shared/styles.js): "glass", "clean", "futuristic",
+    // "robust" or "vintage". Empty until one is picked -- then styles.js
+    // works it out from glass_enabled/theme/accent above, which is how
+    // Kessel looked before there were styles.
+    pub ui_style: String,
+    // Your changes to each style, {style id: {option: value}}, holding only
+    // what differs from that style's own defaults. Free-form so the options
+    // can grow without touching this file.
+    pub ui_custom: serde_json::Value,
+    // Looks you saved: [{id, name, style, values}].
+    pub ui_presets: serde_json::Value,
+
+    // Tab behaviour (Settings -> Tabs). Another browser's window (a tab
+    // dragged out of Chrome) dropped on a Kessel tab strip comes in as tabs
+    // (tabdrag.rs). Ctrl+Tab goes through tabs in the order you last used
+    // them. The mouse wheel over the strip switches tabs. What a double or
+    // middle click on the strip's empty space does ("maximize" | "new-tab"
+    // | "reopen" | "none"). A tab dragged to the page's left or right edge
+    // opens beside the one you're on (split.rs).
+    pub pull_other_browsers: bool,
+    pub tab_cycle_mru: bool,
+    pub tab_wheel_switch: bool,
+    pub strip_double_click: String,
+    pub strip_middle_click: String,
+    pub tab_drag_split: bool,
 }
 
 impl Default for Settings {
@@ -208,6 +234,15 @@ impl Default for Settings {
             reduce_background_memory: true,
             max_awake_tabs: 0,
             never_sleep_sites: Vec::new(),
+            ui_style: String::new(),
+            ui_custom: serde_json::json!({}),
+            ui_presets: serde_json::json!([]),
+            pull_other_browsers: true,
+            tab_cycle_mru: false,
+            tab_wheel_switch: false,
+            strip_double_click: "maximize".into(),
+            strip_middle_click: "none".into(),
+            tab_drag_split: true,
         }
     }
 }

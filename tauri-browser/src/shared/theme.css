@@ -1,6 +1,10 @@
 /* Kessel design system -- shared by every page (toolbar, new tab, settings,
    passwords). One file so the look stays consistent and there is exactly
-   one place to tune it. Loaded before each page's own <style>. */
+   one place to tune it. Loaded before each page's own <style>. The UI
+   styles (shared/styles.js) set the variables below on <html>; styles.css
+   holds the rules their options switch on. */
+
+@import url("styles.css");
 
 * { box-sizing: border-box; }
 *::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }

@@ -13,19 +13,27 @@
    element as a backdrop root, so glass inside glass only sees its parent's
    flat tint and looks dead. Hence floating capsules, not solid bars. */
 
+/* The material's knobs (Settings -> Appearance -> Glass material, see
+   shared/styles.js): --k-glass-rgb is the tint colour; tint, rim, gloss and
+   shadow multiply the stock values below (1 = as designed). */
 html.glass {
   --lg-blur: 14px;
   --lg-sat: 1.8;
-  --lg-tint: rgba(255, 255, 255, 0.09);
-  --lg-tint-hover: rgba(255, 255, 255, 0.15);
-  --lg-tint-strong: rgba(255, 255, 255, 0.2);
-  --lg-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0) 100%);
+  --k-glass-rgb: 255 255 255;
+  --k-glass-tint: 1;
+  --k-glass-rim: 1;
+  --k-glass-gloss: 1;
+  --k-glass-shadow: 1;
+  --lg-tint: rgb(var(--k-glass-rgb) / calc(0.09 * var(--k-glass-tint)));
+  --lg-tint-hover: rgb(var(--k-glass-rgb) / calc(0.15 * var(--k-glass-tint)));
+  --lg-tint-strong: rgb(var(--k-glass-rgb) / calc(0.2 * var(--k-glass-tint)));
+  --lg-gloss: linear-gradient(180deg, rgb(255 255 255 / calc(0.16 * var(--k-glass-gloss))) 0%, rgb(255 255 255 / calc(0.03 * var(--k-glass-gloss))) 55%, rgb(255 255 255 / 0) 100%);
   --lg-edge:
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.22),
-    inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, 0.75),
-    inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, 0.3);
-  --lg-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), 0 1px 3px rgba(0, 0, 0, 0.2);
-  --lg-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 0.5px rgb(255 255 255 / calc(0.22 * var(--k-glass-rim))),
+    inset 1.5px 1.5px 1px -1px rgb(255 255 255 / calc(0.75 * var(--k-glass-rim))),
+    inset -1.5px -1.5px 1px -1px rgb(255 255 255 / calc(0.3 * var(--k-glass-rim)));
+  --lg-shadow: 0 10px 30px rgb(0 0 0 / calc(0.28 * var(--k-glass-shadow))), 0 1px 3px rgb(0 0 0 / calc(0.2 * var(--k-glass-shadow)));
+  --lg-shadow-sm: 0 4px 14px rgb(0 0 0 / calc(0.22 * var(--k-glass-shadow))), 0 1px 2px rgb(0 0 0 / calc(0.18 * var(--k-glass-shadow)));
   --lg-text: #ffffff;
   --lg-text-dim: rgba(255, 255, 255, 0.74);
   --lg-text-faint: rgba(255, 255, 255, 0.5);
@@ -35,16 +43,16 @@ html.glass {
 }
 
 html.glass[data-glass-tone="light"] {
-  --lg-tint: rgba(255, 255, 255, 0.4);
-  --lg-tint-hover: rgba(255, 255, 255, 0.55);
-  --lg-tint-strong: rgba(255, 255, 255, 0.66);
-  --lg-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.1) 55%, rgba(255, 255, 255, 0) 100%);
+  --lg-tint: rgb(var(--k-glass-rgb) / calc(0.4 * var(--k-glass-tint)));
+  --lg-tint-hover: rgb(var(--k-glass-rgb) / calc(0.55 * var(--k-glass-tint)));
+  --lg-tint-strong: rgb(var(--k-glass-rgb) / calc(0.66 * var(--k-glass-tint)));
+  --lg-gloss: linear-gradient(180deg, rgb(255 255 255 / calc(0.5 * var(--k-glass-gloss))) 0%, rgb(255 255 255 / calc(0.1 * var(--k-glass-gloss))) 55%, rgb(255 255 255 / 0) 100%);
   --lg-edge:
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.6),
-    inset 1.5px 1.5px 1px -1px rgba(255, 255, 255, 1),
-    inset -1.5px -1.5px 1px -1px rgba(255, 255, 255, 0.55);
-  --lg-shadow: 0 10px 30px rgba(20, 30, 60, 0.18), 0 1px 3px rgba(20, 30, 60, 0.12);
-  --lg-shadow-sm: 0 4px 14px rgba(20, 30, 60, 0.14), 0 1px 2px rgba(20, 30, 60, 0.1);
+    inset 0 0 0 0.5px rgb(255 255 255 / calc(0.6 * var(--k-glass-rim))),
+    inset 1.5px 1.5px 1px -1px rgb(255 255 255 / var(--k-glass-rim)),
+    inset -1.5px -1.5px 1px -1px rgb(255 255 255 / calc(0.55 * var(--k-glass-rim)));
+  --lg-shadow: 0 10px 30px rgb(20 30 60 / calc(0.18 * var(--k-glass-shadow))), 0 1px 3px rgb(20 30 60 / calc(0.12 * var(--k-glass-shadow)));
+  --lg-shadow-sm: 0 4px 14px rgb(20 30 60 / calc(0.14 * var(--k-glass-shadow))), 0 1px 2px rgb(20 30 60 / calc(0.1 * var(--k-glass-shadow)));
   --lg-text: #10121a;
   --lg-text-dim: rgba(16, 18, 26, 0.7);
   --lg-text-faint: rgba(16, 18, 26, 0.45);
@@ -93,9 +101,10 @@ html.glass body { background: #0a1433; }
 html.glass #wallpaper {
   display: block;
   position: fixed;
-  inset: 0;
+  inset: var(--k-wall-inset, 0px);
   z-index: 0;
   pointer-events: none;
+  filter: var(--k-wall-filter, none);
 }
 
 html.glass #app { position: relative; z-index: 1; }
@@ -110,20 +119,20 @@ html.glass #bookmarks-bar {
 
 /* --- Rail: one floating glass capsule of iOS-style app icons --- */
 html.glass #rail {
-  width: 64px;
+  width: var(--k-rail-w, 64px);
   padding: 8px 8px 8px 8px;
   background: transparent;
   border: none;
 }
 html.glass #rail-capsule {
-  border-radius: 24px;
+  border-radius: calc(var(--k-panel-radius, 18px) + 6px);
   padding: 7px 0 9px;
-  gap: 8px;
+  gap: var(--k-rail-gap, 8px);
 }
 
 html.glass .rail-logo {
-  width: 36px;
-  height: 36px;
+  width: var(--k-rail-icon, 36px);
+  height: var(--k-rail-icon, 36px);
   border-radius: 0;
   margin-bottom: 2px;
   -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 0C13 0 0 13 0 50s13 50 50 50 50-13 50-50S87 0 50 0z"/></svg>') center / 100% 100% no-repeat;
@@ -136,12 +145,12 @@ html.glass .rail-logo {
 
 /* Grow with the rail instead of style.css's fixed 40vh cap; scrolls only
    once the icons genuinely don't fit. */
-html.glass #pinned-list { gap: 8px; padding: 2px 6px; margin: 0 -6px; max-height: none; flex: 0 1 auto; min-height: 0; }
+html.glass #pinned-list { gap: var(--k-rail-gap, 8px); padding: 2px 6px; margin: 0 -6px; max-height: none; flex: 0 1 auto; min-height: 0; }
 
 html.glass .rail-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: var(--k-rail-icon, 36px);
+  height: var(--k-rail-icon, 36px);
+  border-radius: calc(var(--k-btn-radius, 15px) * 0.8);
   color: var(--lg-text-dim);
 }
 html.glass .rail-btn:hover { background: var(--lg-tint-hover); color: var(--lg-text); }
@@ -152,14 +161,14 @@ html.glass .rail-btn.panel-open { background: var(--lg-tint-strong); color: var(
 html.glass .rail-badge { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25); }
 
 html.glass .pin-item {
-  width: 36px;
-  height: 36px;
+  width: var(--k-rail-icon, 36px);
+  height: var(--k-rail-icon, 36px);
   background: none;
   border: none;
   border-radius: 0;
   transition: transform 0.25s var(--ease), filter 0.25s var(--ease);
 }
-html.glass .pin-item .app-icon { width: 36px; height: 36px; box-shadow: none; }
+html.glass .pin-item .app-icon { width: var(--k-rail-icon, 36px); height: var(--k-rail-icon, 36px); box-shadow: none; }
 html.glass .pin-item:hover { transform: scale(1.1); filter: brightness(1.08); }
 html.glass .pin-item:active { transform: scale(0.92); }
 /* Open-in-panel indicator: a small light pill at the capsule's left edge,
@@ -180,26 +189,28 @@ html.glass .pin-item .pin-remove { top: -3px; right: -3px; z-index: 2; }
 
 /* --- Tab strip (also the title bar) --- */
 html.glass #tab-bar {
-  height: 46px;
+  height: calc(var(--k-tab-h, 32px) + var(--k-tabbar-pad, 8px) + 6px);
   align-items: center;
-  padding: 8px 8px 0 2px;
+  padding: var(--k-tabbar-pad, 8px) 8px 0 2px;
   gap: 6px;
 }
-html.glass #tabs { gap: 4px; padding: 3px 2px; align-items: center; }
+html.glass #tabs { gap: var(--k-tab-gap, 4px); padding: 3px 2px; align-items: center; }
 
 html.glass .tab {
-  height: 32px;
-  padding: 0 7px 0 8px;
-  border-radius: 16px;
+  height: var(--k-tab-h, 32px);
+  padding: 0 calc(var(--k-tab-pad, 8px) - 1px) 0 var(--k-tab-pad, 8px);
+  border-radius: var(--k-tab-rad, 16px);
+  clip-path: var(--k-tab-clip, none);
   min-width: 110px;
-  max-width: 210px;
+  max-width: var(--k-tab-w, 210px);
   color: var(--lg-text-dim);
   transition: background 0.2s var(--ease), box-shadow 0.2s var(--ease);
 }
 html.glass .tab:not(.active):not(:hover) { background: transparent; box-shadow: none; }
 html.glass .tab:hover:not(.active) { background: var(--lg-gloss), var(--lg-tint); }
 html.glass .tab.active { background: var(--lg-gloss), var(--lg-tint-strong); box-shadow: var(--lg-edge), var(--lg-shadow); }
-html.glass .tab.active::after { display: none; }
+/* The glass pill is the marker -- unless you pick one (styles.css). */
+html.glass:not([data-k-indicator]) .tab.active::after { display: none; }
 html.glass .tab-title { color: var(--lg-text-dim); text-shadow: var(--lg-legibility); }
 html.glass .tab.active .tab-title { color: var(--lg-text); font-weight: 500; }
 html.glass .tab .tab-favicon {
@@ -220,8 +231,8 @@ html.glass .tab .tab-audio:hover { background: rgba(255, 255, 255, 0.18); color:
 html.glass .tab .tab-audio.muted { color: #ff9b9b; }
 
 html.glass :is(#new-tab-btn, #tab-search-btn, #vtabs-collapse) {
-  width: 32px;
-  height: 32px;
+  width: var(--k-tab-h, 32px);
+  height: var(--k-tab-h, 32px);
   border-radius: 50%;
   color: var(--lg-text-dim);
 }
@@ -247,33 +258,34 @@ html.glass #window-controls #win-close:hover { background: #ff453a; color: #fff;
 
 /* --- Nav bar: back/forward/reload capsule + omnibox capsule --- */
 html.glass #nav-bar {
-  height: 46px;
+  height: var(--k-nav-h, 46px);
   padding: 0 8px 0 2px;
   gap: 8px;
 }
 html.glass #nav-cluster {
-  height: 36px;
+  height: calc(var(--k-btn, 32px) + 4px);
   padding: 0 3px;
   gap: 1px;
-  border-radius: 18px;
+  border-radius: calc(var(--k-btn-radius, 15px) + 3px);
 }
 html.glass #nav-cluster > button {
-  width: 32px;
-  height: 30px;
-  border-radius: 15px;
+  width: var(--k-btn, 32px);
+  height: calc(var(--k-btn, 32px) - 2px);
+  border-radius: var(--k-btn-radius, 15px);
   color: var(--lg-text);
 }
 html.glass #nav-cluster > button:hover { background: rgba(255, 255, 255, 0.16); }
-html.glass #menu-cluster { height: 36px; padding: 0 3px; border-radius: 18px; }
-html.glass #menu-cluster > button { width: 32px; height: 30px; border-radius: 15px; color: var(--lg-text); }
+html.glass #menu-cluster { height: calc(var(--k-btn, 32px) + 4px); padding: 0 3px; border-radius: calc(var(--k-btn-radius, 15px) + 3px); }
+html.glass #menu-cluster > button { width: var(--k-btn, 32px); height: calc(var(--k-btn, 32px) - 2px); border-radius: var(--k-btn-radius, 15px); color: var(--lg-text); }
 html.glass #menu-cluster > button:hover { background: rgba(255, 255, 255, 0.16); }
 html.glass #zoom-btn { color: var(--lg-text); background: rgba(255, 255, 255, 0.14); }
 
 html.glass #address-wrap {
   background: var(--lg-gloss), var(--lg-tint);
   border: none;
-  height: 36px;
-  border-radius: 18px;
+  height: var(--k-address-h, 36px);
+  border-radius: var(--k-address-rad, 18px);
+  clip-path: var(--k-address-clip, none);
   margin: 0;
   padding: 0 5px 0 14px;
   transition: box-shadow 0.2s var(--ease), background 0.2s var(--ease);
@@ -291,13 +303,13 @@ html.glass #star-btn.starred { color: #ffd60a; }
 
 /* --- Bookmarks bar: bare labels that turn into glass pills on hover --- */
 html.glass #bookmarks-bar {
-  height: 34px;
+  height: var(--k-bm-h, 34px);
   padding: 0 8px 6px 2px;
   gap: 2px;
 }
 html.glass .bm-chip {
-  height: 26px;
-  border-radius: 13px;
+  height: calc(var(--k-bm-h, 34px) - 8px);
+  border-radius: var(--k-btn-radius, 13px);
   color: var(--lg-text-dim);
   text-shadow: var(--lg-legibility);
   background: transparent;
@@ -349,7 +361,7 @@ html.glass #vtabs::before {
   box-shadow: var(--lg-edge);
   pointer-events: none;
 }
-html.glass.vertical-tabs .tab { height: 34px; border-radius: 12px; }
+html.glass.vertical-tabs .tab { height: calc(var(--k-tab-h, 32px) + 2px); border-radius: min(var(--k-tab-rad, 12px), 12px); clip-path: none; }
 html.glass.vertical-tabs .tab .group-line { left: 0; right: auto; top: 8px; bottom: 8px; width: 3px; height: auto; }
 html.glass.vertical-tabs #new-tab-btn { width: 100%; border-radius: 12px; height: 34px; }
 html.glass .bm-chip .saved-group-dot { box-shadow: 0 0 6px color-mix(in srgb, var(--group) 60%, transparent); }

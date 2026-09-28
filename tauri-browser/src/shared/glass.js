@@ -52,6 +52,31 @@ export const WALLPAPERS = {
       radial-gradient(55% 45% at 80% 80%, rgba(120, 130, 160, 0.3), transparent 70%),
       linear-gradient(160deg, #1b1d24 0%, #0d0e12 100%)`,
   },
+  nebula: {
+    name: "Nebula",
+    css: `radial-gradient(40% 35% at 30% 35%, rgba(255, 60, 200, 0.5), transparent 70%),
+      radial-gradient(45% 40% at 72% 60%, rgba(0, 220, 255, 0.45), transparent 70%),
+      radial-gradient(30% 25% at 55% 20%, rgba(255, 255, 255, 0.18), transparent 70%),
+      linear-gradient(170deg, #07051a 0%, #1a0b3a 55%, #030712 100%)`,
+  },
+  forest: {
+    name: "Forest",
+    css: `radial-gradient(55% 45% at 25% 70%, rgba(90, 170, 90, 0.5), transparent 70%),
+      radial-gradient(45% 40% at 78% 30%, rgba(220, 200, 120, 0.35), transparent 70%),
+      linear-gradient(180deg, #0b1d14 0%, #16372a 55%, #0a140f 100%)`,
+  },
+  dunes: {
+    name: "Dunes",
+    css: `radial-gradient(60% 40% at 30% 80%, rgba(230, 150, 90, 0.65), transparent 70%),
+      radial-gradient(50% 40% at 80% 25%, rgba(255, 235, 200, 0.9), transparent 70%),
+      linear-gradient(170deg, #f6e3c6 0%, #e9b98a 60%, #c98a5c 100%)`,
+  },
+  mist: {
+    name: "Mist",
+    css: `radial-gradient(55% 45% at 25% 30%, rgba(255, 255, 255, 0.95), transparent 70%),
+      radial-gradient(50% 45% at 80% 75%, rgba(170, 190, 215, 0.7), transparent 70%),
+      linear-gradient(165deg, #e8edf3 0%, #cfd8e3 100%)`,
+  },
 };
 
 const CUSTOM_KEY = "kessel.wallpaper.custom";
@@ -62,7 +87,7 @@ const ICON_CACHE_KEY = "kessel.icons";
 // Glass text color follows what's *behind* the glass, not the light/dark
 // theme -- dark text on a light theme over a dark photo was unreadable.
 // "dark" tone = dark backdrop, so white text; "light" = dark text.
-const PRESET_TONES = { daylight: "light" };
+const PRESET_TONES = { daylight: "light", dunes: "light", mist: "light" };
 
 function readStorage(key) {
   try {
@@ -124,30 +149,41 @@ async function adoptSharedStorage() {
     // This page's own listeners (alignToChrome, watchCustomWallpaper).
     window.dispatchEvent(new StorageEvent("storage", { key }));
   }
-  if (lastSettings) applyGlass(lastSettings);
+  if (lastSettings) applyGlass(lastSettings, lastLook);
 }
 adoptSharedStorage();
 
 // --- Settings -> <html> -------------------------------------------------------
 
 let lastSettings = null;
+let lastLook = {};
+let refractionScale = 0.09;
 
-export function applyGlass(settings) {
+// `look` comes from the UI style (see glassLook in theme.js): whether the
+// glass is on at all, its refraction, which wallpaper, the backdrop to paint
+// instead of a wallpaper (a style's gradient or pattern), and a text tone
+// that overrides the wallpaper's own. Without it: the pre-styles settings.
+export function applyGlass(settings, look = {}) {
   lastSettings = settings;
+  lastLook = look;
   const root = document.documentElement;
-  const enabled = settings?.glass_enabled ?? true;
+  const enabled = look.enabled ?? settings?.glass_enabled ?? true;
   root.classList.toggle("glass", enabled);
-  root.classList.toggle("glass-refract", enabled && (settings?.glass_refraction ?? true));
-  root.style.setProperty("--lg-blur", `${settings?.glass_blur ?? 14}px`);
+  root.classList.toggle("glass-refract", enabled && (look.refraction ?? settings?.glass_refraction ?? true));
+  if (look.refractionScale != null && look.refractionScale !== refractionScale) {
+    refractionScale = look.refractionScale;
+    document.querySelector("#lg-refract feDisplacementMap")?.setAttribute("scale", String(refractionScale));
+  }
+  const wallpaper = look.wallpaper ?? settings?.wallpaper;
   // The toolbar sits over the wallpaper's top/left edges, the new-tab page
   // (html[data-glass-role="page"]) over its middle -- each can differ.
   const role = root.dataset.glassRole === "page" ? "page" : "chrome";
-  root.dataset.glassTone = wallpaperTone(settings)[role];
-  paintWallpapers(settings);
+  root.dataset.glassTone = look.tone || wallpaperTone(wallpaper)[role];
+  paintWallpapers(look.backdrop ?? wallpaperCss({ wallpaper }));
 }
 
-function wallpaperTone(settings) {
-  const id = settings?.wallpaper || "nightfall";
+function wallpaperTone(wallpaper) {
+  const id = wallpaper || "nightfall";
   if (id === "custom" && readStorage(CUSTOM_KEY)) {
     try {
       const tone = JSON.parse(readStorage(TONE_KEY));
@@ -202,7 +238,7 @@ function analyzeStoredWallpaper() {
   img.onload = () => {
     try {
       writeStorage(TONE_KEY, JSON.stringify(measureTone(img)));
-      applyGlass(lastSettings);
+      applyGlass(lastSettings, lastLook);
     } catch {
       // unreadable pixels -- keep the white-text default
     }
@@ -223,12 +259,17 @@ export function wallpaperCss(settings) {
   return (WALLPAPERS[id] || WALLPAPERS.nightfall).css;
 }
 
-// Every element with [data-wallpaper] gets the current wallpaper. On the
-// new-tab page it's additionally sized/offset to the whole window so it
-// lines up with the toolbar's copy (see alignToChrome).
-function paintWallpapers(settings) {
-  const css = wallpaperCss(settings);
+// Every element with [data-wallpaper] gets the current wallpaper (or the
+// style's gradient/pattern). On the new-tab page it's additionally
+// sized/offset to the whole window so it lines up with the toolbar's copy
+// (see alignToChrome).
+// (What each layer was last painted with -- a custom wallpaper's data URL can
+// be megabytes, so it isn't re-parsed on every settings change.)
+let painted = new WeakMap();
+function paintWallpapers(css) {
   document.querySelectorAll("[data-wallpaper]").forEach((el) => {
+    if (painted.get(el) === css) return;
+    painted.set(el, css);
     el.style.background = css;
     if (css.startsWith("url(")) el.style.backgroundSize = "cover";
   });
@@ -269,9 +310,12 @@ export function alignToChrome(el) {
 
 // Re-apply when another page changes the custom wallpaper image or its
 // measured tone.
-export function watchCustomWallpaper(getSettings) {
+export function watchCustomWallpaper() {
   window.addEventListener("storage", (e) => {
-    if (e.key === CUSTOM_KEY || e.key === TONE_KEY) applyGlass(getSettings());
+    if ((e.key === CUSTOM_KEY || e.key === TONE_KEY) && lastSettings) {
+      painted = new WeakMap();
+      applyGlass(lastSettings, lastLook);
+    }
   });
 }
 
@@ -340,7 +384,7 @@ export function injectRefractionFilter() {
   holder.innerHTML = `<svg id="lg-filters" width="0" height="0" style="position:absolute;width:0;height:0" aria-hidden="true">
     <filter id="lg-refract" x="0" y="0" width="1" height="1" primitiveUnits="objectBoundingBox" color-interpolation-filters="sRGB">
       <feImage href="${DISPLACEMENT_MAP}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="map"/>
-      <feDisplacementMap in="SourceGraphic" in2="map" scale="0.09" xChannelSelector="R" yChannelSelector="G"/>
+      <feDisplacementMap in="SourceGraphic" in2="map" scale="${refractionScale}" xChannelSelector="R" yChannelSelector="G"/>
     </filter>
   </svg>`;
   document.body.appendChild(holder.firstElementChild);

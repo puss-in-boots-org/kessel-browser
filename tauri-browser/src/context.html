@@ -10,7 +10,7 @@
        point (see toggle_popup in main.rs), so it shows over the page -- a
        menu drawn inside the toolbar would be hidden behind the tab below. */
     html, body { height: 100%; overflow: hidden; user-select: none; }
-    body { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: min(var(--k-popup-radius, 12px), 12px); }
     html.glass body { background: #0a1433; border: none; }
     #wallpaper { display: none; }
     html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }

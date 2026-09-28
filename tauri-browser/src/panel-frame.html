@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-glass-role="page">
+<html lang="en" data-glass-role="page" data-page="panel">
 <head>
   <meta charset="UTF-8" />
   <title>Side panel</title>
@@ -22,7 +22,7 @@
     #sheet {
       position: fixed;
       inset: 3px 3px 3px 2px;
-      border-radius: 18px;
+      border-radius: var(--k-panel-radius, 18px);
       background: var(--surface);
       border: 1px solid var(--border);
       box-shadow: var(--shadow);

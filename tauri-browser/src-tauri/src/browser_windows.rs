@@ -42,6 +42,17 @@ pub(crate) fn create(app: &tauri::AppHandle, private: bool, init: serde_json::Va
 // The same, with the window's top-left corner at `position` (screen
 // coordinates) -- where a tab dragged out of the strip was dropped.
 pub(crate) fn create_at(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>) -> Result<String, String> {
+    create_placed(app, private, init, position, None)
+}
+
+// A window for tabs being dragged out of another: `grab` is the point of its
+// client area (logical) that goes under the mouse pointer, so the dragged
+// tab stays exactly where it was on screen. Shown once it's there.
+pub(crate) fn create_under_pointer(app: &tauri::AppHandle, private: bool, init: serde_json::Value, grab: (f64, f64)) -> Result<String, String> {
+    create_placed(app, private, init, None, Some(grab))
+}
+
+fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>, grab: Option<(f64, f64)>) -> Result<String, String> {
     let state = app.state::<BrowserState>();
     let number = state.next_window.fetch_add(1, Ordering::SeqCst);
     let label = window_label(number);
@@ -54,11 +65,15 @@ pub(crate) fn create_at(app: &tauri::AppHandle, private: bool, init: serde_json:
         .title(window_title(private))
         .inner_size(width, height)
         .min_inner_size(680.0, 420.0)
-        .decorations(false);
-    if let Some((x, y)) = position.or_else(|| cascade_position(&state)) {
+        .decorations(false)
+        .visible(grab.is_none());
+    if let Some((x, y)) = position.or_else(|| if grab.is_none() { cascade_position(&state) } else { None }) {
         builder = builder.position(x, y);
     }
     let window = builder.build().map_err(|e| e.to_string())?;
+    if let Some(grab) = grab {
+        crate::tabdrag::place_under_pointer(&window, grab);
+    }
 
     let toolbar_init = format!(
         "window.__KESSEL_WINDOW__ = {{ label: {}, number: {}, private: {} }};",
@@ -95,7 +110,13 @@ pub(crate) fn create_at(app: &tauri::AppHandle, private: bool, init: serde_json:
         heartbeat: millis_since_start() + TOOLBAR_LOAD_GRACE_MS,
         user_fullscreen: false,
         page_fullscreen: false,
+        split: None,
+        split_preview: None,
     });
+    if grab.is_some() {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
     *state.focused_window.lock().unwrap() = Some(label.clone());
 
     let (app2, label2, window2) = (app.clone(), label.clone(), window.clone());
@@ -248,7 +269,7 @@ pub(crate) fn get_windows(webview: Webview, state: tauri::State<BrowserState>) -
 
 // Moves live tab `id` into window `target` (parked off-screen until its
 // toolbar shows it) and tells the window it left.
-fn move_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32, target: &str) -> Result<serde_json::Value, String> {
+pub(crate) fn move_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32, target: &str) -> Result<serde_json::Value, String> {
     let from = state.tab_window(id).ok_or("tab not found")?;
     if from == target {
         return tab_info(state, id).ok_or_else(|| "tab not found".into());
@@ -257,6 +278,7 @@ fn move_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32, target: &str)
         return Err("tabs can't move between private and normal windows".into());
     }
     let target_window = state.window_handle(target).ok_or("that window is closed")?;
+    crate::split::tab_gone(app, state, &from, id);
     {
         let tabs = state.tabs.lock().unwrap();
         let webview = tabs.get(&id).ok_or("tab not found")?;

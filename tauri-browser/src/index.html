@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page="toolbar">
 <head>
   <meta charset="UTF-8" />
   <title>Kessel</title>
@@ -95,6 +95,13 @@
       <div id="bookmarks-bar"></div>
     </div>
   </div>
+
+  <!-- Split view (main.js / split.rs): the divider in the gap between the
+       two pages, and while a tab is held at a page edge, where it will go. -->
+  <div id="split-divider" hidden><span class="split-grip"></span><button class="split-swap" title="Swap sides">&#8644;</button><button class="split-close" title="Exit split view">&#215;</button></div>
+  <div id="split-hint" hidden><div class="split-hint-card"><span class="split-hint-title"></span><small>Drop to open side by side</small></div></div>
+  <!-- Where something dragged onto the tab strip will land. -->
+  <div id="drop-marker" hidden></div>
 
   <script type="module" src="main.js"></script>
 </body>
