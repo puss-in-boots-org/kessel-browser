@@ -79,6 +79,10 @@ pub(crate) struct Extension {
     // Its manifest changed since Kessel started: starting Kessel again
     // finishes the change.
     pub restart: bool,
+    // What its store said last time Kessel looked: "malware" (Chrome's store
+    // marks it as such -- it's turned off, like Chrome does), "removed" (the
+    // store doesn't have it any more), or "".
+    pub flagged: String,
 }
 
 impl Extension {
@@ -962,7 +966,7 @@ pub(crate) async fn preview_store_extension(app: tauri::AppHandle, webview: Webv
 }
 
 // Runs a file dialog on the main thread, owned by the caller's window.
-async fn dialog<T: Send + 'static>(app: &tauri::AppHandle, webview: &Webview, show: impl FnOnce(Option<dialogs::Owner>) -> T + Send + 'static) -> Result<T, String> {
+pub(crate) async fn dialog<T: Send + 'static>(app: &tauri::AppHandle, webview: &Webview, show: impl FnOnce(Option<dialogs::Owner>) -> T + Send + 'static) -> Result<T, String> {
     let (app2, webview) = (app.clone(), webview.clone());
     on_main(app, move || {
         let state = app2.state::<BrowserState>();
@@ -1170,6 +1174,23 @@ fn offered_version(xml: &str) -> Option<String> {
     (attr("status").as_deref() == Some("ok")).then(|| attr("version")).flatten()
 }
 
+// What a store's answer says about the extension itself: "malware" (Chrome's
+// store marks the ones it took down for it), "removed" (it no longer knows
+// the extension), or "" (nothing wrong).
+fn store_verdict(xml: &str) -> &'static str {
+    let tag = |name: &str| -> Option<&str> {
+        let at = xml.find(&format!("<{}", name))?;
+        Some(&xml[at..at + xml[at..].find('>')?])
+    };
+    if tag("updatecheck").map(|t| t.contains("_malware=\"true\"")).unwrap_or(false) {
+        "malware"
+    } else if tag("app").map(|t| t.contains("status=\"error-unknownApplication\"")).unwrap_or(false) {
+        "removed"
+    } else {
+        ""
+    }
+}
+
 // Is version `a` newer than `b` ("1.10.2" > "1.9")?
 fn newer(a: &str, b: &str) -> bool {
     let parts = |v: &str| v.split('.').map(|p| p.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>();
@@ -1182,6 +1203,7 @@ fn newer(a: &str, b: &str) -> bool {
 pub(crate) async fn update_all(app: &tauri::AppHandle, only: Option<String>) -> Vec<String> {
     let exts = app.state::<Extensions>();
     let mut updated = Vec::new();
+    let mut turned_off = Vec::new();
     let candidates: Vec<Extension> = exts.list().into_iter().filter(|e| e.from_store() && only.as_ref().is_none_or(|o| *o == e.id)).collect();
     for ext in candidates {
         let url = update_url(&ext.source, &ext.id, &ext.version);
@@ -1192,6 +1214,22 @@ pub(crate) async fn update_all(app: &tauri::AppHandle, only: Option<String>) -> 
         .await;
         exts.update(&ext.id, |e| e.last_check = now_unix());
         let Ok(Ok(xml)) = answer else { continue };
+        // Taken down as malware: off, the first time the store says so (you
+        // can turn it back on).
+        let verdict = store_verdict(&xml);
+        if verdict != ext.flagged {
+            let off = verdict == "malware" && ext.enabled;
+            exts.update(&ext.id, |e| {
+                e.flagged = verdict.to_string();
+                e.enabled &= !off;
+            });
+            if off {
+                turned_off.push(ext.name.clone());
+            }
+        }
+        if !verdict.is_empty() {
+            continue;
+        }
         let Some(version) = offered_version(&xml).filter(|v| newer(v, &ext.version)) else { continue };
         let url = package_url(&ext.source, &ext.id);
         let Ok(Ok(data)) = tauri::async_runtime::spawn_blocking(move || download(&url)).await else { continue };
@@ -1207,8 +1245,12 @@ pub(crate) async fn update_all(app: &tauri::AppHandle, only: Option<String>) -> 
             updated.push(staged.name);
         }
     }
-    if !updated.is_empty() {
+    if !updated.is_empty() || !turned_off.is_empty() {
         sync_all(app).await;
+    }
+    if !turned_off.is_empty() {
+        let _ = app.emit("extensions-flagged", &turned_off);
+        let _ = app.emit("extensions-changed", exts.list());
     }
     updated
 }
@@ -1535,6 +1577,11 @@ mod tests {
         let xml = r#"<?xml version="1.0"?><gupdate><app appid="x" status="ok"><updatecheck codebase="https://x/y.crx" version="1.10.0" status="ok"/></app></gupdate>"#;
         assert_eq!(offered_version(xml).as_deref(), Some("1.10.0"));
         assert_eq!(offered_version(r#"<updatecheck status="noupdate"/>"#), None);
+        // What the Chrome Web Store answered for The Great Suspender (taken
+        // down as malware), an id it doesn't know, and a fine one.
+        assert_eq!(store_verdict(r#"<gupdate><app appid="klbibkeccnjlkjkiokjodocebajanakg" status="ok"><updatecheck _esbAllowlist="false" _malware="true" status="noupdate"/></app></gupdate>"#), "malware");
+        assert_eq!(store_verdict(r#"<gupdate><app appid="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" status="error-unknownApplication"/></gupdate>"#), "removed");
+        assert_eq!(store_verdict(xml), "");
         assert!(newer("1.10.0", "1.9.9"));
         assert!(!newer("1.2", "1.2.0"));
         assert_eq!(site_of("https://www.Example.com/path").as_deref(), Some("example.com"));

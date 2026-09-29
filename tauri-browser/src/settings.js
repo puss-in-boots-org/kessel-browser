@@ -3,6 +3,7 @@ import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
 import { buildStyleSection } from "./appearance.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
+import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -14,7 +15,9 @@ const SECTIONS = [
   { id: "sidebar", label: "Side panel", icon: "sidebar" },
   { id: "extensions", label: "Extensions", icon: "puzzle" },
   { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
-  { id: "privacy", label: "Privacy & Security", icon: "shield" },
+  { id: "privacy", label: "Privacy", icon: "shield" },
+  { id: "cookies", label: "Cookies & site data", icon: "cookie" },
+  { id: "security", label: "Security", icon: "lock" },
   { id: "performance", label: "Performance", icon: "bolt" },
   { id: "pinned", label: "Pinned Sites", icon: "pin" },
   { id: "bookmarks", label: "Bookmarks", icon: "bookmark" },
@@ -283,8 +286,8 @@ async function privacyPanel(settings) {
   ]);
 
   const p = el(`<div class="panel" id="panel-privacy">
-    <h2>Privacy &amp; Security</h2>
-    <p class="sub">Shields (ads, trackers, fingerprinting), browsing data, and the vault's auto-lock.</p>
+    <h2>Privacy</h2>
+    <p class="sub">Shields (ads, trackers, fingerprinting), what sites learn about you, browsing data, and the vault's auto-lock. Cookies and security have pages of their own.</p>
 
     <div class="setting-card">
       ${settingRow({ title: "Shields", desc: "Block ads, trackers and fingerprinting on every site. Turn them off for one site from the shield in the address bar.", controlHtml: switchHtml("adblock-toggle", settings.adblock_enabled) })}
@@ -435,6 +438,7 @@ async function privacyPanel(settings) {
   vaultTimeout.addEventListener("input", () => (vaultTimeoutValue.textContent = `${vaultTimeout.value}m`));
   vaultTimeout.addEventListener("change", () => saveSettings({ vault_lock_minutes: parseInt(vaultTimeout.value, 10) }));
 
+  privacyExtras(p, settings, { el, settingRow, switchHtml, wireSwitch });
   return p;
 }
 
@@ -1196,6 +1200,8 @@ async function buildPanel(id, settings) {
     case "extensions": return await extensionsPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "shortcuts": return await keyboardPanel(settings);
     case "privacy": return await privacyPanel(settings);
+    case "cookies": return await cookiesPanel(settings, { el, settingRow, switchHtml, wireSwitch });
+    case "security": return await securityPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "performance": return performancePanel(settings);
     case "pinned": return await pinnedPanel();
     case "bookmarks": return await bookmarksPanel();
@@ -1243,6 +1249,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (hash === "clear") {
       await showSection("privacy", currentSettings());
       openClearDataDialog({ fromShortcut: true });
+      return;
+    }
+    // kessel://settings/cookies:example.com -- that site's cookies.
+    if (hash.startsWith("cookies:")) {
+      await showSection("cookies", currentSettings());
+      focusCookies(decodeURIComponent(hash.slice("cookies:".length)));
       return;
     }
     await showSection(SECTIONS.some((s) => s.id === hash) ? hash : "appearance", currentSettings());

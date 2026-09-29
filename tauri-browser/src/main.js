@@ -621,7 +621,6 @@ function paintStaticIcons() {
   iconFor("tab-search-btn", icon("chevronDown", 15));
   iconFor("tabs-scroll-left", icon("chevronLeft", 14));
   iconFor("tabs-scroll-right", icon("chevronRight", 14));
-  iconFor("lock-icon", icon("lock", 13));
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
   iconFor("shields-btn", icon("shieldCheck", 16));
@@ -2299,12 +2298,14 @@ function updateAddressBarForActiveTab(force = false) {
   const input = document.getElementById("url-input");
   if (force || document.activeElement !== input) {
     // Internal kessel:// pages show a blank omnibox, like a real browser's
-    // new-tab/settings pages do -- there's nothing useful to type over.
-    input.value = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : "";
+    // new-tab/settings pages do -- there's nothing useful to type over. A
+    // warning page shows the address it stands in for.
+    input.value = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : warnedUrl(tab?.url || "") || "";
     input.classList.remove("search-mode");
     omnibox?.reset();
   }
   document.getElementById("share-btn").hidden = !(tab && /^(https?|file):/.test(tab.url || ""));
+  updateSiteButton();
   updateStarButton();
   updateNavButtons();
   updateShieldsButton();
@@ -2989,6 +2990,72 @@ async function toggleSharePopup() {
   if (!tab || !/^(https?|file):/.test(tab.url || "")) return;
   const rect = document.getElementById("share-btn").getBoundingClientRect();
   await invoke("toggle_popup", { kind: "share", x: rect.right + 60, y: rect.bottom, width: 300, height: 400, init: { url: tab.url, title: tab.title || "" } }).catch(() => {});
+}
+
+// --- Site info (the address bar's lock) ---------------------------------------
+// How the page is connected -- a lock, or "Not secure" for a website on plain
+// http (security.rs's HTTPS-only can refuse those) -- and, on click, the site
+// info popup (siteinfo.html): the certificate, the site's cookies and data.
+
+// Like shields.rs's is_local_host: an address or a name on your own network.
+function isLocalHost(host) {
+  return host === "localhost" || /\.(localhost|local|lan|internal)$/.test(host) || /^[\d.]+$/.test(host) || host.startsWith("[") || !host.includes(".");
+}
+
+// The page a warning page (kessel://warning) stands in for.
+function warnedUrl(url) {
+  if (!url.startsWith("kessel://warning")) return null;
+  try {
+    return new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("url") || "";
+  } catch {
+    return "";
+  }
+}
+
+function siteState(url) {
+  if (warnedUrl(url) !== null) return "danger";
+  if (/^https:/i.test(url)) return "secure";
+  if (/^http:/i.test(url)) {
+    let host = "";
+    try {
+      host = new URL(url).hostname;
+    } catch {}
+    return isLocalHost(host) ? "local" : "insecure";
+  }
+  if (/^file:/i.test(url)) return "file";
+  return "none";
+}
+
+function updateSiteButton() {
+  const button = document.getElementById("lock-icon");
+  const state = siteState(findTab(activeTabId)?.url || "");
+  if (button.dataset.state === state) return;
+  button.dataset.state = state;
+  const glyph = { secure: "lock", insecure: "unlock", danger: "warning", local: "globe", file: "file" }[state] || "search";
+  const label = { insecure: "Not secure", danger: "Warning" }[state];
+  button.innerHTML = `${icon(glyph, 13)}${label ? `<span>${label}</span>` : ""}`;
+  button.title = { secure: "Connection is secure -- site info", insecure: "Not secure -- site info", local: "Site info", file: "Site info" }[state] || "";
+  button.disabled = !["secure", "insecure", "local", "file"].includes(state);
+}
+
+async function toggleSiteInfo() {
+  const tab = findTab(activeTabId);
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) return;
+  const rect = document.getElementById("lock-icon").getBoundingClientRect();
+  await invoke("toggle_popup", { kind: "siteinfo", x: Math.round(rect.left - 6), y: Math.round(rect.bottom), width: 320, height: 330, init: { tab: tab.id, url: tab.url } }).catch(() => {});
+}
+
+// --- Risky downloads ---------------------------------------------------------------
+// A download security.rs holds back until you decide: one prompt at a time
+// (download-warning.html), the rest wait their turn.
+
+const downloadWarnings = [];
+
+function showDownloadWarning() {
+  const next = downloadWarnings[0];
+  if (!next) return;
+  const rect = document.getElementById("menu-btn").getBoundingClientRect();
+  invoke("toggle_popup", { kind: "download", x: Math.round(rect.right + 4), y: Math.round(rect.bottom), width: 360, height: 220, init: next }).catch(() => {});
 }
 
 // The Kessel menu (⋮, Alt+F, Alt+E, F10): a popup under its button.
@@ -4003,6 +4070,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
   document.getElementById("zoom-btn").addEventListener("click", () => runCommand("zoom-reset"));
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
+  document.getElementById("lock-icon").addEventListener("click", toggleSiteInfo);
   document.getElementById("account-btn").addEventListener("click", toggleAccountsPopup);
   document.getElementById("engine-btn").addEventListener("click", toggleEngineMenu);
 
@@ -4346,6 +4414,25 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateDownloadsBadge();
     toast(event.payload.success ? "Download complete" : "Download failed");
   });
+
+  // A risky download waits for you (security.rs).
+  listenHere("download-warning", (event) => {
+    downloadWarnings.push(event.payload);
+    if (downloadWarnings.length === 1) showDownloadWarning();
+  });
+  await listen("download-resolved", (event) => {
+    const at = downloadWarnings.findIndex((w) => w.id === event.payload.id);
+    if (at < 0) return;
+    downloadWarnings.splice(at, 1);
+    if (at === 0) setTimeout(showDownloadWarning, 350);
+  });
+  await listen("download-discarded", () => {
+    activeDownloads = Math.max(0, activeDownloads - 1);
+    updateDownloadsBadge();
+    toast("Download discarded");
+  });
+  // An extension its store took down as malware was turned off (extensions.rs).
+  await listen("extensions-flagged", (event) => toast(`Turned off ${(event.payload || []).join(", ")}: its store took it down as malware`, { duration: 6000 }));
 
   window.addEventListener("kessel-settings", () => {
     updateShieldsButton();

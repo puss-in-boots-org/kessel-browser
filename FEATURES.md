@@ -348,17 +348,17 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 10.01 | Allow cookies | 🌐 | |
-| 10.02 | Block cookies | ⏳ | |
-| 10.03 | Block third-party cookies | ⏳ | |
-| 10.04 | Delete cookies | ⏳ | |
-| 10.05 | Per-site cookie settings | ⏳ | |
-| 10.06 | Cookie viewer | ⏳ | |
-| 10.07 | Cookie editor | ⏳ | |
-| 10.08 | Cookie expiration controls | ⏳ | |
-| 10.09 | Session-only cookies | ⏳ | |
-| 10.10 | Cookie isolation | 🟢 | Accounts |
-| 10.11 | Partitioned cookies | ⏳ | |
+| 10.01 | Allow cookies | 🌐 | Sites keep cookies unless you say otherwise (Settings → Cookies & site data) |
+| 10.02 | Block cookies | ✅ | Settings → Cookies & site data: sites may keep cookies -- yes / until you close Kessel / no -- and per-site rules. WebView2 has no cookie policy to set, so a sweep over the cookie jar (as pages load, and every minute) deletes a blocked site's cookies, and its pages get no document.cookie (privacy.rs) |
+| 10.03 | Block third-party cookies | ✅ | On by default: Chromium's own third-party cookie blocking (engine switch, after a restart); partitioned cookies keep working. A switch in Settings → Cookies & site data |
+| 10.04 | Delete cookies | ✅ | One cookie, or a whole site's, in Settings → Cookies & site data (and Clear browsing data) |
+| 10.05 | Per-site cookie settings | ✅ | Allow / until Kessel closes / block, per site (covering its subdomains; the most specific rule wins) -- in Settings, or from the address bar's lock (site info) |
+| 10.06 | Cookie viewer | ✅ | Settings → Cookies & site data: every cookie by site, with its domain, path, expiry and flags, searchable |
+| 10.07 | Cookie editor | ✅ | Add or edit a cookie: name, value, domain, path, expiry, Secure, HttpOnly, SameSite |
+| 10.08 | Cookie expiration controls | ✅ | "Keep cookies at most" a day … a year: longer-lived cookies are cut short by the sweep; any cookie's expiry in the editor |
+| 10.09 | Session-only cookies | ✅ | "Until you close Kessel" -- for every site, or per site: their cookies become session cookies |
+| 10.10 | Cookie isolation | 🟢 | Accounts (each has its own cookie jar); private windows too |
+| 10.11 | Partitioned cookies | 🌐 | CHIPS: a Partitioned cookie in another site's frame is kept, for that page only (tested) |
 | 10.12 | Tracker blocking | 🟢 | Shields |
 | 10.13 | Third-party tracker blocking | 🟢 | Shields |
 | 10.14 | Cross-site tracking protection | 🟢 | Shields + WebView2 tracking prevention |
@@ -367,48 +367,48 @@ branch, one small commit per feature or group of features.
 | 10.17 | Fingerprinting protection | 🟢 | Shields farbling |
 | 10.18 | Cryptomining protection | 🟢 | Shields lists |
 | 10.19 | Tracking URL removal | 🟢 | Shields |
-| 10.20 | Bounce-tracking protection | ⏳ | |
-| 10.21 | Storage partitioning | ⏳ | |
-| 10.22 | First-party isolation | ⏳ | |
-| 10.23 | Total cookie protection | ⏳ | |
-| 10.24 | Private browsing | ⏳ | |
-| 10.25 | Incognito mode | ⏳ | |
-| 10.26 | Automatic private sessions | ⏳ | |
-| 10.27 | Clear data on exit | ⏳ | |
-| 10.28 | Per-site data deletion | ⏳ | |
-| 10.29 | Global privacy controls | ⏳ | |
-| 10.30 | Do Not Track | ⏳ | |
-| 10.31 | Global Privacy Control | ⏳ | |
-| 10.32 | Referrer controls | ⏳ | |
-| 10.33 | User-agent privacy controls | ⏳ | |
-| 10.34 | Fingerprint resistance | 🟢 | Shields farbling |
+| 10.20 | Bounce-tracking protection | ✅ | With Shields: click-tracking redirect pages (google.com/url, l.facebook.com, out.reddit.com, youtube.com/redirect, steamcommunity.com/linkfilter, …) are skipped straight to where they point |
+| 10.21 | Storage partitioning | 🌐 | A site's frame inside another site gets storage of its own (tested with localStorage) |
+| 10.22 | First-party isolation | 🌐 | Storage partitioning + third-party cookie blocking: each site only sees what it keeps itself |
+| 10.23 | Total cookie protection | ✅ | Third-party cookies blocked with partitioned ones allowed: a site's cookies in other sites' pages live in a jar per page site, like Firefox's Total Cookie Protection |
+| 10.24 | Private browsing | 🟢 | Private windows (Ctrl+Shift+N): their own in-memory profile, no history, gone when closed |
+| 10.25 | Incognito mode | 🟢 | The same private windows |
+| 10.26 | Automatic private sessions | ✅ | Settings → Privacy: "Always use private windows" |
+| 10.27 | Clear data on exit | ✅ | Settings → Cookies & site data: history, the downloads list, cookies and site data, cached files, autofill, site settings -- cleared when the last window closes or you quit |
+| 10.28 | Per-site data deletion | ✅ | "Delete site data" -- cookies, storage, caches and service workers of every address of the site -- in Settings or the lock's popup |
+| 10.29 | Global privacy controls | ✅ | Global Privacy Control and Do Not Track switches (Settings → Privacy) |
+| 10.30 | Do Not Track | ✅ | Off by default (few sites honour it, and it makes you stand out): the DNT header and navigator.doNotTrack |
+| 10.31 | Global Privacy Control | ✅ | On by default: the Sec-GPC header on requests (Shields or not) and navigator.globalPrivacyControl |
+| 10.32 | Referrer controls | ✅ | Just the site (default) / nothing to other sites / nothing ever: set as each page's own referrer policy as it starts, and document.referrer. (The engine adds the Referer header after Kessel sees a request, so it can't be taken off there) |
+| 10.33 | User-agent privacy controls | ✅ | Kessel (Edge's engine) / Google Chrome / your own, for tabs opened from then on. Client hints (Sec-CH-UA) still name the engine |
+| 10.34 | Fingerprint resistance | 🟢 | Shields farbling -- canvas, audio, CPU cores, and now WebGL and screen size |
 | 10.35 | Canvas fingerprint protection | 🟢 | |
-| 10.36 | WebGL fingerprint protection | ⏳ | |
-| 10.37 | Font fingerprint protection | ⏳ | |
-| 10.38 | Screen-size fingerprint protection | ⏳ | |
-| 10.39 | Timezone fingerprint protection | ⏳ | |
+| 10.36 | WebGL fingerprint protection | ✅ | Farbling: a common graphics card vendor/renderer instead of yours, and faint noise on pixels read back |
+| 10.37 | Font fingerprint protection | ⏭️ | Not possible from outside the engine: WebView2 has no say over which fonts pages can use or measure (Brave does it inside Chromium) |
+| 10.38 | Screen-size fingerprint protection | ✅ | Farbling: the screen is the size of the window (no monitor size or layout) |
+| 10.39 | Timezone fingerprint protection | ✅ | Opt-in (Settings → Privacy): pages run in UTC (the engine's time zone override), and other sites' frames read UTC too |
 
 ### 11. Security
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 11.01 | HTTPS support | 🌐 | |
-| 11.02 | HTTPS-only mode | ⏳ | |
-| 11.03 | HTTP warning | ⏳ | |
+| 11.02 | HTTPS-only mode | ✅ | Settings → Security: every site is opened as https; one without it gets a warning page first ("continue" lasts until a restart). Addresses on your own network are left alone |
+| 11.03 | HTTP warning | ✅ | A red "Not secure" chip in the address bar on http sites; the lock opens the site info (connection, certificate, cookies) |
 | 11.04 | TLS | 🌐 | |
 | 11.05 | Certificate validation | 🌐 | |
-| 11.06 | Certificate warnings | ⏳ | |
-| 11.07 | Certificate viewer | ⏳ | |
+| 11.06 | Certificate warnings | ✅ | A warning page saying what's wrong (expired, another site's, untrusted, revoked), with "go on (unsafe)" -- remembered until a restart |
+| 11.07 | Certificate viewer | ✅ | The lock → Certificate: Windows' own certificate dialog, for the certificate the site sends (fetched fresh -- WebView2 doesn't hand out its page's) |
 | 11.08 | HSTS | 🌐 | |
 | 11.09 | Certificate Transparency | 🌐 | |
 | 11.10 | Mixed-content blocking | 🌐 | |
-| 11.11 | Safe Browsing | ⏳ | |
-| 11.12 | Phishing protection | ⏳ | |
-| 11.13 | Malware protection | ⏳ | |
-| 11.14 | Dangerous-download protection | ⏳ | |
-| 11.15 | Deceptive-site warnings | ⏳ | |
-| 11.16 | Malicious-extension protection | ⏳ | |
-| 11.17 | Permission warnings | ⏳ | |
+| 11.11 | Safe Browsing | ✅ | On this PC, nothing sent anywhere: the URLhaus malware, phishing and uBlock "badware" lists, refreshed twice a day, checked whether Shields is up or down. Opt-in: Microsoft Defender SmartScreen (sends addresses to Microsoft; after a restart) |
+| 11.12 | Phishing protection | ✅ | Phishing URL Blocklist → a "Deceptive site ahead" warning page |
+| 11.13 | Malware protection | ✅ | URLhaus (malware sites and files) → a warning page; downloads of listed files wait for you |
+| 11.14 | Dangerous-download protection | ✅ | A download from the malware lists, or a program over plain http, waits until you keep or discard it (and SmartScreen's checks, if on) |
+| 11.15 | Deceptive-site warnings | ✅ | Warning pages for deceptive, malware and badware sites (and pages Shields blocks outright), with a way on for the session |
+| 11.16 | Malicious-extension protection | ✅ | Update checks read the store's verdict: an extension the Chrome Web Store took down as malware is turned off and marked, like Chrome does; one no longer in its store is marked |
+| 11.17 | Permission warnings | 🟢 | Extensions list what they may do before you add them, and an update asking for more waits for you; sites' permission prompts are the engine's |
 | 11.18 | Sandboxing | 🌐 | |
 | 11.19 | Site isolation | 🌐 | |
 | 11.20 | Process isolation | 🌐 | |

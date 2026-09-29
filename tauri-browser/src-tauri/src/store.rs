@@ -196,6 +196,58 @@ pub struct Settings {
     // Workspaces: [{ id, name, icon, color }]. A window shows one at a time
     // (its tabs); none means just the one, as before.
     pub workspaces: serde_json::Value,
+
+    // Cookies and site data (privacy.rs). Other sites' cookies inside a page
+    // are refused (partitioned ones, which stay with that page, still work)
+    // -- an engine switch, so after a restart. What sites may keep cookies:
+    // "allow", "session" (until Kessel closes) or "block", and per-site
+    // rules over that. Cookies are kept at most `cookie_max_days` (0 = as
+    // long as the site asks).
+    pub block_third_party_cookies: bool,
+    pub cookies_default: String,
+    pub cookie_rules: Vec<CookieRule>,
+    pub cookie_max_days: u32,
+    // What's deleted when Kessel closes: "history", "downloads", "cookies",
+    // "cache", "autofill", "site_settings" (as in Clear browsing data).
+    pub clear_on_exit: Vec<String>,
+    // Every window opens as a private one.
+    pub always_private: bool,
+    // Asking sites not to track or sell your data: Global Privacy Control
+    // (Sec-GPC) and Do Not Track headers, and the matching navigator values.
+    pub send_gpc: bool,
+    pub send_dnt: bool,
+    // How much of the page you came from other sites see: "default" (the
+    // engine's: just the site), "same-site" (nothing, to other sites) or
+    // "none" (nothing, ever).
+    pub referrer_policy: String,
+    // What Kessel tells sites it is: "default" (Edge's engine), "chrome"
+    // (plain Chrome), or "custom" (user_agent_custom).
+    pub user_agent: String,
+    pub user_agent_custom: String,
+    // Shields: skip known redirect pages (google.com/url?q=, l.facebook.com
+    // ...) that record your click on the way.
+    pub shields_debounce: bool,
+    // Fingerprinting protection for the time zone: sites see UTC.
+    pub fp_timezone: bool,
+
+    // Security (security.rs). HTTPS-only: http:// pages open as https, and
+    // one without it warns before loading insecurely. Dangerous sites (the
+    // malware and phishing lists) get a warning page. Microsoft Defender
+    // SmartScreen checks pages and downloads too (it sends them to Microsoft;
+    // after a restart). Risky downloads (programs over plain http, files on
+    // the malware lists) wait for you to keep them.
+    pub https_only: bool,
+    pub safe_browsing: bool,
+    pub smartscreen: bool,
+    pub warn_dangerous_downloads: bool,
+}
+
+// A site's own cookie rule: `site` is a domain ("example.com" covers its
+// subdomains too), `rule` "allow" | "session" | "block".
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct CookieRule {
+    pub site: String,
+    pub rule: String,
 }
 
 impl Default for Settings {
@@ -262,6 +314,23 @@ impl Default for Settings {
             ai_provider: "chatgpt".into(),
             ai_custom_url: String::new(),
             workspaces: serde_json::json!([]),
+            block_third_party_cookies: true,
+            cookies_default: "allow".into(),
+            cookie_rules: Vec::new(),
+            cookie_max_days: 0,
+            clear_on_exit: Vec::new(),
+            always_private: false,
+            send_gpc: true,
+            send_dnt: false,
+            referrer_policy: "default".into(),
+            user_agent: "default".into(),
+            user_agent_custom: String::new(),
+            shields_debounce: true,
+            fp_timezone: false,
+            https_only: false,
+            safe_browsing: true,
+            smartscreen: false,
+            warn_dangerous_downloads: true,
         }
     }
 }

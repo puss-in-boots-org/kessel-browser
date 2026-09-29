@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" data-page="warning">
+<head>
+  <meta charset="UTF-8" />
+  <title>Warning</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    /* Shown in a tab instead of a dangerous or broken page (security.rs):
+       warning.html?kind=...&url=...&detail=... */
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
+    body.danger { background: color-mix(in srgb, var(--danger) 16%, var(--bg)); }
+    main { max-width: 600px; padding: 40px 32px; }
+    #symbol { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;
+      color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+    body.danger #symbol { color: var(--danger); background: color-mix(in srgb, var(--danger) 16%, transparent); }
+    h1 { font-size: 24px; margin: 0 0 12px; line-height: 1.25; }
+    p { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0 0 12px; }
+    #address { font-family: var(--mono, monospace); font-size: 12.5px; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; padding: 8px 11px; margin: 16px 0 22px; word-break: break-all; user-select: text; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    #details { margin-top: 26px; font-size: 13px; }
+    #details summary { cursor: pointer; color: var(--text-dim); }
+    #details summary:hover { color: var(--text); }
+    #details .inner { padding: 12px 0 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="symbol"></div>
+    <h1 id="title"></h1>
+    <p id="what"></p>
+    <div id="address"></div>
+    <div class="actions">
+      <button class="btn primary" id="back"></button>
+    </div>
+    <details id="details">
+      <summary id="details-label"></summary>
+      <div class="inner">
+        <p id="more"></p>
+        <button class="btn danger sm" id="proceed"></button>
+      </div>
+    </details>
+  </main>
+  <script type="module" src="warning.js"></script>
+</body>
+</html>

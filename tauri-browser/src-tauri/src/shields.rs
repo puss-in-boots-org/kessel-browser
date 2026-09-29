@@ -177,7 +177,7 @@ fn build_engine(lists: &[(&str, String)], custom: &[String], include_bootstrap: 
     (engine, rules)
 }
 
-fn http_agent() -> ureq::Agent {
+pub(crate) fn http_agent() -> ureq::Agent {
     use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
     // Windows' own certificate store (native TLS + platform roots) rather
     // than a bundled root list -- security suites that inspect HTTPS (ESET)
@@ -601,6 +601,50 @@ const FARBLING_SCRIPT: &str = r#"
         }
       });
     }
+  } catch (e) {}
+
+  // WebGL: the graphics card's exact name is one of the strongest
+  // identifiers -- sites get a common one instead -- and pixels read back
+  // get the same faint noise as canvas.
+  try {
+    [window.WebGLRenderingContext, window.WebGL2RenderingContext].forEach(function (Context) {
+      if (!Context) return;
+      var getParameter = Context.prototype.getParameter;
+      Context.prototype.getParameter = function (name) {
+        if (!off()) {
+          if (name === 0x9245) return 'Google Inc. (Intel)'; // UNMASKED_VENDOR_WEBGL
+          if (name === 0x9246) return 'ANGLE (Intel, Intel(R) UHD Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'; // UNMASKED_RENDERER_WEBGL
+        }
+        return getParameter.apply(this, arguments);
+      };
+      var readPixels = Context.prototype.readPixels;
+      Context.prototype.readPixels = function (x, y, w, h, format, type, pixels) {
+        readPixels.apply(this, arguments);
+        if (!off() && pixels instanceof Uint8Array && pixels.length >= w * h * 4) farbleImageData(pixels, w, h);
+      };
+    });
+  } catch (e) {}
+
+  // Screen: the window's own size instead of the monitor's (with several
+  // monitors, their layout too).
+  try {
+    var sizes = {
+      width: function () { return window.outerWidth || window.innerWidth; },
+      height: function () { return window.outerHeight || window.innerHeight; },
+      availWidth: function () { return window.outerWidth || window.innerWidth; },
+      availHeight: function () { return window.outerHeight || window.innerHeight; },
+      availLeft: function () { return 0; },
+      availTop: function () { return 0; }
+    };
+    Object.keys(sizes).forEach(function (name) {
+      var real = Object.getOwnPropertyDescriptor(Screen.prototype, name);
+      if (!real || !real.get) return;
+      Object.defineProperty(Screen.prototype, name, {
+        configurable: true,
+        enumerable: true,
+        get: function () { return off() ? real.get.call(this) : sizes[name](); }
+      });
+    });
   } catch (e) {}
 })();
 "#;

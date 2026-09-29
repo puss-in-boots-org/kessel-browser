@@ -14,7 +14,9 @@ mod import;
 mod keys;
 mod lifecycle;
 mod page;
+mod privacy;
 mod profile;
+mod security;
 mod shields;
 mod sidebar;
 mod split;
@@ -117,6 +119,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("history", "history.html"),
     ("help", "help.html"),
     ("sidebar", "sidebar.html"),
+    // Shown instead of a dangerous or broken page (security.rs).
+    ("warning", "warning.html"),
 ];
 
 // kessel://settings -> settings.html, kessel://settings/privacy ->
@@ -1894,24 +1898,41 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     }
     let st = app.state::<BrowserState>();
     let shields = app.state::<shields::Shields>();
+    let security = app.state::<security::Security>();
     let host = nav_url.host_str().unwrap_or("").to_lowercase();
+    let (https, strip, debounce, https_only, safe_browsing) = {
+        let s = st.store.settings.lock().unwrap();
+        (s.shields_https_upgrade, s.shields_strip_tracking, s.shields_debounce, s.https_only, s.safe_browsing)
+    };
 
-    if shields_up_for(&st, &host) {
-        let (https, strip) = {
-            let s = st.store.settings.lock().unwrap();
-            (s.shields_https_upgrade, s.shields_strip_tracking)
-        };
-        let failed = shields.https_failed.lock().unwrap().clone();
-        let (blocked, list_rewrite) = shields.check_document(nav_url.as_str());
-        if blocked {
-            st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
-            let _ = app.emit("adblock-count-changed", st.store.blocked_count.load(Ordering::SeqCst));
+    // A site on the malware or phishing lists: a warning page instead,
+    // Shields or not -- unless you chose to go on this session.
+    if safe_browsing && !security.proceeds(&host) {
+        if let Some(danger) = security.check(nav_url) {
+            security::show_warning(app, id, label, danger.kind, nav_url.as_str(), danger.list);
             return false;
         }
-        // Our own HTTPS/parameter rules first, then the lists' $removeparam.
-        let rewrite = shields::rewrite_navigation(nav_url, https, strip, &failed).or_else(|| {
+    }
+
+    let shields_on = shields_up_for(&st, &host);
+    // HTTPS-only upgrades every site (whose https hasn't failed you before
+    // this session, when it's just Shields' upgrade).
+    let strict = https_only && !security.http_allowed(&host);
+    if shields_on || strict {
+        let failed = if strict { Default::default() } else { shields.https_failed.lock().unwrap().clone() };
+        let (blocked, list_rewrite) = if shields_on { shields.check_document(nav_url.as_str()) } else { (false, None) };
+        if blocked && !security.proceeds(&host) {
+            st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
+            let _ = app.emit("adblock-count-changed", st.store.blocked_count.load(Ordering::SeqCst));
+            security::show_warning(app, id, label, "blocked", nav_url.as_str(), "");
+            return false;
+        }
+        // Redirect pages skipped, then our own HTTPS/parameter rules, then
+        // the lists' $removeparam.
+        let skipped = (shields_on && debounce).then(|| privacy::debounce(nav_url)).flatten().map(|url| shields::Rewrite { url, upgraded: false, stripped: true });
+        let rewrite = skipped.or_else(|| shields::rewrite_navigation(nav_url, strict || (shields_on && https), shields_on && strip, &failed)).or_else(|| {
             list_rewrite
-                .filter(|u| strip && u != nav_url.as_str())
+                .filter(|u| shields_on && strip && u != nav_url.as_str())
                 .map(|url| shields::Rewrite { url, upgraded: false, stripped: true })
         });
         if let Some(rw) = rewrite {
@@ -1945,6 +1966,15 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     };
     if !arrived_via_rewrite {
         shields.reset_tab(id, &host);
+    }
+    // Off to another site before an https attempt finished (you stopped it,
+    // or clicked on): its fallback no longer applies.
+    {
+        let mut pending = shields.https_pending.lock().unwrap();
+        let stale = pending.get(label).and_then(|u| tauri::Url::parse(u).ok()).map(|u| u.host_str().unwrap_or("").to_lowercase() != host).unwrap_or(false);
+        if stale {
+            pending.remove(label);
+        }
     }
     shields.nav_targets.lock().unwrap().insert(label.to_string(), nav_url.to_string());
     // This page's `+js(...)` scriptlets, registered before its document
@@ -2210,6 +2240,8 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
                 page.loading = false;
             }
             emit_to_tab_window(&app_done, id, "tab-load-finished", serde_json::json!({ "id": id }));
+            // The cookies it set meet your cookie rules.
+            privacy::sweep_soon(&app_done);
             if let Some(core) = sender {
                 if let Ok(source) = webview_source(&core) {
                     page_url_changed(&app_done, id, &source, false);
@@ -2407,19 +2439,63 @@ fn content_webview(label: &str, url: WebviewUrl, token: &str) -> WebviewBuilder<
         .devtools(true)
 }
 
-// Fingerprinting protection runs in every frame -- third-party iframes are
-// where most fingerprinting scripts live -- so it's added separately from
-// the main-frame content script.
+// What every page webview is made with besides the content script: the
+// fingerprinting protection and the privacy script (privacy.rs) run in every
+// frame -- third-party iframes are where most fingerprinting scripts live --
+// and the user agent you chose.
 fn with_farbling(app: &tauri::AppHandle, builder: WebviewBuilder<tauri::Wry>) -> WebviewBuilder<tauri::Wry> {
-    let enabled = {
-        let settings = app.state::<BrowserState>().store.settings.lock().unwrap().clone();
-        settings.adblock_enabled && settings.shields_fingerprinting
-    };
-    if enabled {
-        builder.initialization_script_for_all_frames(app.state::<shields::Shields>().farbling_script())
-    } else {
-        builder
+    let settings = app.state::<BrowserState>().store.settings.lock().unwrap().clone();
+    let mut builder = builder;
+    if settings.adblock_enabled && settings.shields_fingerprinting {
+        builder = builder.initialization_script_for_all_frames(app.state::<shields::Shields>().farbling_script());
     }
+    if let Some(script) = privacy::page_script(&settings) {
+        builder = builder.initialization_script_for_all_frames(&script);
+    }
+    if let Some(agent) = privacy::user_agent(&settings) {
+        builder = builder.user_agent(&agent);
+    }
+    builder
+}
+
+// Every webview showing a website (tabs, pop-outs, the side panel's page).
+fn page_webviews(app: &tauri::AppHandle) -> Vec<Webview> {
+    app.webviews()
+        .into_values()
+        .filter(|w| {
+            let label = w.label();
+            label.starts_with("content-") || label.starts_with("popout-content-") || label.starts_with("side-panel-") && !label.starts_with("side-panel-frame")
+        })
+        .collect()
+}
+
+// Whether pages' requests need to come past Kessel at all: for Shields, or
+// to change their headers (privacy.rs).
+fn wants_requests(settings: &Settings) -> bool {
+    settings.adblock_enabled || privacy::request_plan(settings).is_some()
+}
+
+// The time zone protection: pages' own frames run in UTC (the engine's
+// override; privacy.rs's page script covers other sites' frames).
+#[cfg(windows)]
+unsafe fn set_timezone_override(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2, on: bool) {
+    use windows::core::HSTRING;
+    let params = serde_json::json!({ "timezoneId": if on { "UTC" } else { "" } }).to_string();
+    let done = webview2_com::CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(())));
+    let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Emulation.setTimezoneOverride"), &HSTRING::from(params), &done);
+}
+
+fn apply_timezone(app: &tauri::AppHandle, on: bool) {
+    #[cfg(windows)]
+    for webview in page_webviews(app) {
+        let _ = webview.with_webview(move |platform| unsafe {
+            if let Ok(core) = platform.controller().CoreWebView2() {
+                set_timezone_override(&core, on);
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, on);
 }
 
 // Adds the Shields hooks to a freshly created content webview.
@@ -2456,14 +2532,11 @@ fn request_kind(context: webview2_com::Microsoft::Web::WebView2::Win32::COREWEBV
     }
 }
 
-// Runs on the main thread (inside with_webview).
-#[cfg(windows)]
 // Whether every http(s) request of `core`'s page -- from the page, its
-// iframes and its workers -- comes past Shields (WebResourceRequested). Only
-// while Shields is on: each is a round trip to Kessel, and while they come
-// here the engine skips extensions' own blocking rules (declarativeNetRequest).
-// The source-kinds API needs a newer WebView2 runtime; older ones only
-// report the page's own requests.
+// iframes and its workers -- comes past Kessel (WebResourceRequested): for
+// Shields, and for the privacy headers. Only while one of those is on: each
+// is a round trip to Kessel. The source-kinds API needs a newer WebView2
+// runtime; older ones only report the page's own requests.
 #[cfg(windows)]
 unsafe fn set_request_filters(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2, on: bool) -> windows::core::Result<()> {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
@@ -2480,24 +2553,23 @@ unsafe fn set_request_filters(core: &webview2_com::Microsoft::Web::WebView2::Win
     Ok(())
 }
 
-// Shields switched on or off: every open page's requests start or stop
-// coming past it.
+// Shields (or the privacy headers) switched on or off: every open page's
+// requests start or stop coming past Kessel.
 fn apply_request_filters(app: &tauri::AppHandle, on: bool) {
     #[cfg(windows)]
-    for webview in app.webviews().into_values() {
-        let label = webview.label();
-        if label.starts_with("content-") || label.starts_with("popout-content-") || label.starts_with("side-panel-") && !label.starts_with("side-panel-frame") {
-            let _ = webview.with_webview(move |platform| unsafe {
-                if let Ok(core) = platform.controller().CoreWebView2() {
-                    let _ = set_request_filters(&core, on);
-                }
-            });
-        }
+    for webview in page_webviews(app) {
+        let _ = webview.with_webview(move |platform| unsafe {
+            if let Ok(core) = platform.controller().CoreWebView2() {
+                let _ = set_request_filters(&core, on);
+            }
+        });
     }
     #[cfg(not(windows))]
     let _ = (app, on);
 }
 
+// Runs on the main thread (inside with_webview).
+#[cfg(windows)]
 unsafe fn install_shields_hooks(
     app: &tauri::AppHandle,
     platform: &tauri::webview::PlatformWebview,
@@ -2511,11 +2583,16 @@ unsafe fn install_shields_hooks(
     let core = platform.controller().CoreWebView2()?;
     let env = platform.environment();
 
-    // Every request is only handed to us while Shields is on (see
+    // Every request is only handed to us while something needs it (see
     // set_request_filters).
-    if app.state::<BrowserState>().store.settings.lock().unwrap().adblock_enabled {
+    let settings = app.state::<BrowserState>().store.settings.lock().unwrap().clone();
+    if wants_requests(&settings) {
         set_request_filters(&core, true)?;
     }
+    if settings.fp_timezone {
+        set_timezone_override(&core, true);
+    }
+    security::install_hooks(app, &core, id, &label)?;
 
     let app_req = app.clone();
     let label_req = label.clone();
@@ -2535,6 +2612,12 @@ unsafe fn install_shields_hooks(
             let Ok(page_url) = tauri::Url::parse(&page) else { return Ok(()) };
             if is_internal_nav(&page_url) {
                 return Ok(());
+            }
+            // Global Privacy Control and Do Not Track, on every request (one
+            // whose headers can't be changed still goes past Shields).
+            let plan = privacy::request_plan(&app_req.state::<BrowserState>().store.settings.lock().unwrap());
+            if let Some(plan) = plan {
+                let _ = privacy::adjust_request(&request, &plan);
             }
             let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
             args.ResourceContext(&mut context)?;
@@ -2583,34 +2666,40 @@ unsafe fn install_shields_hooks(
         &NavigationCompletedEventHandler::create(Box::new(move |sender, args| {
             let (Some(sender), Some(args)) = (sender, args) else { return Ok(()) };
             let shields = app_nav.state::<shields::Shields>();
-            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else { return Ok(()) };
             let mut success = windows::core::BOOL::default();
             args.IsSuccess(&mut success)?;
+            let mut status = COREWEBVIEW2_WEB_ERROR_STATUS::default();
+            args.WebErrorStatus(&mut status)?;
+            // The http navigation Kessel cancelled to go to https reports in
+            // too (cancelled): that's not the https attempt's outcome.
+            if !success.as_bool() && status == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED {
+                return Ok(());
+            }
+            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else { return Ok(()) };
             if success.as_bool() {
                 return Ok(());
             }
-            let mut status = COREWEBVIEW2_WEB_ERROR_STATUS::default();
-            args.WebErrorStatus(&mut status)?;
-            let https_problem = [
-                // What a server that only speaks http answers an https
-                // handshake with (ERR_SSL_PROTOCOL_ERROR).
-                COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET,
-                COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE,
-                COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CLIENT_CERTIFICATE_CONTAINS_ERRORS,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED,
-                COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID,
+            // However the https attempt failed -- a server that only speaks
+            // http answers a handshake with a protocol error, an empty
+            // reply, a reset, nothing at all, or a certificate for something
+            // else -- except when it was stopped, the name doesn't exist at
+            // all (http wouldn't find it either), or it asked to sign in.
+            let https_problem = ![
+                COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED,
+                COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED,
+                COREWEBVIEW2_WEB_ERROR_STATUS_VALID_AUTHENTICATION_CREDENTIALS_REQUIRED,
+                COREWEBVIEW2_WEB_ERROR_STATUS_VALID_PROXY_AUTHENTICATION_REQUIRED,
             ]
             .contains(&status);
             if https_problem {
-                if let Some(host) = tauri::Url::parse(&original).ok().and_then(|u| u.host_str().map(|h| h.to_lowercase())) {
-                    shields.https_failed.lock().unwrap().insert(host);
+                let host = tauri::Url::parse(&original).ok().and_then(|u| u.host_str().map(|h| h.to_lowercase())).unwrap_or_default();
+                // HTTPS-only: ask before loading it insecurely.
+                let strict = app_nav.state::<BrowserState>().store.settings.lock().unwrap().https_only && !app_nav.state::<security::Security>().http_allowed(&host);
+                if strict {
+                    security::show_warning(&app_nav, id, &label_nav, "https", &original, "");
+                    return Ok(());
                 }
+                shields.https_failed.lock().unwrap().insert(host);
                 sender.Navigate(&HSTRING::from(original))?;
             }
             Ok(())
@@ -3098,11 +3187,17 @@ async fn toggle_popup(
         "share" => "share.html",
         "tabsearch" => "tabsearch.html",
         "extensions" => "extensions.html",
+        "siteinfo" => "siteinfo.html",
+        "download" => "download-warning.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
     let at_point = kind == "context" || kind == "dropdown";
-    let toggles = kind != "context";
+    // The site info popup hangs from the address bar's left end (x, y = its
+    // button's bottom left); the others from their button's right end.
+    let from_left = kind == "siteinfo";
+    // A download prompt isn't a button's: the next one replaces it.
+    let toggles = kind != "context" && kind != "download";
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
@@ -3142,7 +3237,7 @@ async fn toggle_popup(
         } else {
             let top = y + 6.0;
             let height = height.min((logical.height - top - 8.0).max(160.0));
-            let left = (x - width).clamp(insets.0.min(8.0), (logical.width - width - 4.0).max(0.0));
+            let left = (if from_left { x } else { x - width }).clamp(insets.0.min(8.0), (logical.width - width - 4.0).max(0.0));
             (left, top, height)
         };
         // A menu is already open (right-clicked again, or another dropdown):
@@ -3248,10 +3343,25 @@ async fn close_popup(app: tauri::AppHandle, webview: Webview) -> Result<(), Stri
 }
 
 // Exit (the menu): closes every window.
+// Settings -> "Restart now", for settings that change the engine's command
+// line (see engine_args). Your tabs come back if you restore them anyway.
+#[tauri::command]
+fn restart_kessel(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    app.restart();
+}
+
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
     require_internal_page(&webview)?;
-    app.exit(0);
+    // Gone from the screen at once, while what you chose to clear on exit
+    // is cleared (it exits when done).
+    for window in app.state::<BrowserState>().windows.lock().unwrap().iter() {
+        let _ = window.window.hide();
+    }
+    if !privacy::clear_on_exit(&app) {
+        app.exit(0);
+    }
     Ok(())
 }
 
@@ -4046,17 +4156,27 @@ fn get_settings(state: tauri::State<BrowserState>) -> Settings {
 #[tauri::command]
 fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, settings: Settings) -> Result<(), String> {
     require_internal_page(&webview)?;
-    let lists_changed = state.store.settings.lock().unwrap().filter_lists != settings.filter_lists;
-    let shields_switched = state.store.settings.lock().unwrap().adblock_enabled != settings.adblock_enabled;
-    if state.store.settings.lock().unwrap().shortcuts != settings.shortcuts {
+    let before = state.store.settings.lock().unwrap().clone();
+    let lists_changed = before.filter_lists != settings.filter_lists;
+    if before.shortcuts != settings.shortcuts {
         commands::rebuild_keymap(&settings.shortcuts);
     }
     *state.store.settings.lock().unwrap() = settings.clone();
     state.store.save_settings();
     let _ = app.emit("settings-changed", &settings);
-    if shields_switched {
-        let (app2, on) = (app.clone(), settings.adblock_enabled);
+    if wants_requests(&before) != wants_requests(&settings) {
+        let (app2, on) = (app.clone(), wants_requests(&settings));
         later(&app, move || apply_request_filters(&app2, on));
+    }
+    if before.fp_timezone != settings.fp_timezone {
+        let (app2, on) = (app.clone(), settings.fp_timezone);
+        later(&app, move || apply_timezone(&app2, on));
+    }
+    if before.safe_browsing != settings.safe_browsing {
+        security::safe_browsing_switched(&app, settings.safe_browsing);
+    }
+    if before.cookie_rules != settings.cookie_rules || before.cookies_default != settings.cookies_default || before.cookie_max_days != settings.cookie_max_days {
+        privacy::sweep_soon(&app);
     }
     if lists_changed {
         // Download any newly enabled list, then recompile.
@@ -4711,9 +4831,15 @@ fn take_window_init(webview: Webview, state: tauri::State<BrowserState>) -> serd
     state.win(&win, |w| w.init.take()).flatten().unwrap_or(serde_json::Value::Null)
 }
 
-// The WebView2 command line for this run (see profile::set_browser_args).
-fn engine_args(_settings: &Settings) -> String {
-    let mut args = String::from(profile::DEFAULT_ENGINE_ARGS);
+// The WebView2 command line for this run (see profile::set_browser_args):
+// other sites' cookies inside pages refused (partitioned ones still work --
+// Chromium's own third-party cookie blocking), and SmartScreen only when you
+// switched it on.
+fn engine_args(settings: &Settings) -> String {
+    let mut args = if settings.smartscreen { String::from("--disable-features=msWebOOUI,msPdfOOUI") } else { String::from(profile::DEFAULT_ENGINE_ARGS) };
+    if settings.block_third_party_cookies {
+        args.push_str(" --test-third-party-cookie-phaseout");
+    }
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
@@ -4814,6 +4940,7 @@ fn main() {
             suggest::share_page,
             close_popup,
             quit_app,
+            restart_kessel,
             browser_windows::new_window,
             browser_windows::close_window,
             browser_windows::get_windows,
@@ -4906,7 +5033,17 @@ fn main() {
             sidebar::active_tab_info,
             sidebar::tell_toolbar,
             sidebar::set_side_panel_kind,
-            sidebar::tell_side_panel
+            sidebar::tell_side_panel,
+            privacy::get_cookies,
+            privacy::save_cookie,
+            privacy::delete_cookies,
+            privacy::clear_site_data,
+            privacy::set_cookie_rule,
+            privacy::site_info,
+            security::security_status,
+            security::warning_proceed,
+            security::view_certificate,
+            security::resolve_download
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -4925,6 +5062,7 @@ fn main() {
             app.manage(accounts::Accounts::load(&data_dir, profile.local_dir.join("accounts")));
             app.manage(extensions::Extensions::load(&data_dir, &profile.local_dir));
             app.manage(sidebar::Sidebar::load(&data_dir));
+            app.manage(security::Security::new(&data_dir));
 
             let state = BrowserState {
                 windows: Mutex::new(Vec::new()),
@@ -4949,6 +5087,8 @@ fn main() {
             app.manage(state);
             app.manage(Vault::new(data_dir));
             start_shields(app.handle());
+            security::start(app.handle());
+            privacy::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());
             extensions::schedule_updates(app.handle());
 
@@ -4970,8 +5110,17 @@ fn main() {
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            // Data being cleared on the way out (privacy::clear_on_exit)
+            // finishes first; it exits by itself when done.
+            if let tauri::RunEvent::ExitRequested { code: None, api, .. } = event {
+                if privacy::CLEARING.load(Ordering::SeqCst) {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
 
 #[cfg(test)]

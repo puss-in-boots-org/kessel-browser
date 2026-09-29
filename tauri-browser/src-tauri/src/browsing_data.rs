@@ -40,7 +40,7 @@ pub struct ClearReport {
 
 // The engine's data kinds for a request (0 = none).
 #[cfg(windows)]
-fn engine_kinds(r: &ClearRequest) -> i32 {
+pub(crate) fn engine_kinds(r: &ClearRequest) -> i32 {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
     let mut kinds = 0;
     if r.history {
@@ -66,12 +66,12 @@ fn engine_kinds(r: &ClearRequest) -> i32 {
 }
 
 #[cfg(not(windows))]
-fn engine_kinds(_r: &ClearRequest) -> i32 {
+pub(crate) fn engine_kinds(_r: &ClearRequest) -> i32 {
     0
 }
 
 // Clears Kessel's own records in [from, now].
-fn clear_records(app: &tauri::AppHandle, r: &ClearRequest, report: &mut ClearReport) {
+pub(crate) fn clear_records(app: &tauri::AppHandle, r: &ClearRequest, report: &mut ClearReport) {
     let state = app.state::<BrowserState>();
     let from = r.from.unwrap_or(0);
     // Anything recorded from `from` on, including a clock that ran ahead.
@@ -160,7 +160,7 @@ fn engine_targets(app: &tauri::AppHandle, accounts: bool) -> Vec<(String, Webvie
 
 // Clears `kinds` from `webview`'s engine profile; `done` gets the outcome.
 #[cfg(windows)]
-fn clear_engine_profile(webview: &Webview, kinds: i32, from: Option<u64>, done: std::sync::mpsc::Sender<Result<(), String>>) {
+pub(crate) fn clear_engine_profile(webview: &Webview, kinds: i32, from: Option<u64>, done: std::sync::mpsc::Sender<Result<(), String>>) {
     let fail = done.clone();
     let result = webview.with_webview(move |platform| unsafe {
         use webview2_com::Microsoft::Web::WebView2::Win32::*;
