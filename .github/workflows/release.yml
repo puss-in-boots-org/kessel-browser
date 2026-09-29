@@ -1,5 +1,6 @@
-# Publishes a Kessel release when a version tag is pushed (git tag v0.9.0 &&
-# git push origin v0.9.0):
+# Publishes a Kessel release: when a version tag is pushed (git tag v0.9.0
+# && git push origin v0.9.0), or from the Actions tab (Run workflow, with the
+# version), which tags the commit it runs on:
 #
 # - the Windows installers, built here as in build.yml;
 # - Kessel for phones' Android installers (kessel-mobile/), which follow
@@ -17,9 +18,17 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version to release, e.g. 0.9.0 (tauri-browser/package.json must say the same); v<version> is tagged on this commit"
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
 
 concurrency:
   group: release-${{ github.ref }}
@@ -36,12 +45,12 @@ jobs:
         name: The tag matches the app's version and has notes
         run: |
           version=$(node -p "require('./tauri-browser/package.json').version")
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME, but tauri-browser/package.json says $version"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Releasing $TAG, but tauri-browser/package.json says $version"
             exit 1
           fi
-          if [ ! -f ".github/release-notes/$GITHUB_REF_NAME.md" ]; then
-            echo "::error::No .github/release-notes/$GITHUB_REF_NAME.md"
+          if [ ! -f ".github/release-notes/$TAG.md" ]; then
+            echo "::error::No .github/release-notes/$TAG.md"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -148,10 +157,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes=".github/release-notes/$GITHUB_REF_NAME.md"
+          notes=".github/release-notes/$TAG.md"
           title=$(head -n 1 "$notes" | sed 's/^# *//')
           tail -n +2 "$notes" > "$RUNNER_TEMP/notes.md"
           cd dist
           sha256sum * > SHA256SUMS.txt
           ls -la
-          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --title "$title" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+          # A pushed tag is used as it is; from the Actions tab, the tag is
+          # made on the commit this run built.
+          gh release create "$TAG" * --repo "$GITHUB_REPOSITORY" --title "$title" --notes-file "$RUNNER_TEMP/notes.md" --target "$GITHUB_SHA"
