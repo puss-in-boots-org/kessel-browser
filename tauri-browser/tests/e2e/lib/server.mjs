@@ -6,7 +6,10 @@
 //   /slow/<ms>/<name>     the same, after a delay (for "stop loading")
 //   /frame/<name>         a page titled <name> showing /page/<name>-inner in an iframe
 //   /download/<name>      a small file served as an attachment
-//   /echo-headers         the request headers as JSON
+//   /echo-headers         the request headers as JSON (any site may read it)
+//   /set-cookie/<name>    a page that sets cookie <name>=1 (for a day) as it loads
+//   /embed?src=<url>      a page showing <url> in an iframe
+//   /script/<name>        a tiny script (text/javascript, any site may load it)
 //   /sound/<name>         a page titled <name> whose startSound() / stopSound()
 //                         play a barely audible tone
 
@@ -27,13 +30,37 @@ ${paragraphs}
 </body></html>`;
 }
 
+// Ten seconds of a very quiet 440 Hz tone, as a WAV file.
+function toneWav(seconds = 10, rate = 8000) {
+  const samples = seconds * rate;
+  const buf = Buffer.alloc(44 + samples * 2);
+  buf.write("RIFF", 0);
+  buf.writeUInt32LE(36 + samples * 2, 4);
+  buf.write("WAVEfmt ", 8);
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(rate, 24);
+  buf.writeUInt32LE(rate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
+  buf.write("data", 36);
+  buf.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 300), 44 + i * 2);
+  return buf;
+}
+
 export async function startServer(host = "127.0.0.2") {
   // Big enough for the tests' deliberately huge addresses.
   const server = http.createServer({ maxHeaderSize: 1024 * 1024 }, async (req, res) => {
     const origin = `http://${req.headers.host}`;
     const url = new URL(req.url, origin);
     const parts = url.pathname.split("/").filter(Boolean);
-    if (parts[0] === "page") {
+    if (parts[0] === "script") {
+      // A tiny script (any name), for tests that load one from another site.
+      res.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
+      res.end("window.__kesselScripts = (window.__kesselScripts || 0) + 1;");
+    } else if (parts[0] === "page") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(page(decodeURIComponent(parts[1] || "page"), origin));
     } else if (parts[0] === "frame") {
@@ -68,9 +95,40 @@ async function startSound() {
 }
 function stopSound() { if (ctx) { ctx.close(); ctx = null; } }
 </script></body></html>`);
+    } else if (parts[0] === "tone.wav") {
+      res.writeHead(200, { "Content-Type": "audio/wav", "Cache-Control": "no-store" });
+      res.end(toneWav());
+    } else if (parts[0] === "media") {
+      // An <audio> player with captions and Media Session buttons, for the
+      // media controls (media.rs). Muted: the tests make no sound.
+      const name = decodeURIComponent(parts[1] || "media");
+      const vtt = "data:text/vtt;base64," + Buffer.from("WEBVTT\n\n00:00.000 --> 00:59.000\nHello\n").toString("base64");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head>
+<body><h1>${name}</h1>
+<audio id="player" src="${origin}/tone.wav" loop controls><track kind="subtitles" label="English" srclang="en" src="${vtt}"></audio>
+<script>
+window.nextPressed = 0;
+navigator.mediaSession.metadata = new MediaMetadata({ title: "Test Song", artist: "Kessel Band", album: "Tests" });
+navigator.mediaSession.setActionHandler("nexttrack", () => { window.nextPressed++; });
+async function startMedia() {
+  const p = document.getElementById("player");
+  p.volume = 0.01;
+  await p.play();
+  return !p.paused;
+}
+</script></body></html>`);
     } else if (parts[0] === "echo-headers") {
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify(req.headers));
+    } else if (parts[0] === "set-cookie") {
+      const name = decodeURIComponent(parts[1] || "cookie");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": `${name}=1; Max-Age=86400; Path=/` });
+      res.end(page(name, origin));
+    } else if (parts[0] === "embed") {
+      const src = url.searchParams.get("src") || "about:blank";
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Embed</title></head><body><iframe id="inner" src="${src.replace(/"/g, "&quot;")}" style="width:600px;height:300px"></iframe></body></html>`);
     } else {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("not found");

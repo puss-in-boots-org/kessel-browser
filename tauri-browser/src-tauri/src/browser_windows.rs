@@ -54,6 +54,8 @@ pub(crate) fn create_under_pointer(app: &tauri::AppHandle, private: bool, init: 
 
 fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>, grab: Option<(f64, f64)>) -> Result<String, String> {
     let state = app.state::<BrowserState>();
+    // Automatic private sessions: every window is a private one.
+    let private = private || state.store.settings.lock().unwrap().always_private;
     let number = state.next_window.fetch_add(1, Ordering::SeqCst);
     let label = window_label(number);
     let (width, height) = (1280.0, 820.0);
@@ -70,7 +72,22 @@ fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value,
     if let Some((x, y)) = position.or_else(|| if grab.is_none() { cascade_position(&state) } else { None }) {
         builder = builder.position(x, y);
     }
+    // Automated tests on a throw-away profile can keep their windows off
+    // every screen (and off the taskbar), out of the way of whoever is
+    // using the PC meanwhile.
+    let offscreen = profile::get().custom && std::env::var_os("KESSEL_TEST_OFFSCREEN").is_some();
+    if offscreen {
+        // Made hidden and moved before it shows (a position given here
+        // isn't kept for one off every screen).
+        builder = builder.visible(false).skip_taskbar(true).focused(false);
+    }
     let window = builder.build().map_err(|e| e.to_string())?;
+    if offscreen {
+        let _ = window.set_position(tauri::PhysicalPosition::new(-8000 - number as i32 * 40, 60));
+        if grab.is_none() {
+            let _ = window.show();
+        }
+    }
     if let Some(grab) = grab {
         crate::tabdrag::place_under_pointer(&window, grab);
     }
@@ -165,10 +182,12 @@ fn session_from_snapshot(snapshot: &str) -> Option<WindowSession> {
             title: tab.get("title").and_then(|t| t.as_str()).map(str::to_string),
             pinned: tab.get("pinned").and_then(|p| p.as_bool()).unwrap_or(false),
             group: tab.get("group").and_then(|g| g.as_str()).map(str::to_string),
+            workspace: tab.get("workspace").and_then(|w| w.as_str()).map(str::to_string),
+            ..Default::default()
         });
     }
     let groups = value.get("groups").and_then(|g| g.as_array()).cloned().unwrap_or_default();
-    (!tabs.is_empty()).then_some(WindowSession { tabs, active, groups })
+    (!tabs.is_empty()).then_some(WindowSession { tabs, active, groups, ..Default::default() })
 }
 
 // A window closed (its close button, Alt+F4, Ctrl+Shift+W, its last tab
@@ -199,7 +218,10 @@ fn closed(app: &tauri::AppHandle, label: &str) {
 
     let remaining = state.windows.lock().unwrap().len();
     if remaining == 0 {
-        app.exit(0);
+        // What you chose to clear on exit goes first (it exits when done).
+        if !crate::privacy::clear_on_exit(app) {
+            app.exit(0);
+        }
         return;
     }
     if !window.private {
@@ -418,7 +440,7 @@ pub(crate) async fn reopen_closed_window(app: tauri::AppHandle, index: Option<us
             }
         };
         let Some(closed) = closed else { return Ok(None) };
-        let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups };
+        let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups, ..Default::default() };
         create(&app2, false, serde_json::json!({ "session": session })).map(Some)
     })
     .await

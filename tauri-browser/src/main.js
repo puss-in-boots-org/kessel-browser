@@ -11,6 +11,7 @@ import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallp
 import { avatarHtml, accountName } from "./shared/accounts.js";
 import { setupOmnibox } from "./omnibox.js";
 import { playUiSound } from "./shared/sounds.js";
+import { RAIL_ITEMS, DEFAULT_RAIL_ITEMS, aiTarget, aiPrompt, WORKSPACE_COLORS } from "./shared/sidebar-panels.js";
 
 const { invoke } = window.__TAURI__.core;
 // Only events for this window's toolbar (and broadcasts) -- see listenHere.
@@ -620,11 +621,11 @@ function paintStaticIcons() {
   iconFor("tab-search-btn", icon("chevronDown", 15));
   iconFor("tabs-scroll-left", icon("chevronLeft", 14));
   iconFor("tabs-scroll-right", icon("chevronRight", 14));
-  iconFor("lock-icon", icon("lock", 13));
   iconFor("engine-btn", icon("chevronDown", 13));
   iconFor("star-btn", icon("star", 16));
   iconFor("shields-btn", icon("shieldCheck", 16));
   iconFor("menu-btn", icon("dotsV", 18));
+  iconFor("media-btn", icon("music", 17));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -792,8 +793,20 @@ async function restoreAfterToolbarReload() {
 const tabEls = new Map(); // tab id -> its element
 let lastScrolledTo = null;
 
+// The workspace buttons show how many tabs each has: redrawn when a count
+// changes.
+let workspaceCountsKey = "";
+function noteWorkspaceCounts() {
+  const key = `${currentWorkspace}|${tabs.length}|${[...parkedWorkspaces].map(([id, p]) => `${id}:${p.tabs.length}`).join()}`;
+  if (key === workspaceCountsKey) return;
+  workspaceCountsKey = key;
+  renderWorkspaces();
+}
+
 function renderTabs() {
   pushToolbarSnapshot();
+  noteWorkspaceCounts();
+  updateMediaButton();
   // Mid-drag the strip belongs to the drag; it's redrawn when that ends.
   if (drag) {
     drag.redraw = true;
@@ -1612,7 +1625,9 @@ function stripItems() {
   return [...document.getElementById("tabs").children].filter((el) => !el.classList.contains("closing") && (!vertical || !el.classList.contains("pinned")));
 }
 
-function showDropGap(x, y, label) {
+// Where in the strip (x, y) falls: the index of the item it's in front of,
+// and the strip's items.
+function gapAt(x, y) {
   const vertical = isVerticalTabs();
   const els = stripItems();
   const pos = vertical ? y : x;
@@ -1621,6 +1636,17 @@ function showDropGap(x, y, label) {
     return pos < (vertical ? r.top + r.height / 2 : r.left + r.width / 2);
   });
   if (k < 0) k = els.length;
+  return { k, els };
+}
+
+// The first tab (or group) at or after strip item `k`.
+function gapItem(els, k) {
+  return els.slice(k).find((el) => el.dataset.tabId || el.dataset.userGroup || el.dataset.group) || null;
+}
+
+function showDropGap(x, y, label) {
+  const vertical = isVerticalTabs();
+  const { k, els } = gapAt(x, y);
   const marker = document.getElementById("drop-marker");
   marker.textContent = label || "";
   marker.hidden = !label;
@@ -1632,7 +1658,7 @@ function showDropGap(x, y, label) {
     el.style.transform = i >= k ? `translate${vertical ? "Y" : "X"}(${size}px)` : "";
   });
   const shown = !!dropGap?.shown;
-  dropGap = { k, els, before: els.slice(k).find((el) => el.dataset.tabId || el.dataset.userGroup || el.dataset.group) || null, shown: true };
+  dropGap = { k, els, before: gapItem(els, k), shown: true };
   const at = els[k - 1]?.getBoundingClientRect();
   const strip = document.getElementById("tabs").getBoundingClientRect();
   marker.style.left = `${vertical ? strip.left + 8 : (at ? at.right : strip.left) + 8}px`;
@@ -1653,7 +1679,11 @@ function hideDropGap() {
 
 // The tab something dropped at the gap goes in front of.
 function dropGapTab() {
-  const el = dropGap?.before;
+  return stripItemTab(dropGap?.before);
+}
+
+// The tab strip item `el` stands for (a group: its first tab).
+function stripItemTab(el) {
   if (!el) return null;
   if (el.dataset.tabId) return findTab(parseInt(el.dataset.tabId, 10));
   if (el.dataset.userGroup) return tabs.find((t) => t.group === el.dataset.userGroup) || null;
@@ -1739,11 +1769,16 @@ function placeBefore(tab, before) {
 
 // Another browser's window, let go over this strip (tabdrag.rs): its tabs
 // open here -- the first one live, the rest asleep until you look at them.
-async function openForeignTabs({ urls, browser }) {
-  const before = dropGap ? dropGapTab() : null;
+// `kept`: some tab couldn't be read, so that window was left as it was.
+async function openForeignTabs({ urls, browser, x, y, missed, kept }) {
+  let before = dropGap ? dropGapTab() : null;
+  if (!dropGap && Number.isFinite(x)) {
+    const { k, els } = gapAt(x, y);
+    before = stripItemTab(gapItem(els, k));
+  }
   hideDropGap();
   if (!urls?.length) {
-    toast(`Couldn't read that ${browser} window's tabs`);
+    toast(missed ? `Couldn't read that ${browser} window's tabs` : `That ${browser} window only had its own pages open`);
     return;
   }
   playSound("attach");
@@ -1756,7 +1791,10 @@ async function openForeignTabs({ urls, browser }) {
   syncTabOrder();
   renderTabs();
   persistSession();
-  toast(urls.length === 1 ? `Moved the tab over from ${browser}` : `Moved ${urls.length} tabs over from ${browser}`);
+  const what = urls.length === 1 ? "the tab" : `${urls.length} tabs`;
+  if (!kept) toast(`Moved ${what} over from ${browser}`);
+  else if (missed) toast(`Copied ${what} from ${browser} -- ${missed === 1 ? "one tab" : `${missed} tabs`} couldn't be read, so its window stays open`);
+  else toast(`Copied ${what} from ${browser} -- its window stays open`);
 }
 
 // --- Split view ------------------------------------------------------------------------
@@ -2022,6 +2060,12 @@ async function tabMenuItems(tab) {
     { label: duplicates.length ? `Close ${tabCount(duplicates.length, "duplicate tab")}` : "Close duplicate tabs", iconName: "copy", disabled: !duplicates.length, action: () => closeTabs(duplicates) },
     { label: "Sort tabs by site", iconName: "grid", disabled: tabs.filter((t) => !t.pinned).length < 2, action: () => sortTabs() }
   );
+  // Into another workspace (asleep there till you go to it).
+  if (!WIN.private) {
+    for (const w of workspaceList().filter((w) => w.id !== currentWorkspace)) {
+      items.push({ label: `Move to workspace “${w.name}”`, iconName: "layers", action: () => moveTabsToWorkspace(list, w.id) });
+    }
+  }
   if (live.length) {
     for (const w of otherWindows) {
       const name = w.title ? `“${w.title.length > 28 ? w.title.slice(0, 27) + "…" : w.title}”` : "another window";
@@ -2256,17 +2300,20 @@ function updateAddressBarForActiveTab(force = false) {
   const input = document.getElementById("url-input");
   if (force || document.activeElement !== input) {
     // Internal kessel:// pages show a blank omnibox, like a real browser's
-    // new-tab/settings pages do -- there's nothing useful to type over.
-    input.value = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : "";
+    // new-tab/settings pages do -- there's nothing useful to type over. A
+    // warning page shows the address it stands in for.
+    input.value = tab && tab.url && !tab.url.startsWith("kessel://") ? tab.url : warnedUrl(tab?.url || "") || "";
     input.classList.remove("search-mode");
     omnibox?.reset();
   }
   document.getElementById("share-btn").hidden = !(tab && /^(https?|file):/.test(tab.url || ""));
+  updateSiteButton();
   updateStarButton();
   updateNavButtons();
   updateShieldsButton();
   updateAccountButton();
   updateZoomIndicator();
+  updateExtensionButtons();
 }
 
 // --- Shields button (address bar) -------------------------------------------
@@ -2480,8 +2527,34 @@ function makePlaceholder(url, account = null, title = null, pinned = false, grou
 async function openWindowInit(init) {
   if (!init) return false;
   if (init.session?.tabs?.length) {
-    const saved = init.session.tabs;
-    const active = Math.min(Math.max(init.session.active || 0, 0), saved.length - 1);
+    // The workspace the window was in (tabs of one that's gone join the
+    // first one); the others' tabs wait asleep.
+    const known = new Set(workspaceList().map((w) => w.id));
+    const workspaceOf = (t) => (known.has(t.workspace || "") ? t.workspace || "" : "");
+    currentWorkspace = WIN.private || !known.has(init.session.workspace || "") ? "" : init.session.workspace || "";
+    const saved = init.session.tabs.filter((t) => workspaceOf(t) === currentWorkspace);
+    for (const t of init.session.tabs) {
+      const workspace = workspaceOf(t);
+      if (workspace === currentWorkspace) continue;
+      const parked = parkedWorkspaces.get(workspace) || { tabs: [], active: 0, groups: [] };
+      if (t.current) parked.active = parked.tabs.length;
+      parked.tabs.push(makePlaceholder(t.url, t.account ?? null, t.title, t.pinned, t.group ?? null));
+      parkedWorkspaces.set(workspace, parked);
+    }
+    for (const g of init.session.groups || []) {
+      if (!g?.id) continue;
+      const parked = [...parkedWorkspaces.values()].find((p) => p.tabs.some((t) => t.group === g.id));
+      if (parked && !saved.some((t) => t.group === g.id)) parked.groups.push({ ...g });
+    }
+    if (!saved.length) {
+      await createTab();
+      for (const g of init.session.groups || []) if (g?.id && !([...parkedWorkspaces.values()].some((p) => p.groups.some((x) => x.id === g.id)))) tabGroups.set(g.id, { ...g });
+      normalizeGroups();
+      renderWorkspaces();
+      return true;
+    }
+    const current = saved.findIndex((t) => t.current);
+    const active = current >= 0 ? current : Math.min(Math.max(init.session.active || 0, 0), saved.length - 1);
     for (let i = 0; i < saved.length; i++) {
       if (i === active) {
         const id = await createTab(saved[i].url, saved[i].account ?? null);
@@ -2491,11 +2564,13 @@ async function openWindowInit(init) {
         addPlaceholderTab(saved[i].url, saved[i].account ?? null, saved[i].title, saved[i].pinned, saved[i].group ?? null);
       }
     }
-    // Their groups, once every tab is back (an empty group is dropped).
-    for (const g of init.session.groups || []) if (g?.id) tabGroups.set(g.id, { ...g });
+    // Their groups, once every tab is back (an empty group is dropped;
+    // another workspace's wait with its tabs).
+    for (const g of init.session.groups || []) if (g?.id && saved.some((t) => t.group === g.id)) tabGroups.set(g.id, { ...g });
     normalizeGroups();
     syncTabOrder();
     renderTabs();
+    renderWorkspaces();
     return true;
   }
   // Tabs moved here from another window: the live ones with their pages,
@@ -2635,7 +2710,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2758,6 +2833,8 @@ async function runCommand(id, ctx = {}) {
     case "clear-browsing-data": return openSingleton("kessel://settings/clear");
     case "settings": return openSingleton("kessel://settings");
     case "help": return openSingleton("kessel://help");
+    case "gpu": return openSingleton("kessel://gpu");
+    case "media-controls": return toggleMediaPopup();
     case "menu": return toggleMainMenu();
     case "passwords": return toggleSidePanel("passwords", "kessel://passwords");
     case "side-panel":
@@ -2919,6 +2996,72 @@ async function toggleSharePopup() {
   await invoke("toggle_popup", { kind: "share", x: rect.right + 60, y: rect.bottom, width: 300, height: 400, init: { url: tab.url, title: tab.title || "" } }).catch(() => {});
 }
 
+// --- Site info (the address bar's lock) ---------------------------------------
+// How the page is connected -- a lock, or "Not secure" for a website on plain
+// http (security.rs's HTTPS-only can refuse those) -- and, on click, the site
+// info popup (siteinfo.html): the certificate, the site's cookies and data.
+
+// Like shields.rs's is_local_host: an address or a name on your own network.
+function isLocalHost(host) {
+  return host === "localhost" || /\.(localhost|local|lan|internal)$/.test(host) || /^[\d.]+$/.test(host) || host.startsWith("[") || !host.includes(".");
+}
+
+// The page a warning page (kessel://warning) stands in for.
+function warnedUrl(url) {
+  if (!url.startsWith("kessel://warning")) return null;
+  try {
+    return new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("url") || "";
+  } catch {
+    return "";
+  }
+}
+
+function siteState(url) {
+  if (warnedUrl(url) !== null) return "danger";
+  if (/^https:/i.test(url)) return "secure";
+  if (/^http:/i.test(url)) {
+    let host = "";
+    try {
+      host = new URL(url).hostname;
+    } catch {}
+    return isLocalHost(host) ? "local" : "insecure";
+  }
+  if (/^file:/i.test(url)) return "file";
+  return "none";
+}
+
+function updateSiteButton() {
+  const button = document.getElementById("lock-icon");
+  const state = siteState(findTab(activeTabId)?.url || "");
+  if (button.dataset.state === state) return;
+  button.dataset.state = state;
+  const glyph = { secure: "lock", insecure: "unlock", danger: "warning", local: "globe", file: "file" }[state] || "search";
+  const label = { insecure: "Not secure", danger: "Warning" }[state];
+  button.innerHTML = `${icon(glyph, 13)}${label ? `<span>${label}</span>` : ""}`;
+  button.title = { secure: "Connection is secure -- site info", insecure: "Not secure -- site info", local: "Site info", file: "Site info" }[state] || "";
+  button.disabled = !["secure", "insecure", "local", "file"].includes(state);
+}
+
+async function toggleSiteInfo() {
+  const tab = findTab(activeTabId);
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) return;
+  const rect = document.getElementById("lock-icon").getBoundingClientRect();
+  await invoke("toggle_popup", { kind: "siteinfo", x: Math.round(rect.left - 6), y: Math.round(rect.bottom), width: 320, height: 330, init: { tab: tab.id, url: tab.url } }).catch(() => {});
+}
+
+// --- Risky downloads ---------------------------------------------------------------
+// A download security.rs holds back until you decide: one prompt at a time
+// (download-warning.html), the rest wait their turn.
+
+const downloadWarnings = [];
+
+function showDownloadWarning() {
+  const next = downloadWarnings[0];
+  if (!next) return;
+  const rect = document.getElementById("menu-btn").getBoundingClientRect();
+  invoke("toggle_popup", { kind: "download", x: Math.round(rect.right + 4), y: Math.round(rect.bottom), width: 360, height: 220, init: next }).catch(() => {});
+}
+
 // The Kessel menu (⋮, Alt+F, Alt+E, F10): a popup under its button.
 async function toggleMainMenu() {
   const rect = document.getElementById("menu-btn").getBoundingClientRect();
@@ -2959,11 +3102,18 @@ function persistSession() {
   sessionTimer = setTimeout(() => {
     // Settings/Passwords are excluded on purpose: restoring one as a plain
     // tab would bypass the singleton dedup the next time it's reopened.
-    const kept = tabs.filter((t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(internalPageKey(t.url)));
-    const saved = kept.map((t) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group: groupOf(t)?.id ?? null }));
+    const keepable = (t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(internalPageKey(t.url));
+    const entry = (t, workspace, current, group) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group, workspace: workspace || null, current });
+    const kept = tabs.filter(keepable);
+    const saved = kept.map((t) => entry(t, currentWorkspace, t.id === activeTabId, groupOf(t)?.id ?? null));
     const active = Math.max(0, kept.findIndex((t) => t.id === activeTabId));
     const groups = [...tabGroups.values()].filter((g) => kept.some((t) => t.group === g.id));
-    invoke("save_window_session", { tabs: saved, active, groups }).catch(() => {});
+    // The other workspaces' tabs too, asleep as they are.
+    for (const [workspace, parked] of parkedWorkspaces) {
+      parked.tabs.forEach((t, i) => keepable(t) && saved.push(entry(t, workspace, i === parked.active, t.group ?? null)));
+      groups.push(...parked.groups);
+    }
+    invoke("save_window_session", { tabs: saved, active, groups, workspace: currentWorkspace || null }).catch(() => {});
     syncSavedGroups();
   }, 300);
 }
@@ -3179,6 +3329,392 @@ function updatePanelHighlights() {
   document.getElementById("rail-passwords").classList.toggle("panel-open", openPanelKind === "passwords");
   document.getElementById("rail-settings").classList.toggle("panel-open", openPanelKind === "settings");
   renderPinned();
+  renderRailPanels();
+}
+
+// --- The side panel's own pages, and the AI assistant -----------------------------------
+// The rail has a button for each page of sidebar.html picked in Settings ->
+// Side panel; they all open that page in the side panel, and while it's
+// open another of them only turns its page (no new webview). The AI
+// assistant opens its website there instead -- with a question typed in,
+// for "Ask AI about this" (right-click on a page).
+
+const isAiKind = (kind) => /^ai(-ask)?(:|$)/.test(kind || "");
+
+function renderRailPanels() {
+  const box = document.getElementById("rail-panels");
+  const ids = currentSettings()?.sidebar_items ?? DEFAULT_RAIL_ITEMS;
+  const items = ids.map((id) => RAIL_ITEMS.find((i) => i.id === id)).filter(Boolean);
+  const key = `${ids.join()}|${openPanelKind}`;
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.replaceChildren(
+    ...items.map((item) => {
+      const b = document.createElement("button");
+      b.className = "rail-btn";
+      b.dataset.panel = item.id;
+      b.title = item.id === "ai" ? `AI assistant (${aiTarget(currentSettings()).name})` : item.label;
+      b.innerHTML = icon(item.icon, 18);
+      b.classList.toggle("panel-open", item.id === "ai" ? isAiKind(openPanelKind) : openPanelKind === `sidebar:${item.id}`);
+      b.addEventListener("click", () => (item.id === "ai" ? openAiPanel() : openSidebarPanel(item.id)));
+      return b;
+    })
+  );
+}
+
+// Shows side panel page `panel` (sidebar.html). `extra`: what else it's to
+// show (a note: noteId); `keep`: don't close it if it's the one showing.
+async function openSidebarPanel(panel, { keep = false, ...extra } = {}) {
+  const kind = `sidebar:${panel}`;
+  if (openPanelKind === kind && !keep && !extra.noteId) return toggleSidePanel(kind, `kessel://sidebar/${panel}`);
+  if (openPanelKind?.startsWith("sidebar:")) {
+    await invoke("tell_side_panel", { message: { type: "show", panel, ...extra } }).catch(() => {});
+    await invoke("set_side_panel_kind", { kind }).catch(() => {});
+    return;
+  }
+  const query = extra.noteId ? `?note=${encodeURIComponent(extra.noteId)}` : "";
+  await toggleSidePanel(kind, `kessel://sidebar/${panel}${query}`);
+}
+
+// The AI assistant in the side panel -- asked `prompt`, if given. A second
+// click on its button closes it.
+async function openAiPanel(prompt = "") {
+  const target = aiTarget(currentSettings(), prompt);
+  if (!prompt && isAiKind(openPanelKind)) return toggleSidePanel(openPanelKind, target.url);
+  if (prompt && !target.typed) {
+    const copied = await navigator.clipboard.writeText(prompt).then(
+      () => true,
+      () => false
+    );
+    toast(copied ? `Your question is copied -- paste it into ${target.name} (Ctrl+V)` : `${target.name} doesn't take a question in its address -- ask it there`);
+  }
+  await toggleSidePanel(prompt ? `ai-ask:${Date.now()}` : "ai", target.url);
+}
+
+// Kessel's items in a page's right-click menu (sidebar.rs).
+async function onPageMenu({ action, value, page, title, tab }) {
+  const pageTitle = findTab(tab)?.title || "";
+  const fail = (err) => toast(String(err));
+  switch (action) {
+    case "reading-link":
+    case "reading-page":
+      await invoke("add_to_reading_list", { url: value, title: (action === "reading-link" ? title : pageTitle) || value })
+        .then(() => toast("Added to your reading list"))
+        .catch(fail);
+      break;
+    case "note-selection": {
+      const note = await invoke("save_note", { note: { id: "", text: value, url: page, title: pageTitle, pinned: false } }).catch(fail);
+      if (note) {
+        toast("Saved to your notes");
+        openSidebarPanel("notes", { keep: true, noteId: note.id });
+      }
+      break;
+    }
+    case "ai-selection":
+      openAiPanel(aiPrompt({ page, title: pageTitle, selection: value }));
+      break;
+    case "ai-page":
+      openAiPanel(aiPrompt({ page: value, title: pageTitle }));
+      break;
+  }
+}
+
+// What the side panel's page asks of this window (sidebar.js).
+function onSidePanelMessage(m) {
+  switch (m?.type) {
+    case "workspaces-get":
+      tellWorkspaces(true);
+      break;
+    case "workspace-switch":
+      switchWorkspace(m.id);
+      break;
+    case "workspace-new":
+      addWorkspace(m);
+      break;
+    case "workspace-edit":
+      editWorkspace(m);
+      break;
+    case "workspace-delete":
+      deleteWorkspace(m.id);
+      break;
+    case "workspace-move-tab":
+      if (findTab(activeTabId)) moveTabsToWorkspace([findTab(activeTabId)], m.id);
+      break;
+    case "web-search":
+      if (/^https?:\/\//i.test(m.url || "")) toggleSidePanel(`search-web:${Date.now()}`, m.url);
+      break;
+    case "ai-open":
+      openAiPanel();
+      break;
+  }
+}
+
+// --- Workspaces ------------------------------------------------------------------------
+// Named sets of tabs. Settings keeps the list for every window --
+// workspaces [{ id, name, icon, color }] -- and the first one, id "", is
+// always there (it's where tabs are when you've made none). A window shows
+// one workspace's tabs at a time; the other workspaces' tabs sleep (no
+// webview, nothing running, no memory) and wake as you come back, and
+// their tab groups go with them. The window's session keeps them all. A
+// workspace's colour tints its window.
+
+let currentWorkspace = "";
+const parkedWorkspaces = new Map(); // workspace id -> { tabs, active (index), groups }
+let switchingWorkspace = false;
+
+function workspaceList() {
+  const stored = Array.isArray(currentSettings()?.workspaces) ? currentSettings().workspaces.filter((w) => w && typeof w.id === "string") : [];
+  const first = stored.find((w) => w.id === "") || { id: "", name: "Home", icon: "🏠", color: WORKSPACE_COLORS[0] };
+  return [first, ...stored.filter((w) => w.id !== "")];
+}
+
+function workspaceTabCount(id) {
+  return id === currentWorkspace ? tabs.length : parkedWorkspaces.get(id)?.tabs.length || 0;
+}
+
+function renderWorkspaces() {
+  const box = document.getElementById("rail-workspaces");
+  const list = workspaceList();
+  box.hidden = !!WIN.private || list.length < 2;
+  if (!box.hidden) {
+    box.replaceChildren(
+      ...list.map((w) => {
+        const b = document.createElement("button");
+        b.className = "ws-btn" + (w.id === currentWorkspace ? " current" : "");
+        b.style.setProperty("--ws", w.color || "var(--accent)");
+        b.textContent = w.icon || (w.name || "?")[0];
+        const n = workspaceTabCount(w.id);
+        b.title = `${w.name} -- ${tabCount(n)}${w.id === currentWorkspace ? " (you're here)" : ""}`;
+        if (w.id !== currentWorkspace && n) b.insertAdjacentHTML("beforeend", `<span class="ws-count">${n > 99 ? "99+" : n}</span>`);
+        b.addEventListener("click", () => switchWorkspace(w.id));
+        b.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          const here = w.id === currentWorkspace;
+          showContextMenu(
+            [
+              { header: w.name },
+              { label: "Switch to it", iconName: "layers", disabled: here, action: () => switchWorkspace(w.id) },
+              { label: "Move the tab you're on here", iconName: "arrowRight", disabled: here || !findTab(activeTabId), action: () => moveTabsToWorkspace([findTab(activeTabId)], w.id) },
+              "-",
+              { label: "Manage workspaces…", iconName: "edit", action: () => openSidebarPanel("workspaces", { keep: true }) },
+              { label: "Delete workspace", iconName: "trash", danger: true, disabled: !w.id, action: () => deleteWorkspace(w.id) },
+            ],
+            e.clientX,
+            e.clientY
+          );
+        });
+        return b;
+      })
+    );
+  }
+  applyWorkspaceTint();
+  tellWorkspaces();
+}
+
+// The side panel's Workspaces page, if it's up (or `asked`).
+function tellWorkspaces(asked = false) {
+  if (!asked && !openPanelKind?.startsWith("sidebar:")) return;
+  const list = workspaceList().map((w) => ({ ...w, tabs: workspaceTabCount(w.id) }));
+  invoke("tell_side_panel", { message: { type: "workspaces", current: currentWorkspace, list } }).catch(() => {});
+}
+
+// A workspace's colour is its window's accent while you're in it.
+let styleAccent = null;
+function applyWorkspaceTint() {
+  const root = document.documentElement;
+  const w = workspaceList().find((x) => x.id === currentWorkspace);
+  if (currentWorkspace && w?.color) {
+    if (styleAccent === null) styleAccent = root.style.getPropertyValue("--accent");
+    root.style.setProperty("--accent", w.color);
+  } else if (styleAccent !== null) {
+    root.style.setProperty("--accent", styleAccent);
+    styleAccent = null;
+  }
+}
+
+// A sleeping copy of `t`, to wait in another workspace.
+function parkedCopy(t) {
+  return { ...t, id: t.id > 0 && !t.discarded ? nextPlaceholderId() : t.id, discarded: true, neverCreated: true, loading: false, audible: false, frozen: false, memory: null, cpu: null };
+}
+
+async function switchWorkspace(id) {
+  if (id === currentWorkspace || switchingWorkspace || WIN.private || !workspaceList().some((w) => w.id === id)) return;
+  switchingWorkspace = true;
+  try {
+    const leaving = currentWorkspace;
+    const outgoing = tabs;
+    const outgoingActive = outgoing.findIndex((t) => t.id === activeTabId);
+    const outgoingGroups = [...tabGroups.values()].filter((g) => outgoing.some((t) => t.group === g.id));
+    if (split) await invoke("unsplit").catch(() => {});
+    // The other workspace's tabs, in the strip at once...
+    const incoming = parkedWorkspaces.get(id);
+    parkedWorkspaces.delete(id);
+    for (const g of outgoingGroups) tabGroups.delete(g.id);
+    for (const g of incoming?.groups || []) tabGroups.set(g.id, g);
+    tabs = incoming?.tabs || [];
+    currentWorkspace = id;
+    recentTabs = [];
+    clearSelection();
+    if (tabs.length) await activateTab(tabs[Math.min(Math.max(incoming.active ?? 0, 0), tabs.length - 1)].id);
+    else await createTab();
+    // ...and the ones left behind go to sleep.
+    const parked = outgoing.map(parkedCopy);
+    for (const t of outgoing) if (t.id > 0 && !t.discarded) invoke("close_tab", { id: t.id, url: null }).catch(() => {});
+    parkedWorkspaces.set(leaving, { tabs: parked, active: outgoingActive, groups: outgoingGroups });
+    normalizeGroups();
+    syncTabOrder();
+    renderTabs();
+    renderWorkspaces();
+    persistSession();
+    playSound("switch");
+  } finally {
+    switchingWorkspace = false;
+  }
+}
+
+async function saveWorkspaces(list) {
+  // The first one only needs keeping once it's been changed.
+  const home = list[0];
+  const stored = home.name === "Home" && home.icon === "🏠" && home.color === WORKSPACE_COLORS[0] ? list.slice(1) : list;
+  await saveSettings({ workspaces: stored });
+}
+
+async function addWorkspace({ name, icon: glyph, color }) {
+  if (WIN.private) return toast("Private windows have no workspaces");
+  const id = `ws-${Date.now().toString(36)}`;
+  await saveWorkspaces([...workspaceList(), { id, name: name || "Workspace", icon: glyph || "💼", color: color || WORKSPACE_COLORS[1] }]);
+  await switchWorkspace(id);
+}
+
+async function editWorkspace({ id, name, icon: glyph, color }) {
+  await saveWorkspaces(workspaceList().map((w) => (w.id === id ? { ...w, name: name || w.name, icon: glyph || w.icon, color: color || w.color } : w)));
+}
+
+async function deleteWorkspace(id) {
+  if (!id) return;
+  await saveWorkspaces(workspaceList().filter((w) => w.id !== id));
+  reconcileWorkspaces();
+}
+
+// Workspaces that are gone (deleted here or in another window): their tabs
+// join the first one.
+function reconcileWorkspaces() {
+  const known = new Set(workspaceList().map((w) => w.id));
+  const adopt = (parked) => {
+    if (!parked) return;
+    if (currentWorkspace === "") {
+      tabs.push(...parked.tabs);
+      for (const g of parked.groups) tabGroups.set(g.id, g);
+    } else {
+      const home = parkedWorkspaces.get("") || { tabs: [], active: 0, groups: [] };
+      home.tabs.push(...parked.tabs);
+      home.groups.push(...parked.groups);
+      parkedWorkspaces.set("", home);
+    }
+  };
+  if (!known.has(currentWorkspace)) {
+    currentWorkspace = "";
+    const home = parkedWorkspaces.get("");
+    parkedWorkspaces.delete("");
+    adopt(home);
+  }
+  for (const [id, parked] of [...parkedWorkspaces]) {
+    if (!known.has(id)) {
+      parkedWorkspaces.delete(id);
+      adopt(parked);
+    }
+  }
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  renderWorkspaces();
+  persistSession();
+}
+
+// Tabs `list` of this workspace move to workspace `id` (asleep there).
+async function moveTabsToWorkspace(list, id) {
+  list = list.filter((t) => t && tabs.includes(t));
+  if (!list.length || id === currentWorkspace) return;
+  const w = workspaceList().find((x) => x.id === id);
+  if (!w) return;
+  if (list.length === tabs.length) await createTab();
+  if (list.some((t) => t.id === activeTabId)) {
+    const stay = tabs.find((t) => !list.includes(t));
+    if (stay) await activateTab(stay.id);
+  }
+  const target = parkedWorkspaces.get(id) || { tabs: [], active: 0, groups: [] };
+  for (const t of list) {
+    tabs.splice(tabs.indexOf(t), 1);
+    if (t.id > 0 && !t.discarded) invoke("close_tab", { id: t.id, url: null }).catch(() => {});
+    target.tabs.push({ ...parkedCopy(t), group: null });
+  }
+  parkedWorkspaces.set(id, target);
+  clearSelection();
+  normalizeGroups();
+  syncTabOrder();
+  renderTabs();
+  renderWorkspaces();
+  persistSession();
+  toast(`${list.length === 1 ? "Moved the tab" : `Moved ${list.length} tabs`} to “${w.name}”`);
+}
+
+// --- Extensions in the address bar -----------------------------------------------------
+// The puzzle button (once there's an extension that runs, and not in a
+// private window, where they don't) opens extensions.html: each one's
+// popup is a click away. On an extension's page in the Chrome Web Store or
+// Edge Add-ons, "Add to Kessel" installs it.
+
+let installedExtensions = [];
+
+// A store's page for an extension: { store, id }.
+function extensionStorePage(url) {
+  try {
+    const u = new URL(url);
+    const store = /^(chromewebstore\.google\.com|chrome\.google\.com)$/i.test(u.hostname) ? "chrome" : /^microsoftedge\.microsoft\.com$/i.test(u.hostname) ? "edge" : null;
+    if (!store || (store === "chrome" && u.hostname.startsWith("chrome.") && !u.pathname.startsWith("/webstore/"))) return null;
+    const id = u.pathname.split("/").reverse().find((s) => /^[a-p]{32}$/.test(s));
+    return id ? { store, id } : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateExtensionButtons() {
+  const ext = document.getElementById("ext-btn");
+  ext.hidden = !!WIN.private || !installedExtensions.some((e) => e.enabled && !e.theme);
+  const add = document.getElementById("store-add-btn");
+  const page = WIN.private ? null : extensionStorePage(findTab(activeTabId)?.url || "");
+  add.hidden = !page;
+  if (page) {
+    const have = installedExtensions.find((e) => e.id === page.id);
+    add.classList.toggle("installed", !!have);
+    add.innerHTML = `${icon(have ? "check" : "plus", 12)}<span>${have ? "In Kessel" : "Add to Kessel"}</span>`;
+    add.title = have ? `${have.name} is in Kessel -- click to manage it` : "Add this extension to Kessel";
+  }
+}
+
+async function toggleExtensionsPopup(init = { mode: "list" }) {
+  const btn = document.getElementById(init.mode === "install" ? "store-add-btn" : "ext-btn");
+  const r = btn.getBoundingClientRect();
+  // The extensions' own popups open under the puzzle button.
+  const anchor = document.getElementById("ext-btn").getBoundingClientRect();
+  const at = { x: Math.round((anchor.width ? anchor : r).right), y: Math.round((anchor.width ? anchor : r).bottom) };
+  await invoke("toggle_popup", { kind: "extensions", x: r.right, y: r.bottom, width: 340, height: init.mode === "install" ? 460 : 380, init: { ...init, ...at } }).catch((err) => toast(String(err)));
+}
+
+function onStoreAddClick() {
+  const page = extensionStorePage(findTab(activeTabId)?.url || "");
+  if (!page) return;
+  if (installedExtensions.some((e) => e.id === page.id)) {
+    invoke("open_singleton_tab", { route: "kessel://settings/extensions" }).catch(() => {});
+    return;
+  }
+  toggleExtensionsPopup({ mode: "install", ...page });
+}
+
+async function refreshExtensions(list) {
+  installedExtensions = list || (await invoke("list_extensions").catch(() => [])) || [];
+  updateExtensionButtons();
 }
 
 // --- A full tab strip -------------------------------------------------------------
@@ -3239,6 +3775,37 @@ function wireStripScrolling() {
   document.getElementById("tabs-scroll-left").addEventListener("click", () => strip.scrollBy({ left: -strip.clientWidth * 0.75, behavior: "smooth" }));
   document.getElementById("tabs-scroll-right").addEventListener("click", () => strip.scrollBy({ left: strip.clientWidth * 0.75, behavior: "smooth" }));
   new ResizeObserver(updateStripOverflow).observe(strip);
+}
+
+// --- Media controls (media.html) ------------------------------------------------------
+// The music-note button beside the menu: every tab in this window that has
+// played sound, with play/pause, seeking, speed, captions, audio tracks and
+// picture-in-picture (see media.rs). Chrome's "global media controls".
+
+function mediaTabs() {
+  return tabs.filter((t) => t.mediaSeen && !t.discarded && t.id > 0);
+}
+
+function updateMediaButton() {
+  const button = document.getElementById("media-btn");
+  if (!button) return;
+  const list = mediaTabs();
+  button.hidden = !list.length;
+  button.classList.toggle("playing", list.some((t) => t.audible && !t.muted));
+}
+
+async function toggleMediaPopup() {
+  const list = mediaTabs();
+  const button = document.getElementById("media-btn");
+  if (!list.length || button.hidden) return toast("Nothing has played in this window yet");
+  const rect = button.getBoundingClientRect();
+  const init = {
+    toolbar: `toolbar-${WIN.number}`,
+    active: activeTabId,
+    tabs: list.map(({ id, title, url, favicon }) => ({ id, title: title || "", url: url || "", favicon: favicon || "" })),
+  };
+  const height = Math.min(620, 70 + list.length * 214);
+  await invoke("toggle_popup", { kind: "media", x: rect.right, y: rect.bottom, width: 380, height, init }).catch(() => {});
 }
 
 // --- Tab search (tabsearch.html) -----------------------------------------------------
@@ -3506,6 +4073,25 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("rail-passwords").addEventListener("click", () => toggleSidePanel("passwords", "kessel://passwords"));
   document.getElementById("rail-settings").addEventListener("click", () => toggleSidePanel("settings", "kessel://settings"));
 
+  // The side panel's pages, workspaces and extensions (see above).
+  renderRailPanels();
+  renderWorkspaces();
+  document.getElementById("ext-btn").innerHTML = icon("puzzle", 16);
+  document.getElementById("ext-btn").addEventListener("click", () => toggleExtensionsPopup());
+  document.getElementById("store-add-btn").addEventListener("click", onStoreAddClick);
+  refreshExtensions();
+  listen("extensions-changed", (event) => refreshExtensions(event.payload));
+  listen("side-panel-message", (event) => onSidePanelMessage(event.payload));
+  listen("page-menu", (event) => onPageMenu(event.payload || {}));
+  window.addEventListener("kessel-settings", () => {
+    // The style's colours were just put back: the workspace's go on again.
+    styleAccent = null;
+    renderRailPanels();
+    const known = new Set(workspaceList().map((w) => w.id));
+    if (!known.has(currentWorkspace) || [...parkedWorkspaces.keys()].some((id) => !known.has(id))) reconcileWorkspaces();
+    else renderWorkspaces();
+  });
+
   document.getElementById("new-tab-btn").addEventListener("click", () => createTab());
   document.getElementById("back-btn").addEventListener("click", () => runCommand("back"));
   document.getElementById("forward-btn").addEventListener("click", () => runCommand("forward"));
@@ -3514,11 +4100,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
   document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
+  document.getElementById("media-btn").addEventListener("click", toggleMediaPopup);
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
   document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
   document.getElementById("zoom-btn").addEventListener("click", () => runCommand("zoom-reset"));
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
+  document.getElementById("lock-icon").addEventListener("click", toggleSiteInfo);
   document.getElementById("account-btn").addEventListener("click", toggleAccountsPopup);
   document.getElementById("engine-btn").addEventListener("click", toggleEngineMenu);
 
@@ -3595,12 +4183,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Tab search (tabsearch.html) picked or closed one of this window's tabs.
   await listen("tab-search-activate", (event) => activateTab(event.payload.id));
   await listen("tab-search-close", (event) => closeTab(event.payload.id));
+  // The media controls' "go to this tab".
+  await listen("media-activate", (event) => activateTab(event.payload.id));
   // A tab started or stopped playing sound, or was (un)muted.
   await listen("tab-audio", (event) => {
     const tab = findTab(event.payload.id);
     if (!tab) return;
     tab.audible = !!event.payload.playing;
     tab.muted = !!event.payload.muted;
+    // It has something to play: the media button lists it from now on.
+    if (tab.audible) tab.mediaSeen = true;
     renderTabs();
   });
   commandList = await invoke("get_commands").catch(() => []);
@@ -3801,8 +4393,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   // Another browser's window held over this strip, then let go.
   await listen("foreign-drag-over", (event) => {
-    const { x, y, browser, ready } = event.payload;
-    showDropGap(x, y, ready ? `Let go to move this ${browser} window into Kessel` : `Hold to move this ${browser} window in…`);
+    const { x, y, browser, reading } = event.payload;
+    showDropGap(x, y, reading ? `Moving tabs from ${browser}…` : `Let go to move this ${browser} window here`);
   });
   await listen("foreign-drag-leave", hideDropGap);
   await listen("foreign-tabs", (event) => openForeignTabs(event.payload));
@@ -3862,6 +4454,25 @@ window.addEventListener("DOMContentLoaded", async () => {
     updateDownloadsBadge();
     toast(event.payload.success ? "Download complete" : "Download failed");
   });
+
+  // A risky download waits for you (security.rs).
+  listenHere("download-warning", (event) => {
+    downloadWarnings.push(event.payload);
+    if (downloadWarnings.length === 1) showDownloadWarning();
+  });
+  await listen("download-resolved", (event) => {
+    const at = downloadWarnings.findIndex((w) => w.id === event.payload.id);
+    if (at < 0) return;
+    downloadWarnings.splice(at, 1);
+    if (at === 0) setTimeout(showDownloadWarning, 350);
+  });
+  await listen("download-discarded", () => {
+    activeDownloads = Math.max(0, activeDownloads - 1);
+    updateDownloadsBadge();
+    toast("Download discarded");
+  });
+  // An extension its store took down as malware was turned off (extensions.rs).
+  await listen("extensions-flagged", (event) => toast(`Turned off ${(event.payload || []).join(", ")}: its store took it down as malware`, { duration: 6000 }));
 
   window.addEventListener("kessel-settings", () => {
     updateShieldsButton();

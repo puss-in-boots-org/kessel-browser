@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Download warning</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* A risky download waits here until you keep or discard it
+       (security.rs's DownloadStarting hook). */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--surface); border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border)); border-radius: var(--k-popup-radius, 14px); }
+    html.glass body { background: #1a0a14; }
+    main { position: relative; height: 100%; padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; color: var(--text); box-sizing: border-box; }
+    .head { display: flex; gap: 10px; align-items: center; }
+    .glyph { flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent); }
+    h1 { font-size: 13.5px; margin: 0; font-weight: 650; }
+    #file { font-weight: 600; word-break: break-all; font-size: 12.5px; }
+    p { margin: 0; font-size: 12px; line-height: 1.45; opacity: 0.8; }
+    #from { font-size: 11px; opacity: 0.55; word-break: break-all; max-height: 30px; overflow: hidden; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="head"><div class="glyph" id="glyph"></div><h1 id="title"></h1></div>
+    <div id="file"></div>
+    <p id="detail"></p>
+    <div id="from"></div>
+    <div class="actions">
+      <button class="btn danger sm" id="keep">Keep it anyway</button>
+      <button class="btn primary sm" id="discard">Discard</button>
+    </div>
+  </main>
+  <script type="module" src="download-warning.js"></script>
+</body>
+</html>

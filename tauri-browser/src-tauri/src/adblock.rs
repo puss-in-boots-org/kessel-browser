@@ -295,6 +295,29 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
   var ADBLOCK_ENABLED = {adblock};
   var AUTOFILL_ENABLED = {autofill};
   var IN_SIDE_PANEL = {side_panel};
+
+  // --- Media controls: the page's own Media Session buttons ---
+  // Kessel's media controls (media.rs, shared/media-control.js) press the
+  // page's previous/next/seek buttons the way the keyboard's media keys do
+  // in Chrome. A page registers them with setActionHandler; a copy is kept
+  // where the controls can find them. They're the page's own functions,
+  // so it doesn't matter that the page can see the copy too.
+  try {{
+    var session = navigator.mediaSession;
+    if (session && session.setActionHandler) {{
+      var mediaHandlers = {{}};
+      Object.defineProperty(window, Symbol.for('kessel.mediaSession'), {{ value: mediaHandlers }});
+      var setActionHandler = session.setActionHandler;
+      session.setActionHandler = function (name, handler) {{
+        // First the engine's own, which throws for an action it doesn't know.
+        var result = setActionHandler.apply(this, arguments);
+        if (typeof handler === 'function') mediaHandlers[name] = handler;
+        else delete mediaHandlers[name];
+        return result;
+      }};
+    }}
+  }} catch (e) {{}}
+
   if (!BRIDGE) return;
 
   // --- Shields: element hiding ---

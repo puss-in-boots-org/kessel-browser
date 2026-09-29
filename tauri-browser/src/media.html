@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Media controls</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The toolbar's media button: a popup webview (see toggle_popup in
+       main.rs) with a card for each tab of the window that plays sound or
+       video -- media.js, media.rs. */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 14px); }
+    html.glass body { background: #0a1433; border: none; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }
+    html.glass #sheet { position: fixed; inset: 0; background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 88%, transparent); box-shadow: var(--lg-edge); }
+    main { position: relative; height: 100%; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; color: var(--text); }
+    html.glass main { color: var(--lg-text); }
+    header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; padding: 0 2px; }
+    header svg { color: var(--accent); }
+    #cards { display: flex; flex-direction: column; gap: 10px; }
+    .controls .side { display: flex; align-items: center; gap: 2px; }
+    #empty { font-size: 12px; opacity: 0.6; padding: 18px 4px; text-align: center; }
+
+    .card { border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    html.glass .card { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.12); }
+    .card.current { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+    .source { display: flex; align-items: center; gap: 7px; font-size: 11px; opacity: 0.7; cursor: pointer; min-width: 0; }
+    .source:hover { opacity: 1; }
+    .source img, .source .letter { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+    .source .letter { display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; background: var(--surface-hover); }
+    .source span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .now { display: flex; gap: 10px; align-items: center; min-width: 0; }
+    .art { width: 46px; height: 46px; border-radius: 8px; background: var(--surface-hover) center / cover no-repeat; flex-shrink: 0; display: flex; align-items: center; justify-content: center; opacity: 0.9; }
+    .art.has-image svg { display: none; }
+    .what { min-width: 0; flex: 1; }
+    .what .title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .what .artist { font-size: 11.5px; opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+
+    .progress { display: flex; align-items: center; gap: 8px; font-size: 10.5px; font-variant-numeric: tabular-nums; opacity: 0.85; }
+    .progress input { flex: 1; accent-color: var(--accent); height: 14px; margin: 0; }
+    .progress .live { color: #ff5a5a; font-weight: 700; letter-spacing: 0.04em; }
+
+    .controls { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+    .controls .main { display: flex; align-items: center; gap: 2px; }
+    .controls button { width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .controls button:hover { background: var(--surface-hover); }
+    html.glass .controls button:hover { background: rgba(255, 255, 255, 0.14); }
+    .controls button.play { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: var(--accent-text); }
+    .controls button.play:hover { background: color-mix(in srgb, var(--accent) 85%, white); }
+    .controls button.on { color: var(--accent); }
+    .controls button:disabled { opacity: 0.3; pointer-events: none; }
+
+    .options { display: flex; gap: 6px; flex-wrap: wrap; }
+    .options label { display: flex; align-items: center; gap: 5px; font-size: 11px; opacity: 0.85; }
+    .options select { font: inherit; font-size: 11px; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 3px 5px; max-width: 150px; }
+    html.glass .options select { background: rgba(0, 0, 0, 0.25); border-color: rgba(255, 255, 255, 0.16); }
+    .options svg { opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
+  <main>
+    <header id="heading"></header>
+    <div id="cards"></div>
+    <div id="empty" hidden>Nothing is playing in this window right now.</div>
+  </main>
+  <script type="module" src="media.js"></script>
+</body>
+</html>

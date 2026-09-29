@@ -19,10 +19,18 @@
       <div id="rail-capsule">
         <button class="rail-logo" id="rail-home" title="Home / New tab (Ctrl+T)"></button>
 
+        <!-- Workspaces (once you have more than one): the one this window
+             shows is marked; a click switches (see switchWorkspace). -->
+        <div id="rail-workspaces" hidden></div>
+
         <div id="pinned-list"></div>
         <button class="rail-btn ghost-btn" id="rail-add-pin" title="Pin the current page"></button>
 
         <div class="rail-spacer"></div>
+
+        <!-- The side panel's own pages and the AI assistant, as picked in
+             Settings -> Side panel (sidebar.html). -->
+        <div id="rail-panels"></div>
 
         <button class="rail-btn" id="rail-shield" title="Ad &amp; tracker blocking">
           <span class="rail-badge" id="shield-badge" hidden>0</span>
@@ -75,12 +83,17 @@
         </div>
 
         <div id="address-wrap">
-          <span id="lock-icon"></span>
+          <button id="lock-icon"></button>
           <input id="url-input" type="text" placeholder="Search or enter address" spellcheck="false" autocomplete="off" />
           <button id="zoom-btn" hidden></button>
           <button id="engine-btn" title="Search engine"></button>
           <button id="shields-btn" title="Shields"><span id="shields-count" hidden></span></button>
           <button id="share-btn" title="Share this page: copy the link, QR code, send it" hidden></button>
+          <!-- On an extension's page in the Chrome Web Store or Edge
+               Add-ons: installs it here. -->
+          <button id="store-add-btn" title="Add this extension to Kessel" hidden></button>
+          <!-- Your extensions: their popups (extensions.html). -->
+          <button id="ext-btn" title="Extensions" hidden></button>
           <button id="star-btn" title="Bookmark this page (Ctrl+D)"></button>
           <!-- Which account this tab is signed in as; opens the account
                menu (accounts.html). -->
@@ -88,6 +101,9 @@
         </div>
 
         <div id="menu-cluster">
+          <!-- Shown once a tab in this window has played sound: what's
+               playing, with its controls (media.html). -->
+          <button id="media-btn" title="Media controls" hidden></button>
           <button id="menu-btn" title="Kessel menu (Alt+F)"></button>
         </div>
       </div>

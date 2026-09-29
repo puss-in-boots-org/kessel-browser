@@ -1,7 +1,10 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
+import { FEATURES } from "./shared/features.js";
 import { buildStyleSection } from "./appearance.js";
+import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
+import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -10,8 +13,12 @@ const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "palette" },
   { id: "search", label: "Search & Startup", icon: "search" },
   { id: "tabs", label: "Tabs", icon: "tabs" },
+  { id: "sidebar", label: "Side panel", icon: "sidebar" },
+  { id: "extensions", label: "Extensions", icon: "puzzle" },
   { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
-  { id: "privacy", label: "Privacy & Security", icon: "shield" },
+  { id: "privacy", label: "Privacy", icon: "shield" },
+  { id: "cookies", label: "Cookies & site data", icon: "cookie" },
+  { id: "security", label: "Security", icon: "lock" },
   { id: "performance", label: "Performance", icon: "bolt" },
   { id: "pinned", label: "Pinned Sites", icon: "pin" },
   { id: "bookmarks", label: "Bookmarks", icon: "bookmark" },
@@ -19,6 +26,7 @@ const SECTIONS = [
   { id: "downloads", label: "Downloads", icon: "download" },
   { id: "passwords", label: "Passwords", icon: "key" },
   { id: "import", label: "Import", icon: "arrowRight" },
+  { id: "features", label: "All features", icon: "help" },
   { id: "about", label: "About", icon: "bolt" },
 ];
 
@@ -280,8 +288,8 @@ async function privacyPanel(settings) {
   ]);
 
   const p = el(`<div class="panel" id="panel-privacy">
-    <h2>Privacy &amp; Security</h2>
-    <p class="sub">Shields (ads, trackers, fingerprinting), browsing data, and the vault's auto-lock.</p>
+    <h2>Privacy</h2>
+    <p class="sub">Shields (ads, trackers, fingerprinting), what sites learn about you, browsing data, and the vault's auto-lock. Cookies and security have pages of their own.</p>
 
     <div class="setting-card">
       ${settingRow({ title: "Shields", desc: "Block ads, trackers and fingerprinting on every site. Turn them off for one site from the shield in the address bar.", controlHtml: switchHtml("adblock-toggle", settings.adblock_enabled) })}
@@ -432,6 +440,7 @@ async function privacyPanel(settings) {
   vaultTimeout.addEventListener("input", () => (vaultTimeoutValue.textContent = `${vaultTimeout.value}m`));
   vaultTimeout.addEventListener("change", () => saveSettings({ vault_lock_minutes: parseInt(vaultTimeout.value, 10) }));
 
+  privacyExtras(p, settings, { el, settingRow, switchHtml, wireSwitch });
   return p;
 }
 
@@ -755,6 +764,12 @@ function performancePanel(settings) {
     </div>
 
     <div class="setting-card">
+      ${settingRow({ title: "Use hardware acceleration", desc: "The graphics card draws pages, plays video and runs 3D and games -- smoother, and easier on the battery. Turn it off if pages flicker or show black boxes. Applies the next time Kessel starts.", controlHtml: switchHtml("hw-accel", settings.hardware_acceleration !== false) })}
+      ${settingRow({ title: "Graphics card", desc: "For a PC with two, like most gaming laptops. Automatic uses the power-saving one when Kessel starts on battery. Applies the next time Kessel starts.", controlHtml: `<select class="field" id="gpu-preference" style="width:170px"><option value="auto">Automatic</option><option value="power">Power-saving</option><option value="performance">High-performance</option></select>` })}
+      ${settingRow({ title: "Graphics and media", desc: "What the graphics card does for Kessel, and which video and audio formats play", controlHtml: `<button class="btn sm" id="open-gpu-btn">${icon("gpu", 13)} Open</button>` })}
+    </div>
+
+    <div class="setting-card">
       ${settingRow({ title: "Never pause or put to sleep", desc: "Sites that must keep running in the background -- a chat, a music player", controlHtml: `<input class="field" id="never-sleep-input" style="width:200px" placeholder="e.g. music.youtube.com" /><button class="btn sm" id="never-sleep-add">Add</button>` })}
       <div class="site-list" id="never-sleep-list"></div>
     </div>
@@ -779,6 +794,13 @@ function performancePanel(settings) {
   maxAwake.value = String(settings.max_awake_tabs ?? 0);
   maxAwake.addEventListener("change", () => saveSettings({ max_awake_tabs: parseInt(maxAwake.value, 10) }));
   wireSwitch(p, "reduce-memory", "reduce_background_memory", { defaultOn: true });
+  wireSwitch(p, "hw-accel", "hardware_acceleration", { defaultOn: true });
+  const gpu = p.querySelector("#gpu-preference");
+  gpu.value = settings.gpu_preference || "auto";
+  gpu.disabled = settings.hardware_acceleration === false;
+  gpu.addEventListener("change", () => saveSettings({ gpu_preference: gpu.value }));
+  window.addEventListener("kessel-settings", () => (gpu.disabled = currentSettings()?.hardware_acceleration === false));
+  p.querySelector("#open-gpu-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://gpu" }));
 
   // Sites that never sleep: a site per chip.
   const list = p.querySelector("#never-sleep-list");
@@ -1184,13 +1206,33 @@ async function aboutPanel() {
 
 // --- Shell ------------------------------------------------------------
 
+// Every feature and how to use it, searchable (shared/features.js).
+function featuresPanel() {
+  const p = el(`<div class="panel" id="panel-features"><h2>All features</h2><p class="sub">Everything Kessel does, and how to use it.</p>
+    <input class="field" id="features-q" placeholder="Search features" style="width:100%;margin-bottom:14px" /><div id="features-list"></div></div>`);
+  const list = p.querySelector("#features-list");
+  const render = (q) => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    list.innerHTML = FEATURES.map(([group, items]) => {
+      const rows = items.filter(([n, h]) => words.every((w) => `${n} ${h} ${group}`.toLowerCase().includes(w)));
+      return rows.length ? `<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">${escapeHtml(group)}</div></div></div>${rows.map(([n, h]) => settingRow({ title: escapeHtml(n), desc: escapeHtml(h), controlHtml: "" })).join("")}</div>` : "";
+    }).join("") || `<p class="sub">No feature matches.</p>`;
+  };
+  p.querySelector("#features-q").addEventListener("input", (e) => render(e.target.value));
+  render("");
+  return p;
+}
 async function buildPanel(id, settings) {
   switch (id) {
     case "appearance": return appearancePanel(settings);
     case "search": return searchPanel(settings);
     case "tabs": return await tabsPanel(settings);
+    case "sidebar": return await sidebarPanel(settings, { el, settingRow, switchHtml, wireSwitch });
+    case "extensions": return await extensionsPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "shortcuts": return await keyboardPanel(settings);
     case "privacy": return await privacyPanel(settings);
+    case "cookies": return await cookiesPanel(settings, { el, settingRow, switchHtml, wireSwitch });
+    case "security": return await securityPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "performance": return performancePanel(settings);
     case "pinned": return await pinnedPanel();
     case "bookmarks": return await bookmarksPanel();
@@ -1198,6 +1240,7 @@ async function buildPanel(id, settings) {
     case "downloads": return await downloadsPanel();
     case "passwords": return passwordsPanel(settings);
     case "import": return await importPanel();
+    case "features": return featuresPanel();
     case "about": return await aboutPanel();
     default: return el(`<div class="panel"></div>`);
   }
@@ -1238,6 +1281,12 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (hash === "clear") {
       await showSection("privacy", currentSettings());
       openClearDataDialog({ fromShortcut: true });
+      return;
+    }
+    // kessel://settings/cookies:example.com -- that site's cookies.
+    if (hash.startsWith("cookies:")) {
+      await showSection("cookies", currentSettings());
+      focusCookies(decodeURIComponent(hash.slice("cookies:".length)));
       return;
     }
     await showSection(SECTIONS.some((s) => s.id === hash) ? hash : "appearance", currentSettings());

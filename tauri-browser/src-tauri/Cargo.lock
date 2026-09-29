@@ -2242,19 +2242,22 @@ dependencies = [
 
 [[package]]
 name = "kessel"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "adblock",
  "aes-gcm",
  "argon2",
  "base64 0.23.1",
+ "flate2",
  "hmac",
+ "native-tls",
  "qrcode",
  "rand",
  "rusqlite",
  "serde",
  "serde_json",
  "sha1",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",

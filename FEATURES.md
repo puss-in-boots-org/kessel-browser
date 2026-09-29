@@ -11,6 +11,7 @@ branch, one small commit per feature or group of features.
 | ✅ | Built on this branch and tested |
 | 🟢 | Already in Kessel before this branch (checked) |
 | 🌐 | Provided by the engine (WebView2 / Chromium) itself; verified it works in Kessel |
+| 🧪 | Built, with unit tests and an end-to-end test written; waiting for that test's first run on Windows |
 | 🟡 | Partly done -- see the note |
 | ⏳ | Not done yet |
 | ⏭️ | Skipped -- see the note for why (needs a server, mobile only, not possible in WebView2...) |
@@ -27,6 +28,83 @@ branch, one small commit per feature or group of features.
 - Unit tests: `scripts\cargo-msvc.cmd test --target-dir target\e2e` (Rust) and
   `node --test "tauri-browser/tests/unit/*.test.mjs"` (JavaScript).
 - Pick the first ⏳ row below, build it, test it, mark it, commit.
+- Mark rows with `node scripts/mark-feature.mjs <row> <status> [note]` (e.g.
+  `node scripts/mark-feature.mjs 20.03 done`): it also refreshes the Progress
+  table below. Once a 🧪 row's end-to-end test has passed on Windows, mark it ✅.
+
+<!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
+## Progress
+
+**43% overall** -- 386 done (✅ 🟢 🌐), 31 built and waiting for their Windows test run (🧪), 53 partly done (🟡), 551 to do (⏳), 4 skipped (⏭️), of 1025.
+
+| Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
+|---|---:|---:|---:|---:|---:|---|
+| [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
+| [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
+| [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
+| [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
+| [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 13 |  | `███░░░░░░░` 26% |
+| [5. History](#5-history) | 14 |  |  | 2 |  | `█████████░` 88% |
+| [6. Downloads](#6-downloads) | 5 |  | 1 | 16 |  | `███░░░░░░░` 25% |
+| [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 26 |  | `██░░░░░░░░` 24% |
+| [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
+| [9. Sync](#9-sync) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
+| [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
+| [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
+| [12. DNS & networking](#12-dns--networking) | 9 |  |  | 14 |  | `████░░░░░░` 39% |
+| [13. Website permissions](#13-website-permissions) |  |  |  | 20 |  | `░░░░░░░░░░` 0% |
+| [14. Site-specific settings](#14-site-specific-settings) |  |  |  | 22 |  | `░░░░░░░░░░` 0% |
+| [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
+| [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
+| [17. Reading & research](#17-reading--research) | 5 |  | 1 | 16 |  | `███░░░░░░░` 25% |
+| [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [19. PDF](#19-pdf) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
+| [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
+| [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
+| [22. Accessibility](#22-accessibility) | 3 | 1 | 1 | 11 |  | `███░░░░░░░` 28% |
+| [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
+| [24. Search engines](#24-search-engines) | 2 |  |  | 7 |  | `██░░░░░░░░` 22% |
+| [25. Startup behavior](#25-startup-behavior) | 4 |  | 1 | 4 |  | `█████░░░░░` 50% |
+| [26. Session management](#26-session-management) | 1 |  | 5 | 5 |  | `███░░░░░░░` 32% |
+| [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
+| [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
+| [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
+| [30. Web platform support](#30-web-platform-support) |  |  |  | 6 |  | `░░░░░░░░░░` 0% |
+| [31. Progressive Web Apps](#31-progressive-web-apps) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
+| [32. Notifications](#32-notifications) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [33. Clipboard](#33-clipboard) |  |  |  | 7 |  | `░░░░░░░░░░` 0% |
+| [34. File system](#34-file-system) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [35. Hardware acceleration](#35-hardware-acceleration) |  | 8 | 1 |  |  | `█████████░` 94% |
+| [36. Performance](#36-performance) | 11 | 1 |  | 5 |  | `███████░░░` 71% |
+| [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
+| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 3 | 2 | 3 | 8 |  | `████░░░░░░` 41% |
+| [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [41. Screenshots & capture](#41-screenshots--capture) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
+| [42. Sharing](#42-sharing) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [43. Mobile-specific features](#43-mobile-specific-features) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
+| [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 |  |  | 3 |  | `█████████░` 89% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 |  |  | 6 |  | `█████░░░░░` 50% |
+| [47. Context menus](#47-context-menus) | 2 |  |  | 8 |  | `██░░░░░░░░` 20% |
+| [48. AI features](#48-ai-features) | 2 |  | 2 | 16 |  | `██░░░░░░░░` 15% |
+| [49. Shopping](#49-shopping) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 8 |  | `████░░░░░░` 43% |
+| [52. Import / export](#52-import--export) | 4 |  |  | 13 |  | `██░░░░░░░░` 24% |
+| [53. Updates](#53-updates) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
+| [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 7 |  | `███░░░░░░░` 29% |
+| [56. Account system](#56-account-system) |  |  |  | 14 |  | `░░░░░░░░░░` 0% |
+| [57. Browser lock](#57-browser-lock) | 1 |  |  | 9 |  | `█░░░░░░░░░` 10% |
+| [58. Search / history intelligence](#58-search--history-intelligence) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
+| [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
+| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 11 |  | `███░░░░░░░` 32% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 |  | 1 | 30 |  | `░░░░░░░░░░` 5% |
+
+Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
+<!-- progress:end -->
 
 ## Keyboard shortcuts (the requested table)
 
@@ -268,7 +346,7 @@ branch, one small commit per feature or group of features.
 | 7.04 | Generate strong passwords | 🟢 | |
 | 7.05 | Password editing | 🟢 | |
 | 7.06 | Password deletion | 🟢 | |
-| 7.07 | Password search | ⏳ | |
+| 7.07 | Password search | 🟢 | The Passwords page's search box |
 | 7.08 | Password import | 🟢 | Browsers and CSV |
 | 7.09 | Password export | ⏳ | |
 | 7.10 | Password synchronization | ⏳ | |
@@ -348,17 +426,17 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 10.01 | Allow cookies | 🌐 | |
-| 10.02 | Block cookies | ⏳ | |
-| 10.03 | Block third-party cookies | ⏳ | |
-| 10.04 | Delete cookies | ⏳ | |
-| 10.05 | Per-site cookie settings | ⏳ | |
-| 10.06 | Cookie viewer | ⏳ | |
-| 10.07 | Cookie editor | ⏳ | |
-| 10.08 | Cookie expiration controls | ⏳ | |
-| 10.09 | Session-only cookies | ⏳ | |
-| 10.10 | Cookie isolation | 🟢 | Accounts |
-| 10.11 | Partitioned cookies | ⏳ | |
+| 10.01 | Allow cookies | 🌐 | Sites keep cookies unless you say otherwise (Settings → Cookies & site data) |
+| 10.02 | Block cookies | ✅ | Settings → Cookies & site data: sites may keep cookies -- yes / until you close Kessel / no -- and per-site rules. WebView2 has no cookie policy to set, so a sweep over the cookie jar (as pages load, and every minute) deletes a blocked site's cookies, and its pages get no document.cookie (privacy.rs) |
+| 10.03 | Block third-party cookies | ✅ | On by default: Chromium's own third-party cookie blocking (engine switch, after a restart); partitioned cookies keep working. A switch in Settings → Cookies & site data |
+| 10.04 | Delete cookies | ✅ | One cookie, or a whole site's, in Settings → Cookies & site data (and Clear browsing data) |
+| 10.05 | Per-site cookie settings | ✅ | Allow / until Kessel closes / block, per site (covering its subdomains; the most specific rule wins) -- in Settings, or from the address bar's lock (site info) |
+| 10.06 | Cookie viewer | ✅ | Settings → Cookies & site data: every cookie by site, with its domain, path, expiry and flags, searchable |
+| 10.07 | Cookie editor | ✅ | Add or edit a cookie: name, value, domain, path, expiry, Secure, HttpOnly, SameSite |
+| 10.08 | Cookie expiration controls | ✅ | "Keep cookies at most" a day … a year: longer-lived cookies are cut short by the sweep; any cookie's expiry in the editor |
+| 10.09 | Session-only cookies | ✅ | "Until you close Kessel" -- for every site, or per site: their cookies become session cookies |
+| 10.10 | Cookie isolation | 🟢 | Accounts (each has its own cookie jar); private windows too |
+| 10.11 | Partitioned cookies | 🌐 | CHIPS: a Partitioned cookie in another site's frame is kept, for that page only (tested) |
 | 10.12 | Tracker blocking | 🟢 | Shields |
 | 10.13 | Third-party tracker blocking | 🟢 | Shields |
 | 10.14 | Cross-site tracking protection | 🟢 | Shields + WebView2 tracking prevention |
@@ -367,48 +445,48 @@ branch, one small commit per feature or group of features.
 | 10.17 | Fingerprinting protection | 🟢 | Shields farbling |
 | 10.18 | Cryptomining protection | 🟢 | Shields lists |
 | 10.19 | Tracking URL removal | 🟢 | Shields |
-| 10.20 | Bounce-tracking protection | ⏳ | |
-| 10.21 | Storage partitioning | ⏳ | |
-| 10.22 | First-party isolation | ⏳ | |
-| 10.23 | Total cookie protection | ⏳ | |
-| 10.24 | Private browsing | ⏳ | |
-| 10.25 | Incognito mode | ⏳ | |
-| 10.26 | Automatic private sessions | ⏳ | |
-| 10.27 | Clear data on exit | ⏳ | |
-| 10.28 | Per-site data deletion | ⏳ | |
-| 10.29 | Global privacy controls | ⏳ | |
-| 10.30 | Do Not Track | ⏳ | |
-| 10.31 | Global Privacy Control | ⏳ | |
-| 10.32 | Referrer controls | ⏳ | |
-| 10.33 | User-agent privacy controls | ⏳ | |
-| 10.34 | Fingerprint resistance | 🟢 | Shields farbling |
+| 10.20 | Bounce-tracking protection | ✅ | With Shields: click-tracking redirect pages (google.com/url, l.facebook.com, out.reddit.com, youtube.com/redirect, steamcommunity.com/linkfilter, …) are skipped straight to where they point |
+| 10.21 | Storage partitioning | 🌐 | A site's frame inside another site gets storage of its own (tested with localStorage) |
+| 10.22 | First-party isolation | 🌐 | Storage partitioning + third-party cookie blocking: each site only sees what it keeps itself |
+| 10.23 | Total cookie protection | ✅ | Third-party cookies blocked with partitioned ones allowed: a site's cookies in other sites' pages live in a jar per page site, like Firefox's Total Cookie Protection |
+| 10.24 | Private browsing | 🟢 | Private windows (Ctrl+Shift+N): their own in-memory profile, no history, gone when closed |
+| 10.25 | Incognito mode | 🟢 | The same private windows |
+| 10.26 | Automatic private sessions | ✅ | Settings → Privacy: "Always use private windows" |
+| 10.27 | Clear data on exit | ✅ | Settings → Cookies & site data: history, the downloads list, cookies and site data, cached files, autofill, site settings -- cleared when the last window closes or you quit |
+| 10.28 | Per-site data deletion | ✅ | "Delete site data" -- cookies, storage, caches and service workers of every address of the site -- in Settings or the lock's popup |
+| 10.29 | Global privacy controls | ✅ | Global Privacy Control and Do Not Track switches (Settings → Privacy) |
+| 10.30 | Do Not Track | ✅ | Off by default (few sites honour it, and it makes you stand out): the DNT header and navigator.doNotTrack |
+| 10.31 | Global Privacy Control | ✅ | On by default: the Sec-GPC header on requests (Shields or not) and navigator.globalPrivacyControl |
+| 10.32 | Referrer controls | ✅ | Just the site (default) / nothing to other sites / nothing ever: set as each page's own referrer policy as it starts, and document.referrer. (The engine adds the Referer header after Kessel sees a request, so it can't be taken off there) |
+| 10.33 | User-agent privacy controls | ✅ | Kessel (Edge's engine) / Google Chrome / your own, for tabs opened from then on. Client hints (Sec-CH-UA) still name the engine |
+| 10.34 | Fingerprint resistance | 🟢 | Shields farbling -- canvas, audio, CPU cores, and now WebGL and screen size |
 | 10.35 | Canvas fingerprint protection | 🟢 | |
-| 10.36 | WebGL fingerprint protection | ⏳ | |
-| 10.37 | Font fingerprint protection | ⏳ | |
-| 10.38 | Screen-size fingerprint protection | ⏳ | |
-| 10.39 | Timezone fingerprint protection | ⏳ | |
+| 10.36 | WebGL fingerprint protection | ✅ | Farbling: a common graphics card vendor/renderer instead of yours, and faint noise on pixels read back |
+| 10.37 | Font fingerprint protection | ⏭️ | Not possible from outside the engine: WebView2 has no say over which fonts pages can use or measure (Brave does it inside Chromium) |
+| 10.38 | Screen-size fingerprint protection | ✅ | Farbling: the screen is the size of the window (no monitor size or layout) |
+| 10.39 | Timezone fingerprint protection | ✅ | Opt-in (Settings → Privacy): pages run in UTC (the engine's time zone override), and other sites' frames read UTC too |
 
 ### 11. Security
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 11.01 | HTTPS support | 🌐 | |
-| 11.02 | HTTPS-only mode | ⏳ | |
-| 11.03 | HTTP warning | ⏳ | |
+| 11.02 | HTTPS-only mode | ✅ | Settings → Security: every site is opened as https; one without it gets a warning page first ("continue" lasts until a restart). Addresses on your own network are left alone |
+| 11.03 | HTTP warning | ✅ | A red "Not secure" chip in the address bar on http sites; the lock opens the site info (connection, certificate, cookies) |
 | 11.04 | TLS | 🌐 | |
 | 11.05 | Certificate validation | 🌐 | |
-| 11.06 | Certificate warnings | ⏳ | |
-| 11.07 | Certificate viewer | ⏳ | |
+| 11.06 | Certificate warnings | ✅ | A warning page saying what's wrong (expired, another site's, untrusted, revoked), with "go on (unsafe)" -- remembered until a restart |
+| 11.07 | Certificate viewer | ✅ | The lock → Certificate: Windows' own certificate dialog, for the certificate the site sends (fetched fresh -- WebView2 doesn't hand out its page's) |
 | 11.08 | HSTS | 🌐 | |
 | 11.09 | Certificate Transparency | 🌐 | |
 | 11.10 | Mixed-content blocking | 🌐 | |
-| 11.11 | Safe Browsing | ⏳ | |
-| 11.12 | Phishing protection | ⏳ | |
-| 11.13 | Malware protection | ⏳ | |
-| 11.14 | Dangerous-download protection | ⏳ | |
-| 11.15 | Deceptive-site warnings | ⏳ | |
-| 11.16 | Malicious-extension protection | ⏳ | |
-| 11.17 | Permission warnings | ⏳ | |
+| 11.11 | Safe Browsing | ✅ | On this PC, nothing sent anywhere: the URLhaus malware, phishing and uBlock "badware" lists, refreshed twice a day, checked whether Shields is up or down. Opt-in: Microsoft Defender SmartScreen (sends addresses to Microsoft; after a restart) |
+| 11.12 | Phishing protection | ✅ | Phishing URL Blocklist → a "Deceptive site ahead" warning page |
+| 11.13 | Malware protection | ✅ | URLhaus (malware sites and files) → a warning page; downloads of listed files wait for you |
+| 11.14 | Dangerous-download protection | ✅ | A download from the malware lists, or a program over plain http, waits until you keep or discard it (and SmartScreen's checks, if on) |
+| 11.15 | Deceptive-site warnings | ✅ | Warning pages for deceptive, malware and badware sites (and pages Shields blocks outright), with a way on for the session |
+| 11.16 | Malicious-extension protection | ✅ | Update checks read the store's verdict: an extension the Chrome Web Store took down as malware is turned off and marked, like Chrome does; one no longer in its store is marked |
+| 11.17 | Permission warnings | 🟢 | Extensions list what they may do before you add them, and an update asking for more waits for you; sites' permission prompts are the engine's |
 | 11.18 | Sandboxing | 🌐 | |
 | 11.19 | Site isolation | 🌐 | |
 | 11.20 | Process isolation | 🌐 | |
@@ -501,23 +579,23 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 15.01 | Extension marketplace | ⏳ | |
-| 15.02 | Install extensions | ⏳ | |
-| 15.03 | Uninstall extensions | ⏳ | |
-| 15.04 | Enable/disable extensions | ⏳ | |
-| 15.05 | Extension permissions | ⏳ | |
-| 15.06 | Per-site extension permissions | ⏳ | |
-| 15.07 | Private-mode extension permissions | ⏳ | |
-| 15.08 | Extension updates | ⏳ | |
-| 15.09 | Automatic updates | ⏳ | |
-| 15.10 | Extension developer mode | ⏳ | |
-| 15.11 | Extension debugging | ⏳ | |
-| 15.12 | Extension packaging | ⏳ | |
-| 15.13 | Extension themes | ⏳ | |
-| 15.14 | Content blockers | ⏳ | |
-| 15.15 | Password-manager extensions | ⏳ | |
-| 15.16 | Productivity extensions | ⏳ | |
-| 15.17 | Developer extensions | ⏳ | |
+| 15.01 | Extension marketplace | ✅ | Chrome Web Store and Edge Add-ons: on an extension's page, "Add to Kessel" in the address bar; Settings -> Extensions links both stores |
+| 15.02 | Install extensions | ✅ | From a store (its .crx, over HTTPS; keeps its store id), from a .crx/.zip file, or unpacked from a folder. Run by WebView2 itself; Manifest V2 ones are refused (the engine no longer runs them) |
+| 15.03 | Uninstall extensions | ✅ | Settings -> Extensions -> Remove: its data goes with it |
+| 15.04 | Enable/disable extensions | ✅ | Settings -> Extensions, the side panel's Extensions page; takes effect at once, data kept |
+| 15.05 | Extension permissions | ✅ | What it may do, in words, before it's added and in Settings -> Extensions -> Details |
+| 15.06 | Per-site extension permissions | 🟡 | Every site / only sites you list / only when you open it: its scripts for pages obey at once (a guard in front of each); what it may fetch from sites follows after a restart. "When you open it" doesn't grant the page you're on, as Chrome's click does |
+| 15.07 | Private-mode extension permissions | ⏭️ | Private windows are the engine's private mode, where it doesn't run extensions and has no switch to let one in -- they stay out (Chrome's default) |
+| 15.08 | Extension updates | ✅ | Settings -> Extensions -> Update now; a new version keeps the extension's data. One that asks for more than before waits for you to look it over |
+| 15.09 | Automatic updates | ✅ | A little after starting, then every five hours (Settings -> Extensions can turn it off) |
+| 15.10 | Extension developer mode | ✅ | Developer mode: load unpacked (your folder, never changed), Reload after editing, id shown. Manifest changes finish on the next start (the engine reads manifests then) |
+| 15.11 | Extension debugging | 🟡 | Its options and popup pages open in a tab, where F12 DevTools works; why the engine won't run one is shown in Settings. Service workers can't be inspected (WebView2 has no chrome://inspect) |
+| 15.12 | Extension packaging | ✅ | Pack for a store: a .zip the Chrome Web Store and Edge Add-ons take (without the key Kessel adds) |
+| 15.13 | Extension themes | 🟡 | A Chrome theme's colours go onto the style you use (frame, toolbar, text, address bar, accent); its background pictures aren't used |
+| 15.14 | Content blockers | 🟡 | Shields is built in. Manifest V3 blockers install and run -- tried with uBlock Origin Lite from the Chrome Web Store -- but WebView2 doesn't act on their blocking rules (enabled, and matching by its own test, yet requests go through), so Shields does the blocking |
+| 15.15 | Password-manager extensions | 🟡 | Install and run like any MV3 extension (their popups from the puzzle button, content scripts fill forms) -- not tried with a real one yet; the built-in vault is Passwords |
+| 15.16 | Productivity extensions | 🟡 | Install and run like any MV3 extension -- not tried with real ones yet. The engine has no chrome.tabs model of Kessel's tabs, so ones that manage tabs can't |
+| 15.17 | Developer extensions | 🟡 | Install and run like any MV3 extension; DevTools extensions (devtools_page) don't, as WebView2's DevTools has no panels for them |
 
 ### 16. Built-in content blocking
 
@@ -545,8 +623,8 @@ branch, one small commit per feature or group of features.
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 17.01 | Reader mode | ⏳ | |
-| 17.02 | Reading list | ⏳ | |
-| 17.03 | Save page for later | ⏳ | |
+| 17.02 | Reading list | ✅ | Side panel -> Reading list: unread/read, add the page you're on, or right-click a link: Add link to reading list |
+| 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
 | 17.04 | Offline pages | ⏳ | |
 | 17.05 | Reading progress | ⏳ | |
 | 17.06 | Page translation | ⏳ | |
@@ -562,7 +640,7 @@ branch, one small commit per feature or group of features.
 | 17.16 | Copy selected text | ⏳ | |
 | 17.17 | Highlight text | ⏳ | |
 | 17.18 | Page annotations | ⏳ | |
-| 17.19 | Web clipping | ⏳ | |
+| 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
 | 17.21 | Save as PDF | ⏳ | |
 | 17.22 | Webpage screenshot | ⏳ | |
@@ -609,26 +687,26 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 20.01 | HTML5 video | ⏳ | |
-| 20.02 | HTML5 audio | ⏳ | |
-| 20.03 | Media controls | ⏳ | |
-| 20.04 | Fullscreen video | ⏳ | |
-| 20.05 | Picture-in-picture | ⏳ | |
-| 20.06 | Multiple audio tracks | ⏳ | |
-| 20.07 | Subtitles | ⏳ | |
-| 20.08 | Closed captions | ⏳ | |
-| 20.09 | Playback speed | ⏳ | |
-| 20.10 | Media session controls | ⏳ | |
-| 20.11 | Hardware acceleration | ⏳ | |
-| 20.12 | Codec support | ⏳ | |
-| 20.13 | HDR | ⏳ | |
-| 20.14 | Wide-color support | ⏳ | |
-| 20.15 | Spatial audio | ⏳ | |
-| 20.16 | Web Audio | ⏳ | |
-| 20.17 | WebRTC | ⏳ | |
-| 20.18 | Screen sharing | ⏳ | |
-| 20.19 | Camera streaming | ⏳ | |
-| 20.20 | Microphone streaming | ⏳ | |
+| 20.01 | HTML5 video | 🧪 | The engine's player; Kessel's media controls work with every `<video>` |
+| 20.02 | HTML5 audio | 🧪 | The engine's player; Kessel's media controls work with every `<audio>` |
+| 20.03 | Media controls | 🧪 | The music-note button beside the menu (shown once a tab has played sound): every such tab of the window with title, artist, artwork, play/pause, ±10 s, a seek bar, previous/next, mute -- without switching tabs. Also a command ("media controls") |
+| 20.04 | Fullscreen video | 🟢 | A video's (or any page's) fullscreen fills the whole screen |
+| 20.05 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture: the engine's floating video window |
+| 20.06 | Multiple audio tracks | 🧪 | Switched on in the engine (AudioVideoTracks); media controls -> audio track, when a video has more than one |
+| 20.07 | Subtitles | 🧪 | WebVTT subtitle tracks, drawn by the engine; media controls -> captions menu turns them on and off |
+| 20.08 | Closed captions | 🧪 | Caption tracks, like subtitles (20.07) |
+| 20.09 | Playback speed | 🧪 | Media controls -> speed: 0.5× to 3× (a site's own speed setting, 0.25× to 4×, is kept) |
+| 20.10 | Media session controls | 🧪 | The page's Media Session: its title, artist and artwork show in the media controls, and its own previous/next/seek buttons are what they press |
+| 20.11 | Hardware acceleration | 🧪 | Video is decoded by the graphics card; kessel://gpu shows which formats are, on this PC |
+| 20.12 | Codec support | 🧪 | The engine's: H.264, VP8, VP9, AV1, AAC, MP3, Opus, Vorbis, FLAC, WAV; HEVC where Windows and the graphics card have it. kessel://gpu lists what plays here |
+| 20.13 | HDR | 🧪 | HDR video plays in HDR when Windows' HDR is on; kessel://gpu shows whether it is |
+| 20.14 | Wide-color support | 🧪 | Display P3 / Rec. 2020 colour on screens that have it; kessel://gpu shows the screen's gamut |
+| 20.15 | Spatial audio | 🟡 | 3D (HRTF) Web Audio and surround output work; Windows Sonic / Dolby Atmos are turned on in Windows. kessel://gpu shows the output channels |
+| 20.16 | Web Audio | 🧪 | The engine's; kessel://gpu shows sample rate and latency |
+| 20.17 | WebRTC | 🧪 | The engine's (video calls); a site asks before using the camera or microphone |
+| 20.18 | Screen sharing | 🧪 | getDisplayMedia: the engine's screen / window / tab picker |
+| 20.19 | Camera streaming | 🧪 | The engine's; a site asks first. kessel://gpu counts the cameras |
+| 20.20 | Microphone streaming | 🧪 | The engine's; a site asks first. kessel://gpu counts the microphones |
 
 ### 21. Picture-in-picture
 
@@ -658,7 +736,7 @@ branch, one small commit per feature or group of features.
 | 22.09 | Caret browsing | ⏳ | |
 | 22.10 | Focus indicators | ⏳ | |
 | 22.11 | Text-to-speech | ⏳ | |
-| 22.12 | Caption support | ⏳ | |
+| 22.12 | Caption support | 🧪 | Media controls -> captions (20.07) |
 | 22.13 | Accessibility tree | ⏳ | |
 | 22.14 | Color/contrast assistance | ⏳ | |
 | 22.15 | Keyboard shortcuts | ✅ | See the shortcut table above; the full list is in Help (F1) |
@@ -670,7 +748,7 @@ branch, one small commit per feature or group of features.
 |---|---|---|---|
 | 23.01 | Light mode | 🟢 | |
 | 23.02 | Dark mode | 🟢 | |
-| 23.03 | System theme | ⏳ | |
+| 23.03 | System theme | 🟢 | Settings -> Appearance -> Mode: Follow Windows (changes along with Windows) |
 | 23.04 | Custom themes | 🟢 | |
 | 23.05 | Custom background | 🟢 | Wallpapers |
 | 23.06 | Custom new-tab wallpaper | 🟢 | |
@@ -681,7 +759,7 @@ branch, one small commit per feature or group of features.
 | 23.11 | Normal mode | 🟢 | |
 | 23.12 | Touch mode | ⏳ | |
 | 23.13 | Sidebar | 🟢 | Rail + side panel |
-| 23.14 | Vertical tabs | ⏳ | |
+| 23.14 | Vertical tabs | ✅ | See 2.30 |
 | 23.15 | Custom fonts | ⏳ | |
 | 23.16 | Custom UI scaling | 🟢 | Interface size |
 
@@ -717,9 +795,9 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 26.01 | Save session | ⏳ | |
+| 26.01 | Save session | ✅ | Each window's tabs are saved as they change (3.10) |
 | 26.02 | Restore session | 🟡 | Last session on launch |
-| 26.03 | Automatic session recovery | ⏳ | |
+| 26.03 | Automatic session recovery | 🟡 | With "Keep tabs when Kessel closes" on, tabs come back after a crash too: they're saved as they change |
 | 26.04 | Crash recovery | 🟡 | Toolbar watchdog |
 | 26.05 | Session snapshots | ⏳ | |
 | 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
@@ -733,29 +811,29 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 27.01 | Workspace creation | ⏳ | |
-| 27.02 | Workspace switching | ⏳ | |
-| 27.03 | Workspace tabs | ⏳ | |
-| 27.04 | Workspace-specific themes | ⏳ | |
-| 27.05 | Workspace-specific tab groups | ⏳ | |
-| 27.06 | Workspace persistence | ⏳ | |
-| 27.07 | Workspace sync | ⏳ | |
+| 27.01 | Workspace creation | ✅ | The side panel's Workspaces page, or Settings -> Side panel: a name, an icon and a colour |
+| 27.02 | Workspace switching | ✅ | The workspace buttons at the top of the rail (right-click for more), or the side panel |
+| 27.03 | Workspace tabs | ✅ | Each window shows one workspace's tabs; the others' tabs sleep (no memory) until you come back. The tab menu moves tabs between them |
+| 27.04 | Workspace-specific themes | 🟡 | A workspace's colour is its window's accent while you're in it |
+| 27.05 | Workspace-specific tab groups | ✅ | Tab groups go with their workspace's tabs |
+| 27.06 | Workspace persistence | ✅ | Every window's workspaces and their tabs come back with the session (Keep tabs when Kessel closes) |
+| 27.07 | Workspace sync | ⏭️ | Needs a sync server Kessel doesn't have |
 
 ### 28. Sidebar
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 28.01 | Bookmarks | ⏳ | |
-| 28.02 | History | ⏳ | |
+| 28.01 | Bookmarks | ✅ | Side panel -> Bookmarks: search, open (Ctrl/middle click: new tab), add the page you're on, remove |
+| 28.02 | History | ✅ | Side panel -> History: by day, search, open, remove, more as you scroll |
 | 28.03 | Downloads | 🟢 | |
-| 28.04 | Reading list | ⏳ | |
-| 28.05 | Notes | ⏳ | |
-| 28.06 | AI assistant | ⏳ | |
+| 28.04 | Reading list | ✅ | Side panel -> Reading list |
+| 28.05 | Notes | ✅ | Side panel -> Notes: write, pin, link to the page you're on, search; saved as you type |
+| 28.06 | AI assistant | ✅ | ChatGPT, Claude, Gemini, Copilot, Perplexity, Le Chat or your own (Settings -> Side panel) in the side panel; right-click "Ask AI about this" asks it |
 | 28.07 | Messaging services | 🟢 | Any pinned site opens in the side panel |
 | 28.08 | Web apps | 🟢 | Pinned sites |
-| 28.09 | Extensions | ⏳ | |
-| 28.10 | Search | ⏳ | |
-| 28.11 | Workspaces | ⏳ | |
+| 28.09 | Extensions | ✅ | Side panel -> Extensions; an extension's side panel page (or popup) opens in the side panel |
+| 28.10 | Search | ✅ | Side panel -> Search: open tabs, bookmarks, reading list, notes and history at once; Enter searches the web in the side panel |
+| 28.11 | Workspaces | ✅ | Side panel -> Workspaces, and their buttons at the top of the rail |
 
 ### 29. Developer tools
 
@@ -850,37 +928,37 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 35.01 | GPU rendering | ⏳ | |
-| 35.02 | Hardware video decoding | ⏳ | |
-| 35.03 | Hardware video encoding | ⏳ | |
-| 35.04 | WebGL acceleration | ⏳ | |
-| 35.05 | WebGPU | ⏳ | |
-| 35.06 | GPU rasterization | ⏳ | |
-| 35.07 | Compositor acceleration | ⏳ | |
-| 35.08 | Battery-aware GPU behavior | ⏳ | |
-| 35.09 | Graphics diagnostics | ⏳ | |
+| 35.01 | GPU rendering | 🧪 | On by default; Settings -> Performance -> Use hardware acceleration (off draws everything with the processor; applies at the next start) |
+| 35.02 | Hardware video decoding | 🧪 | kessel://gpu: for each video format, whether the graphics card or the processor decodes it |
+| 35.03 | Hardware video encoding | 🧪 | Used by video calls; kessel://gpu shows which formats the graphics card encodes |
+| 35.04 | WebGL acceleration | 🧪 | kessel://gpu shows the renderer and warns about a software fallback |
+| 35.05 | WebGPU | 🧪 | The engine's WebGPU; kessel://gpu shows the power-saving and high-performance adapters |
+| 35.06 | GPU rasterization | 🧪 | The engine's, with hardware acceleration on |
+| 35.07 | Compositor acceleration | 🧪 | The engine's, with hardware acceleration on (off: software compositing) |
+| 35.08 | Battery-aware GPU behavior | 🟡 | Settings -> Performance -> Graphics card: Automatic picks the power-saving card when Kessel starts on battery -- decided at start, not while running; or always power-saving / high-performance |
+| 35.09 | Graphics diagnostics | 🧪 | kessel://gpu (Settings -> Performance, Help, or type "gpu" in the address bar): acceleration, renderer, WebGL/WebGPU, display, video and audio formats, DRM, Web Audio, WebRTC; Copy report |
 
 ### 36. Performance
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 36.01 | Memory saver | ⏳ | |
+| 36.01 | Memory saver | ✅ | Sleeping tabs and "Save memory in background tabs" (2.39, 2.44); Settings -> Performance |
 | 36.02 | Sleeping tabs | 🟢 | |
 | 36.03 | Energy saver | ⏳ | |
-| 36.04 | CPU throttling | ⏳ | |
-| 36.05 | Background-tab throttling | ⏳ | |
-| 36.06 | Hardware acceleration | ⏳ | |
+| 36.04 | CPU throttling | ✅ | Background tabs are paused after a while (2.41) |
+| 36.05 | Background-tab throttling | ✅ | See 2.44 |
+| 36.06 | Hardware acceleration | 🧪 | See 35.01 |
 | 36.07 | Cache optimization | ⏳ | |
 | 36.08 | Prefetching | ⏳ | |
 | 36.09 | Pre-rendering | ⏳ | |
-| 36.10 | DNS caching | ⏳ | |
-| 36.11 | Connection reuse | ⏳ | |
-| 36.12 | HTTP/2 multiplexing | ⏳ | |
-| 36.13 | HTTP/3/QUIC | ⏳ | |
+| 36.10 | DNS caching | 🌐 | The engine's (Chromium's) network stack |
+| 36.11 | Connection reuse | 🌐 | The engine's network stack |
+| 36.12 | HTTP/2 multiplexing | 🌐 | The engine's network stack |
+| 36.13 | HTTP/3/QUIC | 🌐 | The engine's network stack |
 | 36.14 | Image optimization | ⏳ | |
-| 36.15 | Lazy loading | ⏳ | |
-| 36.16 | Process management | ⏳ | |
-| 36.17 | Site isolation | ⏳ | |
+| 36.15 | Lazy loading | 🌐 | loading="lazy" images and frames |
+| 36.16 | Process management | 🌐 | The engine's processes; Shift+Esc shows them (39.16) |
+| 36.17 | Site isolation | 🌐 | The engine's site isolation |
 
 ### 37. Cache
 
@@ -921,16 +999,16 @@ branch, one small commit per feature or group of features.
 |---|---|---|---|
 | 39.01 | Browser version | 🟢 | Settings -> About |
 | 39.02 | Engine version | ✅ | Help and Settings -> About show the WebView2 version |
-| 39.03 | OS information | ⏳ | |
-| 39.04 | GPU information | ⏳ | |
-| 39.05 | CPU information | ⏳ | |
+| 39.03 | OS information | 🟡 | kessel://gpu: Windows and the architecture; not the Windows version yet |
+| 39.04 | GPU information | 🧪 | kessel://gpu: the renderer, WebGL and WebGPU adapters |
+| 39.05 | CPU information | 🟡 | kessel://gpu: the number of processor threads |
 | 39.06 | Memory information | ⏳ | |
-| 39.07 | Installed codecs | ⏳ | |
+| 39.07 | Installed codecs | 🧪 | kessel://gpu: video and audio formats, hardware decoding, DRM |
 | 39.08 | Supported APIs | ⏳ | |
 | 39.09 | Network information | ⏳ | |
 | 39.10 | Connection status | ⏳ | |
 | 39.11 | Crash reports | ⏳ | |
-| 39.12 | Diagnostics page | ⏳ | |
+| 39.12 | Diagnostics page | 🟡 | kessel://gpu covers graphics and media |
 | 39.13 | Certificate information | ⏳ | |
 | 39.14 | Storage usage | ⏳ | |
 | 39.15 | Site permissions | ⏳ | |
@@ -1008,13 +1086,13 @@ branch, one small commit per feature or group of features.
 | 44.02 | Keyboard shortcuts | ✅ | See the shortcut table |
 | 44.03 | Full developer tools | 🌐 | Edge DevTools (F12) |
 | 44.04 | Extensions | ⏳ | |
-| 44.05 | Vertical tabs | ⏳ | |
+| 44.05 | Vertical tabs | ✅ | See 2.30 |
 | 44.06 | Sidebars | 🟢 | |
 | 44.07 | Workspaces | ⏳ | |
 | 44.08 | Profiles | 🟡 | Accounts |
 | 44.09 | Window management | ⏳ | |
 | 44.10 | Desktop notifications | ⏳ | |
-| 44.11 | Hardware acceleration | ⏳ | |
+| 44.11 | Hardware acceleration | 🧪 | See 35.01 |
 | 44.12 | Advanced downloads | ⏳ | |
 | 44.13 | Advanced DevTools | 🌐 | Edge DevTools (F12) |
 
@@ -1048,7 +1126,7 @@ branch, one small commit per feature or group of features.
 | 45.24 | Screenshot | ⏳ | |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
-| 45.27 | Tab grouping | ⏳ | |
+| 45.27 | Tab grouping | ✅ | See 2.19 |
 | 45.28 | Custom keyboard shortcuts | ✅ | Settings -> Keyboard & Mouse |
 
 ### 46. Mouse / trackpad
@@ -1063,17 +1141,17 @@ branch, one small commit per feature or group of features.
 | 46.06 | Mouse gestures | ⏳ | |
 | 46.07 | Trackpad gestures | ⏳ | |
 | 46.08 | Two-finger navigation | ⏳ | |
-| 46.09 | Pinch zoom | ⏳ | |
+| 46.09 | Pinch zoom | ✅ | Pinch on a touchpad or touchscreen: the engine's zoom, kept per site (22.01) |
 | 46.10 | Swipe navigation | ⏳ | |
-| 46.11 | Context menus | ⏳ | |
+| 46.11 | Context menus | 🌐 | On pages: the engine's menu; on tabs, groups and the tab strip: Kessel's own (2.x) |
 | 46.12 | Link preview | ⏳ | |
 
 ### 47. Context menus
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 47.01 | Page: back, forward, reload | ⏳ | |
-| 47.02 | Page: save, print | ⏳ | |
+| 47.01 | Page: back, forward, reload | 🌐 | The engine's page menu |
+| 47.02 | Page: save, print | 🌐 | The engine's page menu: Save as, Print |
 | 47.03 | Page: translate, screenshot | ⏳ | |
 | 47.04 | Link: open in new tab / new window / private window | ⏳ | |
 | 47.05 | Link: copy link, copy link text | ⏳ | |
@@ -1087,14 +1165,14 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 48.01 | AI page summarization | ⏳ | |
-| 48.02 | AI webpage explanation | ⏳ | |
-| 48.03 | Ask about selected text | ⏳ | |
+| 48.01 | AI page summarization | 🟡 | Right-click a page: Ask AI about this page -- your assistant (side panel) is asked to summarize it |
+| 48.02 | AI webpage explanation | 🟡 | The same, then ask it anything about the page |
+| 48.03 | Ask about selected text | ✅ | Pick text, right-click: Ask AI about this -- the text goes to your assistant |
 | 48.04 | AI search | ⏳ | |
 | 48.05 | AI tab organization | ⏳ | |
 | 48.06 | AI tab grouping | ⏳ | |
 | 48.07 | AI history search | ⏳ | |
-| 48.08 | AI browsing assistant | ⏳ | |
+| 48.08 | AI browsing assistant | ✅ | Your AI assistant in the side panel, beside the page |
 | 48.09 | AI writing assistant | ⏳ | |
 | 48.10 | AI rewriting | ⏳ | |
 | 48.11 | AI translation | ⏳ | |
@@ -1200,7 +1278,7 @@ branch, one small commit per feature or group of features.
 |---|---|---|---|
 | 54.01 | Crash detection | 🟡 | Toolbar only |
 | 54.02 | Automatic recovery | 🟡 | Toolbar only |
-| 54.03 | Session restoration | ⏳ | |
+| 54.03 | Session restoration | 🟡 | As 26.03 |
 | 54.04 | Crash reports | ⏳ | |
 | 54.05 | Error pages | ⏳ | |
 | 54.06 | Safe mode | ⏳ | |
@@ -1327,7 +1405,7 @@ branch, one small commit per feature or group of features.
 | 61.10 | Download manager | 🟡 | |
 | 61.11 | History database | 🟢 | |
 | 61.12 | Bookmark database | 🟢 | |
-| 61.13 | DevTools | ⏳ | |
+| 61.13 | DevTools | 🌐 | F12: the engine's DevTools (section 29) |
 | 61.14 | Crash reporter | ⏳ | |
 | 61.15 | Update system | ⏳ | |
 | 61.16 | Sandbox, site-isolation system, IPC system | ⏳ | |

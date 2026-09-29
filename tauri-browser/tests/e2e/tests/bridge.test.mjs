@@ -22,7 +22,9 @@ export const tests = [
       const url = `${site.origin}/page/Long?${"a".repeat(70_000)}`;
       await k.invoke("navigate", { id: tab.id, url });
       const page = await k.page((t) => t.url.startsWith(`${site.origin}/page/Long`));
-      await page.waitFor(`document.readyState === 'complete'`);
+      // (The DevTools list shows the new address a moment before the old
+      // page is gone: wait for the new page itself.)
+      await page.waitFor(`location.pathname === '/page/Long' && document.readyState === 'complete'`);
       await page.evaluate(`chrome.webview.postMessage('not an IPC message'); window.ipc && window.ipc.postMessage('{}'); 1`);
       await sleep(800);
       assert.equal((await k.tabs()).length, 1, "Kessel is still running");
@@ -83,7 +85,7 @@ export const tests = [
       const url = `${site.origin}/page/Sneaky`;
       await k.invoke("navigate", { id: tab.id, url });
       const page = await k.page(url);
-      await page.waitFor(`document.readyState === 'complete'`);
+      await page.waitFor(`location.pathname === '/page/Sneaky' && document.readyState === 'complete'`);
       // A frame first.
       await page.evaluate(`(() => { const f = document.createElement('iframe'); f.id = 'framed'; f.src = ${JSON.stringify(`${appOrigin}/settings.html`)}; document.body.prepend(f); })()`);
       await sleep(1500);
@@ -106,7 +108,7 @@ export const tests = [
       const url = `${site.origin}/page/Forger`;
       await k.invoke("navigate", { id: tab.id, url });
       const page = await k.page(url);
-      await page.waitFor(`document.readyState === 'complete'`);
+      await page.waitFor(`location.pathname === '/page/Forger' && document.readyState === 'complete'`);
       await page.evaluate(`chrome.webview.postMessage({ k: 'guess', t: 'link', d: { url: '${site.origin}/page/popup', ctrl: true, shift: false, button: 0 } }); 1`);
       await page.evaluate(`chrome.webview.postMessage({ t: 'key', d: { vk: 84, ctrl: true } }); 1`);
       await sleep(1000);

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Site info</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The address bar's lock (site info): a popup webview (see toggle_popup
+       in main.rs) with the connection, the certificate, and the site's
+       cookies and data (privacy.rs). */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 14px); }
+    html.glass body { background: #0a1433; border: none; }
+    #wallpaper { display: none; }
+    html.glass #wallpaper { display: block; position: fixed; inset: -40px; filter: blur(28px) saturate(1.6); pointer-events: none; }
+    html.glass #sheet { position: fixed; inset: 0; background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 88%, transparent); box-shadow: var(--lg-edge); }
+    main { position: relative; height: 100%; padding: 14px; display: flex; flex-direction: column; gap: 10px; color: var(--text); box-sizing: border-box; }
+    html.glass main { color: var(--lg-text); }
+    h1 { font-size: 14px; margin: 0; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; line-height: 1.45; }
+    .status .glyph { flex-shrink: 0; width: 28px; height: 28px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    .status.secure .glyph { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+    .status.insecure .glyph { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+    .status.neutral .glyph { color: var(--text-dim); background: var(--surface-2); }
+    .status b { display: block; font-size: 12.5px; }
+    .status span { opacity: 0.7; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2px 0; width: 100%; }
+    html.glass hr { border-color: rgba(255, 255, 255, 0.12); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+    .row .muted { opacity: 0.65; font-size: 11.5px; }
+    .rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .rules button { height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: inherit; font-size: 11.5px; cursor: pointer; }
+    html.glass .rules button { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); }
+    .rules button.on, html.glass .rules button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, transparent); font-weight: 600; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; }
+    .actions button { display: flex; align-items: center; gap: 7px; justify-content: center; height: 32px; border-radius: 9px; border: 1px solid var(--border);
+      background: var(--surface-2); color: inherit; font-size: 12px; cursor: pointer; }
+    html.glass .actions button { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.14); }
+    .actions button:hover { background: var(--surface-hover); }
+    .actions button.wide { grid-column: span 2; }
+    .note { font-size: 11.5px; opacity: 0.7; line-height: 1.4; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="wallpaper" data-wallpaper></div>
+  <div id="sheet"></div>
+  <main>
+    <h1 id="host"></h1>
+    <div class="status" id="status"><div class="glyph"></div><div><b></b><span></span></div></div>
+    <div class="note" id="cert-note" hidden>You chose to go on to this site despite its certificate problem (until Kessel restarts).</div>
+    <hr />
+    <div class="row"><span>Cookies</span><span class="muted" id="cookie-count"></span></div>
+    <div class="rules" id="rules">
+      <button data-rule="allow">Allow</button>
+      <button data-rule="session">Until I close</button>
+      <button data-rule="block">Block</button>
+    </div>
+    <div class="note" id="rule-note"></div>
+    <div class="actions">
+      <button id="cert-btn"></button>
+      <button id="cookies-btn"></button>
+      <button id="clear-btn" class="wide"></button>
+    </div>
+  </main>
+  <script type="module" src="siteinfo.js"></script>
+</body>
+</html>

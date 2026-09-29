@@ -435,6 +435,7 @@ html.tab-settling #tabs > * { transition: none !important; }
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 #menu-cluster > button:hover { background: var(--surface-hover); color: var(--text); }
+#menu-cluster > #media-btn.playing { color: var(--accent); }
 
 /* The page's zoom, when it isn't the default; click to reset. */
 #zoom-btn {
@@ -482,7 +483,19 @@ html.fullscreen #progress-bar { display: none !important; }
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
-#lock-icon { color: var(--success); flex-shrink: 0; display: flex; }
+/* The site info button (see updateSiteButton): a lock on a secure page, a
+   red "Not secure" chip on plain http. */
+#lock-icon {
+  color: var(--success); flex-shrink: 0; display: flex; align-items: center; gap: 5px;
+  background: none; border: none; padding: 3px 5px; margin: 0 -5px; border-radius: 7px; font: inherit; cursor: pointer;
+}
+#lock-icon:not(:disabled):hover { background: var(--surface-hover); }
+#lock-icon:disabled { cursor: default; color: var(--text-faint); }
+#lock-icon[data-state="local"], #lock-icon[data-state="file"] { color: var(--text-dim); }
+#lock-icon[data-state="insecure"], #lock-icon[data-state="danger"] {
+  color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); margin: 0 2px 0 -3px; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+#lock-icon[data-state="danger"]:disabled { color: var(--danger); }
 #url-input {
   flex: 1;
   border: none;
@@ -496,7 +509,7 @@ html.fullscreen #progress-bar { display: none !important; }
 }
 #url-input::placeholder { color: var(--text-faint); }
 
-#engine-btn, #star-btn, #share-btn {
+#engine-btn, #star-btn, #share-btn, #ext-btn {
   background: none;
   border: none;
   color: var(--text-dim);
@@ -510,8 +523,77 @@ html.fullscreen #progress-bar { display: none !important; }
   justify-content: center;
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
-#share-btn[hidden], #home-btn[hidden] { display: none; }
-#engine-btn:hover, #star-btn:hover, #share-btn:hover { background: var(--surface-hover); color: var(--text); }
+#share-btn[hidden], #home-btn[hidden], #ext-btn[hidden], #store-add-btn[hidden] { display: none; }
+#engine-btn:hover, #star-btn:hover, #share-btn:hover, #ext-btn:hover { background: var(--surface-hover); color: var(--text); }
+#ext-btn.panel-open { color: var(--accent); }
+/* On a store's extension page: "Add to Kessel" (or that it's in). */
+#store-add-btn {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  margin: 0 2px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: filter var(--dur-fast) ease, transform var(--dur-fast) ease;
+}
+#store-add-btn:hover { filter: brightness(1.08); }
+#store-add-btn:active { transform: scale(0.96); }
+#store-add-btn.installed { background: var(--surface-2); color: var(--text-dim); }
+
+/* --- Workspaces and the side panel's pages on the rail --------------------------------- */
+#rail-workspaces, #rail-panels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--k-rail-gap, 6px);
+}
+#rail-workspaces[hidden] { display: none; }
+#rail-workspaces { padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.ws-btn {
+  width: var(--k-rail-icon, 36px);
+  height: var(--k-rail-icon, 36px);
+  border-radius: var(--k-btn-radius, 10px);
+  border: 2px solid transparent;
+  background: color-mix(in srgb, var(--ws, var(--accent)) 20%, var(--surface-2));
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.ws-btn:hover { transform: scale(1.05); }
+.ws-btn:active { transform: scale(0.94); }
+.ws-btn.current { border-color: var(--ws, var(--accent)); background: color-mix(in srgb, var(--ws, var(--accent)) 36%, var(--surface-2)); }
+.ws-btn .ws-count {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 #star-btn.starred { color: var(--warning); }
 #star-btn.starred:hover { transform: scale(1.1); }
 

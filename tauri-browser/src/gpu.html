@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-page="gpu">
+<head>
+  <meta charset="UTF-8" />
+  <title>Graphics &amp; media</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    /* kessel://gpu (gpu.js): hardware acceleration, the graphics card, the
+       display, and which video and audio formats play -- and whether the
+       graphics card does the work -- like chrome://gpu and chrome://media. */
+    body { height: 100vh; overflow-y: auto; margin: 0; }
+    .content { max-width: 820px; margin: 0 auto; padding: 30px 40px 120px; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+    header h1 { font-size: 21px; margin: 0; flex: 1; display: flex; align-items: center; gap: 10px; }
+    header h1 svg { color: var(--accent); }
+    .sub { color: var(--text-faint); font-size: 12.5px; margin: 0 0 22px; line-height: 1.5; }
+    .notice { display: flex; gap: 10px; align-items: center; padding: 11px 14px; border-radius: 11px; margin: 0 0 18px; font-size: 12.5px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+    .notice[hidden] { display: none; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin: 26px 0 8px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .row { display: grid; grid-template-columns: 210px 1fr auto; gap: 14px; align-items: center; padding: 9px 14px; font-size: 12.5px; border-top: 1px solid var(--border); }
+    .row:first-child { border-top: none; }
+    .row .label { color: var(--text-dim); }
+    .row .value { user-select: text; overflow-wrap: anywhere; }
+    .row .value small { display: block; color: var(--text-faint); font-size: 11px; margin-top: 2px; }
+    .badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .badge.ok { color: #2fbf71; background: color-mix(in srgb, #2fbf71 14%, transparent); }
+    .badge.warn { color: #e9a23b; background: color-mix(in srgb, #e9a23b 14%, transparent); }
+    .badge.off { color: var(--text-faint); background: var(--surface-hover); }
+    .codecs { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .codecs th { text-align: left; font-weight: 600; color: var(--text-faint); font-size: 11px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+    .codecs td { padding: 8px 14px; border-top: 1px solid var(--border); }
+    .codecs tr:first-child td { border-top: none; }
+    .codecs td small { color: var(--text-faint); }
+    #loading { color: var(--text-faint); font-size: 12.5px; }
+  </style>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <h1><span id="logo"></span>Graphics &amp; media</h1>
+      <button class="btn sm" id="settings-btn"></button>
+      <button class="btn sm" id="copy-btn"></button>
+    </header>
+    <p class="sub">What Kessel's engine gets from this PC's graphics card and display, and which video and audio formats it plays. "Graphics card" means the format is decoded (or encoded) in hardware: smoother, and easier on the battery.</p>
+    <div class="notice" id="restart" hidden></div>
+    <div id="loading">Checking…</div>
+    <div id="sections"></div>
+  </div>
+  <script type="module" src="gpu.js"></script>
+</body>
+</html>
