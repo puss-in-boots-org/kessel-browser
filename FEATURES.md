@@ -11,6 +11,7 @@ branch, one small commit per feature or group of features.
 | ✅ | Built on this branch and tested |
 | 🟢 | Already in Kessel before this branch (checked) |
 | 🌐 | Provided by the engine (WebView2 / Chromium) itself; verified it works in Kessel |
+| 🧪 | Built, with unit tests and an end-to-end test written; waiting for that test's first run on Windows |
 | 🟡 | Partly done -- see the note |
 | ⏳ | Not done yet |
 | ⏭️ | Skipped -- see the note for why (needs a server, mobile only, not possible in WebView2...) |
@@ -27,6 +28,83 @@ branch, one small commit per feature or group of features.
 - Unit tests: `scripts\cargo-msvc.cmd test --target-dir target\e2e` (Rust) and
   `node --test "tauri-browser/tests/unit/*.test.mjs"` (JavaScript).
 - Pick the first ⏳ row below, build it, test it, mark it, commit.
+- Mark rows with `node scripts/mark-feature.mjs <row> <status> [note]` (e.g.
+  `node scripts/mark-feature.mjs 20.03 done`): it also refreshes the Progress
+  table below. Once a 🧪 row's end-to-end test has passed on Windows, mark it ✅.
+
+<!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
+## Progress
+
+**37% overall** -- 325 done (✅ 🟢 🌐), 31 built and waiting for their Windows test run (🧪), 42 partly done (🟡), 626 to do (⏳), 1 skipped (⏭️), of 1025.
+
+| Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
+|---|---:|---:|---:|---:|---:|---|
+| [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
+| [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
+| [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
+| [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
+| [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 13 |  | `███░░░░░░░` 26% |
+| [5. History](#5-history) | 14 |  |  | 2 |  | `█████████░` 88% |
+| [6. Downloads](#6-downloads) | 5 |  | 1 | 16 |  | `███░░░░░░░` 25% |
+| [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 26 |  | `██░░░░░░░░` 24% |
+| [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
+| [9. Sync](#9-sync) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
+| [10. Privacy](#10-privacy) | 14 |  |  | 25 |  | `████░░░░░░` 36% |
+| [11. Security](#11-security) | 13 |  |  | 11 |  | `█████░░░░░` 54% |
+| [12. DNS & networking](#12-dns--networking) | 9 |  |  | 14 |  | `████░░░░░░` 39% |
+| [13. Website permissions](#13-website-permissions) |  |  |  | 20 |  | `░░░░░░░░░░` 0% |
+| [14. Site-specific settings](#14-site-specific-settings) |  |  |  | 22 |  | `░░░░░░░░░░` 0% |
+| [15. Extensions / add-ons](#15-extensions--add-ons) |  |  |  | 17 |  | `░░░░░░░░░░` 0% |
+| [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
+| [17. Reading & research](#17-reading--research) | 3 |  |  | 19 |  | `█░░░░░░░░░` 14% |
+| [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [19. PDF](#19-pdf) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
+| [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
+| [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
+| [22. Accessibility](#22-accessibility) | 3 | 1 | 1 | 11 |  | `███░░░░░░░` 28% |
+| [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
+| [24. Search engines](#24-search-engines) | 2 |  |  | 7 |  | `██░░░░░░░░` 22% |
+| [25. Startup behavior](#25-startup-behavior) | 4 |  | 1 | 4 |  | `█████░░░░░` 50% |
+| [26. Session management](#26-session-management) | 1 |  | 5 | 5 |  | `███░░░░░░░` 32% |
+| [27. Browser workspaces](#27-browser-workspaces) |  |  |  | 7 |  | `░░░░░░░░░░` 0% |
+| [28. Sidebar](#28-sidebar) | 3 |  |  | 8 |  | `███░░░░░░░` 27% |
+| [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
+| [30. Web platform support](#30-web-platform-support) |  |  |  | 6 |  | `░░░░░░░░░░` 0% |
+| [31. Progressive Web Apps](#31-progressive-web-apps) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
+| [32. Notifications](#32-notifications) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [33. Clipboard](#33-clipboard) |  |  |  | 7 |  | `░░░░░░░░░░` 0% |
+| [34. File system](#34-file-system) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [35. Hardware acceleration](#35-hardware-acceleration) |  | 8 | 1 |  |  | `█████████░` 94% |
+| [36. Performance](#36-performance) | 11 | 1 |  | 5 |  | `███████░░░` 71% |
+| [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
+| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 3 | 2 | 3 | 8 |  | `████░░░░░░` 41% |
+| [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [41. Screenshots & capture](#41-screenshots--capture) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
+| [42. Sharing](#42-sharing) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [43. Mobile-specific features](#43-mobile-specific-features) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
+| [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 |  |  | 3 |  | `█████████░` 89% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 |  |  | 6 |  | `█████░░░░░` 50% |
+| [47. Context menus](#47-context-menus) | 2 |  |  | 8 |  | `██░░░░░░░░` 20% |
+| [48. AI features](#48-ai-features) |  |  |  | 20 |  | `░░░░░░░░░░` 0% |
+| [49. Shopping](#49-shopping) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 8 |  | `████░░░░░░` 43% |
+| [52. Import / export](#52-import--export) | 4 |  |  | 13 |  | `██░░░░░░░░` 24% |
+| [53. Updates](#53-updates) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
+| [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 7 |  | `███░░░░░░░` 29% |
+| [56. Account system](#56-account-system) |  |  |  | 14 |  | `░░░░░░░░░░` 0% |
+| [57. Browser lock](#57-browser-lock) | 1 |  |  | 9 |  | `█░░░░░░░░░` 10% |
+| [58. Search / history intelligence](#58-search--history-intelligence) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
+| [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
+| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 11 |  | `███░░░░░░░` 32% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 |  | 1 | 30 |  | `░░░░░░░░░░` 5% |
+
+Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
+<!-- progress:end -->
 
 ## Keyboard shortcuts (the requested table)
 
@@ -268,7 +346,7 @@ branch, one small commit per feature or group of features.
 | 7.04 | Generate strong passwords | 🟢 | |
 | 7.05 | Password editing | 🟢 | |
 | 7.06 | Password deletion | 🟢 | |
-| 7.07 | Password search | ⏳ | |
+| 7.07 | Password search | 🟢 | The Passwords page's search box |
 | 7.08 | Password import | 🟢 | Browsers and CSV |
 | 7.09 | Password export | ⏳ | |
 | 7.10 | Password synchronization | ⏳ | |
@@ -371,8 +449,8 @@ branch, one small commit per feature or group of features.
 | 10.21 | Storage partitioning | ⏳ | |
 | 10.22 | First-party isolation | ⏳ | |
 | 10.23 | Total cookie protection | ⏳ | |
-| 10.24 | Private browsing | ⏳ | |
-| 10.25 | Incognito mode | ⏳ | |
+| 10.24 | Private browsing | ✅ | Private windows (3.02): Ctrl+Shift+N |
+| 10.25 | Incognito mode | ✅ | Same as private windows (3.03) |
 | 10.26 | Automatic private sessions | ⏳ | |
 | 10.27 | Clear data on exit | ⏳ | |
 | 10.28 | Per-site data deletion | ⏳ | |
@@ -609,26 +687,26 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 20.01 | HTML5 video | ⏳ | |
-| 20.02 | HTML5 audio | ⏳ | |
-| 20.03 | Media controls | ⏳ | |
-| 20.04 | Fullscreen video | ⏳ | |
-| 20.05 | Picture-in-picture | ⏳ | |
-| 20.06 | Multiple audio tracks | ⏳ | |
-| 20.07 | Subtitles | ⏳ | |
-| 20.08 | Closed captions | ⏳ | |
-| 20.09 | Playback speed | ⏳ | |
-| 20.10 | Media session controls | ⏳ | |
-| 20.11 | Hardware acceleration | ⏳ | |
-| 20.12 | Codec support | ⏳ | |
-| 20.13 | HDR | ⏳ | |
-| 20.14 | Wide-color support | ⏳ | |
-| 20.15 | Spatial audio | ⏳ | |
-| 20.16 | Web Audio | ⏳ | |
-| 20.17 | WebRTC | ⏳ | |
-| 20.18 | Screen sharing | ⏳ | |
-| 20.19 | Camera streaming | ⏳ | |
-| 20.20 | Microphone streaming | ⏳ | |
+| 20.01 | HTML5 video | 🧪 | The engine's player; Kessel's media controls work with every `<video>` |
+| 20.02 | HTML5 audio | 🧪 | The engine's player; Kessel's media controls work with every `<audio>` |
+| 20.03 | Media controls | 🧪 | The music-note button beside the menu (shown once a tab has played sound): every such tab of the window with title, artist, artwork, play/pause, ±10 s, a seek bar, previous/next, mute -- without switching tabs. Also a command ("media controls") |
+| 20.04 | Fullscreen video | 🟢 | A video's (or any page's) fullscreen fills the whole screen |
+| 20.05 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture: the engine's floating video window |
+| 20.06 | Multiple audio tracks | 🧪 | Switched on in the engine (AudioVideoTracks); media controls -> audio track, when a video has more than one |
+| 20.07 | Subtitles | 🧪 | WebVTT subtitle tracks, drawn by the engine; media controls -> captions menu turns them on and off |
+| 20.08 | Closed captions | 🧪 | Caption tracks, like subtitles (20.07) |
+| 20.09 | Playback speed | 🧪 | Media controls -> speed: 0.5× to 3× (a site's own speed setting, 0.25× to 4×, is kept) |
+| 20.10 | Media session controls | 🧪 | The page's Media Session: its title, artist and artwork show in the media controls, and its own previous/next/seek buttons are what they press |
+| 20.11 | Hardware acceleration | 🧪 | Video is decoded by the graphics card; kessel://gpu shows which formats are, on this PC |
+| 20.12 | Codec support | 🧪 | The engine's: H.264, VP8, VP9, AV1, AAC, MP3, Opus, Vorbis, FLAC, WAV; HEVC where Windows and the graphics card have it. kessel://gpu lists what plays here |
+| 20.13 | HDR | 🧪 | HDR video plays in HDR when Windows' HDR is on; kessel://gpu shows whether it is |
+| 20.14 | Wide-color support | 🧪 | Display P3 / Rec. 2020 colour on screens that have it; kessel://gpu shows the screen's gamut |
+| 20.15 | Spatial audio | 🟡 | 3D (HRTF) Web Audio and surround output work; Windows Sonic / Dolby Atmos are turned on in Windows. kessel://gpu shows the output channels |
+| 20.16 | Web Audio | 🧪 | The engine's; kessel://gpu shows sample rate and latency |
+| 20.17 | WebRTC | 🧪 | The engine's (video calls); a site asks before using the camera or microphone |
+| 20.18 | Screen sharing | 🧪 | getDisplayMedia: the engine's screen / window / tab picker |
+| 20.19 | Camera streaming | 🧪 | The engine's; a site asks first. kessel://gpu counts the cameras |
+| 20.20 | Microphone streaming | 🧪 | The engine's; a site asks first. kessel://gpu counts the microphones |
 
 ### 21. Picture-in-picture
 
@@ -658,7 +736,7 @@ branch, one small commit per feature or group of features.
 | 22.09 | Caret browsing | ⏳ | |
 | 22.10 | Focus indicators | ⏳ | |
 | 22.11 | Text-to-speech | ⏳ | |
-| 22.12 | Caption support | ⏳ | |
+| 22.12 | Caption support | 🧪 | Media controls -> captions (20.07) |
 | 22.13 | Accessibility tree | ⏳ | |
 | 22.14 | Color/contrast assistance | ⏳ | |
 | 22.15 | Keyboard shortcuts | ✅ | See the shortcut table above; the full list is in Help (F1) |
@@ -670,7 +748,7 @@ branch, one small commit per feature or group of features.
 |---|---|---|---|
 | 23.01 | Light mode | 🟢 | |
 | 23.02 | Dark mode | 🟢 | |
-| 23.03 | System theme | ⏳ | |
+| 23.03 | System theme | 🟢 | Settings -> Appearance -> Mode: Follow Windows (changes along with Windows) |
 | 23.04 | Custom themes | 🟢 | |
 | 23.05 | Custom background | 🟢 | Wallpapers |
 | 23.06 | Custom new-tab wallpaper | 🟢 | |
@@ -681,7 +759,7 @@ branch, one small commit per feature or group of features.
 | 23.11 | Normal mode | 🟢 | |
 | 23.12 | Touch mode | ⏳ | |
 | 23.13 | Sidebar | 🟢 | Rail + side panel |
-| 23.14 | Vertical tabs | ⏳ | |
+| 23.14 | Vertical tabs | ✅ | See 2.30 |
 | 23.15 | Custom fonts | ⏳ | |
 | 23.16 | Custom UI scaling | 🟢 | Interface size |
 
@@ -717,9 +795,9 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 26.01 | Save session | ⏳ | |
+| 26.01 | Save session | ✅ | Each window's tabs are saved as they change (3.10) |
 | 26.02 | Restore session | 🟡 | Last session on launch |
-| 26.03 | Automatic session recovery | ⏳ | |
+| 26.03 | Automatic session recovery | 🟡 | With "Keep tabs when Kessel closes" on, tabs come back after a crash too: they're saved as they change |
 | 26.04 | Crash recovery | 🟡 | Toolbar watchdog |
 | 26.05 | Session snapshots | ⏳ | |
 | 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
@@ -850,37 +928,37 @@ branch, one small commit per feature or group of features.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 35.01 | GPU rendering | ⏳ | |
-| 35.02 | Hardware video decoding | ⏳ | |
-| 35.03 | Hardware video encoding | ⏳ | |
-| 35.04 | WebGL acceleration | ⏳ | |
-| 35.05 | WebGPU | ⏳ | |
-| 35.06 | GPU rasterization | ⏳ | |
-| 35.07 | Compositor acceleration | ⏳ | |
-| 35.08 | Battery-aware GPU behavior | ⏳ | |
-| 35.09 | Graphics diagnostics | ⏳ | |
+| 35.01 | GPU rendering | 🧪 | On by default; Settings -> Performance -> Use hardware acceleration (off draws everything with the processor; applies at the next start) |
+| 35.02 | Hardware video decoding | 🧪 | kessel://gpu: for each video format, whether the graphics card or the processor decodes it |
+| 35.03 | Hardware video encoding | 🧪 | Used by video calls; kessel://gpu shows which formats the graphics card encodes |
+| 35.04 | WebGL acceleration | 🧪 | kessel://gpu shows the renderer and warns about a software fallback |
+| 35.05 | WebGPU | 🧪 | The engine's WebGPU; kessel://gpu shows the power-saving and high-performance adapters |
+| 35.06 | GPU rasterization | 🧪 | The engine's, with hardware acceleration on |
+| 35.07 | Compositor acceleration | 🧪 | The engine's, with hardware acceleration on (off: software compositing) |
+| 35.08 | Battery-aware GPU behavior | 🟡 | Settings -> Performance -> Graphics card: Automatic picks the power-saving card when Kessel starts on battery -- decided at start, not while running; or always power-saving / high-performance |
+| 35.09 | Graphics diagnostics | 🧪 | kessel://gpu (Settings -> Performance, Help, or type "gpu" in the address bar): acceleration, renderer, WebGL/WebGPU, display, video and audio formats, DRM, Web Audio, WebRTC; Copy report |
 
 ### 36. Performance
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 36.01 | Memory saver | ⏳ | |
+| 36.01 | Memory saver | ✅ | Sleeping tabs and "Save memory in background tabs" (2.39, 2.44); Settings -> Performance |
 | 36.02 | Sleeping tabs | 🟢 | |
 | 36.03 | Energy saver | ⏳ | |
-| 36.04 | CPU throttling | ⏳ | |
-| 36.05 | Background-tab throttling | ⏳ | |
-| 36.06 | Hardware acceleration | ⏳ | |
+| 36.04 | CPU throttling | ✅ | Background tabs are paused after a while (2.41) |
+| 36.05 | Background-tab throttling | ✅ | See 2.44 |
+| 36.06 | Hardware acceleration | 🧪 | See 35.01 |
 | 36.07 | Cache optimization | ⏳ | |
 | 36.08 | Prefetching | ⏳ | |
 | 36.09 | Pre-rendering | ⏳ | |
-| 36.10 | DNS caching | ⏳ | |
-| 36.11 | Connection reuse | ⏳ | |
-| 36.12 | HTTP/2 multiplexing | ⏳ | |
-| 36.13 | HTTP/3/QUIC | ⏳ | |
+| 36.10 | DNS caching | 🌐 | The engine's (Chromium's) network stack |
+| 36.11 | Connection reuse | 🌐 | The engine's network stack |
+| 36.12 | HTTP/2 multiplexing | 🌐 | The engine's network stack |
+| 36.13 | HTTP/3/QUIC | 🌐 | The engine's network stack |
 | 36.14 | Image optimization | ⏳ | |
-| 36.15 | Lazy loading | ⏳ | |
-| 36.16 | Process management | ⏳ | |
-| 36.17 | Site isolation | ⏳ | |
+| 36.15 | Lazy loading | 🌐 | loading="lazy" images and frames |
+| 36.16 | Process management | 🌐 | The engine's processes; Shift+Esc shows them (39.16) |
+| 36.17 | Site isolation | 🌐 | The engine's site isolation |
 
 ### 37. Cache
 
@@ -921,16 +999,16 @@ branch, one small commit per feature or group of features.
 |---|---|---|---|
 | 39.01 | Browser version | 🟢 | Settings -> About |
 | 39.02 | Engine version | ✅ | Help and Settings -> About show the WebView2 version |
-| 39.03 | OS information | ⏳ | |
-| 39.04 | GPU information | ⏳ | |
-| 39.05 | CPU information | ⏳ | |
+| 39.03 | OS information | 🟡 | kessel://gpu: Windows and the architecture; not the Windows version yet |
+| 39.04 | GPU information | 🧪 | kessel://gpu: the renderer, WebGL and WebGPU adapters |
+| 39.05 | CPU information | 🟡 | kessel://gpu: the number of processor threads |
 | 39.06 | Memory information | ⏳ | |
-| 39.07 | Installed codecs | ⏳ | |
+| 39.07 | Installed codecs | 🧪 | kessel://gpu: video and audio formats, hardware decoding, DRM |
 | 39.08 | Supported APIs | ⏳ | |
 | 39.09 | Network information | ⏳ | |
 | 39.10 | Connection status | ⏳ | |
 | 39.11 | Crash reports | ⏳ | |
-| 39.12 | Diagnostics page | ⏳ | |
+| 39.12 | Diagnostics page | 🟡 | kessel://gpu covers graphics and media |
 | 39.13 | Certificate information | ⏳ | |
 | 39.14 | Storage usage | ⏳ | |
 | 39.15 | Site permissions | ⏳ | |
@@ -1008,13 +1086,13 @@ branch, one small commit per feature or group of features.
 | 44.02 | Keyboard shortcuts | ✅ | See the shortcut table |
 | 44.03 | Full developer tools | 🌐 | Edge DevTools (F12) |
 | 44.04 | Extensions | ⏳ | |
-| 44.05 | Vertical tabs | ⏳ | |
+| 44.05 | Vertical tabs | ✅ | See 2.30 |
 | 44.06 | Sidebars | 🟢 | |
 | 44.07 | Workspaces | ⏳ | |
 | 44.08 | Profiles | 🟡 | Accounts |
 | 44.09 | Window management | ⏳ | |
 | 44.10 | Desktop notifications | ⏳ | |
-| 44.11 | Hardware acceleration | ⏳ | |
+| 44.11 | Hardware acceleration | 🧪 | See 35.01 |
 | 44.12 | Advanced downloads | ⏳ | |
 | 44.13 | Advanced DevTools | 🌐 | Edge DevTools (F12) |
 
@@ -1048,7 +1126,7 @@ branch, one small commit per feature or group of features.
 | 45.24 | Screenshot | ⏳ | |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
-| 45.27 | Tab grouping | ⏳ | |
+| 45.27 | Tab grouping | ✅ | See 2.19 |
 | 45.28 | Custom keyboard shortcuts | ✅ | Settings -> Keyboard & Mouse |
 
 ### 46. Mouse / trackpad
@@ -1063,17 +1141,17 @@ branch, one small commit per feature or group of features.
 | 46.06 | Mouse gestures | ⏳ | |
 | 46.07 | Trackpad gestures | ⏳ | |
 | 46.08 | Two-finger navigation | ⏳ | |
-| 46.09 | Pinch zoom | ⏳ | |
+| 46.09 | Pinch zoom | ✅ | Pinch on a touchpad or touchscreen: the engine's zoom, kept per site (22.01) |
 | 46.10 | Swipe navigation | ⏳ | |
-| 46.11 | Context menus | ⏳ | |
+| 46.11 | Context menus | 🌐 | On pages: the engine's menu; on tabs, groups and the tab strip: Kessel's own (2.x) |
 | 46.12 | Link preview | ⏳ | |
 
 ### 47. Context menus
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 47.01 | Page: back, forward, reload | ⏳ | |
-| 47.02 | Page: save, print | ⏳ | |
+| 47.01 | Page: back, forward, reload | 🌐 | The engine's page menu |
+| 47.02 | Page: save, print | 🌐 | The engine's page menu: Save as, Print |
 | 47.03 | Page: translate, screenshot | ⏳ | |
 | 47.04 | Link: open in new tab / new window / private window | ⏳ | |
 | 47.05 | Link: copy link, copy link text | ⏳ | |
@@ -1200,7 +1278,7 @@ branch, one small commit per feature or group of features.
 |---|---|---|---|
 | 54.01 | Crash detection | 🟡 | Toolbar only |
 | 54.02 | Automatic recovery | 🟡 | Toolbar only |
-| 54.03 | Session restoration | ⏳ | |
+| 54.03 | Session restoration | 🟡 | As 26.03 |
 | 54.04 | Crash reports | ⏳ | |
 | 54.05 | Error pages | ⏳ | |
 | 54.06 | Safe mode | ⏳ | |
@@ -1327,7 +1405,7 @@ branch, one small commit per feature or group of features.
 | 61.10 | Download manager | 🟡 | |
 | 61.11 | History database | 🟢 | |
 | 61.12 | Bookmark database | 🟢 | |
-| 61.13 | DevTools | ⏳ | |
+| 61.13 | DevTools | 🌐 | F12: the engine's DevTools (section 29) |
 | 61.14 | Crash reporter | ⏳ | |
 | 61.15 | Update system | ⏳ | |
 | 61.16 | Sandbox, site-isolation system, IPC system | ⏳ | |

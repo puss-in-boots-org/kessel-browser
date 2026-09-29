@@ -435,6 +435,7 @@ html.tab-settling #tabs > * { transition: none !important; }
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 #menu-cluster > button:hover { background: var(--surface-hover); color: var(--text); }
+#menu-cluster > #media-btn.playing { color: var(--accent); }
 
 /* The page's zoom, when it isn't the default; click to reset. */
 #zoom-btn {

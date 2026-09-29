@@ -685,6 +685,8 @@ const COMMAND_WORDS = {
   "help": ["help", "keyboard shortcuts", "shortcuts"],
   "devtools": ["developer tools", "devtools", "inspect element"],
   "task-manager": ["task manager"],
+  "media-controls": ["media controls", "now playing", "playing media", "picture in picture", "playback speed"],
+  "gpu": ["gpu", "graphics", "hardware acceleration", "codecs", "webgl", "webgpu", "diagnostics"],
   "print": ["print", "print page"],
   "save-page": ["save page", "save as"],
   "view-source": ["view source", "page source"],

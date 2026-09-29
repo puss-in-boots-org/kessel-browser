@@ -182,6 +182,12 @@ pub struct Settings {
     pub strip_double_click: String,
     pub strip_middle_click: String,
     pub tab_drag_split: bool,
+
+    // Hardware acceleration (graphics.rs): the graphics card draws pages,
+    // decodes video and runs WebGL/WebGPU; and which card, on a PC with
+    // two ("auto" | "power" | "performance"). Both apply at the next start.
+    pub hardware_acceleration: bool,
+    pub gpu_preference: String,
 }
 
 impl Default for Settings {
@@ -243,6 +249,8 @@ impl Default for Settings {
             strip_double_click: "maximize".into(),
             strip_middle_click: "none".into(),
             tab_drag_split: true,
+            hardware_acceleration: true,
+            gpu_preference: "auto".into(),
         }
     }
 }

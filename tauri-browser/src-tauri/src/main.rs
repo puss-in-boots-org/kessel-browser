@@ -8,10 +8,12 @@ mod browsing_data;
 mod browser_windows;
 mod commands;
 mod dialogs;
+mod graphics;
 mod history;
 mod import;
 mod keys;
 mod lifecycle;
+mod media;
 mod page;
 mod profile;
 mod shields;
@@ -112,6 +114,7 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("downloads", "downloads.html"),
     ("history", "history.html"),
     ("help", "help.html"),
+    ("gpu", "gpu.html"),
 ];
 
 // kessel://settings -> settings.html, kessel://settings/privacy ->
@@ -3037,6 +3040,7 @@ async fn toggle_popup(
         "menu" => "menu.html",
         "share" => "share.html",
         "tabsearch" => "tabsearch.html",
+        "media" => "media.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
@@ -4633,8 +4637,12 @@ fn take_window_init(webview: Webview, state: tauri::State<BrowserState>) -> serd
 }
 
 // The WebView2 command line for this run (see profile::set_browser_args).
-fn engine_args(_settings: &Settings) -> String {
+fn engine_args(settings: &Settings) -> String {
     let mut args = String::from(profile::DEFAULT_ENGINE_ARGS);
+    // A video's audio tracks (other languages, commentary), for the media
+    // controls to pick from (media.rs): off in the engine by default.
+    args.push_str(" --enable-blink-features=AudioVideoTracks");
+    args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
@@ -4723,6 +4731,9 @@ fn main() {
             toggle_fullscreen,
             open_file_dialog,
             page::page_selection,
+            media::page_media,
+            media::media_action,
+            graphics::graphics_info,
             page::page_find_status,
             toggle_popup,
             suggest_popup,

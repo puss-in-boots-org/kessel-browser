@@ -127,6 +127,8 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("passwords", "Passwords", "Kessel", &["Ctrl+Shift+L"]),
     cmd("side-panel", "Close the side panel", "Kessel", &["Ctrl+B"]),
     cmd("task-manager", "Task manager", "Kessel", &["Shift+Escape"]),
+    cmd("media-controls", "Media controls", "Kessel", &[]),
+    cmd("gpu", "Graphics and media diagnostics", "Kessel", &[]),
 ];
 
 pub fn find(id: &str) -> Option<&'static CommandDef> {

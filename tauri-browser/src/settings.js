@@ -755,6 +755,12 @@ function performancePanel(settings) {
     </div>
 
     <div class="setting-card">
+      ${settingRow({ title: "Use hardware acceleration", desc: "The graphics card draws pages, plays video and runs 3D and games -- smoother, and easier on the battery. Turn it off if pages flicker or show black boxes. Applies the next time Kessel starts.", controlHtml: switchHtml("hw-accel", settings.hardware_acceleration !== false) })}
+      ${settingRow({ title: "Graphics card", desc: "For a PC with two, like most gaming laptops. Automatic uses the power-saving one when Kessel starts on battery. Applies the next time Kessel starts.", controlHtml: `<select class="field" id="gpu-preference" style="width:170px"><option value="auto">Automatic</option><option value="power">Power-saving</option><option value="performance">High-performance</option></select>` })}
+      ${settingRow({ title: "Graphics and media", desc: "What the graphics card does for Kessel, and which video and audio formats play", controlHtml: `<button class="btn sm" id="open-gpu-btn">${icon("gpu", 13)} Open</button>` })}
+    </div>
+
+    <div class="setting-card">
       ${settingRow({ title: "Never pause or put to sleep", desc: "Sites that must keep running in the background -- a chat, a music player", controlHtml: `<input class="field" id="never-sleep-input" style="width:200px" placeholder="e.g. music.youtube.com" /><button class="btn sm" id="never-sleep-add">Add</button>` })}
       <div class="site-list" id="never-sleep-list"></div>
     </div>
@@ -779,6 +785,13 @@ function performancePanel(settings) {
   maxAwake.value = String(settings.max_awake_tabs ?? 0);
   maxAwake.addEventListener("change", () => saveSettings({ max_awake_tabs: parseInt(maxAwake.value, 10) }));
   wireSwitch(p, "reduce-memory", "reduce_background_memory", { defaultOn: true });
+  wireSwitch(p, "hw-accel", "hardware_acceleration", { defaultOn: true });
+  const gpu = p.querySelector("#gpu-preference");
+  gpu.value = settings.gpu_preference || "auto";
+  gpu.disabled = settings.hardware_acceleration === false;
+  gpu.addEventListener("change", () => saveSettings({ gpu_preference: gpu.value }));
+  window.addEventListener("kessel-settings", () => (gpu.disabled = currentSettings()?.hardware_acceleration === false));
+  p.querySelector("#open-gpu-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://gpu" }));
 
   // Sites that never sleep: a site per chip.
   const list = p.querySelector("#never-sleep-list");
