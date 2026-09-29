@@ -514,7 +514,7 @@ branch, one small commit per feature or group of features.
 | 15.11 | Extension debugging | 🟡 | Its options and popup pages open in a tab, where F12 DevTools works; why the engine won't run one is shown in Settings. Service workers can't be inspected (WebView2 has no chrome://inspect) |
 | 15.12 | Extension packaging | ✅ | Pack for a store: a .zip the Chrome Web Store and Edge Add-ons take (without the key Kessel adds) |
 | 15.13 | Extension themes | 🟡 | A Chrome theme's colours go onto the style you use (frame, toolbar, text, address bar, accent); its background pictures aren't used |
-| 15.14 | Content blockers | 🟡 | Shields is built in; Manifest V3 blockers (uBlock Origin Lite...) install from the store like any extension -- not tried with a real one yet |
+| 15.14 | Content blockers | 🟡 | Shields is built in. Manifest V3 blockers install and run -- tried with uBlock Origin Lite from the Chrome Web Store -- but WebView2 doesn't act on their blocking rules (enabled, and matching by its own test, yet requests go through), so Shields does the blocking |
 | 15.15 | Password-manager extensions | 🟡 | Install and run like any MV3 extension (their popups from the puzzle button, content scripts fill forms) -- not tried with a real one yet; the built-in vault is Passwords |
 | 15.16 | Productivity extensions | 🟡 | Install and run like any MV3 extension -- not tried with real ones yet. The engine has no chrome.tabs model of Kessel's tabs, so ones that manage tabs can't |
 | 15.17 | Developer extensions | 🟡 | Install and run like any MV3 extension; DevTools extensions (devtools_page) don't, as WebView2's DevTools has no panels for them |

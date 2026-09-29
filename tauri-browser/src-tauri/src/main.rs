@@ -2458,6 +2458,46 @@ fn request_kind(context: webview2_com::Microsoft::Web::WebView2::Win32::COREWEBV
 
 // Runs on the main thread (inside with_webview).
 #[cfg(windows)]
+// Whether every http(s) request of `core`'s page -- from the page, its
+// iframes and its workers -- comes past Shields (WebResourceRequested). Only
+// while Shields is on: each is a round trip to Kessel, and while they come
+// here the engine skips extensions' own blocking rules (declarativeNetRequest).
+// The source-kinds API needs a newer WebView2 runtime; older ones only
+// report the page's own requests.
+#[cfg(windows)]
+unsafe fn set_request_filters(core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2, on: bool) -> windows::core::Result<()> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::*;
+    use windows::core::{Interface, HSTRING};
+    for filter in ["http://*", "https://*"] {
+        let filter = HSTRING::from(filter);
+        match (core.cast::<ICoreWebView2_22>(), on) {
+            (Ok(core22), true) => core22.AddWebResourceRequestedFilterWithRequestSourceKinds(&filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL, COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL)?,
+            (Ok(core22), false) => core22.RemoveWebResourceRequestedFilterWithRequestSourceKinds(&filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL, COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL)?,
+            (Err(_), true) => core.AddWebResourceRequestedFilter(&filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)?,
+            (Err(_), false) => core.RemoveWebResourceRequestedFilter(&filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)?,
+        }
+    }
+    Ok(())
+}
+
+// Shields switched on or off: every open page's requests start or stop
+// coming past it.
+fn apply_request_filters(app: &tauri::AppHandle, on: bool) {
+    #[cfg(windows)]
+    for webview in app.webviews().into_values() {
+        let label = webview.label();
+        if label.starts_with("content-") || label.starts_with("popout-content-") || label.starts_with("side-panel-") && !label.starts_with("side-panel-frame") {
+            let _ = webview.with_webview(move |platform| unsafe {
+                if let Ok(core) = platform.controller().CoreWebView2() {
+                    let _ = set_request_filters(&core, on);
+                }
+            });
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (app, on);
+}
+
 unsafe fn install_shields_hooks(
     app: &tauri::AppHandle,
     platform: &tauri::webview::PlatformWebview,
@@ -2471,19 +2511,10 @@ unsafe fn install_shields_hooks(
     let core = platform.controller().CoreWebView2()?;
     let env = platform.environment();
 
-    // Every http(s) request -- from the page, its iframes and its workers
-    // (the source-kinds API needs a newer WebView2 runtime; older ones only
-    // report the page's own requests).
-    for filter in ["http://*", "https://*"] {
-        let filter = HSTRING::from(filter);
-        match core.cast::<ICoreWebView2_22>() {
-            Ok(core22) => core22.AddWebResourceRequestedFilterWithRequestSourceKinds(
-                &filter,
-                COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
-                COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL,
-            )?,
-            Err(_) => core.AddWebResourceRequestedFilter(&filter, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)?,
-        }
+    // Every request is only handed to us while Shields is on (see
+    // set_request_filters).
+    if app.state::<BrowserState>().store.settings.lock().unwrap().adblock_enabled {
+        set_request_filters(&core, true)?;
     }
 
     let app_req = app.clone();
@@ -4016,12 +4047,17 @@ fn get_settings(state: tauri::State<BrowserState>) -> Settings {
 fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, settings: Settings) -> Result<(), String> {
     require_internal_page(&webview)?;
     let lists_changed = state.store.settings.lock().unwrap().filter_lists != settings.filter_lists;
+    let shields_switched = state.store.settings.lock().unwrap().adblock_enabled != settings.adblock_enabled;
     if state.store.settings.lock().unwrap().shortcuts != settings.shortcuts {
         commands::rebuild_keymap(&settings.shortcuts);
     }
     *state.store.settings.lock().unwrap() = settings.clone();
     state.store.save_settings();
     let _ = app.emit("settings-changed", &settings);
+    if shields_switched {
+        let (app2, on) = (app.clone(), settings.adblock_enabled);
+        later(&app, move || apply_request_filters(&app2, on));
+    }
     if lists_changed {
         // Download any newly enabled list, then recompile.
         let app2 = app.clone();

@@ -7,6 +7,7 @@
 //   /frame/<name>         a page titled <name> showing /page/<name>-inner in an iframe
 //   /download/<name>      a small file served as an attachment
 //   /echo-headers         the request headers as JSON
+//   /script/<name>        a tiny script (text/javascript, any site may load it)
 //   /sound/<name>         a page titled <name> whose startSound() / stopSound()
 //                         play a barely audible tone
 
@@ -33,7 +34,11 @@ export async function startServer(host = "127.0.0.2") {
     const origin = `http://${req.headers.host}`;
     const url = new URL(req.url, origin);
     const parts = url.pathname.split("/").filter(Boolean);
-    if (parts[0] === "page") {
+    if (parts[0] === "script") {
+      // A tiny script (any name), for tests that load one from another site.
+      res.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
+      res.end("window.__kesselScripts = (window.__kesselScripts || 0) + 1;");
+    } else if (parts[0] === "page") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(page(decodeURIComponent(parts[1] || "page"), origin));
     } else if (parts[0] === "frame") {
