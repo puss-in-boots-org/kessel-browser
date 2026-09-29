@@ -1,7 +1,8 @@
 # Kessel feature checklist
 
 Every keyboard shortcut and every item of the "Complete Modern Browser Feature
-List", with what Kessel does about it. Work happens on the `feature-list`
+List", with what Kessel does about it. Section 43 is [Kessel for phones](kessel-mobile/README.md),
+the Android app; everything else is the desktop browser. Work happens on the `feature-list`
 branch, one small commit per feature or group of features.
 
 ## Status legend
@@ -11,7 +12,7 @@ branch, one small commit per feature or group of features.
 | ✅ | Built on this branch and tested |
 | 🟢 | Already in Kessel before this branch (checked) |
 | 🌐 | Provided by the engine (WebView2 / Chromium) itself; verified it works in Kessel |
-| 🧪 | Built, with unit tests and an end-to-end test written; waiting for that test's first run on Windows |
+| 🧪 | Built and unit-tested; waiting for its first run on the real thing (Windows for the desktop, an Android phone for [Kessel for phones](kessel-mobile/README.md)) |
 | 🟡 | Partly done -- see the note |
 | ⏳ | Not done yet |
 | ⏭️ | Skipped -- see the note for why (needs a server, mobile only, not possible in WebView2...) |
@@ -35,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**37% overall** -- 325 done (✅ 🟢 🌐), 31 built and waiting for their Windows test run (🧪), 42 partly done (🟡), 626 to do (⏳), 1 skipped (⏭️), of 1025.
+**38% overall** -- 325 done (✅ 🟢 🌐), 37 built and waiting for their Windows test run (🧪), 43 partly done (🟡), 617 to do (⏳), 3 skipped (⏭️), of 1025.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -82,7 +83,7 @@ branch, one small commit per feature or group of features.
 | [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
 | [41. Screenshots & capture](#41-screenshots--capture) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
 | [42. Sharing](#42-sharing) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
-| [43. Mobile-specific features](#43-mobile-specific-features) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
+| [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 |  |  | 3 |  | `█████████░` 89% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 6 |  |  | 6 |  | `█████░░░░░` 50% |
@@ -1062,19 +1063,19 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 43.01 | Bottom address bar | ⏳ | |
-| 43.02 | One-handed mode | ⏳ | |
-| 43.03 | Gesture navigation | ⏳ | |
-| 43.04 | Pull-to-refresh | ⏳ | |
-| 43.05 | Tab grid | ⏳ | |
-| 43.06 | Tab groups | ⏳ | |
-| 43.07 | Mobile tab synchronization | ⏳ | |
-| 43.08 | Send tab to desktop | ⏳ | |
-| 43.09 | Mobile downloads | ⏳ | |
+| 43.01 | Bottom address bar | 🧪 | Kessel for phones: the address bar at the bottom (or the top, Settings), menus and sheets rising from the bottom |
+| 43.02 | One-handed mode | 🟡 | Everything within a thumb's reach from the bottom bar and sheets; no mode that shrinks the screen |
+| 43.03 | Gesture navigation | 🧪 | Android's Back: menus first, then the page's history, then the tab that opened it; swipe along the address bar to change tabs; swipe a tab card to close it |
+| 43.04 | Pull-to-refresh | ⏳ | Reload is in the menu |
+| 43.05 | Tab grid | 🧪 | The tab switcher: a grid of tabs with pictures of them, normal and private |
+| 43.06 | Tab groups | ⏳ | The desktop's groups aren't on the phone yet |
+| 43.07 | Mobile tab synchronization | ⏭️ | Needs an account and sync server Kessel doesn't have |
+| 43.08 | Send tab to desktop | ⏭️ | Needs sync; Share sends a link to any app or nearby device |
+| 43.09 | Mobile downloads | 🧪 | To the phone's Downloads folder with Android's download manager; data: and blob: files too; a Downloads list |
 | 43.10 | Mobile reader mode | ⏳ | |
 | 43.11 | Mobile screenshot | ⏳ | |
-| 43.12 | Mobile sharing | ⏳ | |
-| 43.13 | Mobile autofill | ⏳ | |
+| 43.12 | Mobile sharing | 🧪 | Android's share sheet for the page, a link or a picture |
+| 43.13 | Mobile autofill | 🧪 | Android's autofill service (Google, a password manager app) fills pages' forms; the desktop's vault stays on the desktop |
 | 43.14 | Mobile passkeys | ⏳ | |
 | 43.15 | Biometric browser locking | ⏳ | |
 
