@@ -42,6 +42,7 @@ export const FEATURES = [
     ["Developer tools", "F12. Task manager: Shift+Esc."],
     ["Open a file", "Ctrl+O."],
     ["Links", "Ctrl+click or middle-click: new tab. Shift+click: new window."],
+    ["Media controls", "The music note beside the menu, once a tab has played sound: play/pause, seek, speed, captions, audio track, picture-in-picture -- for any tab of the window."],
   ]],
   ["Your data", [
     ["History", "Ctrl+H. Search, by site, delete days or sites."],
@@ -58,5 +59,6 @@ export const FEATURES = [
     ["Your own shortcuts", "Settings -> Keyboard & Mouse."],
     ["Look", "Settings -> Appearance: theme, Liquid Glass, wallpaper, bookmarks bar."],
     ["Help", "F1: shortcuts and tips."],
+    ["Hardware acceleration", "Settings -> Performance: on or off, and which graphics card. kessel://gpu shows what the graphics card does and which video formats play."],
   ]],
 ];

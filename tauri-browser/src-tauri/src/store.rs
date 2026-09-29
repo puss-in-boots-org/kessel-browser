@@ -240,6 +240,12 @@ pub struct Settings {
     pub safe_browsing: bool,
     pub smartscreen: bool,
     pub warn_dangerous_downloads: bool,
+
+    // Hardware acceleration (graphics.rs): the graphics card draws pages,
+    // decodes video and runs WebGL/WebGPU; and which card, on a PC with
+    // two ("auto" | "power" | "performance"). Both apply at the next start.
+    pub hardware_acceleration: bool,
+    pub gpu_preference: String,
 }
 
 // A site's own cookie rule: `site` is a domain ("example.com" covers its
@@ -331,6 +337,8 @@ impl Default for Settings {
             safe_browsing: true,
             smartscreen: false,
             warn_dangerous_downloads: true,
+            hardware_acceleration: true,
+            gpu_preference: "auto".into(),
         }
     }
 }

@@ -72,6 +72,7 @@ const PAGES = [
   ["kessel://settings", "Settings"],
   ["kessel://passwords", "Your passwords (Ctrl+Shift+L)"],
   ["kessel://help", "This page (F1)"],
+  ["kessel://gpu", "Graphics & media: hardware acceleration, video formats"],
 ];
 
 function line(what, keysHtml, { note = "", custom = false } = {}) {

@@ -625,6 +625,7 @@ function paintStaticIcons() {
   iconFor("star-btn", icon("star", 16));
   iconFor("shields-btn", icon("shieldCheck", 16));
   iconFor("menu-btn", icon("dotsV", 18));
+  iconFor("media-btn", icon("music", 17));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -805,6 +806,7 @@ function noteWorkspaceCounts() {
 function renderTabs() {
   pushToolbarSnapshot();
   noteWorkspaceCounts();
+  updateMediaButton();
   // Mid-drag the strip belongs to the drag; it's redrawn when that ends.
   if (drag) {
     drag.redraw = true;
@@ -2708,7 +2710,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2831,6 +2833,8 @@ async function runCommand(id, ctx = {}) {
     case "clear-browsing-data": return openSingleton("kessel://settings/clear");
     case "settings": return openSingleton("kessel://settings");
     case "help": return openSingleton("kessel://help");
+    case "gpu": return openSingleton("kessel://gpu");
+    case "media-controls": return toggleMediaPopup();
     case "menu": return toggleMainMenu();
     case "passwords": return toggleSidePanel("passwords", "kessel://passwords");
     case "side-panel":
@@ -3773,6 +3777,37 @@ function wireStripScrolling() {
   new ResizeObserver(updateStripOverflow).observe(strip);
 }
 
+// --- Media controls (media.html) ------------------------------------------------------
+// The music-note button beside the menu: every tab in this window that has
+// played sound, with play/pause, seeking, speed, captions, audio tracks and
+// picture-in-picture (see media.rs). Chrome's "global media controls".
+
+function mediaTabs() {
+  return tabs.filter((t) => t.mediaSeen && !t.discarded && t.id > 0);
+}
+
+function updateMediaButton() {
+  const button = document.getElementById("media-btn");
+  if (!button) return;
+  const list = mediaTabs();
+  button.hidden = !list.length;
+  button.classList.toggle("playing", list.some((t) => t.audible && !t.muted));
+}
+
+async function toggleMediaPopup() {
+  const list = mediaTabs();
+  const button = document.getElementById("media-btn");
+  if (!list.length || button.hidden) return toast("Nothing has played in this window yet");
+  const rect = button.getBoundingClientRect();
+  const init = {
+    toolbar: `toolbar-${WIN.number}`,
+    active: activeTabId,
+    tabs: list.map(({ id, title, url, favicon }) => ({ id, title: title || "", url: url || "", favicon: favicon || "" })),
+  };
+  const height = Math.min(620, 70 + list.length * 214);
+  await invoke("toggle_popup", { kind: "media", x: rect.right, y: rect.bottom, width: 380, height, init }).catch(() => {});
+}
+
 // --- Tab search (tabsearch.html) -----------------------------------------------------
 // Every tab of every window, sleeping ones too, plus recently closed ones:
 // type to find one, Enter to go there.
@@ -4065,6 +4100,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
   document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
+  document.getElementById("media-btn").addEventListener("click", toggleMediaPopup);
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
   document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
@@ -4147,12 +4183,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Tab search (tabsearch.html) picked or closed one of this window's tabs.
   await listen("tab-search-activate", (event) => activateTab(event.payload.id));
   await listen("tab-search-close", (event) => closeTab(event.payload.id));
+  // The media controls' "go to this tab".
+  await listen("media-activate", (event) => activateTab(event.payload.id));
   // A tab started or stopped playing sound, or was (un)muted.
   await listen("tab-audio", (event) => {
     const tab = findTab(event.payload.id);
     if (!tab) return;
     tab.audible = !!event.payload.playing;
     tab.muted = !!event.payload.muted;
+    // It has something to play: the media button lists it from now on.
+    if (tab.audible) tab.mediaSeen = true;
     renderTabs();
   });
   commandList = await invoke("get_commands").catch(() => []);

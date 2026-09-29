@@ -9,10 +9,12 @@ mod browser_windows;
 mod commands;
 mod dialogs;
 mod extensions;
+mod graphics;
 mod history;
 mod import;
 mod keys;
 mod lifecycle;
+mod media;
 mod page;
 mod privacy;
 mod profile;
@@ -121,6 +123,7 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("sidebar", "sidebar.html"),
     // Shown instead of a dangerous or broken page (security.rs).
     ("warning", "warning.html"),
+    ("gpu", "gpu.html"),
 ];
 
 // kessel://settings -> settings.html, kessel://settings/privacy ->
@@ -3189,6 +3192,7 @@ async fn toggle_popup(
         "extensions" => "extensions.html",
         "siteinfo" => "siteinfo.html",
         "download" => "download-warning.html",
+        "media" => "media.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
@@ -4833,13 +4837,17 @@ fn take_window_init(webview: Webview, state: tauri::State<BrowserState>) -> serd
 
 // The WebView2 command line for this run (see profile::set_browser_args):
 // other sites' cookies inside pages refused (partitioned ones still work --
-// Chromium's own third-party cookie blocking), and SmartScreen only when you
-// switched it on.
+// Chromium's own third-party cookie blocking), SmartScreen only when you
+// switched it on, a video's audio tracks for the media controls (media.rs),
+// and hardware acceleration and the graphics card (graphics.rs).
 fn engine_args(settings: &Settings) -> String {
     let mut args = if settings.smartscreen { String::from("--disable-features=msWebOOUI,msPdfOOUI") } else { String::from(profile::DEFAULT_ENGINE_ARGS) };
     if settings.block_third_party_cookies {
         args.push_str(" --test-third-party-cookie-phaseout");
     }
+    // Off in the engine by default.
+    args.push_str(" --enable-blink-features=AudioVideoTracks");
+    args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
@@ -4928,6 +4936,9 @@ fn main() {
             toggle_fullscreen,
             open_file_dialog,
             page::page_selection,
+            media::page_media,
+            media::media_action,
+            graphics::graphics_info,
             page::page_find_status,
             toggle_popup,
             suggest_popup,
