@@ -8,11 +8,6 @@ password manager.
 The app lives in [`tauri-browser/`](tauri-browser/) — see its
 [README](tauri-browser/README.md) for features, requirements and how to build.
 
-**Kessel for phones**, the Android app, lives in [`kessel-mobile/`](kessel-mobile/):
-the same address bar, Shields, private tabs, bookmarks and history, laid out
-for one hand. Its [README](kessel-mobile/README.md) covers installing it (the
-APK from the Actions tab), what's in it and what stays on the desktop.
-
 ## License
 
 Copyright (C) 2026 the Kessel contributors

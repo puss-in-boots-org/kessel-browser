@@ -1,7 +1,0 @@
-.gradle/
-build/
-local.properties
-*.jks
-*.keystore
-# Copied in from the desktop app and downloaded filter lists (app/build.gradle.kts, scripts/fetch-mobile-shields.mjs).
-app/src/main/assets/shields/

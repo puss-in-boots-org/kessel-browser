@@ -101,7 +101,7 @@ function progressBlock(lines) {
     "<!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->",
     "## Progress",
     "",
-    `**${pct(percent(overall))} overall** -- ${overall.done} done (✅ 🟢 🌐), ${overall.built} built and waiting for their first run on Windows or a phone (🧪), ${overall.partial} partly done (🟡), ${overall.todo} to do (⏳), ${overall.skipped} skipped (⏭️), of ${overall.total}.`,
+    `**${pct(percent(overall))} overall** -- ${overall.done} done (✅ 🟢 🌐), ${overall.built} built and waiting for their Windows test run (🧪), ${overall.partial} partly done (🟡), ${overall.todo} to do (⏳), ${overall.skipped} skipped (⏭️), of ${overall.total}.`,
     "",
     "| Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |",
     "|---|---:|---:|---:|---:|---:|---|",

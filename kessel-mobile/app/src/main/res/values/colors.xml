@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Kessel's palette (see ../tauri-browser/src/shared/theme.css). -->
-    <color name="kessel_bg">#F4F5F8</color>
-    <color name="kessel_accent">#6D4DFA</color>
-    <color name="kessel_icon_bg">#4285F4</color>
-</resources>
