@@ -161,6 +161,9 @@ jobs:
           title=$(head -n 1 "$notes" | sed 's/^# *//')
           tail -n +2 "$notes" > "$RUNNER_TEMP/notes.md"
           cd dist
+          # The Windows artifact keeps the bundler's nsis/ and msi/ folders.
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          find . -mindepth 1 -type d -empty -delete
           sha256sum * > SHA256SUMS.txt
           ls -la
           # A pushed tag is used as it is; from the Actions tab, the tag is
