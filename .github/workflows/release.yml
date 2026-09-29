@@ -2,16 +2,15 @@
 # git push origin v0.9.0):
 #
 # - the Windows installers, built here as in build.yml;
-# - Kessel for phones' Android installers, built from its fork
-#   (ANDROID_REPO below, kessel-mobile/), which follows this repository's
-#   version (tauri-browser/package.json);
+# - Kessel for phones' Android installers (kessel-mobile/), which follow
+#   the desktop's version (tauri-browser/package.json);
 # - SHA256SUMS.txt, and the notes in .github/release-notes/<tag>.md (its
 #   first line, "# Title", is the release's title).
 #
 # The Android installers are signed with the KESSEL_KEYSTORE_BASE64,
 # KESSEL_KEYSTORE_PASSWORD, KESSEL_KEY_ALIAS and KESSEL_KEY_PASSWORD secrets
 # when they're set, else with a throw-away debug key (see
-# kessel-mobile/README.md in the fork).
+# kessel-mobile/README.md).
 
 name: Release
 
@@ -21,11 +20,6 @@ on:
 
 permissions:
   contents: write
-
-env:
-  # Where Kessel for phones lives.
-  ANDROID_REPO: balong2000/kessel-browser
-  ANDROID_REF: main
 
 concurrency:
   group: release-${{ github.ref }}
@@ -94,9 +88,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-        with:
-          repository: ${{ env.ANDROID_REPO }}
-          ref: ${{ env.ANDROID_REF }}
 
       - uses: actions/setup-java@v5
         with:
@@ -108,14 +99,6 @@ jobs:
           node-version: 22
 
       - uses: gradle/actions/setup-gradle@v4
-
-      - name: The phone app is at this release's version
-        run: |
-          version=$(node -p "require('./tauri-browser/package.json').version")
-          if [ "$version" != "${{ needs.check.outputs.version }}" ]; then
-            echo "::error::$ANDROID_REPO@$ANDROID_REF is at $version, not ${{ needs.check.outputs.version }}: merge this release into it first"
-            exit 1
-          fi
 
       - name: Fetch the Shields filter lists
         run: node scripts/fetch-mobile-shields.mjs
