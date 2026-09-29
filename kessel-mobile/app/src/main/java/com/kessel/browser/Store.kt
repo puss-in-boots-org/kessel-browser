@@ -57,9 +57,11 @@ class Store(private val dir: File) {
 
     init {
         dir.mkdirs()
-        read("settings.json")?.let { JSONObject(it) }?.let { saved -> saved.keys().forEach { settings.put(it, saved.get(it)) } }
-        read("bookmarks.json")?.let { bookmarks = JSONArray(it) }
-        read("history.json")?.let {
+        // A file that can't be read (cut short by a dead battery...) is
+        // skipped: Kessel starts with that part empty rather than not at all.
+        load("settings.json") { saved -> JSONObject(saved).let { o -> o.keys().forEach { settings.put(it, o.get(it)) } } }
+        load("bookmarks.json") { bookmarks = JSONArray(it) }
+        load("history.json") {
             val list = JSONArray(it)
             for (i in 0 until list.length()) {
                 val v = list.getJSONArray(i)
@@ -68,13 +70,18 @@ class Store(private val dir: File) {
                 historyIndex[visit.url] = visit
             }
         }
-        read("favicons.json")?.let { saved -> JSONObject(saved).let { f -> f.keys().forEach { favicons.put(it, f.get(it)) } } }
-        read("permissions.json")?.let { saved -> JSONObject(saved).let { p -> p.keys().forEach { permissions.put(it, p.get(it)) } } }
-        read("downloads.json")?.let { downloads = JSONArray(it) }
+        load("favicons.json") { saved -> JSONObject(saved).let { f -> f.keys().forEach { favicons.put(it, f.get(it)) } } }
+        load("permissions.json") { saved -> JSONObject(saved).let { p -> p.keys().forEach { permissions.put(it, p.get(it)) } } }
+        load("downloads.json") { downloads = JSONArray(it) }
         forgetOldHistory()
     }
 
     private fun read(name: String): String? = runCatching { File(dir, name).takeIf { it.exists() }?.readText() }.getOrNull()
+
+    private fun load(name: String, use: (String) -> Unit) {
+        val text = read(name) ?: return
+        runCatching { use(text) }
+    }
 
     // Writes `name` half a second after the first of a burst of changes to it.
     private fun save(name: String, content: () -> String) {
