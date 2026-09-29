@@ -131,7 +131,7 @@ class MainActivity : Activity() {
         ui.webChromeClient = WebChromeClient()
         ui.addJavascriptInterface(bridge, "KesselNative")
         root.addView(ui, uiLayout())
-        root.setOnApplyWindowInsetsListener { _, insets -> applyInsets(insets); insets }
+        root.setOnApplyWindowInsetsListener { _, insets -> applyInsets(insets) }
         setContentView(root)
         applyTheme()
         ui.loadUrl(UI_URL)
@@ -224,16 +224,18 @@ class MainActivity : Activity() {
         }
     }
 
+    // The bars and the keyboard become padding around everything, and stop
+    // here: the pages inside mustn't make room for them a second time.
     @Suppress("DEPRECATION")
-    private fun applyInsets(insets: WindowInsets) {
+    private fun applyInsets(insets: WindowInsets): WindowInsets {
         if (Build.VERSION.SDK_INT >= 30) {
             val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
             val ime = insets.getInsets(WindowInsets.Type.ime())
             root.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
-            emit("keyboard", JSONObject().put("open", ime.bottom > 0))
-        } else {
-            root.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+            return WindowInsets.CONSUMED
         }
+        root.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+        return insets.consumeSystemWindowInsets()
     }
 
     fun isDarkUi(): Boolean = when (store.string("theme")) {
