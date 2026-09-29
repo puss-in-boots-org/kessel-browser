@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Day/night with the system; the page area and bars are drawn by the
+         app itself, edge to edge (MainActivity). -->
+    <style name="Kessel" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/kessel_bg</item>
+        <item name="android:colorAccent">@color/kessel_accent</item>
+        <item name="android:colorPrimary">@color/kessel_accent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBackground">@color/kessel_bg</item>
+    </style>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kessel's "K" (the desktop icon, ../tauri-browser/src-tauri/icons), in the adaptive icon's 108dp canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF" android:pathData="M38,34 h10 v17 L63.5,34 H76 L57.5,53 L77,74 H64.5 L51.2,59 L48,62.4 V74 H38 Z" />
+</vector>
