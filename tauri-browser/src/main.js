@@ -10,6 +10,8 @@ import { ENGINES, resolveInput, looksLikeUrl, toast, hostOf, listenHere, interna
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 import { setupOmnibox } from "./omnibox.js";
+import { resolveTyped, allEngines } from "./shared/search.js";
+import { cleanLink } from "./shared/links.js";
 import { playUiSound } from "./shared/sounds.js";
 import { RAIL_ITEMS, DEFAULT_RAIL_ITEMS, aiTarget, aiPrompt, WORKSPACE_COLORS } from "./shared/sidebar-panels.js";
 
@@ -1701,7 +1703,7 @@ function wireExternalDrops() {
     const moz = (dt.getData("text/x-moz-url") || "").split(/\r?\n/)[0]?.trim();
     if (moz) return [moz];
     const text = (dt.getData("text/plain") || "").trim();
-    return text ? [resolveInput(text, currentSettings()?.search_engine || "google")] : [];
+    return text ? [resolveTyped(text, currentSettings())] : [];
   };
   const accepts = (e) => !drag && [...(e.dataTransfer?.types || [])].some((t) => t === "text/uri-list" || t === "text/plain" || t === "text/x-moz-url");
   let overTab = null;
@@ -2178,12 +2180,35 @@ function setPinned(list, on) {
 }
 
 // Mutes every tab in `list`, or unmutes them if they're all muted already.
+// Settings -> Tabs: only the tab you're on plays sound. Tabs muted this
+// way (not by you) get their sound back when you go to them.
+function muteBackgroundTabs(activeId) {
+  if (!currentSettings()?.features?.mute_background) return;
+  for (const t of tabs) {
+    if (!(t.id > 0) || t.discarded) continue;
+    if (t.id === activeId) {
+      if (t.autoMuted) {
+        t.autoMuted = false;
+        t.muted = false;
+        invoke("page_action", { id: t.id, action: "unmute", value: null }).catch(() => {});
+      }
+    } else if (t.audible && !t.muted && !t.keepSound) {
+      t.autoMuted = true;
+      t.muted = true;
+      invoke("page_action", { id: t.id, action: "mute", value: null }).catch(() => {});
+    }
+  }
+}
+
 async function toggleMute(list) {
   const live = list.filter((t) => t.id > 0 && !t.discarded);
   if (!live.length) return;
   const mute = !live.every((t) => t.muted);
   for (const t of live) {
     t.muted = mute; // the page confirms it with "tab-audio"
+    // Unmuted by you: background muting leaves it alone from now on.
+    t.autoMuted = false;
+    t.keepSound = !mute;
     await invoke("page_action", { id: t.id, action: mute ? "mute" : "unmute", value: null }).catch(() => {});
   }
   renderTabs();
@@ -2379,6 +2404,7 @@ async function activateTab(id) {
   // like it switched).
   activeTabId = id;
   noteRecent(id);
+  muteBackgroundTabs(id);
   // Looked at: no news dot, and showing it unfroze it.
   tab.attention = false;
   tab.frozen = false;
@@ -2721,7 +2747,7 @@ async function openSingleton(route) {
 async function navigateActiveTab(rawInput) {
   const tab = findTab(activeTabId);
   if (!tab) return;
-  const url = resolveInput(rawInput, currentSettings()?.search_engine || "google");
+  const url = resolveTyped(rawInput, currentSettings());
   if (!url) return;
   if (SINGLETON_ROUTES.has(internalPageKey(url))) {
     await openSingleton(url);
@@ -2835,6 +2861,38 @@ async function runCommand(id, ctx = {}) {
     case "help": return openSingleton("kessel://help");
     case "gpu": return openSingleton("kessel://gpu");
     case "media-controls": return toggleMediaPopup();
+    case "command-palette": return toggleCommandPalette();
+    case "screenshot-visible":
+    case "screenshot-full":
+      return page && takeScreenshot(page, id === "screenshot-full");
+    case "reader-mode": return page && openReader(page);
+    case "zap-element":
+      if (!page) return;
+      await invoke("page_tool", { id: page, tool: "zap-start" }).catch((err) => toast(String(err)));
+      return toast("Click what to hide on this site (Esc to stop). Undo it in Settings -> Page tools.");
+    case "link-hints": return page && invoke("page_tool", { id: page, tool: "link-hints" }).catch((err) => toast(String(err)));
+    case "site-tweaks": {
+      const tab = findTab(page) || findTab(activeTabId);
+      const site = /^https?:/.test(tab?.url || "") ? hostOf(tab.url).replace(/^www\./, "") : "";
+      try {
+        if (site) localStorage.setItem("kessel-edit-site", site);
+      } catch {}
+      return openSingleton("kessel://settings/tools");
+    }
+    case "auto-reload": return autoReloadMenu(findTab(page) || findTab(activeTabId));
+    case "copy-clean-link": {
+      const tab = findTab(page) || findTab(activeTabId);
+      if (!tab || !/^https?:/.test(tab.url || "")) return toast("This page has no link to copy");
+      const clean = cleanLink(tab.url);
+      await navigator.clipboard.writeText(clean).then(() => toast(clean === tab.url ? "Link copied (it had no tracking)" : "Link copied without tracking"), () => toast("Couldn't copy -- clipboard unavailable"));
+      return;
+    }
+    case "paste-and-go": {
+      const text = await navigator.clipboard.readText().catch(() => "");
+      if (!text.trim()) return toast("Nothing to paste");
+      return navigateActiveTab(text.trim().slice(0, 4000));
+    }
+    case "close-duplicate-tabs": return closeDuplicateTabs();
     case "menu": return toggleMainMenu();
     case "passwords": return toggleSidePanel("passwords", "kessel://passwords");
     case "side-panel":
@@ -2960,7 +3018,7 @@ function urlInputEl() {
 // Enter in the address bar: `where` is "here", "tab" (Alt+Enter) or
 // "window" (Shift+Enter).
 async function navigateFromAddressBar(text, where) {
-  const url = resolveInput(text, currentSettings()?.search_engine || "google");
+  const url = resolveTyped(text, currentSettings());
   if (!url) return;
   urlInputEl().blur();
   if (where === "tab") await createTab(url);
@@ -3808,6 +3866,108 @@ async function toggleMediaPopup() {
   await invoke("toggle_popup", { kind: "media", x: rect.right, y: rect.bottom, width: 380, height, init }).catch(() => {});
 }
 
+// --- Command palette (palette.html) ---------------------------------------------------
+// F2: every command, searchable; runs the one you pick in this window.
+
+async function toggleCommandPalette() {
+  hideHoverCard();
+  const width = Math.min(560, Math.max(320, window.innerWidth - 40));
+  const x = Math.round(window.innerWidth / 2 + width / 2);
+  const y = Math.round(document.getElementById("nav-bar")?.getBoundingClientRect().bottom || 80);
+  await invoke("toggle_popup", { kind: "palette", x, y, width, height: 460, init: {} }).catch(() => {});
+}
+
+// --- Screenshots (tools.rs, take_screenshot) -------------------------------------------
+// What's in view, or the whole page; saved to your pictures, copied, or both
+// (Settings -> Page tools).
+
+async function takeScreenshot(page, full) {
+  const shot = await invoke("take_screenshot", { id: page, full }).catch((err) => {
+    toast(`Couldn't take a screenshot -- ${err}`);
+    return null;
+  });
+  if (!shot) return;
+  let copied = false;
+  if (shot.data) {
+    try {
+      let blob = await (await fetch(`data:${shot.mime};base64,${shot.data}`)).blob();
+      // The clipboard takes PNG only.
+      if (shot.mime !== "image/png") {
+        const bitmap = await createImageBitmap(blob);
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        canvas.getContext("2d").drawImage(bitmap, 0, 0);
+        blob = await canvas.convertToBlob({ type: "image/png" });
+      }
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      copied = true;
+    } catch {}
+  }
+  const saved = shot.path ? `Saved to ${shot.path}` : "";
+  if (saved && copied) toast(`${saved} and copied`);
+  else if (saved) toast(saved);
+  else toast(copied ? "Screenshot copied" : "Couldn't copy the screenshot");
+}
+
+// --- Reader view (reader.html) ---------------------------------------------------------
+// The article on the page, on its own: your font, size, width and colours.
+
+async function openReader(page) {
+  const tab = findTab(page);
+  if (tab?.url?.startsWith("kessel://reader")) return invoke("page_action", { id: page, action: "back", value: null }).catch(() => {});
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) return toast("Reader view works on web pages");
+  const key = await invoke("reader_open", { id: page }).catch(() => null);
+  if (!key) return toast("No article found on this page");
+  await invoke("navigate", { id: page, url: `kessel://reader?k=${encodeURIComponent(key)}`, httpFallback: false }).catch((err) => toast(String(err)));
+}
+
+// --- Auto-reload ---------------------------------------------------------------------
+// Reloads this site's pages every so often (kept per site, in its tweaks).
+
+function siteKeyOf(url) {
+  return /^https?:/.test(url || "") ? hostOf(url).replace(/^www\./, "") : "";
+}
+
+function autoReloadMenu(tab) {
+  const site = siteKeyOf(tab?.url);
+  if (!site) return toast("Auto-reload works on web pages");
+  const features = currentSettings()?.features || {};
+  const current = Number(features.site_tweaks?.[site]?.reload) || 0;
+  const choices = (Array.isArray(features.reload_intervals) ? features.reload_intervals : [15, 30, 60, 300, 900, 1800]).map(Number).filter((n) => n >= 5);
+  const label = (sec) => (sec < 60 ? `${sec} seconds` : sec < 3600 ? `${Math.round(sec / 60)} minute${sec >= 120 ? "s" : ""}` : `${Math.round(sec / 3600)} hour${sec >= 7200 ? "s" : ""}`);
+  const set = (sec) => {
+    const tweaks = { ...(features.site_tweaks || {}) };
+    tweaks[site] = { ...(tweaks[site] || {}), reload: sec };
+    if (!sec) delete tweaks[site].reload;
+    saveSettings({ features: { ...features, site_tweaks: tweaks } });
+    toast(sec ? `${site} reloads every ${label(sec)}` : `Auto-reload off for ${site}`);
+  };
+  const items = [
+    { header: `Auto-reload ${site}` },
+    ...choices.map((sec) => ({ label: `Every ${label(sec)}`, checked: current === sec, action: () => set(sec) })),
+    "-",
+    { label: "Off", checked: !current, action: () => set(0) },
+  ];
+  const rect = document.getElementById("address-wrap")?.getBoundingClientRect() || { right: window.innerWidth / 2, bottom: 80 };
+  showContextMenu(items, rect.right - 240, rect.bottom, { dropdown: true, width: 240 });
+}
+
+// Closes the tabs showing the same address as another one (not pinned ones,
+// and not the one you're on).
+function closeDuplicateTabs() {
+  const seenUrls = new Set();
+  const active = findTab(activeTabId);
+  if (active?.url) seenUrls.add(active.url);
+  const duplicates = tabs.filter((t) => {
+    if (!t.url || t.pinned || t.id === activeTabId || t.url.startsWith("kessel://")) return false;
+    if (seenUrls.has(t.url)) return true;
+    seenUrls.add(t.url);
+    return false;
+  });
+  if (!duplicates.length) return toast("No duplicate tabs");
+  closeTabs(duplicates);
+  toast(`Closed ${duplicates.length} duplicate tab${duplicates.length > 1 ? "s" : ""}`);
+}
+
 // --- Tab search (tabsearch.html) -----------------------------------------------------
 // Every tab of every window, sleeping ones too, plus recently closed ones:
 // type to find one, Enter to go there.
@@ -4019,7 +4179,7 @@ function toggleEngineMenu() {
   const rect = document.getElementById("engine-btn").getBoundingClientRect();
   const items = [
     { header: "Search with" },
-    ...Object.entries(ENGINES).map(([key, engine]) => ({ label: engine.name, checked: key === current, action: () => saveSettings({ search_engine: key }) })),
+    ...allEngines(currentSettings()).map((engine) => ({ label: engine.name, keys: engine.keyword || undefined, checked: engine.id === current, action: () => saveSettings({ search_engine: engine.id }) })),
     "-",
     { label: "Manage search engines", iconName: "settings", action: () => openSingleton("kessel://settings/search") },
   ];
@@ -4193,6 +4353,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     tab.muted = !!event.payload.muted;
     // It has something to play: the media button lists it from now on.
     if (tab.audible) tab.mediaSeen = true;
+    if (tab.audible && !tab.muted && tab.id !== activeTabId) muteBackgroundTabs(activeTabId);
     renderTabs();
   });
   commandList = await invoke("get_commands").catch(() => []);

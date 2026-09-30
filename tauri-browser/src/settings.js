@@ -5,6 +5,7 @@ import { FEATURES } from "./shared/features.js";
 import { buildStyleSection } from "./appearance.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
+import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -16,10 +17,12 @@ const SECTIONS = [
   { id: "sidebar", label: "Side panel", icon: "sidebar" },
   { id: "extensions", label: "Extensions", icon: "puzzle" },
   { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
+  { id: "tools", label: "Page tools", icon: "sparkle" },
   { id: "privacy", label: "Privacy", icon: "shield" },
   { id: "cookies", label: "Cookies & site data", icon: "cookie" },
   { id: "security", label: "Security", icon: "lock" },
   { id: "performance", label: "Performance", icon: "bolt" },
+  { id: "network", label: "Network", icon: "globe" },
   { id: "pinned", label: "Pinned Sites", icon: "pin" },
   { id: "bookmarks", label: "Bookmarks", icon: "bookmark" },
   { id: "history", label: "History", icon: "history" },
@@ -161,6 +164,7 @@ function searchPanel(settings) {
   homepage.addEventListener("change", () => saveSettings({ homepage: homepage.value || "kessel://newtab" }));
 
   wireSwitch(p, "restore-tabs", "restore_tabs");
+  searchExtras(p, { el, settingRow });
 
   return p;
 }
@@ -277,6 +281,7 @@ async function tabsPanel(settings) {
   renderSaved((await invoke("get_saved_groups").catch(() => [])) || []);
   listen("saved-groups-changed", (event) => renderSaved(event.payload || []));
 
+  p.querySelector(".setting-card").after(tabSoundCard({ el, settingRow, switchHtml }));
   return p;
 }
 
@@ -1201,6 +1206,7 @@ async function aboutPanel() {
     </div>
   </div>`);
   p.querySelector("#open-help-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://help" }));
+  p.querySelector(".setting-card").after(backupCard({ el, settingRow }));
   return p;
 }
 
@@ -1234,6 +1240,8 @@ async function buildPanel(id, settings) {
     case "cookies": return await cookiesPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "security": return await securityPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "performance": return performancePanel(settings);
+    case "tools": return await toolsPanel(settings, { el, settingRow, switchHtml });
+    case "network": return networkPanel(settings, { el, settingRow });
     case "pinned": return await pinnedPanel();
     case "bookmarks": return await bookmarksPanel();
     case "history": return await historyPanel();

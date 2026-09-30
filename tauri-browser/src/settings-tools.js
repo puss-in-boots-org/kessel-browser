@@ -1,0 +1,436 @@
+// Settings for the newer features, all kept in settings.features (store.rs):
+// search engines and keywords, startup pages (Search & Startup), Page tools
+// (screenshots, reader view, page filters, De-AMP, mouse gestures, each
+// site's tweaks), Network (proxy, engine switches) and the settings backup
+// (About). settings.js builds the rest of the page and hands its helpers in.
+
+import { icon } from "./shared/icons.js";
+import { currentSettings, saveSettings } from "./shared/theme.js";
+import { toast, escapeHtml, confirmDialog } from "./shared/api.js";
+import { allEngines, extraEngines, BUILTIN_KEYWORDS, DEFAULT_EXTRA_ENGINES } from "./shared/search.js";
+
+const { invoke } = window.__TAURI__.core;
+
+const features = () => currentSettings()?.features || {};
+function saveFeature(key, value) {
+  const next = { ...features() };
+  if (value === undefined) delete next[key];
+  else next[key] = value;
+  return saveSettings({ features: next });
+}
+
+function selectHtml(id, options, width = 180) {
+  return `<select class="field" id="${id}" style="width:${width}px">${options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</select>`;
+}
+
+const FILTERS = [["", "None"], ["dark", "Dark (invert the page)"], ["grayscale", "Grayscale"], ["sepia", "Sepia"], ["invert", "Invert colours"], ["contrast", "More contrast"], ["dim", "Dimmer"]];
+
+// --- Search & Startup ------------------------------------------------------------------
+
+// The search engines card and the startup pages card, added to the Search &
+// Startup panel; the default engine list there gets your engines too.
+export function searchExtras(panel, { el, settingRow }) {
+  const select = panel.querySelector("#engine-select");
+  const fillEngines = () => {
+    const s = currentSettings() || {};
+    select.innerHTML = allEngines(s).map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join("");
+    select.value = allEngines(s).some((e) => e.id === s.search_engine) ? s.search_engine : "google";
+  };
+  fillEngines();
+
+  const card = el(`<div class="setting-card" id="engines-card">
+    <div class="k-card-title"><span class="k-label">Search engines and keywords</span></div>
+    <p style="margin:2px 18px 8px;font-size:12px;line-height:1.5;color:var(--text-faint)">Type a keyword and a space before your search -- <span class="mono">yt cats</span> -- to search with that engine. In an engine's address, <span class="mono">%s</span> is what you searched for.</p>
+    <div class="list-panel" id="engines-list" style="max-height:none"></div>
+    <div class="setting-row"><div class="info"></div><div class="control">
+      <button class="btn sm" id="engine-add">${icon("plus", 13)}<span>Add a search engine</span></button>
+      <button class="btn sm ghost" id="engine-reset">Reset to Kessel's</button>
+    </div></div>
+  </div>`);
+  const startup = el(`<div class="setting-card">
+    ${settingRow({ title: "Pages to start with", desc: "One address per line, opened when Kessel starts -- unless it's bringing back your last tabs. Leave empty for the new-tab page.", controlHtml: "" })}
+    <div style="padding:0 14px 12px"><textarea class="field mono" id="startup-pages" rows="3" style="width:100%;resize:vertical" spellcheck="false" placeholder="https://example.com"></textarea>
+    <div style="margin-top:8px"><button class="btn sm" id="startup-use-tabs">Use my open tabs</button></div></div>
+  </div>`);
+  panel.querySelector(".setting-card").after(card);
+  card.after(startup);
+
+  const list = card.querySelector("#engines-list");
+  const render = () => {
+    const s = currentSettings() || {};
+    const keywords = { ...BUILTIN_KEYWORDS, ...(features().engine_keywords || {}) };
+    list.innerHTML = "";
+    for (const e of allEngines(s)) {
+      const row = el(`<div class="list-row" style="gap:8px">
+        <input class="field" data-k="name" style="width:150px" />
+        <input class="field mono" data-k="keyword" style="width:70px" placeholder="keyword" spellcheck="false" />
+        <input class="field mono" data-k="url" style="flex:1;min-width:0" spellcheck="false" />
+        <button class="btn ghost icon-only sm" title="Remove">${icon("trash", 13)}</button>
+      </div>`);
+      const [name, keyword, url] = row.querySelectorAll("input");
+      const remove = row.querySelector("button");
+      name.value = e.name;
+      keyword.value = e.builtin ? keywords[e.id] || "" : e.keyword;
+      if (e.builtin) {
+        name.disabled = true;
+        url.disabled = true;
+        url.value = "Built in";
+        remove.style.visibility = "hidden";
+        keyword.addEventListener("change", () => saveFeature("engine_keywords", { ...(features().engine_keywords || {}), [e.id]: keyword.value.trim().toLowerCase() }));
+      } else {
+        url.value = e.template;
+        const update = (patch) => saveFeature("search_engines", extraEngines(currentSettings()).map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
+        name.addEventListener("change", () => name.value.trim() && update({ name: name.value.trim() }));
+        keyword.addEventListener("change", () => update({ keyword: keyword.value.trim().toLowerCase() }));
+        url.addEventListener("change", () => {
+          const v = url.value.trim();
+          if (!/^https?:\/\//i.test(v)) return toast("An engine's address starts with https://");
+          update({ url: v });
+        });
+        remove.addEventListener("click", async () => {
+          await saveFeature("search_engines", extraEngines(currentSettings()).filter((x) => x.id !== e.id));
+          render();
+          fillEngines();
+        });
+      }
+      list.appendChild(row);
+    }
+  };
+  render();
+  card.querySelector("#engine-add").addEventListener("click", async () => {
+    const id = `custom-${Date.now().toString(36)}`;
+    await saveFeature("search_engines", [...extraEngines(currentSettings()), { id, name: "New engine", url: "https://example.com/search?q=%s", keyword: "" }]);
+    render();
+    fillEngines();
+    list.lastElementChild?.querySelector("input")?.select();
+  });
+  card.querySelector("#engine-reset").addEventListener("click", async () => {
+    if (!(await confirmDialog("Reset search engines? Your own engines and keywords go; Kessel's come back.", "Reset"))) return;
+    const next = { ...features() };
+    delete next.engine_keywords;
+    next.search_engines = DEFAULT_EXTRA_ENGINES;
+    await saveSettings({ features: next });
+    render();
+    fillEngines();
+  });
+
+  const pages = startup.querySelector("#startup-pages");
+  pages.value = (features().startup_pages || []).join("\n");
+  const savePages = (text) => {
+    const urls = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const bad = urls.filter((u) => !/^(https?|kessel):\/\//i.test(u));
+    if (bad.length) toast(`Skipped ${bad[0]}${bad.length > 1 ? ` and ${bad.length - 1} more` : ""} -- addresses start with https://`);
+    return saveFeature("startup_pages", urls.filter((u) => !bad.includes(u)).slice(0, 20));
+  };
+  pages.addEventListener("change", () => savePages(pages.value));
+  startup.querySelector("#startup-use-tabs").addEventListener("click", async () => {
+    const data = await invoke("tab_search_list").catch(() => null);
+    const urls = (data?.windows || []).filter((w) => !w.private).flatMap((w) => (w.tabs || []).map((t) => t.url)).filter((u) => /^https?:\/\//.test(u || ""));
+    if (!urls.length) return toast("No web pages open");
+    pages.value = [...new Set(urls)].slice(0, 20).join("\n");
+    await savePages(pages.value);
+  });
+}
+
+// --- Tabs ------------------------------------------------------------------------------
+
+export function tabSoundCard({ el, settingRow, switchHtml }) {
+  const card = el(`<div class="setting-card">
+    ${settingRow({ title: "Only the tab you're on plays sound", desc: "Other tabs are muted while you're away from them, and play again when you go back. A tab you unmute yourself keeps playing.", controlHtml: switchHtml("mute-background", !!features().mute_background) })}
+  </div>`);
+  const btn = card.querySelector("#mute-background");
+  btn.addEventListener("click", async () => {
+    const on = !btn.classList.contains("on");
+    await saveFeature("mute_background", on);
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-checked", String(on));
+  });
+  return card;
+}
+
+// --- Page tools ----------------------------------------------------------------------
+
+const GESTURE_NAMES = { L: "←", R: "→", U: "↑", D: "↓" };
+const DEFAULT_GESTURES = { L: "back", R: "forward", UD: "reload", DR: "close-tab", U: "new-tab", DL: "reopen-closed-tab", RL: "prev-tab", LR: "next-tab" };
+const drawn = (g) => [...g].map((c) => GESTURE_NAMES[c] || c).join(" ");
+
+export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
+  const f = features();
+  const shot = { format: "png", action: "both", folder: "", ...(f.screenshot || {}) };
+  const p = el(`<div class="panel" id="panel-tools">
+    <h2>Page tools</h2>
+    <p class="sub">Screenshots, reader view, mouse gestures, and changes you make to sites -- your own style, a colour filter, elements you've hidden, auto-reload.</p>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Screenshots</span></div>
+      ${settingRow({ title: "When you take one", desc: "Ctrl+Shift+S for what's in view; “Screenshot of the whole page” in the command palette (F2)", controlHtml: selectHtml("shot-action", [["both", "Save and copy"], ["save", "Save it"], ["copy", "Copy it"]], 170) })}
+      ${settingRow({ title: "Format", controlHtml: selectHtml("shot-format", [["png", "PNG (sharp)"], ["jpeg", "JPEG (smaller)"]], 170) })}
+      ${settingRow({ title: "Save to", desc: "Empty: Pictures\\Kessel", controlHtml: `<input class="field mono" id="shot-folder" style="width:240px" spellcheck="false" />` })}
+    </div>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Reading and pages</span></div>
+      ${settingRow({ title: "Colour filter for every site", desc: "Each site can have its own below", controlHtml: selectHtml("page-filter", FILTERS, 200) })}
+      ${settingRow({ title: "Skip AMP pages", desc: "An AMP copy of a page (Google's cut-down version) goes to the site's real page", controlHtml: switchHtml("deamp", f.deamp !== false) })}
+      ${settingRow({ title: "Reader view", desc: "F9 shows a page's article on its own. Its font, size, width, colours and read-aloud voice are in its Aa menu.", controlHtml: `<button class="btn sm" id="reader-reset">Reset its look</button>` })}
+      ${settingRow({ title: "Command palette remembers", desc: "How many commands you ran lately it lists first (F2)", controlHtml: selectHtml("palette-recent", [["0", "None"], ["3", "3"], ["5", "5"], ["10", "10"]], 100) })}
+      ${settingRow({ title: "Auto-reload choices", desc: "The intervals the auto-reload menu offers, in seconds", controlHtml: `<input class="field mono" id="reload-choices" style="width:240px" spellcheck="false" />` })}
+    </div>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Mouse gestures</span></div>
+      ${settingRow({ title: "Mouse gestures", desc: "Hold the right mouse button in a page and draw: ← back, → forward, and the ones below", controlHtml: switchHtml("gestures-on", f.gestures_enabled !== false) })}
+      <div class="list-panel" id="gesture-list" style="max-height:none"></div>
+      <div class="setting-row"><div class="info"><div class="desc">Up to four strokes, like ↓ → (type them as D R). A gesture can run any command.</div></div><div class="control">
+        <input class="field mono" id="gesture-new" style="width:90px" placeholder="D R" spellcheck="false" />
+        <select class="field" id="gesture-new-cmd" style="width:200px"></select>
+        <button class="btn sm" id="gesture-add">${icon("plus", 13)}<span>Add</span></button>
+        <button class="btn sm ghost" id="gesture-reset">Reset</button>
+      </div></div>
+    </div>
+
+    <div class="setting-card" id="site-tweaks-card">
+      <div class="k-card-title"><span class="k-label">Your changes to sites</span></div>
+      <p style="margin:2px 18px 8px;font-size:12px;line-height:1.5;color:var(--text-faint)">Pick a site to give it its own style (CSS), a colour filter, or auto-reload -- or to bring back what you hid with “Hide an element”.</p>
+      <div class="setting-row"><div class="info"><div class="title">Site</div></div><div class="control">
+        <input class="field" id="tweak-site" list="tweak-sites" style="width:240px" placeholder="example.com" spellcheck="false" />
+        <datalist id="tweak-sites"></datalist>
+      </div></div>
+      <div id="tweak-editor"></div>
+    </div>
+  </div>`);
+
+  // Screenshots
+  const shotAction = p.querySelector("#shot-action");
+  const shotFormat = p.querySelector("#shot-format");
+  const shotFolder = p.querySelector("#shot-folder");
+  shotAction.value = shot.action;
+  shotFormat.value = shot.format;
+  shotFolder.value = shot.folder;
+  const saveShot = () => saveFeature("screenshot", { action: shotAction.value, format: shotFormat.value, folder: shotFolder.value.trim() });
+  for (const c of [shotAction, shotFormat, shotFolder]) c.addEventListener("change", saveShot);
+
+  // Reading and pages
+  const filter = p.querySelector("#page-filter");
+  filter.value = f.page_filter || "";
+  filter.addEventListener("change", () => saveFeature("page_filter", filter.value || undefined));
+  const featureSwitch = (id, key) => {
+    const btn = p.querySelector(`#${id}`);
+    btn.addEventListener("click", async () => {
+      const on = !btn.classList.contains("on");
+      await saveFeature(key, on);
+      btn.classList.toggle("on", on);
+      btn.setAttribute("aria-checked", String(on));
+    });
+  };
+  featureSwitch("deamp", "deamp");
+  featureSwitch("gestures-on", "gestures_enabled");
+  p.querySelector("#reader-reset").addEventListener("click", async () => {
+    await saveFeature("reader", undefined);
+    toast("Reader view looks like it did at first");
+  });
+  const recent = p.querySelector("#palette-recent");
+  recent.value = String(f.palette_recent ?? 5);
+  recent.addEventListener("change", () => saveFeature("palette_recent", Number(recent.value)));
+  const reloadChoices = p.querySelector("#reload-choices");
+  reloadChoices.value = (Array.isArray(f.reload_intervals) ? f.reload_intervals : [15, 30, 60, 300, 900, 1800]).join(", ");
+  reloadChoices.addEventListener("change", () => {
+    const list = reloadChoices.value.split(/[\s,]+/).map(Number).filter((n) => Number.isFinite(n) && n >= 5 && n <= 86400);
+    saveFeature("reload_intervals", list.length ? [...new Set(list)].sort((a, b) => a - b) : undefined);
+  });
+
+  // Gestures
+  const commands = (await invoke("get_commands").catch(() => [])).filter((c) => !c.reserved);
+  const commandName = (id) => commands.find((c) => c.id === id)?.label || id;
+  const newCmd = p.querySelector("#gesture-new-cmd");
+  newCmd.innerHTML = commands.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join("");
+  const gestureList = p.querySelector("#gesture-list");
+  const gestures = () => (features().gestures && typeof features().gestures === "object" ? features().gestures : DEFAULT_GESTURES);
+  const renderGestures = () => {
+    gestureList.innerHTML = "";
+    for (const [g, id] of Object.entries(gestures())) {
+      const row = el(`<div class="list-row"><span class="lr-title"><span class="mono" style="display:inline-block;min-width:80px"></span><span class="cmd"></span></span><button class="btn ghost icon-only sm" title="Remove">${icon("trash", 13)}</button></div>`);
+      row.querySelector(".mono").textContent = drawn(g);
+      row.querySelector(".cmd").textContent = commandName(id);
+      row.querySelector("button").addEventListener("click", async () => {
+        const next = { ...gestures() };
+        delete next[g];
+        await saveFeature("gestures", next);
+        renderGestures();
+      });
+      gestureList.appendChild(row);
+    }
+  };
+  renderGestures();
+  p.querySelector("#gesture-add").addEventListener("click", async () => {
+    const input = p.querySelector("#gesture-new");
+    const g = input.value.toUpperCase().replace(/←/g, "L").replace(/→/g, "R").replace(/↑/g, "U").replace(/↓/g, "D").replace(/[^LRUD]/g, "").replace(/(.)\1+/g, "$1");
+    if (!g || g.length > 4) return toast("Type one to four strokes: L R U D");
+    await saveFeature("gestures", { ...gestures(), [g]: newCmd.value });
+    input.value = "";
+    renderGestures();
+  });
+  p.querySelector("#gesture-reset").addEventListener("click", async () => {
+    await saveFeature("gestures", undefined);
+    renderGestures();
+  });
+
+  // Each site's tweaks
+  const siteInput = p.querySelector("#tweak-site");
+  const editor = p.querySelector("#tweak-editor");
+  const fillSites = () => {
+    p.querySelector("#tweak-sites").innerHTML = Object.keys(features().site_tweaks || {}).sort().map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
+  };
+  const showSite = (site) => {
+    site = site.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+    editor.innerHTML = "";
+    if (!site) return;
+    const t = (features().site_tweaks || {})[site] || {};
+    const box = el(`<div>
+      ${settingRow({ title: "Colour filter", controlHtml: selectHtml("tweak-filter", [["", "Same as every site"], ["none", "None"], ...FILTERS.slice(1)], 200) })}
+      ${settingRow({ title: "Reload every", desc: "Seconds; 0 for never (at least 5)", controlHtml: `<input class="field mono" id="tweak-reload" type="number" min="0" step="5" style="width:100px" />` })}
+      <div class="setting-row" style="display:block"><div class="info"><div class="title">Your style for ${escapeHtml(site)}</div><div class="desc">CSS added to every page of the site</div></div>
+        <textarea class="field mono" id="tweak-css" rows="6" style="width:100%;margin-top:8px;resize:vertical" spellcheck="false" placeholder="body { font-size: 18px !important; }"></textarea></div>
+      <div class="list-panel" id="tweak-zapped" style="max-height:220px"></div>
+      <div class="setting-row"><div class="info"></div><div class="control"><button class="btn sm danger" id="tweak-clear">Remove all changes to this site</button></div></div>
+    </div>`);
+    const save = async (patch) => {
+      const all = { ...(features().site_tweaks || {}) };
+      const next = { ...(all[site] || {}), ...patch };
+      for (const k of Object.keys(next)) if (next[k] === "" || next[k] === 0 || (Array.isArray(next[k]) && !next[k].length)) delete next[k];
+      if (Object.keys(next).length) all[site] = next;
+      else delete all[site];
+      await saveFeature("site_tweaks", all);
+      fillSites();
+    };
+    const filterSel = box.querySelector("#tweak-filter");
+    filterSel.value = t.filter || "";
+    filterSel.addEventListener("change", () => save({ filter: filterSel.value }));
+    const reload = box.querySelector("#tweak-reload");
+    reload.value = t.reload || 0;
+    reload.addEventListener("change", () => {
+      const n = Math.round(Number(reload.value) || 0);
+      save({ reload: n >= 5 ? Math.min(n, 86400) : 0 });
+    });
+    const css = box.querySelector("#tweak-css");
+    css.value = t.css || "";
+    css.addEventListener("change", () => save({ css: css.value.slice(0, 100000) }));
+    const zappedList = box.querySelector("#tweak-zapped");
+    const renderZapped = () => {
+      const zapped = ((features().site_tweaks || {})[site] || {}).zapped || [];
+      zappedList.innerHTML = zapped.length ? "" : `<div class="empty" style="padding:10px 12px;font-size:12px;opacity:.6">Nothing hidden on this site. “Hide an element” in the command palette (F2) picks one.</div>`;
+      for (const selector of zapped) {
+        const row = el(`<div class="list-row"><span class="lr-title mono"></span><button class="btn ghost sm">Show again</button></div>`);
+        row.querySelector(".lr-title").textContent = selector;
+        row.querySelector("button").addEventListener("click", async () => {
+          await save({ zapped: zapped.filter((z) => z !== selector) });
+          renderZapped();
+        });
+        zappedList.appendChild(row);
+      }
+    };
+    renderZapped();
+    box.querySelector("#tweak-clear").addEventListener("click", async () => {
+      const all = { ...(features().site_tweaks || {}) };
+      delete all[site];
+      await saveFeature("site_tweaks", all);
+      fillSites();
+      showSite(site);
+    });
+    editor.appendChild(box);
+  };
+  fillSites();
+  siteInput.addEventListener("change", () => showSite(siteInput.value));
+  // Opened from "Change this site" (the command palette): that site.
+  const openFor = () => {
+    let site = "";
+    try {
+      site = localStorage.getItem("kessel-edit-site") || "";
+      localStorage.removeItem("kessel-edit-site");
+    } catch {}
+    if (site) {
+      siteInput.value = site;
+      showSite(site);
+    }
+  };
+  openFor();
+  window.addEventListener("hashchange", openFor);
+  window.addEventListener("focus", openFor);
+  return p;
+}
+
+// --- Network ---------------------------------------------------------------------------
+
+export function networkPanel(settings, { el, settingRow }) {
+  const f = features();
+  const proxy = { mode: "system", server: "", bypass: "", pac: "", ...(f.proxy || {}) };
+  const p = el(`<div class="panel" id="panel-network">
+    <h2>Network</h2>
+    <p class="sub">How Kessel connects. These are part of how the engine starts, so they apply after a restart.</p>
+    <div class="setting-card">
+      ${settingRow({ title: "Proxy", desc: "Where Kessel's connections go", controlHtml: selectHtml("proxy-mode", [["system", "Windows' setting"], ["direct", "No proxy"], ["fixed", "This proxy server"], ["pac", "A setup script (PAC)"]], 200) })}
+      <div id="proxy-fixed">
+        ${settingRow({ title: "Proxy server", desc: "host:port, or socks5://host:port -- one per protocol like http=a:80;https=b:443", controlHtml: `<input class="field mono" id="proxy-server" style="width:260px" spellcheck="false" placeholder="127.0.0.1:8080" />` })}
+        ${settingRow({ title: "Not for", desc: "Addresses that skip the proxy, separated by commas", controlHtml: `<input class="field mono" id="proxy-bypass" style="width:260px" spellcheck="false" placeholder="localhost, *.lan" />` })}
+      </div>
+      <div id="proxy-pac">
+        ${settingRow({ title: "Script address", controlHtml: `<input class="field mono" id="proxy-pac-url" style="width:260px" spellcheck="false" placeholder="http://wpad/wpad.dat" />` })}
+      </div>
+    </div>
+    <div class="setting-card">
+      ${settingRow({ title: "Engine switches", desc: "For experiments: Chromium command-line switches, separated by spaces (like --enable-features=…). A wrong one can stop pages from working -- empty this to undo.", controlHtml: "" })}
+      <div style="padding:0 14px 12px"><textarea class="field mono" id="engine-flags" rows="3" style="width:100%;resize:vertical" spellcheck="false" placeholder="--enable-features=ParallelDownloading"></textarea></div>
+    </div>
+    <div class="setting-card">
+      ${settingRow({ title: "Apply", desc: "Kessel restarts and brings your tabs back", controlHtml: `<button class="btn sm" id="net-restart">${icon("refresh", 13)}<span>Restart now</span></button>` })}
+    </div>
+  </div>`);
+  const mode = p.querySelector("#proxy-mode");
+  const server = p.querySelector("#proxy-server");
+  const bypass = p.querySelector("#proxy-bypass");
+  const pac = p.querySelector("#proxy-pac-url");
+  mode.value = proxy.mode;
+  server.value = proxy.server;
+  bypass.value = proxy.bypass;
+  pac.value = proxy.pac;
+  const showMode = () => {
+    p.querySelector("#proxy-fixed").style.display = mode.value === "fixed" ? "" : "none";
+    p.querySelector("#proxy-pac").style.display = mode.value === "pac" ? "" : "none";
+  };
+  showMode();
+  const save = () => {
+    showMode();
+    saveFeature("proxy", { mode: mode.value, server: server.value.trim(), bypass: bypass.value.trim(), pac: pac.value.trim() });
+  };
+  for (const c of [mode, server, bypass, pac]) c.addEventListener("change", save);
+  const flags = p.querySelector("#engine-flags");
+  flags.value = f.engine_flags || "";
+  flags.addEventListener("change", () => {
+    const bad = flags.value.split(/\s+/).filter((x) => x && !x.startsWith("--"));
+    if (bad.length) toast(`Left out ${bad[0]} -- switches start with --`);
+    saveFeature("engine_flags", flags.value.trim() || undefined);
+  });
+  p.querySelector("#net-restart").addEventListener("click", () => invoke("restart_kessel").catch((err) => toast(String(err))));
+  return p;
+}
+
+// --- Backup ----------------------------------------------------------------------------
+
+export function backupCard({ el, settingRow }) {
+  const card = el(`<div class="setting-card">
+    ${settingRow({ title: "Back up your settings", desc: "Every setting -- appearance, shortcuts, search engines, your changes to sites -- in one file. No passwords, history or bookmarks.", controlHtml: `<button class="btn sm" id="settings-export">Save to a file…</button><button class="btn sm" id="settings-import">Restore…</button>` })}
+  </div>`);
+  card.querySelector("#settings-export").addEventListener("click", async () => {
+    const path = await invoke("export_settings").catch((err) => toast(String(err)));
+    if (path) toast(`Saved to ${path}`);
+  });
+  card.querySelector("#settings-import").addEventListener("click", async () => {
+    if (!(await confirmDialog("Restore settings from a file? Your current settings are replaced by the file's.", "Choose file"))) return;
+    const done = await invoke("import_settings").catch((err) => toast(String(err)));
+    if (done) {
+      toast("Settings restored");
+      setTimeout(() => location.reload(), 600);
+    }
+  });
+  return card;
+}

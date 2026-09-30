@@ -25,6 +25,7 @@ mod split;
 mod store;
 mod suggest;
 mod tabdrag;
+mod tools;
 mod vault;
 mod zip;
 
@@ -124,7 +125,29 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     // Shown instead of a dangerous or broken page (security.rs).
     ("warning", "warning.html"),
     ("gpu", "gpu.html"),
+    ("reader", "reader.html"),
 ];
+
+// The pages Kessel starts with when it isn't bringing back your last
+// session (settings.features.startup_pages): web and Kessel addresses only.
+fn startup_pages(features: &serde_json::Value) -> Vec<String> {
+    features
+        .get("startup_pages")
+        .and_then(|v| v.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|v| v.as_str())
+                .map(str::trim)
+                .filter(|u| {
+                    let lower = u.to_ascii_lowercase();
+                    lower.starts_with("https://") || lower.starts_with("http://") || lower.starts_with("kessel://")
+                })
+                .take(20)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
 
 // kessel://settings -> settings.html, kessel://settings/privacy ->
 // settings.html#privacy (a section of it), kessel://history?q=news ->
@@ -3193,6 +3216,7 @@ async fn toggle_popup(
         "siteinfo" => "siteinfo.html",
         "download" => "download-warning.html",
         "media" => "media.html",
+        "palette" => "palette.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
@@ -4168,6 +4192,9 @@ fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<
     *state.store.settings.lock().unwrap() = settings.clone();
     state.store.save_settings();
     let _ = app.emit("settings-changed", &settings);
+    if before.features != settings.features {
+        tools::broadcast_tweaks(&app);
+    }
     if wants_requests(&before) != wants_requests(&settings) {
         let (app2, on) = (app.clone(), wants_requests(&settings));
         later(&app, move || apply_request_filters(&app2, on));
@@ -4840,6 +4867,39 @@ fn take_window_init(webview: Webview, state: tauri::State<BrowserState>) -> serd
 // Chromium's own third-party cookie blocking), SmartScreen only when you
 // switched it on, a video's audio tracks for the media controls (media.rs),
 // and hardware acceleration and the graphics card (graphics.rs).
+// Settings -> Network: the proxy ("system", "direct", "fixed" with a
+// server like 127.0.0.1:8080 or socks5://127.0.0.1:1080, or "pac" with a
+// PAC file's address), and your own engine switches (Settings ->
+// Experiments) -- both part of the command line, so after a restart.
+fn proxy_args(features: &serde_json::Value) -> String {
+    let mut out = String::new();
+    let proxy = features.get("proxy").cloned().unwrap_or(serde_json::json!({}));
+    let get = |k: &str| proxy.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    // Nothing that could end the switch and start another.
+    let clean = |v: String| v.chars().filter(|c| !c.is_whitespace() && *c != '"').collect::<String>();
+    match get("mode").as_str() {
+        "direct" => out.push_str(" --no-proxy-server"),
+        "fixed" if !get("server").is_empty() => {
+            out.push_str(&format!(" --proxy-server={}", clean(get("server"))));
+            if !get("bypass").is_empty() {
+                out.push_str(&format!(" --proxy-bypass-list={}", clean(get("bypass").replace(',', ";"))));
+            }
+        }
+        "pac" if !get("pac").is_empty() => out.push_str(&format!(" --proxy-pac-url={}", clean(get("pac")))),
+        _ => {}
+    }
+    if let Some(flags) = features.get("engine_flags").and_then(|v| v.as_str()) {
+        for flag in flags.split_whitespace().filter(|f| f.starts_with("--") && f.len() > 2 && !f.contains('"')) {
+            // Kessel's own debugging port is for its tests only.
+            if !flag.starts_with("--remote-debugging") {
+                out.push(' ');
+                out.push_str(flag);
+            }
+        }
+    }
+    out
+}
+
 fn engine_args(settings: &Settings) -> String {
     let mut args = if settings.smartscreen { String::from("--disable-features=msWebOOUI,msPdfOOUI") } else { String::from(profile::DEFAULT_ENGINE_ARGS) };
     if settings.block_third_party_cookies {
@@ -4848,6 +4908,7 @@ fn engine_args(settings: &Settings) -> String {
     // Off in the engine by default.
     args.push_str(" --enable-blink-features=AudioVideoTracks");
     args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
+    args.push_str(&proxy_args(&settings.features));
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
@@ -4939,6 +5000,12 @@ fn main() {
             media::page_media,
             media::media_action,
             graphics::graphics_info,
+            tools::page_tool,
+            tools::take_screenshot,
+            tools::reader_open,
+            tools::reader_content,
+            tools::export_settings,
+            tools::import_settings,
             page::page_find_status,
             toggle_popup,
             suggest_popup,
@@ -5067,6 +5134,7 @@ fn main() {
             let restore = store.settings.lock().unwrap().restore_tabs;
             commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);
             app.manage(page::ZoomLevels::load(&data_dir));
+            app.manage(tools::ReaderPages::default());
 
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
@@ -5110,7 +5178,10 @@ fn main() {
             let state = app.state::<BrowserState>();
             let saved = if restore { read_session(&state) } else { Vec::new() };
             if saved.is_empty() {
-                browser_windows::create(app.handle(), false, serde_json::Value::Null)?;
+                // Settings -> Search & Startup: pages to start with.
+                let pages = startup_pages(&state.store.settings.lock().unwrap().features);
+                let init = if pages.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": pages }) };
+                browser_windows::create(app.handle(), false, init)?;
             } else {
                 for session in saved {
                     browser_windows::create(app.handle(), false, serde_json::json!({ "session": session }))?;
@@ -5137,6 +5208,30 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_and_engine_switches() {
+        assert_eq!(proxy_args(&serde_json::json!({})), "");
+        assert_eq!(proxy_args(&serde_json::json!({ "proxy": { "mode": "direct" } })), " --no-proxy-server");
+        assert_eq!(
+            proxy_args(&serde_json::json!({ "proxy": { "mode": "fixed", "server": "socks5://127.0.0.1:1080", "bypass": "localhost, *.lan" } })),
+            " --proxy-server=socks5://127.0.0.1:1080 --proxy-bypass-list=localhost;*.lan"
+        );
+        // A server with a space can't sneak in a second switch.
+        assert_eq!(proxy_args(&serde_json::json!({ "proxy": { "mode": "fixed", "server": "a:1 --evil" } })), " --proxy-server=a:1--evil");
+        assert_eq!(proxy_args(&serde_json::json!({ "proxy": { "mode": "fixed", "server": "" } })), "");
+        assert_eq!(
+            proxy_args(&serde_json::json!({ "engine_flags": "--enable-features=X nope --remote-debugging-port=9 --lang=hu" })),
+            " --enable-features=X --lang=hu"
+        );
+    }
+
+    #[test]
+    fn startup_pages_are_web_or_kessel_addresses() {
+        let f = serde_json::json!({ "startup_pages": ["https://a.com", " kessel://history ", "javascript:alert(1)", "file:///c:/x", 4] });
+        assert_eq!(startup_pages(&f), vec!["https://a.com", "kessel://history"]);
+        assert!(startup_pages(&serde_json::json!({})).is_empty());
+    }
 
     #[test]
     fn kessel_pages_and_their_sections() {

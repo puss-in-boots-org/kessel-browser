@@ -9,9 +9,10 @@
 
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
-import { toast, hostOf, escapeHtml, formatRelativeTime, debounce, listenHere, ENGINES, confirmDialog } from "./shared/api.js";
+import { toast, hostOf, escapeHtml, formatRelativeTime, debounce, listenHere, confirmDialog } from "./shared/api.js";
 import { siteIcon } from "./shared/glass.js";
 import { SIDEBAR_PANELS, WORKSPACE_COLORS, WORKSPACE_ICONS } from "./shared/sidebar-panels.js";
+import { engineById } from "./shared/search.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -386,7 +387,7 @@ views.search = async (root) => {
   let serial = 0;
   const section = (title, rows) => (rows.length ? [group(title), ...rows] : []);
   const searchWeb = (q) => {
-    const engine = ENGINES[currentSettings()?.search_engine] || ENGINES.google;
+    const engine = engineById(currentSettings(), currentSettings()?.search_engine);
     invoke("tell_toolbar", { message: { type: "web-search", url: engine.url(q), query: q } });
   };
   const run = async (q) => {
@@ -406,7 +407,7 @@ views.search = async (root) => {
     const web = row({
       leading: el(`<span class="sb-glyph">${icon("globe", 13)}</span>`),
       title: `Search the web for “${q}”`,
-      sub: (ENGINES[currentSettings()?.search_engine] || ENGINES.google).name,
+      sub: engineById(currentSettings(), currentSettings()?.search_engine).name,
       onOpen: () => searchWeb(q),
     });
     results.replaceChildren(

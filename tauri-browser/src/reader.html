@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en" data-page="reader">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reader view</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    /* kessel://reader (reader.js): the article from a page on its own, in
+       your font, size, width and colours (the Aa menu; kept in
+       settings.features.reader). */
+    :root { --r-bg: var(--bg); --r-text: var(--text); --r-faint: var(--text-faint); --r-link: var(--accent); --r-font: Georgia, "Times New Roman", serif; --r-size: 19px; --r-width: 680px; --r-line: 1.7; }
+    html[data-rtheme="light"] { --r-bg: #fbfbf8; --r-text: #1d1d1f; --r-faint: #6b6b70; --r-link: #1a5fd0; }
+    html[data-rtheme="sepia"] { --r-bg: #f4ecd8; --r-text: #4a3a26; --r-faint: #86735a; --r-link: #8a4b12; }
+    html[data-rtheme="dark"] { --r-bg: #16171b; --r-text: #dcdcde; --r-faint: #8a8a92; --r-link: #7eb2ff; }
+    html[data-rtheme="black"] { --r-bg: #000; --r-text: #c9c9c9; --r-faint: #777; --r-link: #7eb2ff; }
+    body { margin: 0; height: 100vh; overflow-y: auto; background: var(--r-bg); color: var(--r-text); }
+    #progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--r-link); z-index: 5; transition: width 0.1s linear; }
+    #bar { position: sticky; top: 0; z-index: 4; display: flex; gap: 6px; justify-content: flex-end; padding: 10px 16px; background: color-mix(in srgb, var(--r-bg) 88%, transparent); backdrop-filter: blur(8px); }
+    #bar button { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--r-text); border: 1px solid color-mix(in srgb, var(--r-text) 18%, transparent); border-radius: 9px; padding: 6px 11px; font: 12.5px system-ui, sans-serif; cursor: pointer; }
+    #bar button:hover { background: color-mix(in srgb, var(--r-text) 8%, transparent); }
+    #bar .spacer { flex: 1; }
+    #panel { position: fixed; top: 50px; right: 16px; z-index: 6; width: 300px; padding: 14px; border-radius: 14px; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); font: 12.5px system-ui, sans-serif; }
+    #panel[hidden] { display: none; }
+    #panel label { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 10px; margin: 8px 0; }
+    #panel select, #panel input[type="range"] { width: 100%; }
+    #panel .themes { display: flex; gap: 6px; }
+    #panel .themes button { flex: 1; height: 30px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; font: 12px system-ui, sans-serif; }
+    #panel .themes button.on { border-color: var(--accent); }
+    article { max-width: var(--r-width); margin: 0 auto; padding: 20px 28px 140px; font-family: var(--r-font); font-size: var(--r-size); line-height: var(--r-line); overflow-wrap: break-word; }
+    article .site { font: 600 12px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: var(--r-faint); }
+    article h1.title { font-size: 1.75em; line-height: 1.25; margin: 8px 0 10px; }
+    article .meta { font: 13px system-ui, sans-serif; color: var(--r-faint); margin-bottom: 28px; }
+    article a { color: var(--r-link); }
+    article img, article video, article figure { max-width: 100%; height: auto; }
+    article figure { margin: 1.4em 0; }
+    article figcaption { font-size: 0.8em; color: var(--r-faint); }
+    article pre { overflow-x: auto; font-size: 0.8em; padding: 12px; border-radius: 8px; background: color-mix(in srgb, var(--r-text) 7%, transparent); }
+    article code { font-size: 0.88em; }
+    article blockquote { margin: 1.2em 0; padding-left: 1em; border-left: 3px solid color-mix(in srgb, var(--r-text) 25%, transparent); color: color-mix(in srgb, var(--r-text) 80%, transparent); }
+    article table { border-collapse: collapse; font-size: 0.85em; display: block; overflow-x: auto; }
+    article td, article th { border: 1px solid color-mix(in srgb, var(--r-text) 20%, transparent); padding: 4px 8px; }
+    html.no-images article img, html.no-images article figure { display: none; }
+    .reading { background: color-mix(in srgb, var(--r-link) 18%, transparent); border-radius: 4px; }
+    #empty { text-align: center; padding: 80px 20px; font: 14px system-ui, sans-serif; color: var(--r-faint); }
+  </style>
+</head>
+<body>
+  <div id="progress"></div>
+  <div id="bar">
+    <button id="back-btn" title="Back to the page"></button>
+    <span class="spacer"></span>
+    <button id="speak-btn" title="Read aloud"></button>
+    <button id="style-btn" title="Font, size and colours">Aa</button>
+  </div>
+  <div id="panel" hidden>
+    <label>Font <select id="o-font">
+      <option value="serif">Serif</option>
+      <option value="sans">Sans-serif</option>
+      <option value="mono">Monospace</option>
+      <option value="dyslexic">Easy reading</option>
+    </select></label>
+    <label>Size <input id="o-size" type="range" min="13" max="34" step="1" /></label>
+    <label>Width <input id="o-width" type="range" min="440" max="1200" step="20" /></label>
+    <label>Line height <input id="o-line" type="range" min="1.2" max="2.4" step="0.1" /></label>
+    <label>Pictures <select id="o-images"><option value="1">Show</option><option value="0">Hide</option></select></label>
+    <label>Voice <select id="o-voice"><option value="">System default</option></select></label>
+    <label>Speed <input id="o-rate" type="range" min="0.5" max="2.5" step="0.1" /></label>
+    <div class="themes" id="o-theme">
+      <button data-t="auto" style="background:var(--bg);color:var(--text)">Auto</button>
+      <button data-t="light" style="background:#fbfbf8;color:#1d1d1f">Light</button>
+      <button data-t="sepia" style="background:#f4ecd8;color:#4a3a26">Sepia</button>
+      <button data-t="dark" style="background:#16171b;color:#dcdcde">Dark</button>
+      <button data-t="black" style="background:#000;color:#c9c9c9">Black</button>
+    </div>
+  </div>
+  <article id="article"></article>
+  <script type="module" src="reader.js"></script>
+</body>
+</html>
