@@ -42,6 +42,7 @@ export function searchExtras(panel, { el, settingRow }) {
     <div class="k-card-title"><span class="k-label">Search engines and keywords</span></div>
     <p style="margin:2px 18px 8px;font-size:12px;line-height:1.5;color:var(--text-faint)">Type a keyword and a space before your search -- <span class="mono">yt cats</span> -- to search with that engine. In an engine's address, <span class="mono">%s</span> is what you searched for.</p>
     <div class="list-panel" id="engines-list" style="max-height:none"></div>
+    <div id="offered-engines"></div>
     <div class="setting-row"><div class="info"></div><div class="control">
       <button class="btn sm" id="engine-add">${icon("plus", 13)}<span>Add a search engine</span></button>
       <button class="btn sm ghost" id="engine-reset">Reset to Kessel's</button>
@@ -97,6 +98,35 @@ export function searchExtras(panel, { el, settingRow }) {
     }
   };
   render();
+  // Sites' own search engines (OpenSearch), noticed as you browsed.
+  const offered = card.querySelector("#offered-engines");
+  const renderOffered = () => {
+    const have = new Set(extraEngines(currentSettings()).map((e) => e.url));
+    const list = Object.entries(features().offered_engines || {}).filter(([, e]) => e?.url && !e.dismissed && !have.has(e.url)).sort(([a], [b]) => a.localeCompare(b));
+    offered.innerHTML = list.length ? `<div class="k-card-title" style="margin-top:6px"><span class="k-label">Offered by sites you visited</span></div>` : "";
+    for (const [site, e] of list.slice(0, 30)) {
+      const row = el(`<div class="list-row"><span class="lr-title"></span><span class="lr-sub mono"></span><span><button class="btn sm">Add</button><button class="btn ghost icon-only sm" title="Don't offer it">${icon("close", 12)}</button></span></div>`);
+      row.querySelector(".lr-title").textContent = e.name;
+      row.querySelector(".lr-sub").textContent = site;
+      const [add, dismiss] = row.querySelectorAll("button");
+      add.addEventListener("click", async () => {
+        const keyword = site.split(".")[0].slice(0, 12);
+        const taken = new Set(allEngines(currentSettings()).map((x) => x.keyword));
+        await saveFeature("search_engines", [...extraEngines(currentSettings()), { id: `site-${site}`, name: e.name, url: e.url, keyword: taken.has(keyword) ? "" : keyword }]);
+        render();
+        renderOffered();
+        fillEngines();
+      });
+      dismiss.addEventListener("click", async () => {
+        const next = { ...(features().offered_engines || {}) };
+        next[site] = { ...e, dismissed: true };
+        await saveFeature("offered_engines", next);
+        renderOffered();
+      });
+      offered.appendChild(row);
+    }
+  };
+  renderOffered();
   card.querySelector("#engine-add").addEventListener("click", async () => {
     const id = `custom-${Date.now().toString(36)}`;
     await saveFeature("search_engines", [...extraEngines(currentSettings()), { id, name: "New engine", url: "https://example.com/search?q=%s", keyword: "" }]);
@@ -137,13 +167,44 @@ export function searchExtras(panel, { el, settingRow }) {
 export function tabSoundCard({ el, settingRow, switchHtml }) {
   const card = el(`<div class="setting-card">
     ${settingRow({ title: "Only the tab you're on plays sound", desc: "Other tabs are muted while you're away from them, and play again when you go back. A tab you unmute yourself keeps playing.", controlHtml: switchHtml("mute-background", !!features().mute_background) })}
+    ${settingRow({ title: "Close tabs you've forgotten", desc: "Tabs you haven't looked at for this long close by themselves -- not pinned ones or ones playing sound. They stay in recently closed and history. Counted while Kessel is open.", controlHtml: selectHtml("auto-close-days", [["0", "Never"], ["1", "After a day"], ["3", "After 3 days"], ["7", "After a week"], ["14", "After 2 weeks"], ["30", "After a month"]], 170) })}
   </div>`);
+  const autoClose = card.querySelector("#auto-close-days");
+  autoClose.value = String(features().auto_close_days || 0);
+  autoClose.addEventListener("change", () => saveFeature("auto_close_days", Number(autoClose.value) || undefined));
   const btn = card.querySelector("#mute-background");
   btn.addEventListener("click", async () => {
     const on = !btn.classList.contains("on");
     await saveFeature("mute_background", on);
     btn.classList.toggle("on", on);
     btn.setAttribute("aria-checked", String(on));
+  });
+  return card;
+}
+
+// --- Privacy: forget sites ---------------------------------------------------------------
+
+export function forgetSitesCard({ el, settingRow, switchHtml }) {
+  const card = el(`<div class="setting-card">
+    ${settingRow({ title: "Forget these sites when you close them", desc: "When the last tab showing one of these sites closes, its cookies and site data go -- you're signed out and it forgets you. One site per line, like example.com (its subdomains too).", controlHtml: "" })}
+    <div style="padding:0 14px 12px"><textarea class="field mono" id="forget-sites" rows="3" style="width:100%;resize:vertical" spellcheck="false" placeholder="example.com"></textarea></div>
+    ${settingRow({ title: "Say when a site was forgotten", controlHtml: switchHtml("forget-notice", features().forget_sites_notice !== false) })}
+  </div>`);
+  const text = card.querySelector("#forget-sites");
+  text.value = (features().forget_sites || []).join("\n");
+  text.addEventListener("change", () => {
+    const sites = text.value
+      .split(/[\s,]+/)
+      .map((l) => l.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, ""))
+      .filter((l) => /^[a-z0-9.-]+\.[a-z0-9-]+$/.test(l));
+    text.value = [...new Set(sites)].join("\n");
+    saveFeature("forget_sites", [...new Set(sites)]);
+  });
+  const notice = card.querySelector("#forget-notice");
+  notice.addEventListener("click", async () => {
+    const on = !notice.classList.contains("on");
+    await saveFeature("forget_sites_notice", on);
+    notice.classList.toggle("on", on);
   });
   return card;
 }
@@ -169,9 +230,32 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
     </div>
 
     <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Save as PDF</span></div>
+      ${settingRow({ title: "Landscape", desc: "“Save as PDF” is in the command palette (F2)", controlHtml: switchHtml("pdf-landscape", !!f.pdf?.landscape) })}
+      ${settingRow({ title: "Background colours and pictures", controlHtml: switchHtml("pdf-backgrounds", f.pdf?.backgrounds !== false) })}
+      ${settingRow({ title: "Title, address and page numbers", controlHtml: switchHtml("pdf-headers", !!f.pdf?.headers) })}
+    </div>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Right-click menu in pages</span></div>
+      ${settingRow({ title: "Peek at link", desc: "A link in a small window over the page; “Back to tabs” in it keeps it", controlHtml: switchHtml("menu-peek", f.page_menu?.peek !== false) })}
+      ${settingRow({ title: "Search the web for selected text", desc: "With your default search engine, in a new tab", controlHtml: switchHtml("menu-search", f.page_menu?.search !== false) })}
+      ${settingRow({ title: "Search the web for an image", controlHtml: switchHtml("menu-image", f.page_menu?.image_search !== false) })}
+      ${settingRow({ title: "Search images with", controlHtml: selectHtml("image-search", [["google", "Google Lens"], ["bing", "Bing Visual Search"], ["yandex", "Yandex Images"], ["tineye", "TinEye"]], 190) })}
+    </div>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Command chains</span></div>
+      <p style="margin:2px 18px 8px;font-size:12px;line-height:1.5;color:var(--text-faint)">Several commands in one go -- from the command palette (F2), or a mouse gesture below.</p>
+      <div id="chain-list"></div>
+      <div class="setting-row"><div class="info"></div><div class="control"><button class="btn sm" id="chain-add">${icon("plus", 13)}<span>New chain</span></button></div></div>
+    </div>
+
+    <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Reading and pages</span></div>
       ${settingRow({ title: "Colour filter for every site", desc: "Each site can have its own below", controlHtml: selectHtml("page-filter", FILTERS, 200) })}
       ${settingRow({ title: "Skip AMP pages", desc: "An AMP copy of a page (Google's cut-down version) goes to the site's real page", controlHtml: switchHtml("deamp", f.deamp !== false) })}
+      ${settingRow({ title: "Offer saved copies of missing pages", desc: "When a page is gone (not found), a button opens the Wayback Machine's copy of it", controlHtml: switchHtml("wayback", f.wayback !== false) })}
       ${settingRow({ title: "Reader view", desc: "F9 shows a page's article on its own. Its font, size, width, colours and read-aloud voice are in its Aa menu.", controlHtml: `<button class="btn sm" id="reader-reset">Reset its look</button>` })}
       ${settingRow({ title: "Command palette remembers", desc: "How many commands you ran lately it lists first (F2)", controlHtml: selectHtml("palette-recent", [["0", "None"], ["3", "3"], ["5", "5"], ["10", "10"]], 100) })}
       ${settingRow({ title: "Auto-reload choices", desc: "The intervals the auto-reload menu offers, in seconds", controlHtml: `<input class="field mono" id="reload-choices" style="width:240px" spellcheck="false" />` })}
@@ -210,6 +294,33 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   const saveShot = () => saveFeature("screenshot", { action: shotAction.value, format: shotFormat.value, folder: shotFolder.value.trim() });
   for (const c of [shotAction, shotFormat, shotFolder]) c.addEventListener("change", saveShot);
 
+  // Save as PDF
+  const pdfSwitch = (id, key, defaultOn) => {
+    const btn = p.querySelector(`#${id}`);
+    btn.addEventListener("click", async () => {
+      const on = !btn.classList.contains("on");
+      await saveFeature("pdf", { landscape: false, backgrounds: true, headers: false, ...(features().pdf || {}), [key]: on });
+      btn.classList.toggle("on", on);
+    });
+    return defaultOn;
+  };
+  pdfSwitch("pdf-landscape", "landscape");
+  pdfSwitch("pdf-backgrounds", "backgrounds");
+  pdfSwitch("pdf-headers", "headers");
+
+  // Right-click menu
+  for (const [id, key] of [["menu-peek", "peek"], ["menu-search", "search"], ["menu-image", "image_search"]]) {
+    const btn = p.querySelector(`#${id}`);
+    btn.addEventListener("click", async () => {
+      const on = !btn.classList.contains("on");
+      await saveFeature("page_menu", { ...(features().page_menu || {}), [key]: on });
+      btn.classList.toggle("on", on);
+    });
+  }
+  const imageSearch = p.querySelector("#image-search");
+  imageSearch.value = f.image_search || "google";
+  imageSearch.addEventListener("change", () => saveFeature("image_search", imageSearch.value));
+
   // Reading and pages
   const filter = p.querySelector("#page-filter");
   filter.value = f.page_filter || "";
@@ -224,6 +335,7 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
     });
   };
   featureSwitch("deamp", "deamp");
+  featureSwitch("wayback", "wayback");
   featureSwitch("gestures-on", "gestures_enabled");
   p.querySelector("#reader-reset").addEventListener("click", async () => {
     await saveFeature("reader", undefined);
@@ -241,9 +353,69 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
 
   // Gestures
   const commands = (await invoke("get_commands").catch(() => [])).filter((c) => !c.reserved);
-  const commandName = (id) => commands.find((c) => c.id === id)?.label || id;
+  const commandName = (id) => {
+    const chain = /^chain:(\d+)$/.exec(id);
+    if (chain) return `Chain: ${(Array.isArray(features().command_chains) && features().command_chains[+chain[1]]?.name) || "gone"}`;
+    return commands.find((c) => c.id === id)?.label || id;
+  };
+  const chains = () => (Array.isArray(features().command_chains) ? features().command_chains : []);
   const newCmd = p.querySelector("#gesture-new-cmd");
-  newCmd.innerHTML = commands.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join("");
+  const fillGestureCommands = () => {
+    newCmd.innerHTML =
+      chains().map((c, i) => `<option value="chain:${i}">Chain: ${escapeHtml(c.name || "")}</option>`).join("") +
+      commands.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join("");
+  };
+  fillGestureCommands();
+
+  // Command chains: a name and its steps.
+  const chainList = p.querySelector("#chain-list");
+  const saveChains = async (list) => {
+    await saveFeature("command_chains", list);
+    fillGestureCommands();
+  };
+  const renderChains = () => {
+    chainList.innerHTML = chains().length ? "" : `<div style="padding:4px 18px 10px;font-size:12px;opacity:.6">No chains yet.</div>`;
+    chains().forEach((chain, i) => {
+      const row = el(`<div class="setting-row" style="display:block">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="field" style="flex:1" placeholder="Name" />
+          <button class="btn ghost icon-only sm" title="Remove this chain">${icon("trash", 13)}</button>
+        </div>
+        <div class="steps" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+        <select class="field" style="margin-top:8px;width:260px"><option value="">Add a step…</option>${commands.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join("")}</select>
+      </div>`);
+      const [name] = row.querySelectorAll("input");
+      name.value = chain.name || "";
+      const update = (patch) => saveChains(chains().map((c, j) => (j === i ? { ...c, ...patch } : c)));
+      name.addEventListener("change", () => update({ name: name.value.trim() || "Chain" }));
+      row.querySelector("button").addEventListener("click", async () => {
+        await saveChains(chains().filter((_, j) => j !== i));
+        renderChains();
+      });
+      const steps = row.querySelector(".steps");
+      (chain.steps || []).forEach((id, k) => {
+        const chip = el(`<span class="btn sm" style="cursor:default">${k + 1}. <span></span> <span class="x" style="cursor:pointer;opacity:.6" title="Remove step">✕</span></span>`);
+        chip.querySelector("span").textContent = commandName(id);
+        chip.querySelector(".x").addEventListener("click", async () => {
+          await update({ steps: chain.steps.filter((_, n) => n !== k) });
+          renderChains();
+        });
+        steps.appendChild(chip);
+      });
+      row.querySelector("select").addEventListener("change", async (e) => {
+        if (!e.target.value) return;
+        await update({ steps: [...(chain.steps || []), e.target.value].slice(0, 20) });
+        renderChains();
+      });
+      chainList.appendChild(row);
+    });
+  };
+  renderChains();
+  p.querySelector("#chain-add").addEventListener("click", async () => {
+    await saveChains([...chains(), { name: `Chain ${chains().length + 1}`, steps: [] }]);
+    renderChains();
+    chainList.querySelector(".setting-row:last-child input")?.select();
+  });
   const gestureList = p.querySelector("#gesture-list");
   const gestures = () => (features().gestures && typeof features().gestures === "object" ? features().gestures : DEFAULT_GESTURES);
   const renderGestures = () => {

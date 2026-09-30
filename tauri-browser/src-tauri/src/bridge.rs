@@ -196,6 +196,17 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::tools::add_zapped(app, url, d.get("selector")?.as_str()?);
             None
         }
+        // A part of the page picked for a screenshot (page-tools.js): the
+        // toolbar takes it.
+        "shot-area" if top_frame => {
+            crate::emit_to_tab_window(app, id, "area-picked", serde_json::json!({ "id": id, "area": d }));
+            None
+        }
+        // The site's own search engine (<link rel="search">).
+        "opensearch" if top_frame => {
+            crate::tools::offer_engine(app, url, d.get("name")?.as_str()?, d.get("url")?.as_str()?);
+            None
+        }
         // A mouse gesture drawn in the page.
         "gesture" => {
             crate::tools::on_gesture(app, label, d.get("g")?.as_str()?);

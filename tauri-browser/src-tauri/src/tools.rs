@@ -44,6 +44,7 @@ pub fn site_tweaks_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
         "zapped": site.get("zapped").cloned().unwrap_or(serde_json::json!([])),
         "reload": site.get("reload").and_then(|v| v.as_u64()).unwrap_or(0),
         "deamp": f.get("deamp").and_then(|v| v.as_bool()).unwrap_or(true),
+        "wayback": f.get("wayback").and_then(|v| v.as_bool()).unwrap_or(true),
         "gestures": gestures_on(&f),
     })
 }
@@ -74,6 +75,18 @@ pub fn on_gesture(app: &tauri::AppHandle, label: &str, gesture: &str) {
     }
     let map = f.get("gestures").cloned().filter(|g| g.is_object()).unwrap_or_else(default_gestures);
     let Some(command) = map.get(gesture).and_then(|c| c.as_str()).filter(|c| !c.is_empty()) else { return };
+    // "chain:2": your third command chain.
+    if let Some(index) = command.strip_prefix("chain:").and_then(|i| i.parse::<usize>().ok()) {
+        let steps = f
+            .get("command_chains")
+            .and_then(|c| c.get(index))
+            .and_then(|c| c.get("steps"))
+            .and_then(|s| s.as_array())
+            .map(|s| s.iter().filter_map(|v| v.as_str().map(str::to_string)).collect::<Vec<_>>())
+            .unwrap_or_default();
+        crate::commands::run_chain(app, steps, crate::keys::Source::from_label(label));
+        return;
+    }
     let Some(def) = crate::commands::find(command) else { return };
     let (app2, source) = (app.clone(), crate::keys::Source::from_label(label));
     crate::later(app, move || crate::commands::run(&app2, def.id, &source));
@@ -130,7 +143,7 @@ pub fn broadcast_tweaks(app: &tauri::AppHandle) {
 #[tauri::command]
 pub fn page_tool(app: tauri::AppHandle, webview: Webview, id: u32, tool: String) -> Result<(), String> {
     crate::require_internal_page(&webview)?;
-    if !matches!(tool.as_str(), "zap-start" | "link-hints") {
+    if !matches!(tool.as_str(), "zap-start" | "link-hints" | "shot-area-start" | "pause-media") {
         return Err("no such tool".into());
     }
     let state = app.state::<BrowserState>();
@@ -167,7 +180,7 @@ pub fn safe_file_name(name: &str) -> String {
 // tall as 16,000 pixels). Saved to the screenshots folder and/or handed back
 // for the clipboard, as Settings -> Page tools says: { path, data, mime }.
 #[tauri::command]
-pub async fn take_screenshot(app: tauri::AppHandle, webview: Webview, id: u32, full: bool) -> Result<serde_json::Value, String> {
+pub async fn take_screenshot(app: tauri::AppHandle, webview: Webview, id: u32, full: bool, area: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
     crate::require_internal_page(&webview)?;
     let (page, url) = {
         let state = app.state::<BrowserState>();
@@ -179,7 +192,14 @@ pub async fn take_screenshot(app: tauri::AppHandle, webview: Webview, id: u32, f
     let shot = f.get("screenshot").cloned().unwrap_or(serde_json::json!({}));
     let jpeg = shot.get("format").and_then(|v| v.as_str()) == Some("jpeg");
     let action = shot.get("action").and_then(|v| v.as_str()).unwrap_or("both").to_string();
-    let data = capture(&page, full, jpeg).await?;
+    // A part you picked (page-tools.js): its place on the page, in CSS pixels.
+    let area = area.and_then(|a| Some((a.get("x")?.as_f64()?, a.get("y")?.as_f64()?, a.get("width")?.as_f64()?, a.get("height")?.as_f64()?)));
+    let mode = match area {
+        Some((x, y, w, h)) if w >= 2.0 && h >= 2.0 => Shot::Area(x.max(0.0), y.max(0.0), w.min(16000.0), h.min(16000.0)),
+        _ if full => Shot::Full,
+        _ => Shot::Visible,
+    };
+    let data = capture(&page, mode, jpeg).await?;
     let mut path = serde_json::Value::Null;
     if action != "copy" {
         use base64::Engine;
@@ -201,8 +221,27 @@ pub async fn take_screenshot(app: tauri::AppHandle, webview: Webview, id: u32, f
     Ok(serde_json::json!({ "path": path, "data": if action == "save" { String::new() } else { data }, "mime": if jpeg { "image/jpeg" } else { "image/png" }, "action": action }))
 }
 
+#[derive(Clone, Copy)]
+enum Shot {
+    Visible,
+    Full,
+    Area(f64, f64, f64, f64),
+}
+
+// The CDP parameters for a picture of the area x, y, w, h of the page.
+fn clip_params(format: &str, x: f64, y: f64, w: f64, h: f64) -> String {
+    format!(
+        r#"{{{},"captureBeyondViewport":true,"clip":{{"x":{},"y":{},"width":{},"height":{},"scale":1}}}}"#,
+        format,
+        x.floor(),
+        y.floor(),
+        w.ceil().max(1.0),
+        h.ceil().clamp(1.0, 16000.0)
+    )
+}
+
 #[cfg(windows)]
-async fn capture(page: &Webview, full: bool, jpeg: bool) -> Result<String, String> {
+async fn capture(page: &Webview, mode: Shot, jpeg: bool) -> Result<String, String> {
     let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
     page.with_webview(move |platform| unsafe {
         use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
@@ -232,9 +271,10 @@ async fn capture(page: &Webview, full: bool, jpeg: bool) -> Result<String, Strin
                 }
             }
         };
-        if !full {
-            shoot(format!("{{{}}}", format));
-            return;
+        match mode {
+            Shot::Visible => return shoot(format!("{{{}}}", format)),
+            Shot::Area(x, y, w, h) => return shoot(clip_params(format, x, y, w, h)),
+            Shot::Full => {}
         }
         // The whole page: its size first.
         let tx_err = tx.clone();
@@ -244,12 +284,7 @@ async fn capture(page: &Webview, full: bool, jpeg: bool) -> Result<String, Strin
                 Some((c.get("width")?.as_f64()?, c.get("height")?.as_f64()?))
             });
             match size {
-                Some((w, h)) => shoot(format!(
-                    r#"{{{},"captureBeyondViewport":true,"clip":{{"x":0,"y":0,"width":{},"height":{},"scale":1}}}}"#,
-                    format,
-                    w.ceil().max(1.0),
-                    h.ceil().clamp(1.0, 16000.0)
-                )),
+                Some((w, h)) => shoot(clip_params(format, 0.0, 0.0, w, h)),
                 None => {
                     let _ = tx_err.send(Err("couldn't measure the page".into()));
                 }
@@ -268,8 +303,112 @@ async fn capture(page: &Webview, full: bool, jpeg: bool) -> Result<String, Strin
 }
 
 #[cfg(not(windows))]
-async fn capture(_page: &Webview, _full: bool, _jpeg: bool) -> Result<String, String> {
+async fn capture(_page: &Webview, _mode: Shot, _jpeg: bool) -> Result<String, String> {
     Err("not supported on this system".into())
+}
+
+// --- Save as PDF --------------------------------------------------------------------------
+
+// Page `id` as a PDF file you pick a place for, laid out as Settings ->
+// Page tools says: features.pdf = { landscape, backgrounds, headers }.
+// Some(path) once saved.
+#[tauri::command]
+pub async fn save_pdf(app: tauri::AppHandle, webview: Webview, id: u32, title: String) -> Result<Option<String>, String> {
+    crate::require_internal_page(&webview)?;
+    let page = {
+        let state = app.state::<BrowserState>();
+        crate::page::webview(&app, &state, id).ok_or("that page is gone")?
+    };
+    let name = format!("{}.pdf", safe_file_name(title.trim()).chars().take(120).collect::<String>().trim_end_matches('.'));
+    let name = if name == ".pdf" { "Page.pdf".to_string() } else { name };
+    let Some(path) = crate::extensions::dialog(&app, &webview, move |owner| crate::dialogs::save_file(owner, "Save as PDF", &name, &[("PDF", "*.pdf")])).await? else {
+        return Ok(None);
+    };
+    let pdf = features(&app).get("pdf").cloned().unwrap_or(serde_json::json!({}));
+    let flag = |k: &str, default: bool| pdf.get(k).and_then(|v| v.as_bool()).unwrap_or(default);
+    let (landscape, backgrounds, headers) = (flag("landscape", false), flag("backgrounds", true), flag("headers", false));
+    print_pdf(&page, path.clone(), landscape, backgrounds, headers).await?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+#[cfg(windows)]
+async fn print_pdf(page: &Webview, path: std::path::PathBuf, landscape: bool, backgrounds: bool, headers: bool) -> Result<(), String> {
+    let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+    page.with_webview(move |platform| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::*;
+        use webview2_com::PrintToPdfCompletedHandler;
+        use windows::core::{Interface, HSTRING};
+        let run = || -> windows::core::Result<()> {
+            let core = platform.controller().CoreWebView2()?;
+            let core7 = core.cast::<ICoreWebView2_7>()?;
+            let env = core.cast::<ICoreWebView2_2>()?.Environment()?.cast::<ICoreWebView2Environment6>()?;
+            let settings = env.CreatePrintSettings()?;
+            settings.SetOrientation(if landscape { COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE } else { COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT })?;
+            settings.SetShouldPrintBackgrounds(backgrounds)?;
+            settings.SetShouldPrintHeaderAndFooter(headers)?;
+            let tx2 = tx.clone();
+            let done = PrintToPdfCompletedHandler::create(Box::new(move |result, ok| {
+                let ok: bool = ok.into();
+                let _ = tx2.send(result.map_err(|e| e.message()).and_then(|_| if ok { Ok(()) } else { Err("the PDF couldn't be written".to_string()) }));
+                Ok(())
+            }));
+            core7.PrintToPdf(&HSTRING::from(path.as_os_str()), &settings, &done)
+        };
+        if let Err(e) = run() {
+            let _ = tx.send(Err(e.message()));
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(120)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|_| "the page took too long".to_string())?
+}
+
+#[cfg(not(windows))]
+async fn print_pdf(_page: &Webview, _path: std::path::PathBuf, _landscape: bool, _backgrounds: bool, _headers: bool) -> Result<(), String> {
+    Err("not supported on this system".into())
+}
+
+// --- Search engines offered by sites (OpenSearch) --------------------------------------------
+
+// A site's own search (its <link rel="search"> description, read by
+// page-tools.js): kept under features.offered_engines[site] for Settings ->
+// Search & Startup to offer. `template` has %s for the query.
+pub fn offer_engine(app: &tauri::AppHandle, url: &str, name: &str, template: &str) {
+    let host = site_key(url);
+    let name: String = name.trim().chars().take(60).collect();
+    let template = template.trim();
+    if host.is_empty() || name.is_empty() || template.len() > 1000 || !template.contains("%s") {
+        return;
+    }
+    // The site's own search, on the site itself (or a subdomain of it).
+    let Ok(parsed) = tauri::Url::parse(template) else { return };
+    let engine_host = parsed.host_str().unwrap_or("").trim_start_matches("www.").to_ascii_lowercase();
+    if parsed.scheme() != "https" || !(engine_host == host || engine_host.ends_with(&format!(".{}", host)) || host.ends_with(&format!(".{}", engine_host))) {
+        return;
+    }
+    let state = app.state::<BrowserState>();
+    let mut s = state.store.settings.lock().unwrap();
+    if !s.features.is_object() {
+        s.features = serde_json::json!({});
+    }
+    let offered = s.features.as_object_mut().unwrap().entry("offered_engines").or_insert_with(|| serde_json::json!({}));
+    if !offered.is_object() {
+        *offered = serde_json::json!({});
+    }
+    let map = offered.as_object_mut().unwrap();
+    // One you said not to offer stays that way.
+    if map.get(&host).and_then(|e| e.get("dismissed")).and_then(|d| d.as_bool()) == Some(true) {
+        return;
+    }
+    let entry = serde_json::json!({ "name": name, "url": template });
+    if map.get(&host) == Some(&entry) || (map.len() >= 100 && !map.contains_key(&host)) {
+        return;
+    }
+    map.insert(host, entry);
+    drop(s);
+    state.store.save_settings();
 }
 
 // --- Reader mode --------------------------------------------------------------------------
@@ -368,6 +507,11 @@ mod tests {
         assert_eq!(timestamp(0), "1970-01-01 00.00.00");
         assert_eq!(timestamp(1_790_000_000), "2026-09-21 14.13.20");
         assert_eq!(timestamp(951_782_400), "2000-02-29 00.00.00");
+    }
+
+    #[test]
+    fn clips_are_whole_pixels() {
+        assert_eq!(clip_params(r#""format":"png""#, 10.6, 0.2, 99.2, 20000.0), r#"{"format":"png","captureBeyondViewport":true,"clip":{"x":10,"y":0,"width":100,"height":16000,"scale":1}}"#);
     }
 
     #[test]
