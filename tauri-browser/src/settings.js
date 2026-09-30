@@ -883,22 +883,35 @@ async function pinnedPanel() {
 }
 
 async function bookmarksPanel() {
-  const bookmarks = await invoke("get_bookmarks");
+  const tree = await invoke("bookmark_tree").catch(() => ({ bookmarks: [], folders: [] }));
+  const n = tree.bookmarks.length;
+  const f = tree.folders.length;
   const p = el(`<div class="panel" id="panel-bookmarks">
     <h2>Bookmarks</h2>
-    <p class="sub">${bookmarks.length} saved.</p>
-    <div class="setting-card"><div class="list-panel" id="bookmarks-list-settings" style="max-height:520px"></div></div>
+    <p class="sub">${n} bookmark${n === 1 ? "" : "s"}${f ? `, ${f} folder${f === 1 ? "" : "s"}` : ""}. Kessel keeps a copy of them once a day (the last two weeks).</p>
+    <div class="setting-card">
+      ${settingRow({ title: "Bookmark manager", desc: "Folders, tags and notes, moving, sorting, duplicates, links that stopped working, backups (Ctrl+Shift+O)", controlHtml: `<button class="btn primary sm" id="open-bookmarks-btn">${icon("bookmark", 13)} Open manager</button>` })}
+      ${settingRow({ title: "Import from an HTML file", desc: "Any browser's bookmark export -- in a folder of its own", controlHtml: `<button class="btn sm" id="import-bookmarks-btn">${icon("download", 13)} Import…</button>` })}
+      ${settingRow({ title: "Export to an HTML file", desc: "Every browser can import it", controlHtml: `<button class="btn sm" id="export-bookmarks-btn">${icon("save", 13)} Export…</button>` })}
+      ${settingRow({ title: "Import from another browser", desc: "Chrome, Edge, Brave, Opera, Firefox…", controlHtml: `<button class="btn sm" id="bookmarks-import-browser-btn">Import…</button>` })}
+    </div>
   </div>`);
-  const list = p.querySelector("#bookmarks-list-settings");
-  list.innerHTML = bookmarks.length ? "" : `<div class="empty">No bookmarks yet.</div>`;
-  for (const b of bookmarks) {
-    const row = el(`<div class="list-row"><span class="lr-title">${escapeHtml(b.title || b.url)}</span><button class="btn ghost icon-only sm">${icon("trash", 13)}</button></div>`);
-    row.querySelector("button").addEventListener("click", async () => {
-      await invoke("remove_bookmark", { url: b.url });
-      row.remove();
+  p.querySelector("#open-bookmarks-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://bookmarks" }));
+  p.querySelector("#import-bookmarks-btn").addEventListener("click", async () => {
+    const r = await invoke("import_bookmarks", { path: null }).catch((err) => {
+      toast(String(err));
+      return null;
     });
-    list.appendChild(row);
-  }
+    if (r) toast(`Imported ${r.added} bookmark${r.added === 1 ? "" : "s"}${r.skipped ? ` (${r.skipped} you had already)` : ""}`);
+  });
+  p.querySelector("#export-bookmarks-btn").addEventListener("click", async () => {
+    const path = await invoke("export_bookmarks", { path: null }).catch((err) => {
+      toast(String(err));
+      return null;
+    });
+    if (path) toast(`Saved to ${path}`);
+  });
+  p.querySelector("#bookmarks-import-browser-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://settings/import" }));
   return p;
 }
 

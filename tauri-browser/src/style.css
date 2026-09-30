@@ -649,6 +649,8 @@ html.fullscreen #progress-bar { display: none !important; }
 .bm-chip:hover { background: var(--surface-hover); color: var(--text); }
 .bm-chip .bm-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bm-chip .app-icon { width: 16px; height: 16px; font-size: 9px; }
+.bm-chip.bm-folder { padding-left: 7px; }
+.bm-chip.bm-folder svg { flex-shrink: 0; color: var(--accent); opacity: 0.85; }
 
 /* --- Shields button (address bar) --- */
 #shields-btn {

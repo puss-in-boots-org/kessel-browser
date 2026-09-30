@@ -113,27 +113,54 @@ const views = {};
 
 // --- Bookmarks ---------------------------------------------------------------------
 
+// A folder at a time (folders first, "‹ <parent>" to go up); searching
+// looks through all of them -- names, addresses, tags ("#tag") and notes.
 views.bookmarks = async (root) => {
   let query = "";
+  let folder = "";
   const list = el(`<div></div>`);
   const draw = async () => {
-    const all = await invoke("get_bookmarks").catch(() => []);
-    const shown = all.filter((b) => matches(query, b.title, b.url)).reverse();
+    const tree = await invoke("bookmark_tree").catch(() => ({ bookmarks: [], folders: [] }));
+    const byId = new Map(tree.folders.map((f) => [f.id, f]));
+    if (folder && !byId.has(folder)) folder = "";
+    const bookmarkRow = (b, sub = hostOf(b.url)) =>
+      row({
+        leading: siteIcon(b.url, { label: b.title }),
+        title: b.title || hostOf(b.url),
+        sub,
+        onOpen: (e) => open(b.url, e),
+        actions: [
+          { icon: "plus", title: "Open in a new tab", run: () => invoke("open_url", { url: b.url, how: "tab" }) },
+          { icon: "trash", title: "Remove bookmark", danger: true, run: () => invoke("remove_bookmark", { url: b.url }) },
+        ],
+      });
+    const folderRow = (id, title, iconName = "folder") => {
+      const n = tree.bookmarks.filter((b) => b.folder === id).length;
+      return row({
+        leading: el(`<span style="width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent)">${icon(iconName, 16)}</span>`),
+        title,
+        sub: iconName === "folder" ? `${n} bookmark${n === 1 ? "" : "s"}` : "",
+        className: "sb-bookmark-folder",
+        onOpen: () => {
+          folder = id;
+          draw();
+        },
+      });
+    };
+    if (query) {
+      const q = query.toLowerCase();
+      const shown = tree.bookmarks.filter((b) => (q.startsWith("#") && q.length > 1 ? (b.tags || []).includes(q.slice(1)) : matches(query, b.title, b.url, b.description, (b.tags || []).join(" "))));
+      list.replaceChildren(...(shown.length ? shown.map((b) => bookmarkRow(b, [hostOf(b.url), byId.get(b.folder)?.title].filter(Boolean).join(" · "))) : [empty("No bookmarks match.")]));
+      return;
+    }
+    const here = byId.get(folder);
+    const folders = tree.folders.filter((f) => f.parent === folder);
+    const inside = tree.bookmarks.filter((b) => b.folder === folder);
     list.replaceChildren(
-      ...(shown.length
-        ? shown.map((b) =>
-            row({
-              leading: siteIcon(b.url, { label: b.title }),
-              title: b.title || hostOf(b.url),
-              sub: hostOf(b.url),
-              onOpen: (e) => open(b.url, e),
-              actions: [
-                { icon: "plus", title: "Open in a new tab", run: () => invoke("open_url", { url: b.url, how: "tab" }) },
-                { icon: "trash", title: "Remove bookmark", danger: true, run: () => invoke("remove_bookmark", { url: b.url }) },
-              ],
-            })
-          )
-        : [empty(query ? "No bookmarks match." : "No bookmarks yet -- star a page, or add the one you're on.")])
+      ...(here ? [folderRow(here.parent, `‹ ${byId.get(here.parent)?.title || "Bookmarks bar"}`, "chevronLeft"), group(here.title)] : []),
+      ...folders.map((f) => folderRow(f.id, f.title)),
+      ...inside.map((b) => bookmarkRow(b)),
+      ...(!folders.length && !inside.length ? [empty(here ? "This folder is empty." : "No bookmarks yet -- star a page, or add the one you're on.")] : [])
     );
   };
   root.append(
@@ -143,9 +170,15 @@ views.bookmarks = async (root) => {
         icon: "star",
         run: async () => {
           const page = await currentPage();
-          if (page) await invoke("add_bookmark", { url: page.url, title: page.title });
+          if (!page) return;
+          const id = await invoke("add_bookmark", { url: page.url, title: page.title });
+          // Into the folder you're looking at.
+          const tree = id && folder ? await invoke("bookmark_tree").catch(() => null) : null;
+          const b = tree?.bookmarks.find((x) => x.id === id);
+          if (b) await invoke("save_bookmark", { bookmark: { ...b, folder } }).catch(() => {});
         },
       },
+      { label: "Manager", icon: "bookmark", title: "The bookmark manager (Ctrl+Shift+O)", run: () => invoke("open_singleton_tab", { route: `kessel://bookmarks${folder ? `/${encodeURIComponent(folder)}` : ""}` }) },
     ]),
     searchBox("Search bookmarks", (q) => {
       query = q;

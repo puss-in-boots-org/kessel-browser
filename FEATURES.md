@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**60% overall** -- 487 done (✅ 🟢 🌐), 59 built and waiting for their first run on Windows or a phone (🧪), 57 partly done (🟡), 349 to do (⏳), 93 skipped (⏭️), of 1045.
+**62% overall** -- 503 done (✅ 🟢 🌐), 59 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 335 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -44,7 +44,7 @@ branch, one small commit per feature or group of features.
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
-| [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 12 | 1 | `███░░░░░░░` 28% |
+| [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
 | [6. Downloads](#6-downloads) | 17 | 2 | 1 | 2 |  | `█████████░` 89% |
 | [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 24 | 2 | `███░░░░░░░` 26% |
@@ -92,7 +92,7 @@ branch, one small commit per feature or group of features.
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
-| [52. Import / export](#52-import--export) | 4 | 2 |  | 11 |  | `████░░░░░░` 35% |
+| [52. Import / export](#52-import--export) | 6 | 2 |  | 9 |  | `█████░░░░░` 47% |
 | [53. Updates](#53-updates) |  |  |  | 1 | 8 | `░░░░░░░░░░` 0% |
 | [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
 | [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
@@ -271,24 +271,24 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 4.01 | Bookmark page | 🟢 | |
-| 4.02 | Bookmark folders | ⏳ | |
-| 4.03 | Nested folders | ⏳ | |
+| 4.02 | Bookmark folders | ✅ | |
+| 4.03 | Nested folders | ✅ | |
 | 4.04 | Bookmark bar | 🟢 | |
-| 4.05 | Bookmark manager | ⏳ | |
-| 4.06 | Bookmark search | ⏳ | |
-| 4.07 | Bookmark editing | ⏳ | |
+| 4.05 | Bookmark manager | ✅ | kessel://bookmarks (Ctrl+Shift+O) |
+| 4.06 | Bookmark search | ✅ | Names, addresses, notes, #tags |
+| 4.07 | Bookmark editing | ✅ | |
 | 4.08 | Bookmark deletion | 🟢 | |
-| 4.09 | Bookmark sorting | ⏳ | |
-| 4.10 | Bookmark import | 🟡 | From Opera GX, Opera, Brave and Chrome |
-| 4.11 | Bookmark export | ⏳ | |
+| 4.09 | Bookmark sorting | ✅ | By name, address or date; drag to reorder |
+| 4.10 | Bookmark import | ✅ | Any browser's HTML export; straight from Opera GX, Opera, Brave and Chrome |
+| 4.11 | Bookmark export | ✅ | HTML (the format every browser imports) |
 | 4.12 | Bookmark synchronization | ⏭️ | Needs an online account or server: left out |
-| 4.13 | Bookmark tags | ⏳ | |
-| 4.14 | Bookmark descriptions | ⏳ | |
+| 4.13 | Bookmark tags | ✅ | |
+| 4.14 | Bookmark descriptions | ✅ | |
 | 4.15 | Favicons | 🟢 | |
-| 4.16 | Bookmark previews | ⏳ | |
-| 4.17 | Bookmark duplicate detection | 🟡 | The same address is never saved twice |
-| 4.18 | Bookmark organization tools | ⏳ | |
-| 4.19 | Bookmark backup | ⏳ | |
+| 4.16 | Bookmark previews | ✅ | A picture of the page when you star it; the manager's cards |
+| 4.17 | Bookmark duplicate detection | ✅ | Also the same page at another address (tracking, www., http) |
+| 4.18 | Bookmark organization tools | ✅ | Duplicates, links that stopped working, moving and deleting several |
+| 4.19 | Bookmark backup | ✅ | One a day, the last two weeks; restore in the manager |
 
 ### 5. History
 
@@ -1253,8 +1253,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 52.09 | Import from Edge | ⏳ | |
 | 52.10 | Import from Firefox | ⏳ | |
 | 52.11 | Import from Safari | ⏳ | |
-| 52.12 | Import HTML bookmarks | ⏳ | |
-| 52.13 | Export bookmarks | ⏳ | |
+| 52.12 | Import HTML bookmarks | ✅ | |
+| 52.13 | Export bookmarks | ✅ | |
 | 52.14 | Export passwords | ⏳ | |
 | 52.15 | Export history | ⏳ | |
 | 52.16 | Export settings | 🧪 | Settings -> About -> Save to a file |

@@ -32,7 +32,8 @@ export const FEATURES = [
     ["Commands", "Type an action like clear history, private window, vertical tabs."],
     ["Search engine", "Click the arrow in the address bar, or Settings -> Search & Startup."],
     ["Share / QR code", "The share button in the address bar."],
-    ["Bookmark", "Ctrl+D or the star. Ctrl+Shift+D bookmarks all tabs; Ctrl+Shift+B toggles the bar."],
+    ["Bookmark", "Ctrl+D or the star: name it, pick a folder, add tags and a note. Ctrl+Shift+D bookmarks all tabs; Ctrl+Shift+B toggles the bar."],
+    ["Bookmark manager", "Ctrl+Shift+O: folders inside folders, drag to move, sort, search (#tag for a tag), cards with page previews, HTML import / export, duplicates, broken links, daily backups."],
   ]],
   ["Pages", [
     ["Back / forward / reload", "Alt+Left / Alt+Right, F5 or Ctrl+R; Ctrl+F5 ignores the cache; Esc stops."],
