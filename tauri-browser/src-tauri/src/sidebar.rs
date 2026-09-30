@@ -246,16 +246,38 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
                     let link_text = if has_link.as_bool() { text(&|p| target.LinkText(p)) } else { String::new() };
                     let selection = if has_selection.as_bool() { text(&|p| target.SelectionText(p)) } else { String::new() };
                     let page = text(&|p| target.PageUri(p));
-                    let mut items: Vec<(&str, &str, String)> = Vec::new();
+                    let mut kind = COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND::default();
+                    let _ = target.Kind(&mut kind);
+                    let mut has_source = BOOL::default();
+                    let _ = target.HasSourceUri(&mut has_source);
+                    let image = if kind == COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND_IMAGE && has_source.as_bool() { text(&|p| target.SourceUri(p)) } else { String::new() };
+                    // Which of Kessel's items you want (Settings -> Page tools).
+                    let menu_on = {
+                        let settings = app.state::<crate::BrowserState>().store.settings.lock().unwrap().features.clone();
+                        move |key: &str| settings.get("page_menu").and_then(|m| m.get(key)).and_then(|v| v.as_bool()).unwrap_or(true)
+                    };
+                    let mut items: Vec<(&str, String, String)> = Vec::new();
+                    if web_page(&link) && menu_on("peek") {
+                        items.push(("peek-link", "Peek at link".into(), link.clone()));
+                    }
                     if web_page(&link) {
-                        items.push(("reading-link", "Add link to reading list", link.clone()));
+                        items.push(("reading-link", "Add link to reading list".into(), link.clone()));
+                    }
+                    if web_page(&image) && menu_on("image_search") {
+                        items.push(("search-image", "Search the web for this image".into(), image.clone()));
+                    }
+                    let picked = selection.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if !picked.is_empty() && menu_on("search") {
+                        let short: String = picked.chars().take(24).collect();
+                        let label = format!("Search the web for “{}{}”", short, if picked.chars().count() > 24 { "…" } else { "" });
+                        items.push(("search-selection", label, picked.chars().take(500).collect()));
                     }
                     if !selection.trim().is_empty() {
-                        items.push(("note-selection", "Save selection to notes", selection.clone()));
-                        items.push(("ai-selection", "Ask AI about this", selection.clone()));
+                        items.push(("note-selection", "Save selection to notes".into(), selection.clone()));
+                        items.push(("ai-selection", "Ask AI about this".into(), selection.clone()));
                     } else if web_page(&page) && link.is_empty() {
-                        items.push(("reading-page", "Add page to reading list", page.clone()));
-                        items.push(("ai-page", "Ask AI about this page", page.clone()));
+                        items.push(("reading-page", "Add page to reading list".into(), page.clone()));
+                        items.push(("ai-page", "Ask AI about this page".into(), page.clone()));
                     }
                     if items.is_empty() {
                         return Ok(());
@@ -266,7 +288,7 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
                     let separator = env.CreateContextMenuItem(&HSTRING::new(), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR)?;
                     let _ = menu.InsertValueAtIndex(count, &separator);
                     for (i, (action, label, value)) in items.into_iter().enumerate() {
-                        let item = env.CreateContextMenuItem(&HSTRING::from(label), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND)?;
+                        let item = env.CreateContextMenuItem(&HSTRING::from(label.as_str()), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND)?;
                         let (app, action, page, title) = (app.clone(), action.to_string(), page.clone(), link_text.clone());
                         let mut item_token = 0i64;
                         let _ = item.add_CustomItemSelected(

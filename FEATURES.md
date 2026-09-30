@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**51% overall** -- 387 done (✅ 🟢 🌐), 73 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 437 to do (⏳), 93 skipped (⏭️), of 1045.
+**53% overall** -- 387 done (✅ 🟢 🌐), 85 built and waiting for their first run on Windows or a phone (🧪), 56 partly done (🟡), 424 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -57,7 +57,7 @@ branch, one small commit per feature or group of features.
 | [14. Site-specific settings](#14-site-specific-settings) |  |  |  | 22 |  | `░░░░░░░░░░` 0% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
-| [17. Reading & research](#17-reading--research) | 5 | 5 | 1 | 11 |  | `█████░░░░░` 48% |
+| [17. Reading & research](#17-reading--research) | 5 | 8 | 1 | 8 |  | `██████░░░░` 61% |
 | [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [19. PDF](#19-pdf) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
 | [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
@@ -81,12 +81,12 @@ branch, one small commit per feature or group of features.
 | [38. Developer / experimental controls](#38-developer--experimental-controls) |  | 5 | 1 | 7 |  | `████░░░░░░` 42% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 3 | 2 | 3 | 8 |  | `████░░░░░░` 41% |
 | [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
-| [41. Screenshots & capture](#41-screenshots--capture) |  | 3 |  | 8 |  | `███░░░░░░░` 27% |
+| [41. Screenshots & capture](#41-screenshots--capture) |  | 4 |  | 7 |  | `████░░░░░░` 36% |
 | [42. Sharing](#42-sharing) |  |  |  | 6 | 3 | `░░░░░░░░░░` 0% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 | 1 |  | 2 |  | `█████████░` 93% |
-| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 | 1 |  | 5 |  | `██████░░░░` 58% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 | 2 |  | 4 |  | `███████░░░` 67% |
 | [47. Context menus](#47-context-menus) | 2 |  |  | 8 |  | `██░░░░░░░░` 20% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
@@ -103,7 +103,7 @@ branch, one small commit per feature or group of features.
 | [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 10 | 1 | `███░░░░░░░` 34% |
 | [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 | 2 | 1 | 20 | 8 | `█░░░░░░░░░` 15% |
-| [63. Researched additions (2026)](#63-researched-additions-2026) |  | 9 |  | 11 |  | `█████░░░░░` 45% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) |  | 16 | 1 | 3 |  | `████████░░` 83% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -637,14 +637,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.11 | Page narration | 🧪 | Reader view reads the article paragraph by paragraph, highlighting each |
 | 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |
 | 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
-| 17.14 | Search selected text | ⏳ | |
-| 17.15 | Search image | ⏳ | |
+| 17.14 | Search selected text | 🧪 | Right-click selected text -> Search the web for… |
+| 17.15 | Search image | 🧪 | Right-click an image -> Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
 | 17.16 | Copy selected text | ⏳ | |
 | 17.17 | Highlight text | ⏳ | |
 | 17.18 | Page annotations | ⏳ | |
 | 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
-| 17.21 | Save as PDF | ⏳ | |
+| 17.21 | Save as PDF | 🧪 | Command palette -> Save as PDF; landscape, backgrounds, headers in Settings -> Page tools |
 | 17.22 | Webpage screenshot | 🧪 | Ctrl+Shift+S, or the whole page from the command palette |
 
 ### 18. Translation
@@ -1036,7 +1036,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 41.01 | Full-page screenshot | 🧪 | Command palette -> Screenshot of the whole page |
 | 41.02 | Visible-area screenshot | 🧪 | Ctrl+Shift+S |
-| 41.03 | Selected-area screenshot | ⏳ | |
+| 41.03 | Selected-area screenshot | 🧪 | Command palette -> Screenshot of a part of the page: drag a box |
 | 41.04 | Screenshot to clipboard | 🧪 | Settings -> Page tools: save, copy or both |
 | 41.05 | Screenshot annotation | ⏳ | |
 | 41.06 | Screen recording | ⏳ | |
@@ -1146,7 +1146,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 46.09 | Pinch zoom | ✅ | Pinch on a touchpad or touchscreen: the engine's zoom, kept per site (22.01) |
 | 46.10 | Swipe navigation | ⏳ | |
 | 46.11 | Context menus | 🌐 | On pages: the engine's menu; on tabs, groups and the tab strip: Kessel's own (2.x) |
-| 46.12 | Link preview | ⏳ | |
+| 46.12 | Link preview | 🧪 | Right-click a link -> Peek at link |
 
 ### 47. Context menus
 
@@ -1460,20 +1460,20 @@ Only ones that work on this PC, without an account or a server.
 | 63.01 | Site boosts: your own CSS for a site (Zen Boosts, Arc Boosts) | 🧪 | Command palette -> Change this site: your own CSS |
 | 63.02 | Page filters: grayscale, invert, sepia, dark, contrast per site (Vivaldi page actions) | 🧪 | Per site, or one for every site (Settings -> Page tools) |
 | 63.03 | Element zapper: hide a page element for good (uBlock, Safari distraction control) | 🧪 | Command palette -> Hide an element; undo in Settings -> Page tools |
-| 63.04 | Link preview in a floating window (Zen Glance, Arc Peek) | ⏳ | |
+| 63.04 | Link preview in a floating window (Zen Glance, Arc Peek) | 🧪 | Right-click a link -> Peek at link (a pop-out window; Back to tabs keeps it) |
 | 63.05 | Compact mode: toolbars hide until the mouse comes near (Zen) | ⏳ | |
 | 63.06 | Feed reader: detect RSS/Atom feeds, follow them locally (Vivaldi) | ⏳ | |
-| 63.07 | Break mode: pause every page and all sound at once (Vivaldi) | ⏳ | |
-| 63.08 | Auto-archive tabs you haven't touched in days (Arc) | ⏳ | |
+| 63.07 | Break mode: pause every page and all sound at once (Vivaldi) | 🧪 | Command palette -> Pause everything |
+| 63.08 | Auto-archive tabs you haven't touched in days (Arc) | 🧪 | Settings -> Tabs -> Close tabs you've forgotten (counted while Kessel is open) |
 | 63.09 | De-AMP: open a page's real address instead of its AMP copy (Brave) | 🧪 | On by default; Settings -> Page tools |
-| 63.10 | Wayback Machine offer on dead pages (Brave) | ⏳ | |
-| 63.11 | Forget a site's data when its last tab closes (Brave forgetful browsing) | ⏳ | |
+| 63.10 | Wayback Machine offer on dead pages (Brave) | 🧪 | A missing page (404/410) offers its saved copy; the palette opens any page there |
+| 63.11 | Forget a site's data when its last tab closes (Brave forgetful browsing) | 🧪 | Settings -> Privacy -> Forget these sites when you close them |
 | 63.12 | Copy clean link: without tracking parameters (Firefox) | 🧪 | Command palette -> Copy link without tracking |
 | 63.13 | Auto-reload a tab every N seconds (Vivaldi, Opera) | 🧪 | Command palette -> Auto-reload this site; your own intervals |
 | 63.14 | Mute background tabs automatically (Vivaldi) | 🧪 | Settings -> Tabs -> Only the tab you're on plays sound |
-| 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | ⏳ | |
+| 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | 🟡 | The engine already shows the link under the mouse; no clock yet |
 | 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | 🧪 | Command palette -> Open a link with the keyboard |
 | 63.17 | Paste and go / paste and search (Chrome, Firefox) | 🧪 | Command palette -> Paste and go |
 | 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | ⏳ | |
-| 63.19 | Command chains: several commands under one shortcut (Vivaldi) | ⏳ | |
-| 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | ⏳ | |
+| 63.19 | Command chains: several commands under one shortcut (Vivaldi) | 🧪 | Settings -> Page tools -> Command chains; from the palette or a gesture |
+| 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | 🧪 | Sites' own search engines are offered in Settings -> Search & Startup |

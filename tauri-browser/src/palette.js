@@ -1,7 +1,8 @@
 // Command palette (F2, palette.html): every command Kessel has -- the same
 // list as Settings -> Keyboard shortcuts -- filtered as you type (every word
 // must match its name or category). Enter runs it in the window it was
-// opened from; the ones you ran lately come first. Settings -> Page tools
+// opened from; the ones you ran lately come first. Your command chains
+// (Settings -> Page tools) are here too: several commands in one go. Settings -> Page tools
 // decides how many recent ones it remembers.
 
 import { icon } from "./shared/icons.js";
@@ -43,7 +44,10 @@ function highlight(text, terms) {
 
 function render() {
   const terms = document.getElementById("q").value.toLowerCase().split(/\s+/).filter(Boolean);
-  const found = commands.filter((c) => c.id !== "command-palette" && terms.every((w) => `${c.label} ${c.category}`.toLowerCase().includes(w)));
+  const chains = (currentSettings()?.features?.command_chains || [])
+    .filter((c) => c && c.name && Array.isArray(c.steps) && c.steps.length)
+    .map((c, i) => ({ id: `chain:${i}`, label: c.name, category: `Chain · ${c.steps.length} steps`, keys: [], steps: c.steps }));
+  const found = [...chains, ...commands].filter((c) => c.id !== "command-palette" && terms.every((w) => `${c.label} ${c.category}`.toLowerCase().includes(w)));
   const lately = terms.length ? [] : recent().map((id) => found.find((c) => c.id === id)).filter(Boolean);
   const rest = found.filter((c) => !lately.includes(c));
   rows = [];
@@ -75,7 +79,9 @@ function markFocused() {
 async function run(command) {
   if (!command) return;
   remember(command.id);
-  await invoke("run_command", { id: command.id }).catch(() => {});
+  // A chain: Rust runs its commands one after another (commands.rs).
+  if (command.steps) await invoke("run_commands", { ids: command.steps }).catch(() => {});
+  else await invoke("run_command", { id: command.id }).catch(() => {});
   closeOwnPopup();
 }
 

@@ -133,6 +133,10 @@ pub const COMMANDS: &[CommandDef] = &[
     // Page tools (tools.rs, src/shared/page-tools.js)
     cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),
     cmd("screenshot-full", "Screenshot of the whole page", "Page tools", &[]),
+    cmd("screenshot-area", "Screenshot of a part of the page", "Page tools", &[]),
+    cmd("save-pdf", "Save as PDF", "Page", &[]),
+    cmd("break-mode", "Pause everything", "Page tools", &[]),
+    cmd("wayback", "Open in the Wayback Machine", "Page tools", &[]),
     cmd("reader-mode", "Reader view", "Page tools", &["F9"]),
     cmd("zap-element", "Hide an element", "Page tools", &[]),
     cmd("link-hints", "Open a link with the keyboard", "Page tools", &[]),
@@ -307,6 +311,28 @@ pub fn run_command(app: tauri::AppHandle, webview: tauri::Webview, id: String) -
     let command = find(&id).ok_or("no such command")?;
     let source = Source::from_label(webview.label());
     run(&app, command.id, &source);
+    Ok(())
+}
+
+// A command chain (Settings -> Page tools): its commands one after
+// another, a moment apart so each has happened (a new tab is there) before
+// the next acts. Runs on even if the page that started it closes.
+pub fn run_chain(app: &tauri::AppHandle, steps: Vec<String>, source: Source) {
+    let steps: Vec<&'static str> = steps.iter().filter_map(|id| find(id)).map(|c| c.id).take(20).collect();
+    let app = app.clone();
+    std::thread::spawn(move || {
+        for id in steps {
+            let (app2, source) = (app.clone(), source.clone());
+            crate::later(&app, move || run(&app2, id, &source));
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+    });
+}
+
+#[tauri::command]
+pub fn run_commands(app: tauri::AppHandle, webview: tauri::Webview, ids: Vec<String>) -> Result<(), String> {
+    crate::require_internal_page(&webview)?;
+    run_chain(&app, ids, Source::from_label(webview.label()));
     Ok(())
 }
 

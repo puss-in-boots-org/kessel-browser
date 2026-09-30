@@ -5,7 +5,7 @@ import { FEATURES } from "./shared/features.js";
 import { buildStyleSection } from "./appearance.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
-import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard } from "./settings-tools.js";
+import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -446,6 +446,7 @@ async function privacyPanel(settings) {
   vaultTimeout.addEventListener("change", () => saveSettings({ vault_lock_minutes: parseInt(vaultTimeout.value, 10) }));
 
   privacyExtras(p, settings, { el, settingRow, switchHtml, wireSwitch });
+  p.appendChild(forgetSitesCard({ el, settingRow, switchHtml }));
   return p;
 }
 

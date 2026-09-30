@@ -44,6 +44,38 @@
       var every = +tweaks.reload || 0;
       if (every >= 5) reloadTimer = later(function () { location.reload(); }, every * 1000);
       if (tweaks.deamp) deAmp();
+      if (tweaks.wayback) offerWayback();
+    }
+
+    // A page that's gone (404, 410): offer the Wayback Machine's copy.
+    var waybackShown = false;
+    function offerWayback() {
+      if (waybackShown || window.top !== window || !/^https?:/.test(location.protocol)) return;
+      function check() {
+        var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+        var status = nav && nav.responseStatus;
+        if (status !== 404 && status !== 410) return;
+        waybackShown = true;
+        var bar = document.createElement('div');
+        bar.style.cssText = 'position:fixed;z-index:2147483646;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:12px;align-items:center;background:#16171d;color:#fff;font:13px system-ui,sans-serif;padding:10px 14px;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.45)';
+        var text = document.createElement('span');
+        text.textContent = 'This page is gone (' + status + '). Look for a saved copy?';
+        var go = document.createElement('a');
+        go.textContent = 'Wayback Machine';
+        go.href = 'https://web.archive.org/web/2/' + location.href;
+        go.style.cssText = 'color:#8ab4ff;font-weight:600;text-decoration:none';
+        var x = document.createElement('button');
+        x.textContent = '✕';
+        x.title = 'Close';
+        x.style.cssText = 'background:none;border:none;color:#aaa;cursor:pointer;font:14px system-ui';
+        x.addEventListener('click', function () { bar.remove(); });
+        bar.appendChild(text);
+        bar.appendChild(go);
+        bar.appendChild(x);
+        document.documentElement.appendChild(bar);
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', check);
+      else check();
     }
 
     // An AMP copy of a page (html[amp] / html[⚡]) goes to the real one.
@@ -234,4 +266,105 @@
       }
       window.addEventListener('keydown', key, true);
     });
+
+    // --- Screenshot of a part of the page: drag a box ---
+    BRIDGE.on('shot-area-start', function () {
+      var layer = document.createElement('div');
+      layer.style.cssText = 'position:fixed;inset:0;z-index:2147483647;cursor:crosshair;background:rgba(0,0,0,.25)';
+      var box = document.createElement('div');
+      box.style.cssText = 'position:fixed;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.5);background:rgba(255,255,255,.08);display:none';
+      var tip = document.createElement('div');
+      tip.textContent = 'Drag over what to capture · Esc to stop';
+      tip.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);background:#16171d;color:#fff;font:13px system-ui,sans-serif;padding:8px 14px;border-radius:10px;pointer-events:none';
+      layer.appendChild(box);
+      layer.appendChild(tip);
+      document.documentElement.appendChild(layer);
+      var start = null;
+      function rect(e) {
+        var x = Math.min(start.x, e.clientX), y = Math.min(start.y, e.clientY);
+        return { x: x, y: y, width: Math.abs(e.clientX - start.x), height: Math.abs(e.clientY - start.y) };
+      }
+      function stop() {
+        window.removeEventListener('keydown', key, true);
+        layer.remove();
+      }
+      function key(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          stop();
+        }
+      }
+      layer.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        start = { x: e.clientX, y: e.clientY };
+        tip.style.display = 'none';
+      });
+      layer.addEventListener('mousemove', function (e) {
+        if (!start) return;
+        var r = rect(e);
+        box.style.display = 'block';
+        box.style.left = r.x + 'px';
+        box.style.top = r.y + 'px';
+        box.style.width = r.width + 'px';
+        box.style.height = r.height + 'px';
+      });
+      layer.addEventListener('mouseup', function (e) {
+        if (!start) return;
+        var r = rect(e);
+        stop();
+        if (r.width < 4 || r.height < 4) return;
+        // On the page, not the window: the page may be scrolled.
+        var sx = window.scrollX, sy = window.scrollY;
+        // The overlay has to be gone from the picture first.
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            BRIDGE.send('shot-area', { x: r.x + sx, y: r.y + sy, width: r.width, height: r.height });
+          });
+        });
+      });
+      window.addEventListener('keydown', key, true);
+    });
+
+    // --- Pause everything (break mode): every video and sound here stops ---
+    BRIDGE.on('pause-media', function () {
+      var media = document.querySelectorAll('video, audio');
+      for (var i = 0; i < media.length; i++) {
+        try { media[i].pause(); } catch (e) {}
+      }
+    });
+
+    // --- The site's own search engine (OpenSearch), offered in Settings ---
+    function findSearch() {
+      var link = document.querySelector('link[rel="search"][type="application/opensearchdescription+xml"][href]');
+      if (!link || !/^https:/.test(location.protocol)) return;
+      var href;
+      try {
+        href = new URL(link.getAttribute('href'), location.href);
+      } catch (e) {
+        return;
+      }
+      if (href.origin !== location.origin) return;
+      fetch(href.href, { credentials: 'omit' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (xml) {
+        if (!xml || xml.length > 100000) return;
+        var doc = new DOMParser().parseFromString(xml, 'application/xml');
+        var urls = doc.getElementsByTagName('Url');
+        var template = '';
+        for (var i = 0; i < urls.length; i++) {
+          var type = urls[i].getAttribute('type') || '';
+          var method = (urls[i].getAttribute('method') || 'get').toLowerCase();
+          if (type === 'text/html' && method === 'get') template = urls[i].getAttribute('template') || '';
+        }
+        var nameEl = doc.getElementsByTagName('ShortName')[0];
+        var name = nameEl ? nameEl.textContent.trim() : location.hostname;
+        if (!template || template.indexOf('{searchTerms}') < 0) return;
+        // Other {parameters} have no value here: optional ones go.
+        template = template.replace('{searchTerms}', '%s').replace(/[?&][^=&]+=\{[^}]*\?\}/g, '').replace(/\{[^}]*\}/g, '');
+        BRIDGE.send('opensearch', { name: name, url: new URL(template, location.href).href.replace(/%25s/g, '%s') });
+      }).catch(function () {});
+    }
+    if (window.top === window) {
+      if (document.readyState === 'complete') later(findSearch, 1500);
+      else window.addEventListener('load', function () { later(findSearch, 1500); });
+    }
   })();

@@ -10,7 +10,7 @@ import { ENGINES, resolveInput, looksLikeUrl, toast, hostOf, listenHere, interna
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 import { setupOmnibox } from "./omnibox.js";
-import { resolveTyped, allEngines } from "./shared/search.js";
+import { resolveTyped, allEngines, engineById } from "./shared/search.js";
 import { cleanLink } from "./shared/links.js";
 import { playUiSound } from "./shared/sounds.js";
 import { RAIL_ITEMS, DEFAULT_RAIL_ITEMS, aiTarget, aiPrompt, WORKSPACE_COLORS } from "./shared/sidebar-panels.js";
@@ -2440,6 +2440,31 @@ async function activateTab(id) {
   }
   persistSession();
   enforceAwakeLimit();
+  closeForgottenTabs(now);
+}
+
+// Settings -> Tabs: tabs you haven't looked at in so many days close by
+// themselves (pinned ones, and ones playing sound, stay). They're in
+// recently closed and history if you want one back.
+function closeForgottenTabs(now) {
+  const days = Number(currentSettings()?.features?.auto_close_days) || 0;
+  if (days <= 0) return;
+  const old = tabs.filter((t) => t.id !== activeTabId && !t.pinned && !t.audible && t.url && !t.url.startsWith("kessel://") && now - (t.lastActiveAt ?? now) >= days * 86400000);
+  if (old.length) closeTabs(old);
+}
+
+// Settings -> Privacy: sites whose cookies and data go when you close the
+// last tab showing them.
+async function forgetSiteIfLast(url) {
+  const list = currentSettings()?.features?.forget_sites;
+  if (WIN.private || !Array.isArray(list) || !list.length || !/^https?:/.test(url || "")) return;
+  const host = hostOf(url).replace(/^www\./, "");
+  const site = list.find((s) => host === s || host.endsWith(`.${s}`));
+  if (!site) return;
+  const open = await invoke("all_tabs").catch(() => null);
+  if (!open || open.some((t) => /^https?:/.test(t.url || "") && (hostOf(t.url).replace(/^www\./, "") === site || hostOf(t.url).endsWith(`.${site}`)))) return;
+  const removed = await invoke("clear_site_data", { site, tab: null }).catch(() => null);
+  if (removed != null && currentSettings()?.features?.forget_sites_notice !== false) toast(`Forgot ${site}'s cookies and data`);
 }
 
 // Tabs by when you last looked at them, most recent first (split view's
@@ -2644,6 +2669,7 @@ async function closeTab(id, { remember = true } = {}) {
     const closedUrl = tab.discarded || !remember ? null : tab.url;
     await invoke("close_tab", { id, url: closedUrl || null }).catch(() => {});
   }
+  if (remember) forgetSiteIfLast(tab.url);
   if (last) {
     await createTab();
     return;
@@ -2893,6 +2919,16 @@ async function runCommand(id, ctx = {}) {
       return navigateActiveTab(text.trim().slice(0, 4000));
     }
     case "close-duplicate-tabs": return closeDuplicateTabs();
+    case "screenshot-area":
+      if (!page) return;
+      return invoke("page_tool", { id: page, tool: "shot-area-start" }).catch((err) => toast(String(err)));
+    case "save-pdf": return page && savePdf(page);
+    case "break-mode": return toggleBreakMode();
+    case "wayback": {
+      const tab = findTab(page) || findTab(activeTabId);
+      if (!tab || !/^https?:/.test(tab.url || "")) return toast("This page has no address to look up");
+      return createTab(`https://web.archive.org/web/2/${tab.url}`, tab.account ?? null, { after: tab.id });
+    }
     case "menu": return toggleMainMenu();
     case "passwords": return toggleSidePanel("passwords", "kessel://passwords");
     case "side-panel":
@@ -3474,6 +3510,23 @@ async function onPageMenu({ action, value, page, title, tab }) {
     case "ai-page":
       openAiPanel(aiPrompt({ page: value, title: pageTitle }));
       break;
+    case "search-selection": {
+      const t = findTab(tab);
+      await createTab(searchUrlFor(value), t?.account ?? activeAccount(), { after: tab });
+      break;
+    }
+    case "search-image": {
+      const which = currentSettings()?.features?.image_search || "google";
+      const template = IMAGE_SEARCH[which] || IMAGE_SEARCH.google;
+      await createTab(template.replace("%s", encodeURIComponent(value)), findTab(tab)?.account ?? activeAccount(), { after: tab });
+      break;
+    }
+    case "peek-link": {
+      // A small window over the page; "Back to tabs" in it makes it a tab.
+      const w = window.innerWidth, h = window.innerHeight;
+      await invoke("pop_out", { url: value, title, account: findTab(tab)?.account ?? null, x: Math.round(window.screenX + w * 0.2), y: Math.round(window.screenY + h * 0.12) }).catch(fail);
+      break;
+    }
   }
 }
 
@@ -3881,8 +3934,8 @@ async function toggleCommandPalette() {
 // What's in view, or the whole page; saved to your pictures, copied, or both
 // (Settings -> Page tools).
 
-async function takeScreenshot(page, full) {
-  const shot = await invoke("take_screenshot", { id: page, full }).catch((err) => {
+async function takeScreenshot(page, full, area = null) {
+  const shot = await invoke("take_screenshot", { id: page, full, area }).catch((err) => {
     toast(`Couldn't take a screenshot -- ${err}`);
     return null;
   });
@@ -3919,6 +3972,72 @@ async function openReader(page) {
   if (!key) return toast("No article found on this page");
   await invoke("navigate", { id: page, url: `kessel://reader?k=${encodeURIComponent(key)}`, httpFallback: false }).catch((err) => toast(String(err)));
 }
+
+// --- Save as PDF (tools.rs, save_pdf) --------------------------------------------------
+
+async function savePdf(page) {
+  const tab = findTab(page);
+  if (!tab || !/^(https?|file):/.test(tab.url || "")) return toast("Only web pages can be saved as PDF");
+  const path = await invoke("save_pdf", { id: page, title: tab.title || hostOf(tab.url) }).catch((err) => {
+    toast(`Couldn't save the PDF -- ${err}`);
+    return null;
+  });
+  if (path) toast(`Saved to ${path}`);
+}
+
+// --- Pause everything ---------------------------------------------------------------
+// Every tab in this window stops its videos and goes quiet; again to bring
+// the sound back (the videos stay paused, for you to start).
+
+let breakMuted = null;
+async function toggleBreakMode() {
+  if (breakMuted) {
+    for (const id of breakMuted) {
+      const t = findTab(id);
+      if (!t || t.discarded) continue;
+      t.muted = false;
+      await invoke("page_action", { id, action: "unmute", value: null }).catch(() => {});
+    }
+    breakMuted = null;
+    document.documentElement.classList.remove("break-mode");
+    renderTabs();
+    return toast("Back from your break");
+  }
+  breakMuted = [];
+  for (const t of tabs) {
+    if (!(t.id > 0) || t.discarded) continue;
+    invoke("page_tool", { id: t.id, tool: "pause-media" }).catch(() => {});
+    if (!t.muted) {
+      t.muted = true;
+      breakMuted.push(t.id);
+      await invoke("page_action", { id: t.id, action: "mute", value: null }).catch(() => {});
+    }
+  }
+  document.documentElement.classList.add("break-mode");
+  renderTabs();
+  toast("Everything's paused. Run “Pause everything” again to carry on.");
+}
+
+// A part of the page picked for a screenshot (page-tools.js).
+function onAreaPicked({ id, area }) {
+  if (findTab(id)) takeScreenshot(id, false, area);
+}
+
+// --- Page right-click menu extras ----------------------------------------------------
+
+// Searching the web for a picture: which service (Settings -> Page tools).
+// Your default search engine's results for `text`.
+function searchUrlFor(text) {
+  const s = currentSettings();
+  return engineById(s, s?.search_engine).url(String(text).trim());
+}
+
+const IMAGE_SEARCH = {
+  google: "https://lens.google.com/uploadbyurl?url=%s",
+  bing: "https://www.bing.com/images/search?view=detailv2&iss=sbi&q=imgurl:%s",
+  yandex: "https://yandex.com/images/search?rpt=imageview&url=%s",
+  tineye: "https://tineye.com/search?url=%s",
+};
 
 // --- Auto-reload ---------------------------------------------------------------------
 // Reloads this site's pages every so often (kept per site, in its tweaks).
@@ -4243,6 +4362,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   listen("extensions-changed", (event) => refreshExtensions(event.payload));
   listen("side-panel-message", (event) => onSidePanelMessage(event.payload));
   listen("page-menu", (event) => onPageMenu(event.payload || {}));
+  listen("area-picked", (event) => onAreaPicked(event.payload || {}));
   window.addEventListener("kessel-settings", () => {
     // The style's colours were just put back: the workspace's go on again.
     styleAccent = null;
