@@ -6,7 +6,7 @@
 // src-tauri/src/main.rs.
 import { icon, faviconLetter } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
-import { ENGINES, resolveInput, looksLikeUrl, toast, hostOf, listenHere, internalTitle, internalPageKey, escapeHtml, keyLabel } from "./shared/api.js";
+import { ENGINES, resolveInput, looksLikeUrl, toast, hostOf, listenHere, internalTitle, internalPageKey, escapeHtml, keyLabel, confirmDialog } from "./shared/api.js";
 import { siteIcon, injectRefractionFilter, writeChromeGeometry, watchCustomWallpaper, rememberSiteFavicon, sharePageStorage } from "./shared/glass.js";
 import { avatarHtml, accountName } from "./shared/accounts.js";
 import { setupOmnibox } from "./omnibox.js";
@@ -54,6 +54,7 @@ setInterval(() => invoke("toolbar_heartbeat").catch(() => {}), 1000);
 let tabs = [];
 let activeTabId = null;
 let bookmarks = [];
+let bookmarkFolders = []; // [{ id, title, parent }] -- see bookmarks.rs
 let pinned = [];
 let blockedCount = 0;
 let activeDownloads = 0;
@@ -2231,7 +2232,7 @@ async function bookmarkTabs(list) {
   let added = 0;
   for (const t of list) {
     if (known.has(t.url)) continue;
-    await invoke("add_bookmark", { url: t.url, title: t.title || t.url });
+    await invoke("add_bookmark", { url: t.url, title: t.title || t.url, tab: t.discarded ? null : t.id });
     known.add(t.url);
     added++;
   }
@@ -2762,7 +2763,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2879,6 +2880,7 @@ async function runCommand(id, ctx = {}) {
     case "share-page": return toggleSharePopup();
     case "bookmark": return toggleBookmark();
     case "bookmark-all-tabs": return bookmarkAllTabs();
+    case "bookmark-manager": return openBookmarkManager();
     case "toggle-bookmarks-bar": return saveSettings({ bookmarks_bar: currentSettings()?.bookmarks_bar === false });
     case "history": return openSingleton("kessel://history");
     case "downloads": return openSingleton("kessel://downloads");
@@ -3021,7 +3023,7 @@ async function bookmarkAllTabs() {
   let added = 0;
   for (const t of pages) {
     if (known.has(t.url)) continue;
-    await invoke("add_bookmark", { url: t.url, title: t.title || t.url });
+    await invoke("add_bookmark", { url: t.url, title: t.title || t.url, tab: t.discarded ? null : t.id });
     known.add(t.url);
     added++;
   }
@@ -3231,9 +3233,76 @@ function persistSession() {
 // --- Bookmarks --------------------------------------------------------
 
 async function refreshBookmarks() {
-  bookmarks = await invoke("get_bookmarks");
+  const tree = await invoke("bookmark_tree").catch(() => null);
+  bookmarks = tree?.bookmarks ?? (await invoke("get_bookmarks"));
+  bookmarkFolders = tree?.folders ?? [];
   updateStarButton();
   renderBookmarksBar();
+}
+
+const openBookmarkManager = (folder = "") => openSingleton(`kessel://bookmarks${folder ? `/${encodeURIComponent(folder)}` : ""}`);
+
+// Everything under folder `id` (its folders' too), for "Open all".
+function bookmarksUnder(id) {
+  const ids = new Set([id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const f of bookmarkFolders) {
+      if (ids.has(f.parent) && !ids.has(f.id)) {
+        ids.add(f.id);
+        grew = true;
+      }
+    }
+  }
+  return bookmarks.filter((b) => ids.has(b.folder));
+}
+
+async function openAllBookmarks(list) {
+  if (list.length > 15 && !(await confirmDialog(`Open ${list.length} tabs?`, "Open them"))) return;
+  for (const b of list) await createTab(b.url);
+}
+
+// A folder on the bookmarks bar opens as a dropdown of what's in it; a
+// folder in there opens its own in the same place (a menu has no
+// submenus). Its right-click menu comes with "Open all".
+function showBookmarkFolder(folderId, x, y, dropdown = true) {
+  const folder = bookmarkFolders.find((f) => f.id === folderId);
+  if (!folder) return;
+  const folders = bookmarkFolders.filter((f) => f.parent === folderId);
+  const inside = bookmarks.filter((b) => b.folder === folderId);
+  const all = bookmarksUnder(folderId);
+  // After this menu has closed (its pick closes it), or the new one would be
+  // this one, closing.
+  const reopen = (id) => setTimeout(() => showBookmarkFolder(id, x, y, false), 120);
+  const items = [
+    ...(folder.parent ? [{ label: "‹ Back", iconName: "chevronLeft", action: () => reopen(folder.parent) }, "-"] : []),
+    ...folders.map((f) => ({ label: f.title, iconName: "folder", action: () => reopen(f.id) })),
+    ...(folders.length && inside.length ? ["-"] : []),
+    ...inside.slice(0, 60).map((b) => ({ label: b.title || hostOf(b.url), iconName: "globe", action: () => openInActiveTab(b.url) })),
+    ...(!folders.length && !inside.length ? [{ label: "(empty)", disabled: true }] : []),
+    "-",
+    { label: `Open all ${all.length} in new tabs`, iconName: "tabs", disabled: !all.length, action: () => openAllBookmarks(all) },
+    { label: "Show in bookmark manager", iconName: "bookmark", action: () => openBookmarkManager(folderId) },
+  ];
+  showContextMenu(items, x, y, { dropdown });
+}
+
+function bookmarkChipMenu(b, x, y) {
+  showContextMenu(
+    [
+      { label: "Open in new tab", iconName: "plus", action: () => createTab(b.url) },
+      { label: "Open in new window", iconName: "window", action: () => invoke("new_window", { private: false, url: b.url }) },
+      { label: "Open in private window", iconName: "incognito", action: () => invoke("new_window", { private: true, url: b.url }) },
+      "-",
+      { label: "Edit…", iconName: "edit", action: () => showBookmarkPopup(b, false) },
+      { label: "Copy link", iconName: "copy", action: () => navigator.clipboard.writeText(b.url).then(() => toast("Link copied")) },
+      { label: "Delete", iconName: "trash", danger: true, action: () => invoke("remove_bookmark", { url: b.url }) },
+      "-",
+      { label: "Bookmark manager", iconName: "bookmark", keys: commandKeys("bookmark-manager"), action: () => openBookmarkManager(b.folder) },
+    ],
+    x,
+    y
+  );
 }
 
 // Opera-style bookmarks bar under the omnibox. Click opens in the current
@@ -3272,14 +3341,50 @@ function renderBookmarksBar() {
     });
     bar.appendChild(chip);
   }
-  if (!bookmarks.length) {
+  if (!bookmarks.length && !bookmarkFolders.length) {
     if (!bar.children.length) bar.innerHTML = `<span class="bm-empty">Bookmarks you star show up here</span>`;
     return;
   }
-  for (const b of bookmarks) {
+  // Its folders, then the bookmarks right on it (not in a folder).
+  for (const f of bookmarkFolders.filter((f) => !f.parent)) {
+    const chip = document.createElement("div");
+    chip.className = "bm-chip bm-folder";
+    chip.dataset.folder = f.id;
+    chip.title = f.title;
+    const title = document.createElement("span");
+    title.className = "bm-title";
+    title.textContent = f.title;
+    chip.insertAdjacentHTML("beforeend", icon("folder", 14));
+    chip.append(title);
+    const open = (dropdown) => {
+      const r = chip.getBoundingClientRect();
+      showBookmarkFolder(f.id, r.left, r.bottom + 2, dropdown);
+    };
+    chip.addEventListener("click", () => open(true));
+    chip.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const all = bookmarksUnder(f.id);
+      showContextMenu(
+        [
+          { header: f.title },
+          { label: `Open all ${all.length} in new tabs`, iconName: "tabs", disabled: !all.length, action: () => openAllBookmarks(all) },
+          { label: "Show in bookmark manager", iconName: "bookmark", action: () => openBookmarkManager(f.id) },
+        ],
+        e.clientX,
+        e.clientY
+      );
+    });
+    bar.appendChild(chip);
+  }
+  for (const b of bookmarks.filter((b) => !b.folder)) {
     const chip = document.createElement("div");
     chip.className = "bm-chip";
+    chip.dataset.bookmark = b.id || "";
     chip.title = `${b.title}\n${b.url}`;
+    chip.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      bookmarkChipMenu(b, e.clientX, e.clientY);
+    });
     const title = document.createElement("span");
     title.className = "bm-title";
     title.textContent = b.title || hostOf(b.url);
@@ -3320,18 +3425,25 @@ function updateStarButton() {
   btn.innerHTML = icon(isBookmarked ? "starFilled" : "star", 16);
 }
 
+// The star (Ctrl+D): bookmarks the page -- with a small picture of it, for
+// the manager's cards -- and opens its popup to name it, file it in a
+// folder, tag it (bookmark.html). On a page that's bookmarked already it
+// just opens the popup, which can remove it.
 async function toggleBookmark() {
   const tab = findTab(activeTabId);
   if (!tab || !tab.url || tab.url.startsWith("kessel://")) return;
   const existing = bookmarks.find((b) => b.url === tab.url);
-  if (existing) {
-    await invoke("remove_bookmark", { url: tab.url });
-    toast("Removed bookmark");
-  } else {
-    await invoke("add_bookmark", { url: tab.url, title: tab.title || tab.url });
-    toast("Bookmarked");
-  }
+  if (existing) return showBookmarkPopup(existing, false);
+  const id = await invoke("add_bookmark", { url: tab.url, title: tab.title || tab.url, tab: tab.id });
   await refreshBookmarks();
+  const added = bookmarks.find((b) => b.id === id) || bookmarks.find((b) => b.url === tab.url);
+  if (added) showBookmarkPopup(added, true);
+  else toast("Bookmarked");
+}
+
+async function showBookmarkPopup(b, added) {
+  const rect = document.getElementById("star-btn").getBoundingClientRect();
+  await invoke("toggle_popup", { kind: "bookmark", x: rect.right + 8, y: rect.bottom, width: 340, height: 290, init: { id: b.id || "", url: b.url, title: b.title, added } }).catch(() => toast(added ? "Bookmarked" : "Already bookmarked"));
 }
 
 // --- Pinned sites (rail icons) -----------------------------------------
@@ -4762,6 +4874,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("bookmarks-changed", (event) => {
     bookmarks = event.payload;
     updateStarButton();
+    renderBookmarksBar();
+  });
+  await listen("bookmark-folders-changed", (event) => {
+    bookmarkFolders = event.payload;
     renderBookmarksBar();
   });
 

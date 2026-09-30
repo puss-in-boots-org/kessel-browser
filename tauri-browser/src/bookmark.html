@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bookmark</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The star's popup (bookmark.js): the bookmark just made -- or the one
+       the page already has -- to name, file in a folder, tag and note,
+       or remove. It saves itself as it closes. */
+    html, body { height: 100%; overflow: hidden; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 14px); }
+    html.glass body { background: #0a1433; border: none; }
+    main { position: relative; height: 100%; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text); box-sizing: border-box; }
+    html.glass main { color: var(--lg-text); }
+    h1 { font-size: 13.5px; margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    h1 svg { color: var(--accent); }
+    .form { display: grid; grid-template-columns: 58px 1fr; gap: 8px 10px; align-items: center; font-size: 12px; }
+    .form label { opacity: 0.75; }
+    .form .field { padding: 7px 10px; font-size: 12.5px; }
+    .form [hidden] { display: none; }
+    textarea.field { resize: none; height: 46px; font-family: inherit; }
+    .actions { display: flex; gap: 8px; margin-top: auto; }
+    .actions .grow { flex: 1; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="heading"></h1>
+    <div class="form">
+      <label for="title">Name</label><input class="field" id="title" spellcheck="false" />
+      <label for="folder">Folder</label><select class="field" id="folder"></select>
+      <span id="new-folder-gap" hidden></span><input class="field" id="new-folder" placeholder="New folder's name, then Enter" spellcheck="false" hidden />
+      <label for="tags">Tags</label><input class="field" id="tags" placeholder="news, daily" spellcheck="false" />
+      <label for="note">Note</label><textarea class="field" id="note" placeholder="Why you kept it"></textarea>
+    </div>
+    <div class="actions">
+      <button class="btn sm danger" id="remove">Remove</button>
+      <button class="btn sm ghost" id="more">More…</button>
+      <span class="grow"></span>
+      <button class="btn sm primary" id="done">Done</button>
+    </div>
+  </main>
+  <script type="module" src="bookmark.js"></script>
+</body>
+</html>
