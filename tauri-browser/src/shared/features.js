@@ -68,6 +68,8 @@ export const FEATURES = [
     ["Highlights and notes", "Select text, Ctrl+Shift+H (or right-click -> Highlight). Click a highlight for its colour, a note, or to remove it; they come back when you return. All of them: Settings -> Page tools."],
     ["Screenshot editor", "Settings -> Page tools -> When you take one -> Open it in the editor: pen, highlighter, arrows, boxes, text, blur, crop, undo; then save or copy."],
     ["Feeds", "Palette -> Follow this site's feed, or add a site on the feeds page (palette -> Feeds). Kessel fetches them itself; OPML import and export."],
+    ["Site permissions", "Camera, microphone, location, notifications and more: Kessel asks under the address bar; answers per site and defaults in Settings -> Site permissions."],
+    ["Download manager", "Downloads: progress, pause, resume, cancel, try again, show in folder, search and sort. Folder and “ask where to save”: Settings -> Downloads."],
   ]],
   ["Search", [
     ["Search keywords", "Type a keyword and a space: “yt cats” searches YouTube, “w Budapest” Wikipedia. Keywords and your own engines: Settings -> Search & Startup."],

@@ -5,7 +5,7 @@ import { FEATURES } from "./shared/features.js";
 import { buildStyleSection } from "./appearance.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
-import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard } from "./settings-tools.js";
+import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard, permissionsPanel, downloadsExtras } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -20,6 +20,7 @@ const SECTIONS = [
   { id: "tools", label: "Page tools", icon: "sparkle" },
   { id: "privacy", label: "Privacy", icon: "shield" },
   { id: "cookies", label: "Cookies & site data", icon: "cookie" },
+  { id: "permissions", label: "Site permissions", icon: "shieldCheck" },
   { id: "security", label: "Security", icon: "lock" },
   { id: "performance", label: "Performance", icon: "bolt" },
   { id: "network", label: "Network", icon: "globe" },
@@ -973,6 +974,7 @@ async function downloadsPanel() {
     }
   }
   render(downloads);
+  downloadsExtras(p, { el, settingRow, switchHtml });
   p.querySelector("#open-folder-btn").addEventListener("click", () => invoke("open_downloads_folder"));
   p.querySelector("#clear-downloads-btn").addEventListener("click", async () => {
     await invoke("clear_downloads");
@@ -1243,6 +1245,7 @@ async function buildPanel(id, settings) {
     case "performance": return performancePanel(settings);
     case "tools": return await toolsPanel(settings, { el, settingRow, switchHtml });
     case "network": return networkPanel(settings, { el, settingRow });
+    case "permissions": return permissionsPanel(settings, { el, settingRow, switchHtml });
     case "pinned": return await pinnedPanel();
     case "bookmarks": return await bookmarksPanel();
     case "history": return await historyPanel();
