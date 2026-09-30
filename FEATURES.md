@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**53% overall** -- 387 done (✅ 🟢 🌐), 85 built and waiting for their first run on Windows or a phone (🧪), 56 partly done (🟡), 424 to do (⏳), 93 skipped (⏭️), of 1045.
+**53% overall** -- 387 done (✅ 🟢 🌐), 90 built and waiting for their first run on Windows or a phone (🧪), 56 partly done (🟡), 419 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -57,7 +57,7 @@ branch, one small commit per feature or group of features.
 | [14. Site-specific settings](#14-site-specific-settings) |  |  |  | 22 |  | `░░░░░░░░░░` 0% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
-| [17. Reading & research](#17-reading--research) | 5 | 8 | 1 | 8 |  | `██████░░░░` 61% |
+| [17. Reading & research](#17-reading--research) | 5 | 10 | 1 | 6 |  | `███████░░░` 70% |
 | [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [19. PDF](#19-pdf) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
 | [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
@@ -81,7 +81,7 @@ branch, one small commit per feature or group of features.
 | [38. Developer / experimental controls](#38-developer--experimental-controls) |  | 5 | 1 | 7 |  | `████░░░░░░` 42% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 3 | 2 | 3 | 8 |  | `████░░░░░░` 41% |
 | [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
-| [41. Screenshots & capture](#41-screenshots--capture) |  | 4 |  | 7 |  | `████░░░░░░` 36% |
+| [41. Screenshots & capture](#41-screenshots--capture) |  | 5 |  | 6 |  | `█████░░░░░` 45% |
 | [42. Sharing](#42-sharing) |  |  |  | 6 | 3 | `░░░░░░░░░░` 0% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
@@ -102,8 +102,8 @@ branch, one small commit per feature or group of features.
 | [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 10 | 1 | `███░░░░░░░` 34% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 | 2 | 1 | 20 | 8 | `█░░░░░░░░░` 15% |
-| [63. Researched additions (2026)](#63-researched-additions-2026) |  | 16 | 1 | 3 |  | `████████░░` 83% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 | 3 | 1 | 19 | 8 | `██░░░░░░░░` 19% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) |  | 17 | 1 | 2 |  | `█████████░` 88% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -640,8 +640,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.14 | Search selected text | 🧪 | Right-click selected text -> Search the web for… |
 | 17.15 | Search image | 🧪 | Right-click an image -> Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
 | 17.16 | Copy selected text | ⏳ | |
-| 17.17 | Highlight text | ⏳ | |
-| 17.18 | Page annotations | ⏳ | |
+| 17.17 | Highlight text | 🧪 | Select text, Ctrl+Shift+H or right-click -> Highlight; found again when you come back |
+| 17.18 | Page annotations | 🧪 | Notes on highlights (click one); kept on this computer, never from private windows |
 | 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
 | 17.21 | Save as PDF | 🧪 | Command palette -> Save as PDF; landscape, backgrounds, headers in Settings -> Page tools |
@@ -1038,7 +1038,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 41.02 | Visible-area screenshot | 🧪 | Ctrl+Shift+S |
 | 41.03 | Selected-area screenshot | 🧪 | Command palette -> Screenshot of a part of the page: drag a box |
 | 41.04 | Screenshot to clipboard | 🧪 | Settings -> Page tools: save, copy or both |
-| 41.05 | Screenshot annotation | ⏳ | |
+| 41.05 | Screenshot annotation | 🧪 | Screenshot editor: pen, highlighter, arrows, boxes, text, blur, crop, undo/redo |
 | 41.06 | Screen recording | ⏳ | |
 | 41.07 | Tab recording | ⏳ | |
 | 41.08 | Window recording | ⏳ | |
@@ -1430,7 +1430,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.11 | Page-change notifications | ⏳ | |
 | 62.12 | Built-in notes | ⏳ | |
 | 62.13 | Notes attached to URLs | ⏳ | |
-| 62.14 | Web annotations | ⏳ | |
+| 62.14 | Web annotations | 🧪 | Highlights with notes on any web page (Ctrl+Shift+H) |
 | 62.15 | Collaborative tabs | ⏭️ | Needs an online account or server: left out |
 | 62.16 | Collaborative workspaces | ⏭️ | Needs an online account or server: left out |
 | 62.17 | Shared sessions | ⏭️ | Needs an online account or server: left out |
@@ -1462,7 +1462,7 @@ Only ones that work on this PC, without an account or a server.
 | 63.03 | Element zapper: hide a page element for good (uBlock, Safari distraction control) | 🧪 | Command palette -> Hide an element; undo in Settings -> Page tools |
 | 63.04 | Link preview in a floating window (Zen Glance, Arc Peek) | 🧪 | Right-click a link -> Peek at link (a pop-out window; Back to tabs keeps it) |
 | 63.05 | Compact mode: toolbars hide until the mouse comes near (Zen) | ⏳ | |
-| 63.06 | Feed reader: detect RSS/Atom feeds, follow them locally (Vivaldi) | ⏳ | |
+| 63.06 | Feed reader: detect RSS/Atom feeds, follow them locally (Vivaldi) | 🧪 | kessel://feeds: RSS, Atom, JSON Feed; follow from the palette; OPML import/export |
 | 63.07 | Break mode: pause every page and all sound at once (Vivaldi) | 🧪 | Command palette -> Pause everything |
 | 63.08 | Auto-archive tabs you haven't touched in days (Arc) | 🧪 | Settings -> Tabs -> Close tabs you've forgotten (counted while Kessel is open) |
 | 63.09 | De-AMP: open a page's real address instead of its AMP copy (Brave) | 🧪 | On by default; Settings -> Page tools |

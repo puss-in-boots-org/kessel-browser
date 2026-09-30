@@ -65,6 +65,9 @@ export const FEATURES = [
     ["Missing pages", "A page that's gone (404) offers its Wayback Machine copy; the palette's “Open in the Wayback Machine” works on any page."],
     ["Close forgotten tabs", "Settings -> Tabs: tabs you haven't looked at in days close by themselves."],
     ["Forget sites", "Settings -> Privacy: sites whose cookies and data go when you close their last tab."],
+    ["Highlights and notes", "Select text, Ctrl+Shift+H (or right-click -> Highlight). Click a highlight for its colour, a note, or to remove it; they come back when you return. All of them: Settings -> Page tools."],
+    ["Screenshot editor", "Settings -> Page tools -> When you take one -> Open it in the editor: pen, highlighter, arrows, boxes, text, blur, crop, undo; then save or copy."],
+    ["Feeds", "Palette -> Follow this site's feed, or add a site on the feeds page (palette -> Feeds). Kessel fetches them itself; OPML import and export."],
   ]],
   ["Search", [
     ["Search keywords", "Type a keyword and a space: “yt cats” searches YouTube, “w Budapest” Wikipedia. Keywords and your own engines: Settings -> Search & Startup."],

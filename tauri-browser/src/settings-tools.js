@@ -224,9 +224,25 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
 
     <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Screenshots</span></div>
-      ${settingRow({ title: "When you take one", desc: "Ctrl+Shift+S for what's in view; “Screenshot of the whole page” in the command palette (F2)", controlHtml: selectHtml("shot-action", [["both", "Save and copy"], ["save", "Save it"], ["copy", "Copy it"]], 170) })}
+      ${settingRow({ title: "When you take one", desc: "Ctrl+Shift+S for what's in view; “Screenshot of the whole page” in the command palette (F2)", controlHtml: selectHtml("shot-action", [["both", "Save and copy"], ["save", "Save it"], ["copy", "Copy it"], ["edit", "Open it in the editor"]], 190) })}
       ${settingRow({ title: "Format", controlHtml: selectHtml("shot-format", [["png", "PNG (sharp)"], ["jpeg", "JPEG (smaller)"]], 170) })}
       ${settingRow({ title: "Save to", desc: "Empty: Pictures\\Kessel", controlHtml: `<input class="field mono" id="shot-folder" style="width:240px" spellcheck="false" />` })}
+    </div>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Highlights and notes</span></div>
+      ${settingRow({ title: "Highlight colour", desc: "Select text and press Ctrl+Shift+H, or right-click it -> Highlight. Click a highlight for its colour, a note, or to remove it. Kept on this computer, never from private windows.", controlHtml: selectHtml("hl-color", [["yellow", "Yellow"], ["green", "Green"], ["blue", "Blue"], ["pink", "Pink"], ["orange", "Orange"]], 130) })}
+      ${settingRow({ title: "“Highlight” in the right-click menu", controlHtml: switchHtml("menu-highlight", f.page_menu?.highlight !== false) })}
+      <div class="list-panel" id="hl-list" style="max-height:320px"></div>
+    </div>
+
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Feeds</span></div>
+      ${settingRow({ title: "Your feeds", desc: "Follow a site with “Follow this site's feed” in the command palette (F2), or add one on the feeds page. Kessel fetches them itself -- no account.", controlHtml: `<button class="btn sm" id="open-feeds">Open feeds</button>` })}
+      ${settingRow({ title: "Check for new items", controlHtml: selectHtml("feeds-every", [["15", "Every 15 minutes"], ["30", "Every 30 minutes"], ["60", "Every hour"], ["180", "Every 3 hours"], ["720", "Twice a day"]], 190) })}
+      ${settingRow({ title: "Open items", controlHtml: selectHtml("feeds-open", [["tab", "In a new tab"], ["same", "In the feeds tab"]], 190) })}
+      ${settingRow({ title: "Hide items you've read", controlHtml: switchHtml("feeds-hide-read", f.feeds_hide_read === true) })}
+      ${settingRow({ title: "Items kept per feed", controlHtml: selectHtml("feeds-max", [["50", "50"], ["100", "100"], ["200", "200"], ["500", "500"]], 100) })}
     </div>
 
     <div class="setting-card">
@@ -308,8 +324,51 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   pdfSwitch("pdf-backgrounds", "backgrounds");
   pdfSwitch("pdf-headers", "headers");
 
+  // Highlights
+  const hlColor = p.querySelector("#hl-color");
+  hlColor.value = f.highlight_color || "yellow";
+  hlColor.addEventListener("change", () => saveFeature("highlight_color", hlColor.value));
+  const hlList = p.querySelector("#hl-list");
+  const renderHighlights = async () => {
+    const pages = Object.entries((await invoke("highlights_all").catch(() => ({}))) || {});
+    pages.sort(([, a], [, b]) => Math.max(...b.map((h) => h.at || 0)) - Math.max(...a.map((h) => h.at || 0)));
+    hlList.innerHTML = pages.length ? "" : `<div style="padding:10px 12px;font-size:12px;opacity:.6">No highlights yet.</div>`;
+    for (const [url, list] of pages.slice(0, 200)) {
+      const row = el(`<div class="list-row" style="display:block">
+        <div style="display:flex;gap:8px;align-items:center"><a class="lr-title" style="flex:1;color:inherit" href="#"></a><span class="lr-sub"></span><button class="btn ghost icon-only sm" title="Remove this page's highlights">${icon("trash", 13)}</button></div>
+        <div class="quotes" style="margin-top:4px"></div></div>`);
+      const title = row.querySelector(".lr-title");
+      title.textContent = list[0]?.title || url;
+      title.addEventListener("click", (e) => {
+        e.preventDefault();
+        invoke("open_url", { url, how: "tab" }).catch((err) => toast(String(err)));
+      });
+      row.querySelector(".lr-sub").textContent = `${list.length}`;
+      row.querySelector("button").addEventListener("click", async () => {
+        await invoke("highlight_delete", { url, id: null }).catch((err) => toast(String(err)));
+        renderHighlights();
+      });
+      const quotes = row.querySelector(".quotes");
+      for (const h of list.slice(0, 5)) {
+        const q = el(`<div style="font-size:11.5px;opacity:.75;margin:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>`);
+        q.textContent = `“${h.exact.replace(/\s+/g, " ").slice(0, 140)}”${h.note ? ` -- ${h.note.replace(/\s+/g, " ").slice(0, 80)}` : ""}`;
+        quotes.appendChild(q);
+      }
+      hlList.appendChild(row);
+    }
+  };
+  renderHighlights();
+
+  // Feeds
+  p.querySelector("#open-feeds").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://feeds" }));
+  for (const [id, key, fallback] of [["feeds-every", "feeds_refresh_minutes", "60"], ["feeds-open", "feeds_open", "tab"], ["feeds-max", "feeds_max_items", "100"]]) {
+    const sel = p.querySelector(`#${id}`);
+    sel.value = String(f[key] ?? fallback);
+    sel.addEventListener("change", () => saveFeature(key, /^\d+$/.test(sel.value) ? Number(sel.value) : sel.value));
+  }
+
   // Right-click menu
-  for (const [id, key] of [["menu-peek", "peek"], ["menu-search", "search"], ["menu-image", "image_search"]]) {
+  for (const [id, key] of [["menu-peek", "peek"], ["menu-search", "search"], ["menu-image", "image_search"], ["menu-highlight", "highlight"]]) {
     const btn = p.querySelector(`#${id}`);
     btn.addEventListener("click", async () => {
       const on = !btn.classList.contains("on");
@@ -336,6 +395,7 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   };
   featureSwitch("deamp", "deamp");
   featureSwitch("wayback", "wayback");
+  featureSwitch("feeds-hide-read", "feeds_hide_read");
   featureSwitch("gestures-on", "gestures_enabled");
   p.querySelector("#reader-reset").addEventListener("click", async () => {
     await saveFeature("reader", undefined);

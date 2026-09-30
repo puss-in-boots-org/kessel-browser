@@ -126,6 +126,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("warning", "warning.html"),
     ("gpu", "gpu.html"),
     ("reader", "reader.html"),
+    ("shot", "shot.html"),
+    ("feeds", "feeds.html"),
 ];
 
 // The pages Kessel starts with when it isn't bringing back your last
@@ -5004,6 +5006,12 @@ fn main() {
             tools::page_tool,
             tools::take_screenshot,
             tools::save_pdf,
+            tools::highlights_all,
+            tools::highlight_delete,
+            tools::shot_image,
+            tools::save_image,
+            tools::fetch_feed,
+            tools::page_feeds,
             tools::reader_open,
             tools::reader_content,
             tools::export_settings,
@@ -5137,6 +5145,8 @@ fn main() {
             commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);
             app.manage(page::ZoomLevels::load(&data_dir));
             app.manage(tools::ReaderPages::default());
+            app.manage(tools::ShotPages::default());
+            app.manage(tools::Highlights::load(&data_dir));
 
             let custom_blocked = store.adblock_lists.lock().unwrap().custom.clone();
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));

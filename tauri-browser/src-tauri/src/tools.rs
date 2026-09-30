@@ -45,6 +45,7 @@ pub fn site_tweaks_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
         "reload": site.get("reload").and_then(|v| v.as_u64()).unwrap_or(0),
         "deamp": f.get("deamp").and_then(|v| v.as_bool()).unwrap_or(true),
         "wayback": f.get("wayback").and_then(|v| v.as_bool()).unwrap_or(true),
+        "highlight_color": str_of(&f, "highlight_color"),
         "gestures": gestures_on(&f),
     })
 }
@@ -143,7 +144,7 @@ pub fn broadcast_tweaks(app: &tauri::AppHandle) {
 #[tauri::command]
 pub fn page_tool(app: tauri::AppHandle, webview: Webview, id: u32, tool: String) -> Result<(), String> {
     crate::require_internal_page(&webview)?;
-    if !matches!(tool.as_str(), "zap-start" | "link-hints" | "shot-area-start" | "pause-media") {
+    if !matches!(tool.as_str(), "zap-start" | "link-hints" | "shot-area-start" | "pause-media" | "highlight") {
         return Err("no such tool".into());
     }
     let state = app.state::<BrowserState>();
@@ -200,6 +201,17 @@ pub async fn take_screenshot(app: tauri::AppHandle, webview: Webview, id: u32, f
         _ => Shot::Visible,
     };
     let data = capture(&page, mode, jpeg).await?;
+    // Into the editor (shot.html) instead: it saves or copies from there.
+    if action == "edit" {
+        let key = format!("{:x}", rand::random::<u64>());
+        let shots = app.state::<ShotPages>();
+        let mut shots = shots.0.lock().unwrap();
+        if shots.len() > 8 {
+            shots.clear();
+        }
+        shots.insert(key.clone(), (data, if jpeg { "image/jpeg" } else { "image/png" }.to_string()));
+        return Ok(serde_json::json!({ "edit": key, "action": action }));
+    }
     let mut path = serde_json::Value::Null;
     if action != "copy" {
         use base64::Engine;
@@ -458,6 +470,196 @@ pub fn reader_content(webview: Webview, pages: tauri::State<ReaderPages>, key: S
     Ok(pages.0.lock().unwrap().get(&key).cloned().unwrap_or(serde_json::Value::Null))
 }
 
+// --- Highlights and notes on pages -----------------------------------------------------------
+
+// Text you highlighted on pages, with your notes: { "<page address>": [{ id,
+// exact, prefix, suffix, color, note, at }] }, kept in highlights.json.
+// page-tools.js finds each again by its words when the page opens.
+pub struct Highlights {
+    file: std::path::PathBuf,
+    pages: Mutex<serde_json::Map<String, serde_json::Value>>,
+}
+
+impl Highlights {
+    pub fn load(data_dir: &std::path::Path) -> Self {
+        let file = data_dir.join("highlights.json");
+        let pages = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        Highlights { file, pages: Mutex::new(pages) }
+    }
+
+    fn save(&self, pages: &serde_json::Map<String, serde_json::Value>) {
+        if let Ok(text) = serde_json::to_string(pages) {
+            let tmp = self.file.with_extension("json.tmp");
+            if std::fs::write(&tmp, text).is_ok() {
+                let _ = std::fs::rename(&tmp, &self.file);
+            }
+        }
+    }
+}
+
+// The address highlights are kept under: without its #part.
+pub fn page_key(url: &str) -> String {
+    url.split('#').next().unwrap_or("").to_string()
+}
+
+pub fn highlights_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
+    let store = app.state::<Highlights>();
+    let pages = store.pages.lock().unwrap();
+    pages.get(&page_key(url)).cloned().unwrap_or(serde_json::json!([]))
+}
+
+// "highlight-add" / "highlight-update" / "highlight-remove" from a page.
+// Nothing is kept from private windows.
+pub fn highlight_change(app: &tauri::AppHandle, id: u32, url: &str, kind: &str, d: &serde_json::Value) {
+    let state = app.state::<BrowserState>();
+    if state.private_tabs.lock().unwrap().contains(&id) || !(url.starts_with("http://") || url.starts_with("https://") || url.starts_with("file:")) {
+        return;
+    }
+    let Some(hid) = d.get("id").and_then(|v| v.as_str()).filter(|v| !v.is_empty() && v.len() <= 40).map(str::to_string) else { return };
+    let clip = |k: &str, max: usize| d.get(k).and_then(|v| v.as_str()).unwrap_or("").chars().take(max).collect::<String>();
+    let store = app.state::<Highlights>();
+    let mut pages = store.pages.lock().unwrap();
+    let key = page_key(url);
+    let list = pages.entry(key.clone()).or_insert_with(|| serde_json::json!([]));
+    let Some(items) = list.as_array_mut() else { return };
+    match kind {
+        "highlight-add" => {
+            let exact = clip("exact", 5000);
+            if exact.trim().is_empty() || items.len() >= 500 || items.iter().any(|h| h.get("id").and_then(|v| v.as_str()) == Some(hid.as_str())) {
+                return;
+            }
+            items.push(serde_json::json!({
+                "id": hid,
+                "exact": exact,
+                "prefix": clip("prefix", 64),
+                "suffix": clip("suffix", 64),
+                "color": clip("color", 20),
+                "note": clip("note", 5000),
+                "title": clip("title", 300),
+                "at": crate::store::now_unix(),
+            }));
+        }
+        "highlight-update" => {
+            if let Some(h) = items.iter_mut().find(|h| h.get("id").and_then(|v| v.as_str()) == Some(hid.as_str())) {
+                if d.get("color").is_some() {
+                    h["color"] = serde_json::json!(clip("color", 20));
+                }
+                if d.get("note").is_some() {
+                    h["note"] = serde_json::json!(clip("note", 5000));
+                }
+            }
+        }
+        _ => items.retain(|h| h.get("id").and_then(|v| v.as_str()) != Some(hid.as_str())),
+    }
+    if items.is_empty() {
+        pages.remove(&key);
+    }
+    store.save(&pages);
+}
+
+// Settings -> Page tools: every page with highlights.
+#[tauri::command]
+pub fn highlights_all(webview: Webview, store: tauri::State<Highlights>) -> Result<serde_json::Value, String> {
+    crate::require_internal_page(&webview)?;
+    Ok(serde_json::Value::Object(store.pages.lock().unwrap().clone()))
+}
+
+// Removes one highlight (`id`), or every one on the page (`id` None).
+#[tauri::command]
+pub fn highlight_delete(webview: Webview, store: tauri::State<Highlights>, url: String, id: Option<String>) -> Result<(), String> {
+    crate::require_internal_page(&webview)?;
+    let mut pages = store.pages.lock().unwrap();
+    match id {
+        Some(id) => {
+            if let Some(items) = pages.get_mut(&url).and_then(|l| l.as_array_mut()) {
+                items.retain(|h| h.get("id").and_then(|v| v.as_str()) != Some(id.as_str()));
+                if items.is_empty() {
+                    pages.remove(&url);
+                }
+            }
+        }
+        None => {
+            pages.remove(&url);
+        }
+    }
+    store.save(&pages);
+    Ok(())
+}
+
+// --- Screenshot editor (shot.html) ----------------------------------------------------------
+
+// Screenshots waiting in the editor, by key: (base64 data, mime).
+#[derive(Default)]
+pub struct ShotPages(Mutex<HashMap<String, (String, String)>>);
+
+#[tauri::command]
+pub fn shot_image(webview: Webview, shots: tauri::State<ShotPages>, key: String) -> Result<serde_json::Value, String> {
+    crate::require_internal_page(&webview)?;
+    Ok(shots.0.lock().unwrap().get(&key).map(|(data, mime)| serde_json::json!({ "data": data, "mime": mime })).unwrap_or(serde_json::Value::Null))
+}
+
+// Saves an edited picture (base64 PNG or JPEG) where you choose.
+#[tauri::command]
+pub async fn save_image(app: tauri::AppHandle, webview: Webview, data: String, jpeg: bool, name: String) -> Result<Option<String>, String> {
+    crate::require_internal_page(&webview)?;
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|e| e.to_string())?;
+    let ext = if jpeg { "jpg" } else { "png" };
+    let name = format!("{}.{}", safe_file_name(&name).chars().take(120).collect::<String>(), ext);
+    let filter = if jpeg { ("JPEG picture", "*.jpg") } else { ("PNG picture", "*.png") };
+    let Some(path) = crate::extensions::dialog(&app, &webview, move |owner| crate::dialogs::save_file(owner, "Save the picture", &name, &[filter])).await? else {
+        return Ok(None);
+    };
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+// --- Feeds (feeds.html) --------------------------------------------------------------------
+
+// A feed's text (RSS, Atom or JSON Feed), fetched without cookies; feeds.js
+// reads it. At most 4 MB.
+#[tauri::command]
+pub async fn fetch_feed(webview: Webview, url: String) -> Result<String, String> {
+    crate::require_internal_page(&webview)?;
+    let parsed = tauri::Url::parse(url.trim()).map_err(|_| "that isn't an address".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err("feeds are on http(s) addresses".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut response = crate::shields::http_agent()
+            .get(parsed.as_str())
+            .header("Accept", "application/rss+xml, application/atom+xml, application/feed+json, application/xml;q=0.9, */*;q=0.5")
+            .call()
+            .map_err(|e| format!("couldn't reach it: {e}"))?;
+        response.body_mut().with_config().limit(4 * 1024 * 1024).read_to_string().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// The feeds page `id` offers (<link rel="alternate" type="application/rss+xml">...).
+#[tauri::command]
+pub async fn page_feeds(app: tauri::AppHandle, webview: Webview, id: u32) -> Result<serde_json::Value, String> {
+    crate::require_internal_page(&webview)?;
+    let page = {
+        let state = app.state::<BrowserState>();
+        crate::page::webview(&app, &state, id).ok_or("that page is gone")?
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    page.eval_with_callback(
+        r#"(function(){var out=[];var ls=document.querySelectorAll('link[rel~="alternate"][href]');for(var i=0;i<ls.length&&out.length<10;i++){var t=(ls[i].type||'').toLowerCase();if(/rss|atom|feed\+json/.test(t))out.push({url:ls[i].href,title:(ls[i].title||'').slice(0,200)});}return out;})()"#.to_string(),
+        move |result| {
+            let _ = tx.send(result);
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    let result = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(3)))
+        .await
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    Ok(serde_json::from_str(&result).unwrap_or(serde_json::json!([])))
+}
+
 // --- Settings backup ------------------------------------------------------------------------
 
 // Saves Kessel's settings to a file you pick. Some(path) once saved.
@@ -507,6 +709,12 @@ mod tests {
         assert_eq!(timestamp(0), "1970-01-01 00.00.00");
         assert_eq!(timestamp(1_790_000_000), "2026-09-21 14.13.20");
         assert_eq!(timestamp(951_782_400), "2000-02-29 00.00.00");
+    }
+
+    #[test]
+    fn highlights_ignore_the_part_after_hash() {
+        assert_eq!(page_key("https://a.com/x?y=1#sec"), "https://a.com/x?y=1");
+        assert_eq!(page_key("https://a.com/"), "https://a.com/");
     }
 
     #[test]

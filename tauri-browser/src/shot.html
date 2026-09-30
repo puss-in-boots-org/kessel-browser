@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-page="shot">
+<head>
+  <meta charset="UTF-8" />
+  <title>Screenshot</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    /* kessel://shot (shot.js): a screenshot to draw on before saving or
+       copying it -- pen, highlighter, arrows, boxes, text, blurring, and
+       cropping. */
+    body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+    #bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+    #bar .group { display: flex; gap: 4px; align-items: center; padding-right: 8px; margin-right: 4px; border-right: 1px solid var(--border); }
+    #bar .group:last-child { border-right: none; }
+    .tool { width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 600 12px system-ui, sans-serif; }
+    .tool:hover { background: var(--surface-hover); }
+    .tool.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+    .swatch { width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+    .swatch.on { border-color: var(--text); }
+    #size { width: 90px; }
+    #bar .spacer { flex: 1; }
+    #stage { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 20px; background: repeating-conic-gradient(color-mix(in srgb, var(--text) 5%, transparent) 0 25%, transparent 0 50%) 0 0 / 20px 20px; }
+    #wrap { position: relative; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35); }
+    canvas { display: block; max-width: calc(100vw - 40px); height: auto; cursor: crosshair; }
+    #text-input { position: absolute; display: none; background: rgba(0, 0, 0, 0.1); border: 1px dashed currentColor; outline: none; font: 600 20px system-ui, sans-serif; padding: 2px 4px; min-width: 80px; }
+    #empty { padding: 80px 20px; text-align: center; color: var(--text-faint); }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <div class="group" id="tools"></div>
+    <div class="group" id="colors"></div>
+    <div class="group"><input id="size" type="range" min="2" max="24" step="1" title="Thickness" /></div>
+    <div class="group">
+      <button class="tool" id="undo" title="Undo (Ctrl+Z)"></button>
+      <button class="tool" id="redo" title="Redo (Ctrl+Y)"></button>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn sm" id="copy">Copy</button>
+    <button class="btn sm primary" id="save">Save…</button>
+  </div>
+  <div id="stage"><div id="wrap"><canvas id="canvas"></canvas><div id="text-input" contenteditable="true" spellcheck="false"></div></div></div>
+  <script type="module" src="shot.js"></script>
+</body>
+</html>

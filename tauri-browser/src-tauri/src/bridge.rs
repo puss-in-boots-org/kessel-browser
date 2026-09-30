@@ -207,6 +207,11 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::tools::offer_engine(app, url, d.get("name")?.as_str()?, d.get("url")?.as_str()?);
             None
         }
+        // Highlights you made, changed or removed (page-tools.js).
+        "highlight-add" | "highlight-update" | "highlight-remove" if top_frame => {
+            crate::tools::highlight_change(app, id, url, message.kind.as_str(), d);
+            None
+        }
         // A mouse gesture drawn in the page.
         "gesture" => {
             crate::tools::on_gesture(app, label, d.get("g")?.as_str()?);
@@ -227,6 +232,7 @@ fn request(app: &tauri::AppHandle, id: u32, url: &str, name: &str, d: &serde_jso
     let result = match name {
         "cosmetics" => serde_json::to_value(crate::cosmetics_for(app, url)).ok()?,
         "site-tweaks" => crate::tools::site_tweaks_for(app, url),
+        "highlights" => crate::tools::highlights_for(app, url),
         "hidden-selectors" => {
             let list = |key: &str| -> Vec<String> {
                 d.get(key)

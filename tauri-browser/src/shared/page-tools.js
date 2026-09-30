@@ -367,4 +367,211 @@
       if (document.readyState === 'complete') later(findSearch, 1500);
       else window.addEventListener('load', function () { later(findSearch, 1500); });
     }
+
+    // --- Highlights and notes: kept by their words, found again on load ---
+    // (A note stays out of the page's markup -- the site's scripts can read
+    // that -- and only shows in the popup you open.)
+    var HL_COLORS = { yellow: '#ffe066', green: '#b5eaa6', blue: '#a9d1ff', pink: '#ffc2dc', orange: '#ffcf8f' };
+    var highlights = [];
+    var hlStyle = null;
+    function hlColor(name) { return HL_COLORS[name] || HL_COLORS.yellow; }
+
+    // Every text node of the page in order, and where each starts in the
+    // page's text as one string.
+    function textIndex() {
+      var nodes = [], text = '';
+      if (!document.body) return { nodes: nodes, text: text };
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode: function (n) {
+          var p = n.parentNode && n.parentNode.nodeName;
+          return p === 'SCRIPT' || p === 'STYLE' || p === 'NOSCRIPT' || p === 'TEXTAREA' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      var n;
+      while ((n = walker.nextNode())) {
+        nodes.push({ node: n, start: text.length });
+        text += n.nodeValue;
+      }
+      return { nodes: nodes, text: text };
+    }
+
+    function offsetOf(index, node, offset) {
+      for (var i = 0; i < index.nodes.length; i++) {
+        if (index.nodes[i].node === node) return index.nodes[i].start + offset;
+      }
+      return -1;
+    }
+
+    // Wraps the page's text from `start` to `end` in marks for highlight h.
+    function wrap(index, start, end, h) {
+      var marks = [];
+      for (var i = 0; i < index.nodes.length; i++) {
+        var item = index.nodes[i];
+        var len = item.node.nodeValue.length;
+        var a = Math.max(start, item.start), b = Math.min(end, item.start + len);
+        if (a >= b) continue;
+        var node = item.node;
+        if (b - item.start < len) node.splitText(b - item.start);
+        if (a > item.start) node = node.splitText(a - item.start);
+        if (!node.nodeValue.trim()) continue;
+        var mark = document.createElement('mark');
+        mark.className = 'kessel-hl';
+        mark.setAttribute('data-hl', h.id);
+        mark.style.background = hlColor(h.color);
+        node.parentNode.insertBefore(mark, node);
+        mark.appendChild(node);
+        marks.push(mark);
+      }
+      if (marks.length && h.note) marks[marks.length - 1].classList.add('kessel-hl-note');
+      return marks.length > 0;
+    }
+
+    // Where highlight h is on the page now: the copy of its words with the
+    // same text around it, else the first copy.
+    function anchor(h) {
+      var index = textIndex();
+      var at = -1, best = -1, from = 0;
+      while ((at = index.text.indexOf(h.exact, from)) >= 0) {
+        var before = index.text.slice(Math.max(0, at - h.prefix.length), at);
+        var after = index.text.slice(at + h.exact.length, at + h.exact.length + h.suffix.length);
+        if (before === h.prefix && after === h.suffix) { best = at; break; }
+        if (best < 0) best = at;
+        from = at + 1;
+      }
+      return best >= 0 && wrap(index, best, best + h.exact.length, h);
+    }
+
+    function ensureHlStyle() {
+      if (hlStyle) return;
+      hlStyle = document.createElement('style');
+      hlStyle.textContent = 'mark.kessel-hl{color:inherit;border-radius:2px;padding:0;cursor:pointer;box-decoration-break:clone}' +
+        'mark.kessel-hl-note::after{content:"✎";font-size:.7em;vertical-align:super;margin-left:1px;opacity:.7}';
+      mount(hlStyle);
+    }
+
+    function placeAll(list) {
+      ensureHlStyle();
+      var missing = [];
+      for (var i = 0; i < list.length; i++) {
+        if (document.querySelector('mark[data-hl="' + list[i].id + '"]')) continue;
+        if (!anchor(list[i])) missing.push(list[i]);
+      }
+      return missing;
+    }
+
+    if (window.top === window) {
+      BRIDGE.request('highlights').then(function (list) {
+        highlights = Array.isArray(list) ? list : [];
+        if (!highlights.length) return;
+        var go = function () {
+          var missing = placeAll(highlights);
+          // Pages that build their text late: once more after a while.
+          if (missing.length) later(function () { placeAll(missing); }, 2500);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+        else go();
+      });
+    }
+
+    BRIDGE.on('highlight', function () {
+      var sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+      var range = sel.getRangeAt(0);
+      var exact = range.toString();
+      if (!exact.trim()) return;
+      var index = textIndex();
+      var start = offsetOf(index, range.startContainer, range.startOffset);
+      var end = offsetOf(index, range.endContainer, range.endOffset);
+      if (start < 0 || end <= start) {
+        // The selection starts or ends on an element, not in text: by its words.
+        start = index.text.indexOf(exact);
+        end = start + exact.length;
+        if (start < 0) return;
+      }
+      exact = index.text.slice(start, end);
+      var h = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        exact: exact,
+        prefix: index.text.slice(Math.max(0, start - 32), start),
+        suffix: index.text.slice(end, end + 32),
+        color: HL_COLORS[tweaks.highlight_color] ? tweaks.highlight_color : 'yellow',
+        note: '',
+        title: document.title
+      };
+      ensureHlStyle();
+      if (!wrap(index, start, end, h)) return;
+      sel.removeAllRanges();
+      highlights.push(h);
+      BRIDGE.send('highlight-add', h);
+    });
+
+    // Click a highlight: its colour, a note, or remove it.
+    var hlMenu = null;
+    function closeHlMenu() {
+      if (hlMenu) hlMenu.remove();
+      hlMenu = null;
+    }
+    function marksOf(id) { return document.querySelectorAll('mark[data-hl="' + id + '"]'); }
+    document.addEventListener('click', function (e) {
+      if (hlMenu && hlMenu.contains(e.target)) return;
+      var mark = e.target.closest && e.target.closest('mark.kessel-hl');
+      closeHlMenu();
+      if (!mark || (window.getSelection() && !window.getSelection().isCollapsed)) return;
+      e.preventDefault();
+      var id = mark.getAttribute('data-hl');
+      var h = null;
+      for (var i = 0; i < highlights.length; i++) if (highlights[i].id === id) h = highlights[i];
+      if (!h) return;
+      var r = mark.getBoundingClientRect();
+      hlMenu = document.createElement('div');
+      hlMenu.style.cssText = 'position:fixed;z-index:2147483647;left:' + Math.min(r.left, innerWidth - 270) + 'px;top:' + (r.bottom + 6 > innerHeight - 170 ? Math.max(8, r.top - 170) : r.bottom + 6) + 'px;width:260px;background:#16171d;color:#eee;font:12.5px system-ui,sans-serif;padding:10px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45)';
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:6px;margin-bottom:8px;align-items:center';
+      Object.keys(HL_COLORS).forEach(function (c) {
+        var b = document.createElement('button');
+        b.title = c;
+        b.style.cssText = 'width:22px;height:22px;border-radius:50%;border:2px solid ' + (c === h.color ? '#fff' : 'transparent') + ';background:' + HL_COLORS[c] + ';cursor:pointer;padding:0';
+        b.addEventListener('click', function () {
+          h.color = c;
+          var ms = marksOf(id);
+          for (var k = 0; k < ms.length; k++) ms[k].style.background = HL_COLORS[c];
+          BRIDGE.send('highlight-update', { id: id, color: c });
+          closeHlMenu();
+        });
+        row.appendChild(b);
+      });
+      var del = document.createElement('button');
+      del.textContent = 'Remove';
+      del.style.cssText = 'margin-left:auto;background:none;border:1px solid #555;color:#eee;border-radius:7px;padding:3px 8px;cursor:pointer;font:12px system-ui';
+      del.addEventListener('click', function () {
+        var ms = marksOf(id);
+        for (var k = 0; k < ms.length; k++) {
+          var m = ms[k], parent = m.parentNode;
+          while (m.firstChild) parent.insertBefore(m.firstChild, m);
+          parent.removeChild(m);
+          parent.normalize();
+        }
+        highlights = highlights.filter(function (x) { return x.id !== id; });
+        BRIDGE.send('highlight-remove', { id: id });
+        closeHlMenu();
+      });
+      row.appendChild(del);
+      var note = document.createElement('textarea');
+      note.placeholder = 'Add a note…';
+      note.value = h.note || '';
+      note.rows = 3;
+      note.style.cssText = 'width:100%;box-sizing:border-box;background:#0e0f13;color:#eee;border:1px solid #333;border-radius:8px;padding:6px;font:12.5px system-ui;resize:vertical';
+      note.addEventListener('change', function () {
+        h.note = note.value.slice(0, 5000);
+        var ms = marksOf(id);
+        for (var k = 0; k < ms.length; k++) {
+          ms[k].classList.toggle('kessel-hl-note', !!h.note && k === ms.length - 1);
+        }
+        BRIDGE.send('highlight-update', { id: id, note: h.note });
+      });
+      hlMenu.appendChild(row);
+      hlMenu.appendChild(note);
+      document.documentElement.appendChild(hlMenu);
+    }, true);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHlMenu(); }, true);
   })();

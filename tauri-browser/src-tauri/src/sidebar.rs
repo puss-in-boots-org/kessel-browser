@@ -272,6 +272,9 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
                         let label = format!("Search the web for “{}{}”", short, if picked.chars().count() > 24 { "…" } else { "" });
                         items.push(("search-selection", label, picked.chars().take(500).collect()));
                     }
+                    if !selection.trim().is_empty() && web_page(&page) && menu_on("highlight") {
+                        items.push(("highlight-selection", "Highlight".into(), String::new()));
+                    }
                     if !selection.trim().is_empty() {
                         items.push(("note-selection", "Save selection to notes".into(), selection.clone()));
                         items.push(("ai-selection", "Ask AI about this".into(), selection.clone()));
