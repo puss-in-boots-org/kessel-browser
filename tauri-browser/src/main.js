@@ -2762,7 +2762,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2923,6 +2923,9 @@ async function runCommand(id, ctx = {}) {
       if (!page) return;
       return invoke("page_tool", { id: page, tool: "shot-area-start" }).catch((err) => toast(String(err)));
     case "save-pdf": return page && savePdf(page);
+    case "highlight": return page && invoke("page_tool", { id: page, tool: "highlight" }).catch((err) => toast(String(err)));
+    case "feeds": return openSingleton("kessel://feeds");
+    case "follow-feed": return followFeed(findTab(page) || findTab(activeTabId));
     case "break-mode": return toggleBreakMode();
     case "wayback": {
       const tab = findTab(page) || findTab(activeTabId);
@@ -3510,6 +3513,9 @@ async function onPageMenu({ action, value, page, title, tab }) {
     case "ai-page":
       openAiPanel(aiPrompt({ page: value, title: pageTitle }));
       break;
+    case "highlight-selection":
+      await invoke("page_tool", { id: tab, tool: "highlight" }).catch(fail);
+      break;
     case "search-selection": {
       const t = findTab(tab);
       await createTab(searchUrlFor(value), t?.account ?? activeAccount(), { after: tab });
@@ -3940,6 +3946,11 @@ async function takeScreenshot(page, full, area = null) {
     return null;
   });
   if (!shot) return;
+  // Settings -> Page tools -> "Open it in the editor".
+  if (shot.edit) {
+    await createTab(`kessel://shot?k=${encodeURIComponent(shot.edit)}`, null, { after: page });
+    return;
+  }
   let copied = false;
   if (shot.data) {
     try {
@@ -3983,6 +3994,26 @@ async function savePdf(page) {
     return null;
   });
   if (path) toast(`Saved to ${path}`);
+}
+
+// --- Feeds (feeds.html) ----------------------------------------------------------------
+// Follows the feed the page offers (its RSS / Atom link); kessel://feeds
+// shows what's new, fetched by Kessel itself -- no account anywhere.
+
+async function followFeed(tab) {
+  if (!tab || !/^https?:/.test(tab.url || "")) return toast("Open a site first");
+  const found = await invoke("page_feeds", { id: tab.id }).catch(() => []);
+  if (!found?.length) return toast("This page doesn't offer a feed");
+  const add = async (feed) => {
+    const features = currentSettings()?.features || {};
+    const list = Array.isArray(features.feeds) ? features.feeds : [];
+    if (list.some((f) => f.url === feed.url)) return toast("You already follow it -- see Feeds in the command palette");
+    await saveSettings({ features: { ...features, feeds: [...list, { url: feed.url, title: feed.title || tab.title || hostOf(tab.url), site: tab.url }] } });
+    toast(`Following ${feed.title || hostOf(tab.url)}. Feeds are in the command palette (F2).`);
+  };
+  if (found.length === 1) return add(found[0]);
+  const rect = document.getElementById("address-wrap")?.getBoundingClientRect() || { right: window.innerWidth / 2, bottom: 80 };
+  showContextMenu([{ header: "Follow which feed?" }, ...found.map((f) => ({ label: f.title || f.url, action: () => add(f) }))], rect.right - 300, rect.bottom, { dropdown: true, width: 300 });
 }
 
 // --- Pause everything ---------------------------------------------------------------

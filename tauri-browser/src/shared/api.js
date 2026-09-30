@@ -55,6 +55,8 @@ export const INTERNAL_TITLES = {
   "kessel://help": "Help",
   "kessel://gpu": "Graphics & media",
   "kessel://reader": "Reader view",
+  "kessel://shot": "Screenshot",
+  "kessel://feeds": "Feeds",
 };
 
 // kessel://settings/privacy -> kessel://settings.
