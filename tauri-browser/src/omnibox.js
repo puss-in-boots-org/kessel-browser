@@ -9,7 +9,8 @@
 // Shift+Enter in a new window), Tab accepts the completion, Shift+Delete
 // removes a history entry, Escape closes the list.
 
-import { ENGINES, resolveInput, looksLikeUrl, keyLabel } from "./shared/api.js";
+import { ENGINES, looksLikeUrl, keyLabel } from "./shared/api.js";
+import { resolveTyped, engineById, keywordSearch } from "./shared/search.js";
 import { instantAnswer, parseCurrencyQuery, convertCurrency, parseDefineQuery, matchCommands } from "./shared/answers.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -53,7 +54,7 @@ export function setupOmnibox({ input, anchor, win, listen, getSettings, getBookm
 
   const settings = () => getSettings() || {};
   const engineKey = () => settings().search_engine || "google";
-  const engine = () => ENGINES[engineKey()] || ENGINES.google;
+  const engine = () => engineById(settings(), engineKey());
 
   // --- The list ------------------------------------------------------------------
 
@@ -107,8 +108,11 @@ export function setupOmnibox({ input, anchor, win, listen, getSettings, getBookm
 
   function firstItem(text) {
     const t = text.trim();
-    const url = resolveInput(t, engineKey());
+    const url = resolveTyped(t, settings());
     const address = !t.startsWith("?") && (looksLikeUrl(t) || /^(kessel|file|view-source):/i.test(t));
+    // "yt cats": a search with the engine that keyword belongs to.
+    const kw = !address && keywordSearch(t, settings());
+    if (kw) return { kind: "search", title: kw.query, detail: `${kw.engine.name} Search`, url, fill: t };
     return address
       ? { kind: "go", title: shortUrl(t), detail: "Go to site", url, fill: t }
       : { kind: "search", title: t.replace(/^\?\s*/, ""), detail: `${engine().name} Search`, url, fill: t };
@@ -170,7 +174,8 @@ export function setupOmnibox({ input, anchor, win, listen, getSettings, getBookm
         render();
       })
       .catch(() => {});
-    if (!win.private && s.search_suggestions !== false && !t.startsWith("kessel:") && t.length < 120) {
+    // Suggestions come from the built-in engines' services (suggest.rs).
+    if (!win.private && s.search_suggestions !== false && ENGINES[engineKey()] && !keywordSearch(t, s) && !t.startsWith("kessel:") && t.length < 120) {
       const query = t.replace(/^\?\s*/, "");
       invoke("search_suggest", { engine: engineKey(), text: query })
         .then((list) => {

@@ -319,6 +319,7 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
   }} catch (e) {{}}
 
   if (!BRIDGE) return;
+{page_tools}
 
   // --- Shields: element hiding ---
   // The rules come from the same filter lists as the network blocking (see
@@ -528,7 +529,8 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
         bridge = bridge_prelude(token),
         adblock = if adblock_enabled { "true" } else { "false" },
         autofill = if autofill_enabled { "true" } else { "false" },
-        side_panel = if in_side_panel { "true" } else { "false" }
+        side_panel = if in_side_panel { "true" } else { "false" },
+        page_tools = crate::tools::PAGE_TOOLS_JS
     )
 }
 

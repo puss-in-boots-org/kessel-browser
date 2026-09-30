@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**44% overall** -- 386 done (✅ 🟢 🌐), 37 built and waiting for their first run on Windows or a phone (🧪), 54 partly done (🟡), 542 to do (⏳), 6 skipped (⏭️), of 1025.
+**51% overall** -- 387 done (✅ 🟢 🌐), 73 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 437 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -44,29 +44,29 @@ branch, one small commit per feature or group of features.
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
-| [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 13 |  | `███░░░░░░░` 26% |
-| [5. History](#5-history) | 14 |  |  | 2 |  | `█████████░` 88% |
+| [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 12 | 1 | `███░░░░░░░` 28% |
+| [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
 | [6. Downloads](#6-downloads) | 5 |  | 1 | 16 |  | `███░░░░░░░` 25% |
-| [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 26 |  | `██░░░░░░░░` 24% |
+| [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 24 | 2 | `███░░░░░░░` 26% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
-| [9. Sync](#9-sync) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
+| [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
-| [12. DNS & networking](#12-dns--networking) | 9 |  |  | 14 |  | `████░░░░░░` 39% |
+| [12. DNS & networking](#12-dns--networking) | 9 | 4 |  | 10 |  | `██████░░░░` 57% |
 | [13. Website permissions](#13-website-permissions) |  |  |  | 20 |  | `░░░░░░░░░░` 0% |
 | [14. Site-specific settings](#14-site-specific-settings) |  |  |  | 22 |  | `░░░░░░░░░░` 0% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
-| [17. Reading & research](#17-reading--research) | 5 |  | 1 | 16 |  | `███░░░░░░░` 25% |
+| [17. Reading & research](#17-reading--research) | 5 | 5 | 1 | 11 |  | `█████░░░░░` 48% |
 | [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [19. PDF](#19-pdf) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
 | [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
-| [22. Accessibility](#22-accessibility) | 3 | 1 | 1 | 11 |  | `███░░░░░░░` 28% |
+| [22. Accessibility](#22-accessibility) | 3 | 2 | 1 | 10 |  | `███░░░░░░░` 34% |
 | [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
-| [24. Search engines](#24-search-engines) | 2 |  |  | 7 |  | `██░░░░░░░░` 22% |
-| [25. Startup behavior](#25-startup-behavior) | 4 |  | 1 | 4 |  | `█████░░░░░` 50% |
-| [26. Session management](#26-session-management) | 1 |  | 5 | 5 |  | `███░░░░░░░` 32% |
+| [24. Search engines](#24-search-engines) | 3 | 2 |  | 4 |  | `██████░░░░` 56% |
+| [25. Startup behavior](#25-startup-behavior) | 4 | 1 | 1 | 3 |  | `██████░░░░` 61% |
+| [26. Session management](#26-session-management) | 1 |  | 5 | 4 | 1 | `████░░░░░░` 35% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
@@ -78,31 +78,32 @@ branch, one small commit per feature or group of features.
 | [35. Hardware acceleration](#35-hardware-acceleration) |  | 8 | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 11 | 1 |  | 5 |  | `███████░░░` 71% |
 | [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) |  | 5 | 1 | 7 |  | `████░░░░░░` 42% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 3 | 2 | 3 | 8 |  | `████░░░░░░` 41% |
 | [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
-| [41. Screenshots & capture](#41-screenshots--capture) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
-| [42. Sharing](#42-sharing) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [41. Screenshots & capture](#41-screenshots--capture) |  | 3 |  | 8 |  | `███░░░░░░░` 27% |
+| [42. Sharing](#42-sharing) |  |  |  | 6 | 3 | `░░░░░░░░░░` 0% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
-| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 |  |  | 3 |  | `█████████░` 89% |
-| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 |  |  | 6 |  | `█████░░░░░` 50% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 | 1 |  | 2 |  | `█████████░` 93% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 | 1 |  | 5 |  | `██████░░░░` 58% |
 | [47. Context menus](#47-context-menus) | 2 |  |  | 8 |  | `██░░░░░░░░` 20% |
-| [48. AI features](#48-ai-features) | 2 |  | 2 | 16 |  | `██░░░░░░░░` 15% |
-| [49. Shopping](#49-shopping) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
-| [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 11 |  | `░░░░░░░░░░` 0% |
-| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 8 |  | `████░░░░░░` 43% |
-| [52. Import / export](#52-import--export) | 4 |  |  | 13 |  | `██░░░░░░░░` 24% |
-| [53. Updates](#53-updates) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
+| [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
+| [52. Import / export](#52-import--export) | 4 | 2 |  | 11 |  | `████░░░░░░` 35% |
+| [53. Updates](#53-updates) |  |  |  | 1 | 8 | `░░░░░░░░░░` 0% |
 | [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
-| [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 7 |  | `███░░░░░░░` 29% |
-| [56. Account system](#56-account-system) |  |  |  | 14 |  | `░░░░░░░░░░` 0% |
+| [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
+| [56. Account system](#56-account-system) |  |  |  | 2 | 12 | `░░░░░░░░░░` 0% |
 | [57. Browser lock](#57-browser-lock) | 1 |  |  | 9 |  | `█░░░░░░░░░` 10% |
 | [58. Search / history intelligence](#58-search--history-intelligence) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
 | [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
-| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 11 |  | `███░░░░░░░` 32% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 |  | 1 | 30 |  | `░░░░░░░░░░` 5% |
+| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 10 | 1 | `███░░░░░░░` 34% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 | 2 | 1 | 20 | 8 | `█░░░░░░░░░` 15% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) |  | 9 |  | 11 |  | `█████░░░░░` 45% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -280,7 +281,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 4.09 | Bookmark sorting | ⏳ | |
 | 4.10 | Bookmark import | 🟡 | From Opera GX, Opera, Brave and Chrome |
 | 4.11 | Bookmark export | ⏳ | |
-| 4.12 | Bookmark synchronization | ⏳ | |
+| 4.12 | Bookmark synchronization | ⏭️ | Needs an online account or server: left out |
 | 4.13 | Bookmark tags | ⏳ | |
 | 4.14 | Bookmark descriptions | ⏳ | |
 | 4.15 | Favicons | 🟢 | |
@@ -306,7 +307,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 5.11 | Recently closed windows | ✅ | See 2.29 |
 | 5.12 | Search history | ✅ | History -> Searches: what you searched on Google, Bing, DuckDuckGo, YouTube, Wikipedia, Amazon and more |
 | 5.13 | Download history | 🟢 | |
-| 5.14 | History synchronization | ⏳ | |
+| 5.14 | History synchronization | ⏭️ | Needs an online account or server: left out |
 | 5.15 | History suggestions | ✅ | In the address bar, as you type |
 | 5.16 | Address-bar history integration | ✅ | See 1.11 |
 
@@ -350,7 +351,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.07 | Password search | 🟢 | The Passwords page's search box |
 | 7.08 | Password import | 🟢 | Browsers and CSV |
 | 7.09 | Password export | ⏳ | |
-| 7.10 | Password synchronization | ⏳ | |
+| 7.10 | Password synchronization | ⏭️ | Needs an online account or server: left out |
 | 7.11 | Password security checks | ⏳ | |
 | 7.12 | Weak-password detection | ⏳ | |
 | 7.13 | Reused-password detection | ⏳ | |
@@ -361,7 +362,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.18 | Passkey creation | ⏳ | |
 | 7.19 | Passkey login | ⏳ | |
 | 7.20 | Passkey storage | ⏳ | |
-| 7.21 | Passkey synchronization | ⏳ | |
+| 7.21 | Passkey synchronization | ⏭️ | Needs an online account or server: left out |
 | 7.22 | Hardware-security-key authentication | ⏳ | |
 | 7.23 | Biometric authentication | ⏳ | |
 | 7.24 | WebAuthn | ⏳ | |
@@ -404,24 +405,24 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 9.01 | Bookmark sync | ⏳ | |
-| 9.02 | History sync | ⏳ | |
-| 9.03 | Password sync | ⏳ | |
-| 9.04 | Extension sync | ⏳ | |
-| 9.05 | Settings sync | ⏳ | |
-| 9.06 | Open-tab sync | ⏳ | |
-| 9.07 | Tab-group sync | ⏳ | |
-| 9.08 | Autofill sync | ⏳ | |
-| 9.09 | Reading-list sync | ⏳ | |
-| 9.10 | Theme sync | ⏳ | |
-| 9.11 | Browser configuration sync | ⏳ | |
-| 9.12 | Cross-platform synchronization | ⏳ | |
-| 9.13 | Encrypted synchronization | ⏳ | |
-| 9.14 | Selective synchronization | ⏳ | |
-| 9.15 | Sync conflict handling | ⏳ | |
-| 9.16 | Sync status | ⏳ | |
-| 9.17 | Sync device list | ⏳ | |
-| 9.18 | Remote device management | ⏳ | |
+| 9.01 | Bookmark sync | ⏭️ | Needs an online account or server: left out |
+| 9.02 | History sync | ⏭️ | Needs an online account or server: left out |
+| 9.03 | Password sync | ⏭️ | Needs an online account or server: left out |
+| 9.04 | Extension sync | ⏭️ | Needs an online account or server: left out |
+| 9.05 | Settings sync | ⏭️ | Needs an online account or server: left out |
+| 9.06 | Open-tab sync | ⏭️ | Needs an online account or server: left out |
+| 9.07 | Tab-group sync | ⏭️ | Needs an online account or server: left out |
+| 9.08 | Autofill sync | ⏭️ | Needs an online account or server: left out |
+| 9.09 | Reading-list sync | ⏭️ | Needs an online account or server: left out |
+| 9.10 | Theme sync | ⏭️ | Needs an online account or server: left out |
+| 9.11 | Browser configuration sync | ⏭️ | Needs an online account or server: left out |
+| 9.12 | Cross-platform synchronization | ⏭️ | Needs an online account or server: left out |
+| 9.13 | Encrypted synchronization | ⏭️ | Needs an online account or server: left out |
+| 9.14 | Selective synchronization | ⏭️ | Needs an online account or server: left out |
+| 9.15 | Sync conflict handling | ⏭️ | Needs an online account or server: left out |
+| 9.16 | Sync status | ⏭️ | Needs an online account or server: left out |
+| 9.17 | Sync device list | ⏭️ | Needs an online account or server: left out |
+| 9.18 | Remote device management | ⏭️ | Needs an online account or server: left out |
 
 ### 10. Privacy
 
@@ -513,10 +514,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 12.11 | QUIC | 🌐 | |
 | 12.12 | IPv4 | 🌐 | |
 | 12.13 | IPv6 | 🌐 | |
-| 12.14 | Proxy support | ⏳ | |
-| 12.15 | SOCKS proxy | ⏳ | |
-| 12.16 | HTTP proxy | ⏳ | |
-| 12.17 | PAC files | ⏳ | |
+| 12.14 | Proxy support | 🧪 | Settings -> Network: no proxy, Windows' setting, a server of your own, or a PAC script (after a restart) |
+| 12.15 | SOCKS proxy | 🧪 | socks5://host:port in Settings -> Network |
+| 12.16 | HTTP proxy | 🧪 | host:port in Settings -> Network, with addresses that skip it |
+| 12.17 | PAC files | 🧪 | Settings -> Network -> A setup script (PAC) |
 | 12.18 | System proxy | 🌐 | |
 | 12.19 | Per-profile proxy | ⏳ | |
 | 12.20 | Per-site proxy | ⏳ | |
@@ -623,17 +624,17 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 17.01 | Reader mode | ⏳ | |
+| 17.01 | Reader mode | 🧪 | F9: the article on its own (reader.html), strictly rebuilt so nothing of the site runs |
 | 17.02 | Reading list | ✅ | Side panel -> Reading list: unread/read, add the page you're on, or right-click a link: Add link to reading list |
 | 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
 | 17.04 | Offline pages | ⏳ | |
-| 17.05 | Reading progress | ⏳ | |
+| 17.05 | Reading progress | 🧪 | Progress bar and minutes to read in reader view |
 | 17.06 | Page translation | ⏳ | |
 | 17.07 | Dictionary | ⏳ | |
 | 17.08 | Spell checker | ⏳ | |
 | 17.09 | Grammar checking | ⏳ | |
-| 17.10 | Text-to-speech | ⏳ | |
-| 17.11 | Page narration | ⏳ | |
+| 17.10 | Text-to-speech | 🧪 | Reader view -> Read aloud: your voice and speed |
+| 17.11 | Page narration | 🧪 | Reader view reads the article paragraph by paragraph, highlighting each |
 | 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |
 | 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
 | 17.14 | Search selected text | ⏳ | |
@@ -644,7 +645,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
 | 17.21 | Save as PDF | ⏳ | |
-| 17.22 | Webpage screenshot | ⏳ | |
+| 17.22 | Webpage screenshot | 🧪 | Ctrl+Shift+S, or the whole page from the command palette |
 
 ### 18. Translation
 
@@ -736,7 +737,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 22.08 | Keyboard navigation | ⏳ | |
 | 22.09 | Caret browsing | ⏳ | |
 | 22.10 | Focus indicators | ⏳ | |
-| 22.11 | Text-to-speech | ⏳ | |
+| 22.11 | Text-to-speech | 🧪 | Reader view -> Read aloud |
 | 22.12 | Caption support | 🧪 | Media controls -> captions (20.07) |
 | 22.13 | Accessibility tree | ⏳ | |
 | 22.14 | Color/contrast assistance | ⏳ | |
@@ -770,9 +771,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 24.01 | Default search engine | 🟢 | |
 | 24.02 | Multiple search engines | 🟢 | Six built in |
-| 24.03 | Custom search engines | ⏳ | |
-| 24.04 | Search shortcuts (g cats, yt ..., wiki ...) | ⏳ | |
-| 24.05 | Search suggestions | ⏳ | |
+| 24.03 | Custom search engines | 🧪 | Settings -> Search & Startup: add, edit, remove engines (%s for the query); any can be the default |
+| 24.04 | Search shortcuts (g cats, yt ..., wiki ...) | 🧪 | Type a keyword and a space: yt cats, w Budapest, !gh kessel; keywords are yours to change |
+| 24.05 | Search suggestions | 🟢 | As you type in the address bar (Settings -> Search & Startup); never from a private window |
 | 24.06 | Search history | ⏳ | |
 | 24.07 | Private search | ⏳ | |
 | 24.08 | Search engine per profile | ⏳ | |
@@ -784,7 +785,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 25.01 | Open new-tab page | 🟢 | |
 | 25.02 | Open homepage | 🟢 | |
-| 25.03 | Open specific pages | ⏳ | |
+| 25.03 | Open specific pages | 🧪 | Settings -> Search & Startup -> Pages to start with (or your open tabs) |
 | 25.04 | Restore previous session | 🟢 | |
 | 25.05 | Restore selected windows | 🟡 | Every window of the last session comes back; picking some is not done yet |
 | 25.06 | Open specific profile | ⏳ | |
@@ -806,7 +807,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 26.08 | Suspend session | ⏳ | |
 | 26.09 | Export session | ⏳ | |
 | 26.10 | Import session | ⏳ | |
-| 26.11 | Cross-device session restore | ⏳ | |
+| 26.11 | Cross-device session restore | ⏭️ | Needs an online account or server: left out |
 
 ### 27. Browser workspaces
 
@@ -980,14 +981,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 38.01 | Experimental features | ⏳ | |
-| 38.02 | Feature flags | ⏳ | |
+| 38.01 | Experimental features | 🟡 | Settings -> Network -> Engine switches (your own Chromium switches) |
+| 38.02 | Feature flags | 🧪 | Settings -> Network -> Engine switches: --enable-features / --disable-features |
 | 38.03 | Browser experiments | ⏳ | |
 | 38.04 | Experimental APIs | ⏳ | |
-| 38.05 | Rendering flags | ⏳ | |
-| 38.06 | GPU flags | ⏳ | |
-| 38.07 | Networking flags | ⏳ | |
-| 38.08 | JavaScript flags | ⏳ | |
+| 38.05 | Rendering flags | 🧪 | Any rendering switch in Settings -> Network -> Engine switches |
+| 38.06 | GPU flags | 🧪 | Any GPU switch in Settings -> Network -> Engine switches |
+| 38.07 | Networking flags | 🧪 | Any networking switch in Settings -> Network -> Engine switches |
+| 38.08 | JavaScript flags | 🧪 | --js-flags in Settings -> Network -> Engine switches |
 | 38.09 | Developer mode | ⏳ | |
 | 38.10 | Internal diagnostics | ⏳ | |
 | 38.11 | Browser logs | ⏳ | |
@@ -1033,10 +1034,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 41.01 | Full-page screenshot | ⏳ | |
-| 41.02 | Visible-area screenshot | ⏳ | |
+| 41.01 | Full-page screenshot | 🧪 | Command palette -> Screenshot of the whole page |
+| 41.02 | Visible-area screenshot | 🧪 | Ctrl+Shift+S |
 | 41.03 | Selected-area screenshot | ⏳ | |
-| 41.04 | Screenshot to clipboard | ⏳ | |
+| 41.04 | Screenshot to clipboard | 🧪 | Settings -> Page tools: save, copy or both |
 | 41.05 | Screenshot annotation | ⏳ | |
 | 41.06 | Screen recording | ⏳ | |
 | 41.07 | Tab recording | ⏳ | |
@@ -1055,9 +1056,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 42.04 | Share file | ⏳ | |
 | 42.05 | OS share sheet | ⏳ | |
 | 42.06 | QR-code sharing | ⏳ | |
-| 42.07 | Send to another device | ⏳ | |
-| 42.08 | Send tab to phone | ⏳ | |
-| 42.09 | Send tab to computer | ⏳ | |
+| 42.07 | Send to another device | ⏭️ | Needs an online account or server: left out |
+| 42.08 | Send tab to phone | ⏭️ | Needs an online account or server: left out |
+| 42.09 | Send tab to computer | ⏭️ | Needs an online account or server: left out |
 
 ### 43. Mobile-specific features
 
@@ -1124,7 +1125,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 45.21 | Developer tools | ✅ | F12 |
 | 45.22 | Fullscreen | ✅ | F11 |
 | 45.23 | Picture-in-picture | ⏳ | |
-| 45.24 | Screenshot | ⏳ | |
+| 45.24 | Screenshot | 🧪 | Ctrl+Shift+S; PNG or JPEG, folder of your choice |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
 | 45.27 | Tab grouping | ✅ | See 2.19 |
@@ -1139,7 +1140,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 46.03 | Ctrl-click links | ✅ | Ctrl+click: new tab; Ctrl+Shift+click: behind; Shift+click: new window |
 | 46.04 | Drag links | ⏳ | |
 | 46.05 | Drag tabs | 🟢 | |
-| 46.06 | Mouse gestures | ⏳ | |
+| 46.06 | Mouse gestures | 🧪 | Right button + draw; every gesture and its command is yours to change (Settings -> Page tools) |
 | 46.07 | Trackpad gestures | ⏳ | |
 | 46.08 | Two-finger navigation | ⏳ | |
 | 46.09 | Pinch zoom | ✅ | Pinch on a touchpad or touchscreen: the engine's zoom, kept per site (22.01) |
@@ -1169,38 +1170,38 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 48.01 | AI page summarization | 🟡 | Right-click a page: Ask AI about this page -- your assistant (side panel) is asked to summarize it |
 | 48.02 | AI webpage explanation | 🟡 | The same, then ask it anything about the page |
 | 48.03 | Ask about selected text | ✅ | Pick text, right-click: Ask AI about this -- the text goes to your assistant |
-| 48.04 | AI search | ⏳ | |
-| 48.05 | AI tab organization | ⏳ | |
-| 48.06 | AI tab grouping | ⏳ | |
-| 48.07 | AI history search | ⏳ | |
+| 48.04 | AI search | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.05 | AI tab organization | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.06 | AI tab grouping | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.07 | AI history search | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
 | 48.08 | AI browsing assistant | ✅ | Your AI assistant in the side panel, beside the page |
-| 48.09 | AI writing assistant | ⏳ | |
-| 48.10 | AI rewriting | ⏳ | |
-| 48.11 | AI translation | ⏳ | |
-| 48.12 | AI comparison | ⏳ | |
-| 48.13 | AI shopping assistance | ⏳ | |
-| 48.14 | AI research mode | ⏳ | |
-| 48.15 | AI webpage extraction | ⏳ | |
-| 48.16 | AI PDF summarization | ⏳ | |
-| 48.17 | AI screenshot understanding | ⏳ | |
-| 48.18 | AI image understanding | ⏳ | |
-| 48.19 | AI command interface | ⏳ | |
-| 48.20 | Natural-language browser commands | ⏳ | |
+| 48.09 | AI writing assistant | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.10 | AI rewriting | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.11 | AI translation | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.12 | AI comparison | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.13 | AI shopping assistance | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.14 | AI research mode | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.15 | AI webpage extraction | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.16 | AI PDF summarization | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.17 | AI screenshot understanding | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.18 | AI image understanding | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.19 | AI command interface | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 48.20 | Natural-language browser commands | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
 
 ### 49. Shopping
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 49.01 | Price comparison | ⏳ | |
-| 49.02 | Price tracking | ⏳ | |
-| 49.03 | Price history | ⏳ | |
-| 49.04 | Coupon detection | ⏳ | |
-| 49.05 | Automatic coupon application | ⏳ | |
-| 49.06 | Product comparison | ⏳ | |
+| 49.01 | Price comparison | ⏭️ | Needs a shopping data service: left out |
+| 49.02 | Price tracking | ⏭️ | Needs a shopping data service: left out |
+| 49.03 | Price history | ⏭️ | Needs a shopping data service: left out |
+| 49.04 | Coupon detection | ⏭️ | Needs a shopping data service: left out |
+| 49.05 | Automatic coupon application | ⏭️ | Needs a shopping data service: left out |
+| 49.06 | Product comparison | ⏭️ | Needs a shopping data service: left out |
 | 49.07 | Shopping lists | ⏳ | |
-| 49.08 | Store credibility information | ⏳ | |
-| 49.09 | Purchase history integration | ⏳ | |
-| 49.10 | Delivery tracking | ⏳ | |
+| 49.08 | Store credibility information | ⏭️ | Needs a shopping data service: left out |
+| 49.09 | Purchase history integration | ⏭️ | Needs an online account or server: left out |
+| 49.10 | Delivery tracking | ⏭️ | Needs an online account or server: left out |
 
 ### 50. Media & entertainment extras
 
@@ -1211,9 +1212,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 50.03 | Playback controls | ⏳ | |
 | 50.04 | Volume normalization | ⏳ | |
 | 50.05 | Media-key support | ⏳ | |
-| 50.06 | Casting | ⏳ | |
-| 50.07 | Chromecast-style casting | ⏳ | |
-| 50.08 | AirPlay-style integration | ⏳ | |
+| 50.06 | Casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
+| 50.07 | Chromecast-style casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
+| 50.08 | AirPlay-style integration | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.09 | Subtitle customization | ⏳ | |
 | 50.10 | Theater mode | ⏳ | |
 | 50.11 | Fullscreen mode | ⏳ | |
@@ -1222,7 +1223,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 51.01 | Tor-style routing integration | ⏳ | |
+| 51.01 | Tor-style routing integration | ⏭️ | Needs the Tor network (a separate program): left out |
 | 51.02 | Private windows with stronger isolation | ⏳ | |
 | 51.03 | Fingerprint resistance | 🟢 | |
 | 51.04 | Tracker blocking | 🟢 | |
@@ -1230,8 +1231,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 51.06 | Cookie isolation | 🟢 | Accounts |
 | 51.07 | Container tabs | 🟢 | Accounts |
 | 51.08 | Temporary identities | ⏳ | |
-| 51.09 | Temporary email integration | ⏳ | |
-| 51.10 | VPN integration | ⏳ | |
+| 51.09 | Temporary email integration | ⏭️ | Needs an online account or server: left out |
+| 51.10 | VPN integration | ⏭️ | Needs an online account or server: left out |
 | 51.11 | Proxy integration | ⏳ | |
 | 51.12 | Encrypted DNS | ⏳ | |
 | 51.13 | Anti-bounce tracking | ⏳ | |
@@ -1245,7 +1246,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 52.02 | Import history | ⏳ | |
 | 52.03 | Import passwords | 🟢 | |
 | 52.04 | Import cookies where supported | 🟢 | |
-| 52.05 | Import settings | ⏳ | |
+| 52.05 | Import settings | 🧪 | Settings -> About -> Restore (a Kessel settings file) |
 | 52.06 | Import open tabs | ⏳ | |
 | 52.07 | Import extensions | ⏳ | |
 | 52.08 | Import from Chrome | 🟢 | |
@@ -1256,22 +1257,22 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 52.13 | Export bookmarks | ⏳ | |
 | 52.14 | Export passwords | ⏳ | |
 | 52.15 | Export history | ⏳ | |
-| 52.16 | Export settings | ⏳ | |
+| 52.16 | Export settings | 🧪 | Settings -> About -> Save to a file |
 | 52.17 | Export sessions | ⏳ | |
 
 ### 53. Updates
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 53.01 | Automatic browser updates | ⏳ | |
-| 53.02 | Background updates | ⏳ | |
-| 53.03 | Update notifications | ⏳ | |
-| 53.04 | Update channels (stable, beta, developer, canary) | ⏳ | |
+| 53.01 | Automatic browser updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.02 | Background updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.03 | Update notifications | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.04 | Update channels (stable, beta, developer, canary) | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 | 53.05 | Extension updates | ⏳ | |
-| 53.06 | Component updates | ⏳ | |
-| 53.07 | Security updates | ⏳ | |
-| 53.08 | Rollback/recovery | ⏳ | |
-| 53.09 | Update verification | ⏳ | |
+| 53.06 | Component updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.07 | Security updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.08 | Rollback/recovery | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.09 | Update verification | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 
 ### 54. Crash handling
 
@@ -1301,7 +1302,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 55.08 | Security: safe browsing, HTTPS-only, certificates, passwords, passkeys, security keys | 🟡 | HTTPS upgrade + passwords |
 | 55.09 | Permissions: location, camera, microphone, notifications, pop-ups, autoplay, downloads, clipboard, sensors, USB, Bluetooth | ⏳ | |
 | 55.10 | Performance: hardware acceleration, memory saver, energy saver, tab sleeping, preloading | 🟡 | Tab sleeping |
-| 55.11 | Sync: accounts, devices, data types, encryption, status | ⏳ | |
+| 55.11 | Sync: accounts, devices, data types, encryption, status | ⏭️ | Needs an online account or server: left out |
 | 55.12 | Profiles: create, delete, switch, customize, default | 🟡 | Accounts popup |
 | 55.13 | Extensions: installed, permissions, developer mode, store | ⏳ | |
 | 55.14 | Accessibility: zoom, fonts, reader mode, screen reader, reduced motion | ⏳ | |
@@ -1310,19 +1311,19 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 56.01 | Account login | ⏳ | |
-| 56.02 | Account creation | ⏳ | |
-| 56.03 | Email verification | ⏳ | |
-| 56.04 | MFA | ⏳ | |
-| 56.05 | Passkeys | ⏳ | |
-| 56.06 | Device management | ⏳ | |
-| 56.07 | Session management | ⏳ | |
-| 56.08 | Sync | ⏳ | |
-| 56.09 | Cloud backup | ⏳ | |
+| 56.01 | Account login | ⏭️ | Needs an online account or server: left out |
+| 56.02 | Account creation | ⏭️ | Needs an online account or server: left out |
+| 56.03 | Email verification | ⏭️ | Needs an online account or server: left out |
+| 56.04 | MFA | ⏭️ | Needs an online account or server: left out |
+| 56.05 | Passkeys | ⏭️ | Needs an online account or server: left out |
+| 56.06 | Device management | ⏭️ | Needs an online account or server: left out |
+| 56.07 | Session management | ⏭️ | Needs an online account or server: left out |
+| 56.08 | Sync | ⏭️ | Needs an online account or server: left out |
+| 56.09 | Cloud backup | ⏭️ | Needs an online account or server: left out |
 | 56.10 | Encrypted browser data | ⏳ | |
-| 56.11 | Remote logout | ⏳ | |
-| 56.12 | Device removal | ⏳ | |
-| 56.13 | Account recovery | ⏳ | |
+| 56.11 | Remote logout | ⏭️ | Needs an online account or server: left out |
+| 56.12 | Device removal | ⏭️ | Needs an online account or server: left out |
+| 56.13 | Account recovery | ⏭️ | Needs an online account or server: left out |
 | 56.14 | Privacy dashboard | ⏳ | |
 
 ### 57. Browser lock
@@ -1401,7 +1402,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 61.05 | Permission manager | ⏳ | |
 | 61.06 | Extension system | ⏳ | |
 | 61.07 | Profile manager | 🟢 | Accounts |
-| 61.08 | Sync engine | ⏳ | |
+| 61.08 | Sync engine | ⏭️ | Needs an online account or server: left out |
 | 61.09 | Password manager | 🟢 | |
 | 61.10 | Download manager | 🟡 | |
 | 61.11 | History database | 🟢 | |
@@ -1416,13 +1417,13 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 62.01 | AI-native command bar | ⏳ | |
-| 62.02 | AI semantic history | ⏳ | |
-| 62.03 | AI tab organization | ⏳ | |
-| 62.04 | AI workspace creation | ⏳ | |
+| 62.01 | AI-native command bar | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 62.02 | AI semantic history | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 62.03 | AI tab organization | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
+| 62.04 | AI workspace creation | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
 | 62.05 | Automatic session recovery | ⏳ | |
 | 62.06 | Automatic tab cleanup | 🟢 | Idle tab discarding |
-| 62.07 | Automatic duplicate-tab detection | ⏳ | |
+| 62.07 | Automatic duplicate-tab detection | 🧪 | Command palette -> Close duplicate tabs |
 | 62.08 | Tab memory visualization | ⏳ | |
 | 62.09 | Tab dependency detection | ⏳ | |
 | 62.10 | Website change monitoring | ⏳ | |
@@ -1430,10 +1431,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.12 | Built-in notes | ⏳ | |
 | 62.13 | Notes attached to URLs | ⏳ | |
 | 62.14 | Web annotations | ⏳ | |
-| 62.15 | Collaborative tabs | ⏳ | |
-| 62.16 | Collaborative workspaces | ⏳ | |
-| 62.17 | Shared sessions | ⏳ | |
-| 62.18 | Cloud browser profiles | ⏳ | |
+| 62.15 | Collaborative tabs | ⏭️ | Needs an online account or server: left out |
+| 62.16 | Collaborative workspaces | ⏭️ | Needs an online account or server: left out |
+| 62.17 | Shared sessions | ⏭️ | Needs an online account or server: left out |
+| 62.18 | Cloud browser profiles | ⏭️ | Needs an online account or server: left out |
 | 62.19 | Encrypted browser backup | ⏳ | |
 | 62.20 | Temporary browser identities | ⏳ | |
 | 62.21 | Website-specific containers | 🟡 | Accounts per tab |
@@ -1441,10 +1442,38 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.23 | Built-in automation | ⏳ | |
 | 62.24 | Browser macros | ⏳ | |
 | 62.25 | Workflow automation | ⏳ | |
-| 62.26 | Command palette | ⏳ | |
+| 62.26 | Command palette | 🧪 | F2: every command, searchable, recent ones first |
 | 62.27 | Keyboard-first UI | ⏳ | |
 | 62.28 | Power-user settings | ⏳ | |
 | 62.29 | Browser telemetry dashboard | ⏳ | |
 | 62.30 | Privacy dashboard | ⏳ | |
 | 62.31 | Permission dashboard | ⏳ | |
 | 62.32 | Site resource dashboard | ⏳ | |
+
+### 63. Researched additions (2026)
+
+Features other browsers ship today that the list above doesn't name.
+Only ones that work on this PC, without an account or a server.
+
+| # | Feature | Status | Notes |
+|---|---|---|---|
+| 63.01 | Site boosts: your own CSS for a site (Zen Boosts, Arc Boosts) | 🧪 | Command palette -> Change this site: your own CSS |
+| 63.02 | Page filters: grayscale, invert, sepia, dark, contrast per site (Vivaldi page actions) | 🧪 | Per site, or one for every site (Settings -> Page tools) |
+| 63.03 | Element zapper: hide a page element for good (uBlock, Safari distraction control) | 🧪 | Command palette -> Hide an element; undo in Settings -> Page tools |
+| 63.04 | Link preview in a floating window (Zen Glance, Arc Peek) | ⏳ | |
+| 63.05 | Compact mode: toolbars hide until the mouse comes near (Zen) | ⏳ | |
+| 63.06 | Feed reader: detect RSS/Atom feeds, follow them locally (Vivaldi) | ⏳ | |
+| 63.07 | Break mode: pause every page and all sound at once (Vivaldi) | ⏳ | |
+| 63.08 | Auto-archive tabs you haven't touched in days (Arc) | ⏳ | |
+| 63.09 | De-AMP: open a page's real address instead of its AMP copy (Brave) | 🧪 | On by default; Settings -> Page tools |
+| 63.10 | Wayback Machine offer on dead pages (Brave) | ⏳ | |
+| 63.11 | Forget a site's data when its last tab closes (Brave forgetful browsing) | ⏳ | |
+| 63.12 | Copy clean link: without tracking parameters (Firefox) | 🧪 | Command palette -> Copy link without tracking |
+| 63.13 | Auto-reload a tab every N seconds (Vivaldi, Opera) | 🧪 | Command palette -> Auto-reload this site; your own intervals |
+| 63.14 | Mute background tabs automatically (Vivaldi) | 🧪 | Settings -> Tabs -> Only the tab you're on plays sound |
+| 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | ⏳ | |
+| 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | 🧪 | Command palette -> Open a link with the keyboard |
+| 63.17 | Paste and go / paste and search (Chrome, Firefox) | 🧪 | Command palette -> Paste and go |
+| 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | ⏳ | |
+| 63.19 | Command chains: several commands under one shortcut (Vivaldi) | ⏳ | |
+| 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | ⏳ | |

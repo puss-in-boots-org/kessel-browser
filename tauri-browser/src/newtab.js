@@ -1,6 +1,7 @@
 import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings } from "./shared/theme.js";
-import { resolveInput, hostOf } from "./shared/api.js";
+import { hostOf } from "./shared/api.js";
+import { resolveTyped } from "./shared/search.js";
 import { siteIcon, alignToChrome, injectRefractionFilter, watchCustomWallpaper } from "./shared/glass.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -81,7 +82,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (e.key !== "Enter") return;
     const raw = e.target.value.trim();
     if (!raw) return;
-    go(resolveInput(raw, currentSettings()?.search_engine || "google"));
+    go(resolveTyped(raw, currentSettings()));
   });
 
   const [pinned, bookmarks] = await Promise.all([invoke("get_pinned"), invoke("get_bookmarks")]);

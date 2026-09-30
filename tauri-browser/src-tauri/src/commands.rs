@@ -129,6 +129,18 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("task-manager", "Task manager", "Kessel", &["Shift+Escape"]),
     cmd("media-controls", "Media controls", "Kessel", &[]),
     cmd("gpu", "Graphics and media diagnostics", "Kessel", &[]),
+    cmd("command-palette", "Command palette", "Kessel", &["F2"]),
+    // Page tools (tools.rs, src/shared/page-tools.js)
+    cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),
+    cmd("screenshot-full", "Screenshot of the whole page", "Page tools", &[]),
+    cmd("reader-mode", "Reader view", "Page tools", &["F9"]),
+    cmd("zap-element", "Hide an element", "Page tools", &[]),
+    cmd("link-hints", "Open a link with the keyboard", "Page tools", &[]),
+    cmd("site-tweaks", "Change this site", "Page tools", &[]),
+    cmd("auto-reload", "Auto-reload this site", "Page tools", &[]),
+    cmd("copy-clean-link", "Copy link without tracking", "Page tools", &[]),
+    cmd("paste-and-go", "Paste and go", "Address bar", &[]),
+    cmd("close-duplicate-tabs", "Close duplicate tabs", "Tabs", &[]),
 ];
 
 pub fn find(id: &str) -> Option<&'static CommandDef> {

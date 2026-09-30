@@ -191,6 +191,16 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::side_panel_drag(app, label, x, done);
             None
         }
+        // An element picked with "Hide an element on this site" (tools.rs).
+        "zap" if top_frame => {
+            crate::tools::add_zapped(app, url, d.get("selector")?.as_str()?);
+            None
+        }
+        // A mouse gesture drawn in the page.
+        "gesture" => {
+            crate::tools::on_gesture(app, label, d.get("g")?.as_str()?);
+            None
+        }
         "ads-hidden" => {
             let count = d.get("count")?.as_u64()? as u32;
             crate::count_ads_hidden(app, count);
@@ -205,6 +215,7 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
 fn request(app: &tauri::AppHandle, id: u32, url: &str, name: &str, d: &serde_json::Value) -> Option<serde_json::Value> {
     let result = match name {
         "cosmetics" => serde_json::to_value(crate::cosmetics_for(app, url)).ok()?,
+        "site-tweaks" => crate::tools::site_tweaks_for(app, url),
         "hidden-selectors" => {
             let list = |key: &str| -> Vec<String> {
                 d.get(key)

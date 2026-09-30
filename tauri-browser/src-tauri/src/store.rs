@@ -246,6 +246,13 @@ pub struct Settings {
     // two ("auto" | "power" | "performance"). Both apply at the next start.
     pub hardware_acceleration: bool,
     pub gpu_preference: String,
+
+    // Everything newer, free-form so a feature's options don't each need a
+    // field here (tools.rs, src/shared/search.js, settings.js): search
+    // engines and keywords, startup pages, per-site tweaks (boosts, page
+    // filters, hidden elements, auto-reload), screenshots, reader mode,
+    // mouse gestures, the proxy and extra engine flags, and more.
+    pub features: serde_json::Value,
 }
 
 // A site's own cookie rule: `site` is a domain ("example.com" covers its
@@ -339,6 +346,7 @@ impl Default for Settings {
             warn_dangerous_downloads: true,
             hardware_acceleration: true,
             gpu_preference: "auto".into(),
+            features: serde_json::json!({}),
         }
     }
 }
