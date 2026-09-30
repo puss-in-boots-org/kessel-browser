@@ -628,12 +628,14 @@ fn create_tab_internal(
                 DownloadEvent::Requested { url, destination } => {
                     let dl_id = st.next_download_id.fetch_add(1, Ordering::SeqCst);
                     let dir = downloads::download_dir(&app_for_download).unwrap_or_else(|| data_dir.clone());
-                    let filename = url
-                        .path_segments()
-                        .and_then(|mut s| s.next_back())
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or("download")
-                        .to_string();
+                    // The name the engine worked out (the server's own, the
+                    // link's download="..."), else the address's last part.
+                    let filename = destination
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .filter(|n| !n.trim().is_empty())
+                        .or_else(|| url.path_segments().and_then(|mut s| s.next_back()).filter(|s| !s.is_empty()).map(str::to_string))
+                        .unwrap_or_else(|| "download".to_string());
                     let mut target = dir.join(&filename);
                     let mut counter = 1;
                     let stem = target

@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**60% overall** -- 422 done (✅ 🟢 🌐), 124 built and waiting for their first run on Windows or a phone (🧪), 57 partly done (🟡), 349 to do (⏳), 93 skipped (⏭️), of 1045.
+**60% overall** -- 487 done (✅ 🟢 🌐), 59 built and waiting for their first run on Windows or a phone (🧪), 57 partly done (🟡), 349 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -46,47 +46,47 @@ branch, one small commit per feature or group of features.
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
 | [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 12 | 1 | `███░░░░░░░` 28% |
 | [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
-| [6. Downloads](#6-downloads) | 7 | 12 | 1 | 2 |  | `█████████░` 89% |
+| [6. Downloads](#6-downloads) | 17 | 2 | 1 | 2 |  | `█████████░` 89% |
 | [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 24 | 2 | `███░░░░░░░` 26% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
-| [12. DNS & networking](#12-dns--networking) | 9 | 4 |  | 10 |  | `██████░░░░` 57% |
-| [13. Website permissions](#13-website-permissions) |  | 10 |  | 10 |  | `█████░░░░░` 50% |
-| [14. Site-specific settings](#14-site-specific-settings) | 1 | 8 |  | 13 |  | `████░░░░░░` 41% |
+| [12. DNS & networking](#12-dns--networking) | 11 | 2 |  | 10 |  | `██████░░░░` 57% |
+| [13. Website permissions](#13-website-permissions) | 4 | 6 |  | 10 |  | `█████░░░░░` 50% |
+| [14. Site-specific settings](#14-site-specific-settings) | 5 | 4 |  | 13 |  | `████░░░░░░` 41% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
-| [17. Reading & research](#17-reading--research) | 6 | 10 | 1 | 5 |  | `████████░░` 75% |
+| [17. Reading & research](#17-reading--research) | 11 | 5 | 1 | 5 |  | `████████░░` 75% |
 | [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
-| [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
+| [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
-| [22. Accessibility](#22-accessibility) | 3 | 2 | 1 | 10 |  | `███░░░░░░░` 34% |
+| [22. Accessibility](#22-accessibility) | 4 | 1 | 1 | 10 |  | `███░░░░░░░` 34% |
 | [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
-| [24. Search engines](#24-search-engines) | 3 | 2 |  | 4 |  | `██████░░░░` 56% |
-| [25. Startup behavior](#25-startup-behavior) | 4 | 1 | 1 | 3 |  | `██████░░░░` 61% |
+| [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
+| [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
 | [26. Session management](#26-session-management) | 1 |  | 5 | 4 | 1 | `████░░░░░░` 35% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
 | [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
 | [31. Progressive Web Apps](#31-progressive-web-apps) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
-| [32. Notifications](#32-notifications) |  | 3 |  | 7 |  | `███░░░░░░░` 30% |
+| [32. Notifications](#32-notifications) | 2 | 1 |  | 7 |  | `███░░░░░░░` 30% |
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
-| [35. Hardware acceleration](#35-hardware-acceleration) |  | 8 | 1 |  |  | `█████████░` 94% |
-| [36. Performance](#36-performance) | 11 | 1 |  | 5 |  | `███████░░░` 71% |
+| [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
+| [36. Performance](#36-performance) | 12 |  |  | 5 |  | `███████░░░` 71% |
 | [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) |  | 5 | 1 | 7 |  | `████░░░░░░` 42% |
-| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 3 | 2 | 3 | 8 |  | `████░░░░░░` 41% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) | 1 | 4 | 1 | 7 |  | `████░░░░░░` 42% |
+| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 4 | 1 | 3 | 8 |  | `████░░░░░░` 41% |
 | [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
-| [41. Screenshots & capture](#41-screenshots--capture) |  | 5 |  | 6 |  | `█████░░░░░` 45% |
+| [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
 | [42. Sharing](#42-sharing) |  |  |  | 6 | 3 | `░░░░░░░░░░` 0% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
-| [44. Desktop-specific features](#44-desktop-specific-features) | 6 | 1 | 1 | 5 |  | `██████░░░░` 58% |
-| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 25 | 1 |  | 2 |  | `█████████░` 93% |
-| [46. Mouse / trackpad](#46-mouse--trackpad) | 6 | 2 |  | 4 |  | `███████░░░` 67% |
+| [44. Desktop-specific features](#44-desktop-specific-features) | 7 |  | 1 | 5 |  | `██████░░░░` 58% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 |  |  | 2 |  | `█████████░` 93% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
 | [47. Context menus](#47-context-menus) | 2 |  |  | 8 |  | `██░░░░░░░░` 20% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
@@ -102,8 +102,8 @@ branch, one small commit per feature or group of features.
 | [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 10 | 1 | `███░░░░░░░` 34% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 1 | 3 | 1 | 19 | 8 | `██░░░░░░░░` 19% |
-| [63. Researched additions (2026)](#63-researched-additions-2026) |  | 17 | 1 | 2 |  | `█████████░` 88% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 3 | 1 | 1 | 19 | 8 | `██░░░░░░░░` 19% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -317,26 +317,26 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 6.01 | Download manager | 🟡 | Basic list |
 | 6.02 | Download list | 🟢 | |
-| 6.03 | Download progress | 🧪 | Downloads list: size so far, of how much, and a progress bar |
-| 6.04 | Pause downloads | 🧪 | Downloads list -> Pause |
-| 6.05 | Resume downloads | 🧪 | Downloads list -> Resume (also after a dropped connection, if the site allows) |
-| 6.06 | Cancel downloads | 🧪 | Downloads list -> Cancel |
-| 6.07 | Retry failed downloads | 🧪 | Downloads list -> Try again (fetches it anew) |
+| 6.03 | Download progress | ✅ | Downloads list: size so far, of how much, and a progress bar |
+| 6.04 | Pause downloads | ✅ | Downloads list -> Pause |
+| 6.05 | Resume downloads | ✅ | Downloads list -> Resume (also after a dropped connection, if the site allows) |
+| 6.06 | Cancel downloads | ✅ | Downloads list -> Cancel |
+| 6.07 | Retry failed downloads | ✅ | Downloads list -> Try again (fetches it anew) |
 | 6.08 | Open downloaded file | 🟢 | |
 | 6.09 | Show downloaded file in folder | 🧪 | Downloads list -> Show in folder |
-| 6.10 | Change download location | 🧪 | Settings -> Downloads -> Save downloads to |
+| 6.10 | Change download location | ✅ | Settings -> Downloads -> Save downloads to |
 | 6.11 | Ask where to save every file | 🧪 | Settings -> Downloads -> Ask where to save each file |
-| 6.12 | Automatic downloads | 🧪 | Site permissions -> Several downloads at once (ask, allow or block, per site) |
+| 6.12 | Automatic downloads | ✅ | Site permissions -> Several downloads at once (ask, allow or block, per site) |
 | 6.13 | Multiple simultaneous downloads | 🟢 | |
 | 6.14 | Download notifications | 🟢 | Toasts |
 | 6.15 | Dangerous-download detection | 🟢 | Risky downloads wait for you to keep or discard them (Settings -> Security) |
 | 6.16 | File-type warnings | 🟢 | Programs and scripts (exe, msi, bat, ps1...) from plain http or bad sites are held back |
 | 6.17 | Download scanning | ⏳ | |
 | 6.18 | Download history | 🟢 | |
-| 6.19 | Download sorting | 🧪 | Downloads list: newest, oldest, by name or by site |
-| 6.20 | Download search | 🧪 | Downloads list: search by name or address |
+| 6.19 | Download sorting | ✅ | Downloads list: newest, oldest, by name or by site |
+| 6.20 | Download search | ✅ | Downloads list: search by name or address |
 | 6.21 | Automatic download organization | ⏳ | |
-| 6.22 | Per-site download permissions | 🧪 | Site permissions -> Several downloads at once, per site |
+| 6.22 | Per-site download permissions | ✅ | Site permissions -> Several downloads at once, per site |
 
 ### 7. Passwords & identity
 
@@ -514,9 +514,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 12.11 | QUIC | 🌐 | |
 | 12.12 | IPv4 | 🌐 | |
 | 12.13 | IPv6 | 🌐 | |
-| 12.14 | Proxy support | 🧪 | Settings -> Network: no proxy, Windows' setting, a server of your own, or a PAC script (after a restart) |
+| 12.14 | Proxy support | ✅ | Settings -> Network: no proxy, Windows' setting, a server of your own, or a PAC script (after a restart) |
 | 12.15 | SOCKS proxy | 🧪 | socks5://host:port in Settings -> Network |
-| 12.16 | HTTP proxy | 🧪 | host:port in Settings -> Network, with addresses that skip it |
+| 12.16 | HTTP proxy | ✅ | host:port in Settings -> Network, with addresses that skip it |
 | 12.17 | PAC files | 🧪 | Settings -> Network -> A setup script (PAC) |
 | 12.18 | System proxy | 🌐 | |
 | 12.19 | Per-profile proxy | ⏳ | |
@@ -529,10 +529,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 13.01 | Camera permission | 🧪 | Settings -> Site permissions: Kessel's own prompt, answers kept per site |
+| 13.01 | Camera permission | ✅ | Settings -> Site permissions: Kessel's own prompt, answers kept per site |
 | 13.02 | Microphone permission | 🧪 | Settings -> Site permissions |
-| 13.03 | Location permission | 🧪 | Settings -> Site permissions |
-| 13.04 | Notifications permission | 🧪 | Settings -> Site permissions |
+| 13.03 | Location permission | ✅ | Settings -> Site permissions |
+| 13.04 | Notifications permission | ✅ | Settings -> Site permissions |
 | 13.05 | Clipboard permission | 🧪 | Settings -> Site permissions |
 | 13.06 | Fullscreen permission | ⏳ | |
 | 13.07 | Motion sensor permission | 🧪 | Settings -> Site permissions (allowed unless you change it) |
@@ -544,7 +544,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 13.13 | Payment permission | ⏳ | |
 | 13.14 | Autoplay permission | 🧪 | Settings -> Site permissions -> Playing sound on its own |
 | 13.15 | Pop-up permission | ⏳ | |
-| 13.16 | Downloads permission | 🧪 | Settings -> Site permissions -> Several downloads at once |
+| 13.16 | Downloads permission | ✅ | Settings -> Site permissions -> Several downloads at once |
 | 13.17 | Background activity permission | ⏳ | |
 | 13.18 | VR/AR permission | ⏳ | |
 | 13.19 | Local-network permission | ⏳ | |
@@ -558,12 +558,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 14.02 | Cookies | 🟢 | Settings -> Cookies & site data: allow, block or clear on exit, per site |
 | 14.03 | Pop-ups | ⏳ | |
 | 14.04 | Redirects | ⏳ | |
-| 14.05 | Camera | 🧪 | Settings -> Site permissions, per site |
+| 14.05 | Camera | ✅ | Settings -> Site permissions, per site |
 | 14.06 | Microphone | 🧪 | Settings -> Site permissions, per site |
-| 14.07 | Location | 🧪 | Settings -> Site permissions, per site |
-| 14.08 | Notifications | 🧪 | Settings -> Site permissions, per site |
+| 14.07 | Location | ✅ | Settings -> Site permissions, per site |
+| 14.08 | Notifications | ✅ | Settings -> Site permissions, per site |
 | 14.09 | Clipboard | 🧪 | Settings -> Site permissions, per site |
-| 14.10 | Downloads | 🧪 | Settings -> Site permissions, per site |
+| 14.10 | Downloads | ✅ | Settings -> Site permissions, per site |
 | 14.11 | Autoplay | 🧪 | Settings -> Site permissions, per site |
 | 14.12 | MIDI | 🧪 | Settings -> Site permissions, per site |
 | 14.13 | Bluetooth | ⏳ | |
@@ -624,7 +624,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 17.01 | Reader mode | 🧪 | F9: the article on its own (reader.html), strictly rebuilt so nothing of the site runs |
+| 17.01 | Reader mode | ✅ | F9: the article on its own (reader.html), strictly rebuilt so nothing of the site runs |
 | 17.02 | Reading list | ✅ | Side panel -> Reading list: unread/read, add the page you're on, or right-click a link: Add link to reading list |
 | 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
 | 17.04 | Offline pages | ⏳ | |
@@ -637,15 +637,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.11 | Page narration | 🧪 | Reader view reads the article paragraph by paragraph, highlighting each |
 | 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |
 | 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
-| 17.14 | Search selected text | 🧪 | Right-click selected text -> Search the web for… |
-| 17.15 | Search image | 🧪 | Right-click an image -> Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
+| 17.14 | Search selected text | ✅ | Right-click selected text -> Search the web for… |
+| 17.15 | Search image | ✅ | Right-click an image -> Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
 | 17.16 | Copy selected text | 🌐 | Comes with the engine (WebView2, Chromium) |
-| 17.17 | Highlight text | 🧪 | Select text, Ctrl+Shift+H or right-click -> Highlight; found again when you come back |
+| 17.17 | Highlight text | ✅ | Select text, Ctrl+Shift+H or right-click -> Highlight; found again when you come back |
 | 17.18 | Page annotations | 🧪 | Notes on highlights (click one); kept on this computer, never from private windows |
 | 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
 | 17.21 | Save as PDF | 🧪 | Command palette -> Save as PDF; landscape, backgrounds, headers in Settings -> Page tools |
-| 17.22 | Webpage screenshot | 🧪 | Ctrl+Shift+S, or the whole page from the command palette |
+| 17.22 | Webpage screenshot | ✅ | Ctrl+Shift+S, or the whole page from the command palette |
 
 ### 18. Translation
 
@@ -690,15 +690,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 20.01 | HTML5 video | 🧪 | The engine's player; Kessel's media controls work with every `<video>` |
-| 20.02 | HTML5 audio | 🧪 | The engine's player; Kessel's media controls work with every `<audio>` |
-| 20.03 | Media controls | 🧪 | The music-note button beside the menu (shown once a tab has played sound): every such tab of the window with title, artist, artwork, play/pause, ±10 s, a seek bar, previous/next, mute -- without switching tabs. Also a command ("media controls") |
+| 20.02 | HTML5 audio | ✅ | The engine's player; Kessel's media controls work with every `<audio>` |
+| 20.03 | Media controls | ✅ | The music-note button beside the menu (shown once a tab has played sound): every such tab of the window with title, artist, artwork, play/pause, ±10 s, a seek bar, previous/next, mute -- without switching tabs. Also a command ("media controls") |
 | 20.04 | Fullscreen video | 🟢 | A video's (or any page's) fullscreen fills the whole screen |
 | 20.05 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture: the engine's floating video window |
 | 20.06 | Multiple audio tracks | 🧪 | Switched on in the engine (AudioVideoTracks); media controls -> audio track, when a video has more than one |
-| 20.07 | Subtitles | 🧪 | WebVTT subtitle tracks, drawn by the engine; media controls -> captions menu turns them on and off |
-| 20.08 | Closed captions | 🧪 | Caption tracks, like subtitles (20.07) |
-| 20.09 | Playback speed | 🧪 | Media controls -> speed: 0.5× to 3× (a site's own speed setting, 0.25× to 4×, is kept) |
-| 20.10 | Media session controls | 🧪 | The page's Media Session: its title, artist and artwork show in the media controls, and its own previous/next/seek buttons are what they press |
+| 20.07 | Subtitles | ✅ | WebVTT subtitle tracks, drawn by the engine; media controls -> captions menu turns them on and off |
+| 20.08 | Closed captions | ✅ | Caption tracks, like subtitles (20.07) |
+| 20.09 | Playback speed | ✅ | Media controls -> speed: 0.5× to 3× (a site's own speed setting, 0.25× to 4×, is kept) |
+| 20.10 | Media session controls | ✅ | The page's Media Session: its title, artist and artwork show in the media controls, and its own previous/next/seek buttons are what they press |
 | 20.11 | Hardware acceleration | 🧪 | Video is decoded by the graphics card; kessel://gpu shows which formats are, on this PC |
 | 20.12 | Codec support | 🧪 | The engine's: H.264, VP8, VP9, AV1, AAC, MP3, Opus, Vorbis, FLAC, WAV; HEVC where Windows and the graphics card have it. kessel://gpu lists what plays here |
 | 20.13 | HDR | 🧪 | HDR video plays in HDR when Windows' HDR is on; kessel://gpu shows whether it is |
@@ -738,7 +738,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 22.09 | Caret browsing | ⏳ | |
 | 22.10 | Focus indicators | ⏳ | |
 | 22.11 | Text-to-speech | 🧪 | Reader view -> Read aloud |
-| 22.12 | Caption support | 🧪 | Media controls -> captions (20.07) |
+| 22.12 | Caption support | ✅ | Media controls -> captions (20.07) |
 | 22.13 | Accessibility tree | ⏳ | |
 | 22.14 | Color/contrast assistance | ⏳ | |
 | 22.15 | Keyboard shortcuts | ✅ | See the shortcut table above; the full list is in Help (F1) |
@@ -771,8 +771,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 24.01 | Default search engine | 🟢 | |
 | 24.02 | Multiple search engines | 🟢 | Six built in |
-| 24.03 | Custom search engines | 🧪 | Settings -> Search & Startup: add, edit, remove engines (%s for the query); any can be the default |
-| 24.04 | Search shortcuts (g cats, yt ..., wiki ...) | 🧪 | Type a keyword and a space: yt cats, w Budapest, !gh kessel; keywords are yours to change |
+| 24.03 | Custom search engines | ✅ | Settings -> Search & Startup: add, edit, remove engines (%s for the query); any can be the default |
+| 24.04 | Search shortcuts (g cats, yt ..., wiki ...) | ✅ | Type a keyword and a space: yt cats, w Budapest, !gh kessel; keywords are yours to change |
 | 24.05 | Search suggestions | 🟢 | As you type in the address bar (Settings -> Search & Startup); never from a private window |
 | 24.06 | Search history | ⏳ | |
 | 24.07 | Private search | ⏳ | |
@@ -785,7 +785,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 25.01 | Open new-tab page | 🟢 | |
 | 25.02 | Open homepage | 🟢 | |
-| 25.03 | Open specific pages | 🧪 | Settings -> Search & Startup -> Pages to start with (or your open tabs) |
+| 25.03 | Open specific pages | ✅ | Settings -> Search & Startup -> Pages to start with (or your open tabs) |
 | 25.04 | Restore previous session | 🟢 | |
 | 25.05 | Restore selected windows | 🟡 | Every window of the last session comes back; picking some is not done yet |
 | 25.06 | Open specific profile | ⏳ | |
@@ -889,9 +889,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 32.01 | Website notifications | ⏳ | |
-| 32.02 | Permission prompts | 🧪 | Kessel's own prompt under the address bar |
+| 32.02 | Permission prompts | ✅ | Kessel's own prompt under the address bar |
 | 32.03 | Notification blocking | 🧪 | Site permissions -> Notifications: Block, for every site or one |
-| 32.04 | Per-site notification permissions | 🧪 | Settings -> Site permissions -> Notifications, per site |
+| 32.04 | Per-site notification permissions | ✅ | Settings -> Site permissions -> Notifications, per site |
 | 32.05 | Notification history | ⏳ | |
 | 32.06 | Push notifications | ⏳ | |
 | 32.07 | Notification sounds | ⏳ | |
@@ -930,7 +930,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 35.01 | GPU rendering | 🧪 | On by default; Settings -> Performance -> Use hardware acceleration (off draws everything with the processor; applies at the next start) |
+| 35.01 | GPU rendering | ✅ | On by default; Settings -> Performance -> Use hardware acceleration (off draws everything with the processor; applies at the next start) |
 | 35.02 | Hardware video decoding | 🧪 | kessel://gpu: for each video format, whether the graphics card or the processor decodes it |
 | 35.03 | Hardware video encoding | 🧪 | Used by video calls; kessel://gpu shows which formats the graphics card encodes |
 | 35.04 | WebGL acceleration | 🧪 | kessel://gpu shows the renderer and warns about a software fallback |
@@ -938,7 +938,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 35.06 | GPU rasterization | 🧪 | The engine's, with hardware acceleration on |
 | 35.07 | Compositor acceleration | 🧪 | The engine's, with hardware acceleration on (off: software compositing) |
 | 35.08 | Battery-aware GPU behavior | 🟡 | Settings -> Performance -> Graphics card: Automatic picks the power-saving card when Kessel starts on battery -- decided at start, not while running; or always power-saving / high-performance |
-| 35.09 | Graphics diagnostics | 🧪 | kessel://gpu (Settings -> Performance, Help, or type "gpu" in the address bar): acceleration, renderer, WebGL/WebGPU, display, video and audio formats, DRM, Web Audio, WebRTC; Copy report |
+| 35.09 | Graphics diagnostics | ✅ | kessel://gpu (Settings -> Performance, Help, or type "gpu" in the address bar): acceleration, renderer, WebGL/WebGPU, display, video and audio formats, DRM, Web Audio, WebRTC; Copy report |
 
 ### 36. Performance
 
@@ -949,7 +949,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 36.03 | Energy saver | ⏳ | |
 | 36.04 | CPU throttling | ✅ | Background tabs are paused after a while (2.41) |
 | 36.05 | Background-tab throttling | ✅ | See 2.44 |
-| 36.06 | Hardware acceleration | 🧪 | See 35.01 |
+| 36.06 | Hardware acceleration | ✅ | See 35.01 |
 | 36.07 | Cache optimization | ⏳ | |
 | 36.08 | Prefetching | ⏳ | |
 | 36.09 | Pre-rendering | ⏳ | |
@@ -982,7 +982,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 38.01 | Experimental features | 🟡 | Settings -> Network -> Engine switches (your own Chromium switches) |
-| 38.02 | Feature flags | 🧪 | Settings -> Network -> Engine switches: --enable-features / --disable-features |
+| 38.02 | Feature flags | ✅ | Settings -> Network -> Engine switches: --enable-features / --disable-features |
 | 38.03 | Browser experiments | ⏳ | |
 | 38.04 | Experimental APIs | ⏳ | |
 | 38.05 | Rendering flags | 🧪 | Any rendering switch in Settings -> Network -> Engine switches |
@@ -1005,7 +1005,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 39.04 | GPU information | 🧪 | kessel://gpu: the renderer, WebGL and WebGPU adapters |
 | 39.05 | CPU information | 🟡 | kessel://gpu: the number of processor threads |
 | 39.06 | Memory information | ⏳ | |
-| 39.07 | Installed codecs | 🧪 | kessel://gpu: video and audio formats, hardware decoding, DRM |
+| 39.07 | Installed codecs | ✅ | kessel://gpu: video and audio formats, hardware decoding, DRM |
 | 39.08 | Supported APIs | ⏳ | |
 | 39.09 | Network information | ⏳ | |
 | 39.10 | Connection status | ⏳ | |
@@ -1034,9 +1034,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 41.01 | Full-page screenshot | 🧪 | Command palette -> Screenshot of the whole page |
-| 41.02 | Visible-area screenshot | 🧪 | Ctrl+Shift+S |
-| 41.03 | Selected-area screenshot | 🧪 | Command palette -> Screenshot of a part of the page: drag a box |
+| 41.01 | Full-page screenshot | ✅ | Command palette -> Screenshot of the whole page |
+| 41.02 | Visible-area screenshot | ✅ | Ctrl+Shift+S |
+| 41.03 | Selected-area screenshot | ✅ | Command palette -> Screenshot of a part of the page: drag a box |
 | 41.04 | Screenshot to clipboard | 🧪 | Settings -> Page tools: save, copy or both |
 | 41.05 | Screenshot annotation | 🧪 | Screenshot editor: pen, highlighter, arrows, boxes, text, blur, crop, undo/redo |
 | 41.06 | Screen recording | ⏳ | |
@@ -1094,7 +1094,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 44.08 | Profiles | 🟡 | Accounts |
 | 44.09 | Window management | ⏳ | |
 | 44.10 | Desktop notifications | ⏳ | |
-| 44.11 | Hardware acceleration | 🧪 | See 35.01 |
+| 44.11 | Hardware acceleration | ✅ | See 35.01 |
 | 44.12 | Advanced downloads | ⏳ | |
 | 44.13 | Advanced DevTools | 🌐 | Edge DevTools (F12) |
 
@@ -1125,7 +1125,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 45.21 | Developer tools | ✅ | F12 |
 | 45.22 | Fullscreen | ✅ | F11 |
 | 45.23 | Picture-in-picture | ⏳ | |
-| 45.24 | Screenshot | 🧪 | Ctrl+Shift+S; PNG or JPEG, folder of your choice |
+| 45.24 | Screenshot | ✅ | Ctrl+Shift+S; PNG or JPEG, folder of your choice |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
 | 45.27 | Tab grouping | ✅ | See 2.19 |
@@ -1140,13 +1140,13 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 46.03 | Ctrl-click links | ✅ | Ctrl+click: new tab; Ctrl+Shift+click: behind; Shift+click: new window |
 | 46.04 | Drag links | ⏳ | |
 | 46.05 | Drag tabs | 🟢 | |
-| 46.06 | Mouse gestures | 🧪 | Right button + draw; every gesture and its command is yours to change (Settings -> Page tools) |
+| 46.06 | Mouse gestures | ✅ | Right button + draw; every gesture and its command is yours to change (Settings -> Page tools) |
 | 46.07 | Trackpad gestures | ⏳ | |
 | 46.08 | Two-finger navigation | ⏳ | |
 | 46.09 | Pinch zoom | ✅ | Pinch on a touchpad or touchscreen: the engine's zoom, kept per site (22.01) |
 | 46.10 | Swipe navigation | ⏳ | |
 | 46.11 | Context menus | 🌐 | On pages: the engine's menu; on tabs, groups and the tab strip: Kessel's own (2.x) |
-| 46.12 | Link preview | 🧪 | Right-click a link -> Peek at link |
+| 46.12 | Link preview | ✅ | Right-click a link -> Peek at link |
 
 ### 47. Context menus
 
@@ -1423,7 +1423,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.04 | AI workspace creation | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
 | 62.05 | Automatic session recovery | ⏳ | |
 | 62.06 | Automatic tab cleanup | 🟢 | Idle tab discarding |
-| 62.07 | Automatic duplicate-tab detection | 🧪 | Command palette -> Close duplicate tabs |
+| 62.07 | Automatic duplicate-tab detection | ✅ | Command palette -> Close duplicate tabs |
 | 62.08 | Tab memory visualization | ⏳ | |
 | 62.09 | Tab dependency detection | ⏳ | |
 | 62.10 | Website change monitoring | ⏳ | |
@@ -1442,7 +1442,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.23 | Built-in automation | ⏳ | |
 | 62.24 | Browser macros | ⏳ | |
 | 62.25 | Workflow automation | ⏳ | |
-| 62.26 | Command palette | 🧪 | F2: every command, searchable, recent ones first |
+| 62.26 | Command palette | ✅ | F2: every command, searchable, recent ones first |
 | 62.27 | Keyboard-first UI | ⏳ | |
 | 62.28 | Power-user settings | ⏳ | |
 | 62.29 | Browser telemetry dashboard | ⏳ | |
@@ -1457,23 +1457,23 @@ Only ones that work on this PC, without an account or a server.
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 63.01 | Site boosts: your own CSS for a site (Zen Boosts, Arc Boosts) | 🧪 | Command palette -> Change this site: your own CSS |
-| 63.02 | Page filters: grayscale, invert, sepia, dark, contrast per site (Vivaldi page actions) | 🧪 | Per site, or one for every site (Settings -> Page tools) |
-| 63.03 | Element zapper: hide a page element for good (uBlock, Safari distraction control) | 🧪 | Command palette -> Hide an element; undo in Settings -> Page tools |
-| 63.04 | Link preview in a floating window (Zen Glance, Arc Peek) | 🧪 | Right-click a link -> Peek at link (a pop-out window; Back to tabs keeps it) |
+| 63.01 | Site boosts: your own CSS for a site (Zen Boosts, Arc Boosts) | ✅ | Command palette -> Change this site: your own CSS |
+| 63.02 | Page filters: grayscale, invert, sepia, dark, contrast per site (Vivaldi page actions) | ✅ | Per site, or one for every site (Settings -> Page tools) |
+| 63.03 | Element zapper: hide a page element for good (uBlock, Safari distraction control) | ✅ | Command palette -> Hide an element; undo in Settings -> Page tools |
+| 63.04 | Link preview in a floating window (Zen Glance, Arc Peek) | ✅ | Right-click a link -> Peek at link (a pop-out window; Back to tabs keeps it) |
 | 63.05 | Compact mode: toolbars hide until the mouse comes near (Zen) | ⏳ | |
-| 63.06 | Feed reader: detect RSS/Atom feeds, follow them locally (Vivaldi) | 🧪 | kessel://feeds: RSS, Atom, JSON Feed; follow from the palette; OPML import/export |
-| 63.07 | Break mode: pause every page and all sound at once (Vivaldi) | 🧪 | Command palette -> Pause everything |
-| 63.08 | Auto-archive tabs you haven't touched in days (Arc) | 🧪 | Settings -> Tabs -> Close tabs you've forgotten (counted while Kessel is open) |
-| 63.09 | De-AMP: open a page's real address instead of its AMP copy (Brave) | 🧪 | On by default; Settings -> Page tools |
-| 63.10 | Wayback Machine offer on dead pages (Brave) | 🧪 | A missing page (404/410) offers its saved copy; the palette opens any page there |
-| 63.11 | Forget a site's data when its last tab closes (Brave forgetful browsing) | 🧪 | Settings -> Privacy -> Forget these sites when you close them |
+| 63.06 | Feed reader: detect RSS/Atom feeds, follow them locally (Vivaldi) | ✅ | kessel://feeds: RSS, Atom, JSON Feed; follow from the palette; OPML import/export |
+| 63.07 | Break mode: pause every page and all sound at once (Vivaldi) | ✅ | Command palette -> Pause everything |
+| 63.08 | Auto-archive tabs you haven't touched in days (Arc) | ✅ | Settings -> Tabs -> Close tabs you've forgotten (counted while Kessel is open) |
+| 63.09 | De-AMP: open a page's real address instead of its AMP copy (Brave) | ✅ | On by default; Settings -> Page tools |
+| 63.10 | Wayback Machine offer on dead pages (Brave) | ✅ | A missing page (404/410) offers its saved copy; the palette opens any page there |
+| 63.11 | Forget a site's data when its last tab closes (Brave forgetful browsing) | ✅ | Settings -> Privacy -> Forget these sites when you close them |
 | 63.12 | Copy clean link: without tracking parameters (Firefox) | 🧪 | Command palette -> Copy link without tracking |
-| 63.13 | Auto-reload a tab every N seconds (Vivaldi, Opera) | 🧪 | Command palette -> Auto-reload this site; your own intervals |
-| 63.14 | Mute background tabs automatically (Vivaldi) | 🧪 | Settings -> Tabs -> Only the tab you're on plays sound |
+| 63.13 | Auto-reload a tab every N seconds (Vivaldi, Opera) | ✅ | Command palette -> Auto-reload this site; your own intervals |
+| 63.14 | Mute background tabs automatically (Vivaldi) | ✅ | Settings -> Tabs -> Only the tab you're on plays sound |
 | 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | 🟡 | The engine already shows the link under the mouse; no clock yet |
-| 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | 🧪 | Command palette -> Open a link with the keyboard |
+| 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | ✅ | Command palette -> Open a link with the keyboard |
 | 63.17 | Paste and go / paste and search (Chrome, Firefox) | 🧪 | Command palette -> Paste and go |
 | 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | ⏳ | |
-| 63.19 | Command chains: several commands under one shortcut (Vivaldi) | 🧪 | Settings -> Page tools -> Command chains; from the palette or a gesture |
+| 63.19 | Command chains: several commands under one shortcut (Vivaldi) | ✅ | Settings -> Page tools -> Command chains; from the palette or a gesture |
 | 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | 🧪 | Sites' own search engines are offered in Settings -> Search & Startup |

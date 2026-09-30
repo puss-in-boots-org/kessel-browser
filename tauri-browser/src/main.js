@@ -2440,7 +2440,7 @@ async function activateTab(id) {
   }
   persistSession();
   enforceAwakeLimit();
-  closeForgottenTabs(now);
+  closeForgottenTabs(Date.now());
 }
 
 // Settings -> Tabs: tabs you haven't looked at in so many days close by

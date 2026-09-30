@@ -28,6 +28,8 @@ function sorted(list) {
 
 function status(d) {
   const l = live.get(d.id);
+  // Cancelled is over too, but not a failure.
+  if (l?.state === "cancelled") return "Cancelled";
   if (d.finished) return d.success ? `Done · ${hostOf(d.url)} · ${formatRelativeTime(d.started_at)}` : "Failed";
   if (!l) return "Downloading…";
   const size = l.total > 0 ? `${formatBytes(l.received)} of ${formatBytes(l.total)}` : formatBytes(l.received);

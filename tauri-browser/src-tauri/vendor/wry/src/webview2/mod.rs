@@ -854,6 +854,19 @@ impl InnerWebView {
                 let mut state = COREWEBVIEW2_DOWNLOAD_STATE::default();
                 download_operation.State(&mut state)?;
 
+                // Kessel: a paused download -- WebView2 pauses by
+                // interrupting it -- or one that stopped but can carry on
+                // hasn't finished (see KESSEL-PATCH.md).
+                if state == COREWEBVIEW2_DOWNLOAD_STATE_INTERRUPTED {
+                  let mut reason = COREWEBVIEW2_DOWNLOAD_INTERRUPT_REASON::default();
+                  download_operation.InterruptReason(&mut reason)?;
+                  let mut can_resume = BOOL::default();
+                  download_operation.CanResume(&mut can_resume)?;
+                  if reason == COREWEBVIEW2_DOWNLOAD_INTERRUPT_REASON_USER_PAUSED || can_resume.as_bool() {
+                    return Ok(());
+                  }
+                }
+
                 if state != COREWEBVIEW2_DOWNLOAD_STATE_IN_PROGRESS {
                   let uri = {
                     let mut uri = PWSTR::null();

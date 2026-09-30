@@ -43,6 +43,18 @@ The patch keeps a list of the windows that can take such posts (all on the
 main thread) and, when a post fails, sends it through the next live one
 instead, so every request gets its answer.
 
+## A paused download isn't a finished one
+
+WebView2 pauses a download by interrupting it (reason "user paused"), and
+one that lost its connection but can carry on is interrupted too. wry told
+Tauri a download had finished -- unsuccessfully -- as soon as it was
+anything but "in progress", so pausing one in Kessel's download manager
+marked it failed for good (and resuming it then finished a download Kessel
+had already written off).
+
+The patch reports a download only once it's really over: completed, or
+interrupted for good (cancelled, or failed with no way to resume).
+
 ## Updating
 
 When Tauri moves to a newer wry, copy that version here (`src`, `examples`,
