@@ -117,6 +117,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("bookmark", "Bookmark this page", "Bookmarks & history", &["Ctrl+D"]),
     cmd("bookmark-all-tabs", "Bookmark all tabs", "Bookmarks & history", &["Ctrl+Shift+D"]),
     cmd("toggle-bookmarks-bar", "Show or hide the bookmarks bar", "Bookmarks & history", &["Ctrl+Shift+B"]),
+    cmd("bookmark-manager", "Bookmark manager", "Bookmarks & history", &["Ctrl+Shift+O"]),
     cmd("history", "History", "Bookmarks & history", &["Ctrl+H"]),
     cmd("downloads", "Downloads", "Bookmarks & history", &["Ctrl+J"]),
     cmd("clear-browsing-data", "Clear browsing data", "Bookmarks & history", &["Ctrl+Shift+Delete"]),

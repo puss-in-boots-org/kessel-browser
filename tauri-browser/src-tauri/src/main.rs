@@ -3,6 +3,7 @@
 
 mod accounts;
 mod adblock;
+mod bookmarks;
 mod bridge;
 mod browsing_data;
 mod browser_windows;
@@ -124,6 +125,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("history", "history.html"),
     ("help", "help.html"),
     ("sidebar", "sidebar.html"),
+    // The bookmark manager (bookmarks.rs).
+    ("bookmarks", "bookmarks.html"),
     // Shown instead of a dangerous or broken page (security.rs).
     ("warning", "warning.html"),
     ("gpu", "gpu.html"),
@@ -628,12 +631,14 @@ fn create_tab_internal(
                 DownloadEvent::Requested { url, destination } => {
                     let dl_id = st.next_download_id.fetch_add(1, Ordering::SeqCst);
                     let dir = downloads::download_dir(&app_for_download).unwrap_or_else(|| data_dir.clone());
-                    let filename = url
-                        .path_segments()
-                        .and_then(|mut s| s.next_back())
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or("download")
-                        .to_string();
+                    // The name the engine worked out (the server's own, the
+                    // link's download="..."), else the address's last part.
+                    let filename = destination
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .filter(|n| !n.trim().is_empty())
+                        .or_else(|| url.path_segments().and_then(|mut s| s.next_back()).filter(|s| !s.is_empty()).map(str::to_string))
+                        .unwrap_or_else(|| "download".to_string());
                     let mut target = dir.join(&filename);
                     let mut counter = 1;
                     let stem = target
@@ -1580,16 +1585,11 @@ async fn import_from_browser(
     if choice.bookmarks || choice.speed_dial {
         let (bookmarks, speed_dial) = import::read_bookmarks(&profile)?;
         if choice.bookmarks {
-            let mut known: HashSet<String> = state.store.get_bookmarks().into_iter().map(|b| b.url).collect();
-            for b in bookmarks {
-                if known.insert(b.url.clone()) {
-                    state.store.add_bookmark(b.url, b.title);
-                    report.bookmarks_added += 1;
-                } else {
-                    report.bookmarks_existing += 1;
-                }
-            }
-            let _ = app.emit("bookmarks-changed", state.store.get_bookmarks());
+            // In a folder of their own.
+            let links = bookmarks.into_iter().map(|b| (b.url, b.title)).collect();
+            let (added, existing) = bookmarks::add_imported(&app, &format!("From {}", profile.browser), links);
+            report.bookmarks_added += added;
+            report.bookmarks_existing += existing;
         }
         if choice.speed_dial {
             {
@@ -3219,6 +3219,7 @@ async fn toggle_popup(
         "download" => "download-warning.html",
         "media" => "media.html",
         "palette" => "palette.html",
+        "bookmark" => "bookmark.html",
         "permission" => "permission.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
@@ -4104,18 +4105,16 @@ fn get_bookmarks(state: tauri::State<BrowserState>) -> Vec<Bookmark> {
     state.store.get_bookmarks()
 }
 
-// Broadcast so the toolbar's bookmarks bar stays current no matter which
-// page (toolbar star, Settings -> Bookmarks) made the change.
+// On the bookmarks bar (bookmarks.rs broadcasts the change). With `tab`,
+// a small picture of that page for the bookmark manager. Its id.
 #[tauri::command]
-fn add_bookmark(app: tauri::AppHandle, state: tauri::State<BrowserState>, url: String, title: String) {
-    state.store.add_bookmark(url, title);
-    let _ = app.emit("bookmarks-changed", state.store.get_bookmarks());
+fn add_bookmark(app: tauri::AppHandle, url: String, title: String, tab: Option<u32>) -> Option<String> {
+    bookmarks::add(&app, url, title, tab)
 }
 
 #[tauri::command]
-fn remove_bookmark(app: tauri::AppHandle, state: tauri::State<BrowserState>, url: String) {
-    state.store.remove_bookmark(&url);
-    let _ = app.emit("bookmarks-changed", state.store.get_bookmarks());
+fn remove_bookmark(app: tauri::AppHandle, url: String) {
+    bookmarks::remove_url(&app, &url);
 }
 
 // --- Pinned sites ----------------------------------------------------------
@@ -5126,6 +5125,21 @@ fn main() {
             sidebar::tell_toolbar,
             sidebar::set_side_panel_kind,
             sidebar::tell_side_panel,
+            bookmarks::bookmark_tree,
+            bookmarks::save_bookmark,
+            bookmarks::delete_bookmarks,
+            bookmarks::save_bookmark_folder,
+            bookmarks::delete_bookmark_folder,
+            bookmarks::move_bookmarks,
+            bookmarks::sort_bookmark_folder,
+            bookmarks::find_duplicate_bookmarks,
+            bookmarks::check_bookmark_links,
+            bookmarks::bookmark_backups,
+            bookmarks::restore_bookmark_backup,
+            bookmarks::export_bookmarks,
+            bookmarks::import_bookmarks,
+            bookmarks::bookmark_preview,
+            bookmarks::update_bookmark_preview,
             privacy::get_cookies,
             privacy::save_cookie,
             privacy::delete_cookies,

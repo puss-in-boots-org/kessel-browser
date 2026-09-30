@@ -12,8 +12,27 @@
 //   /script/<name>        a tiny script (text/javascript, any site may load it)
 //   /sound/<name>         a page titled <name> whose startSound() / stopSound()
 //                         play a barely audible tone
+//   /article/<name>       an article titled <name> that offers /feed.xml and a
+//                         banner (#banner) to hide
+//   /feed.xml             an RSS feed: "Test News", Story 1..3
+//   /amp/<name>           an AMP copy of /article/<name>
+//   /missing              a 404 page
+//   /big/<name>           3 MB, slowly and resumably, saved as <name>
 
 import http from "node:http";
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const BIG_SIZE = 3 * 1024 * 1024;
+
+function article(name, origin) {
+  const paragraphs = Array.from({ length: 40 }, (_, i) => `<p>Paragraph ${i}: an article about glass, light and the way windows bend what's behind them. A second sentence makes it long enough to read.</p>`).join("\n");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title>
+<link rel="alternate" type="application/rss+xml" title="Test News" href="${origin}/feed.xml"></head>
+<body><nav><a href="${origin}/page/home">Home</a> <a href="${origin}/page/about">About</a></nav>
+<article><h1>How glass bends light</h1>${paragraphs}</article>
+<div id="banner" style="height:60px;background:#fc0">A banner to hide</div>
+<p><a id="link1" href="${origin}/page/linked">A link</a></p></body></html>`;
+}
 
 function page(name, origin) {
   const paragraphs = Array.from({ length: 120 }, (_, i) => `<p id="p${i}">Paragraph ${i} of ${name}. The quick brown fox jumps over the lazy dog.</p>`).join("\n");
@@ -63,6 +82,36 @@ export async function startServer(host = "127.0.0.2") {
     } else if (parts[0] === "page") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(page(decodeURIComponent(parts[1] || "page"), origin));
+    } else if (parts[0] === "article") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(article(decodeURIComponent(parts[1] || "Article"), origin));
+    } else if (parts[0] === "feed.xml") {
+      res.writeHead(200, { "Content-Type": "application/rss+xml", "Cache-Control": "no-store" });
+      const items = [1, 2, 3].map((i) => `<item><title>Story ${i}</title><link>${origin}/page/story${i}</link><guid>${origin}/page/story${i}</guid><pubDate>Tue, 29 Sep 2026 1${i}:00:00 GMT</pubDate><description>Story ${i}</description></item>`).join("");
+      res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>Test News</title><link>${origin}/</link><description>Tests</description>${items}</channel></rss>`);
+    } else if (parts[0] === "amp") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
+    } else if (parts[0] === "missing") {
+      res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><title>Not found</title><h1>404</h1>`);
+    } else if (parts[0] === "big") {
+      // Slowly (something to pause), resumable from where it stopped.
+      const range = /bytes=(\d+)-/.exec(req.headers.range || "");
+      const start = range ? parseInt(range[1], 10) : 0;
+      res.writeHead(range ? 206 : 200, {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${(parts[1] || "big.bin").replace(/"/g, "")}"`,
+        "Content-Length": String(BIG_SIZE - start),
+        "Accept-Ranges": "bytes",
+        ...(range ? { "Content-Range": `bytes ${start}-${BIG_SIZE - 1}/${BIG_SIZE}` } : {}),
+      });
+      const chunk = Buffer.alloc(64 * 1024, 7);
+      for (let at = start; at < BIG_SIZE && !res.destroyed; at += chunk.length) {
+        res.write(chunk.subarray(0, Math.min(chunk.length, BIG_SIZE - at)));
+        await sleep(60);
+      }
+      res.end();
     } else if (parts[0] === "frame") {
       const name = decodeURIComponent(parts[1] || "frame");
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
@@ -113,7 +162,9 @@ navigator.mediaSession.metadata = new MediaMetadata({ title: "Test Song", artist
 navigator.mediaSession.setActionHandler("nexttrack", () => { window.nextPressed++; });
 async function startMedia() {
   const p = document.getElementById("player");
-  p.volume = 0.01;
+  // Loud enough for the engine to count the tab as playing sound (it
+  // ignores anything below about -72 dB); the tests mute the tab first.
+  p.volume = 1;
   await p.play();
   return !p.paused;
 }

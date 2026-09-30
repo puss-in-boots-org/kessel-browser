@@ -25,10 +25,23 @@ fn write_json<T: Serialize>(path: &Path, value: &T) {
 
 // --- Bookmarks -------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct Bookmark {
     pub url: String,
     pub title: String,
+    // (bookmarks.rs) Its id, its folder ("" = the bookmarks bar), your tags
+    // and note, and when it was added (unix seconds). Not in files from
+    // before folders.
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub folder: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub added: u64,
 }
 
 // --- Pinned sites (left rail quick-launch) ---------------------------------
@@ -431,10 +444,6 @@ impl Store {
         }
     }
 
-    fn bookmarks_path(&self) -> PathBuf {
-        self.dir.join("bookmarks.json")
-    }
-
     pub fn save_settings(&self) {
         write_json(&self.dir.join("settings.json"), &*self.settings.lock().unwrap());
     }
@@ -460,24 +469,9 @@ impl Store {
         let _ = self.history_writes.send(HistoryWrite::Title { url: url.to_string(), title: title.to_string() });
     }
 
+    // Every bookmark, in whatever folder (changes go through bookmarks.rs).
     pub fn get_bookmarks(&self) -> Vec<Bookmark> {
-        read_json_or_default(&self.bookmarks_path())
-    }
-
-    pub fn add_bookmark(&self, url: String, title: String) {
-        let path = self.bookmarks_path();
-        let mut bookmarks: Vec<Bookmark> = read_json_or_default(&path);
-        if !bookmarks.iter().any(|b| b.url == url) {
-            bookmarks.push(Bookmark { url, title });
-            write_json(&path, &bookmarks);
-        }
-    }
-
-    pub fn remove_bookmark(&self, url: &str) {
-        let path = self.bookmarks_path();
-        let mut bookmarks: Vec<Bookmark> = read_json_or_default(&path);
-        bookmarks.retain(|b| b.url != url);
-        write_json(&path, &bookmarks);
+        crate::bookmarks::load(&self.dir).bookmarks
     }
 
     pub fn saved_groups(&self) -> Vec<SavedGroup> {
