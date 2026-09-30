@@ -54,6 +54,8 @@ pub(crate) fn create_under_pointer(app: &tauri::AppHandle, private: bool, init: 
 
 fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>, grab: Option<(f64, f64)>) -> Result<String, String> {
     let state = app.state::<BrowserState>();
+    // Automatic private sessions: every window is a private one.
+    let private = private || state.store.settings.lock().unwrap().always_private;
     let number = state.next_window.fetch_add(1, Ordering::SeqCst);
     let label = window_label(number);
     let (width, height) = (1280.0, 820.0);
@@ -216,7 +218,10 @@ fn closed(app: &tauri::AppHandle, label: &str) {
 
     let remaining = state.windows.lock().unwrap().len();
     if remaining == 0 {
-        app.exit(0);
+        // What you chose to clear on exit goes first (it exits when done).
+        if !crate::privacy::clear_on_exit(app) {
+            app.exit(0);
+        }
         return;
     }
     if !window.private {

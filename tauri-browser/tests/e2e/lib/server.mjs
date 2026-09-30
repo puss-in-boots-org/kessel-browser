@@ -6,7 +6,9 @@
 //   /slow/<ms>/<name>     the same, after a delay (for "stop loading")
 //   /frame/<name>         a page titled <name> showing /page/<name>-inner in an iframe
 //   /download/<name>      a small file served as an attachment
-//   /echo-headers         the request headers as JSON
+//   /echo-headers         the request headers as JSON (any site may read it)
+//   /set-cookie/<name>    a page that sets cookie <name>=1 (for a day) as it loads
+//   /embed?src=<url>      a page showing <url> in an iframe
 //   /script/<name>        a tiny script (text/javascript, any site may load it)
 //   /sound/<name>         a page titled <name> whose startSound() / stopSound()
 //                         play a barely audible tone
@@ -74,8 +76,16 @@ async function startSound() {
 function stopSound() { if (ctx) { ctx.close(); ctx = null; } }
 </script></body></html>`);
     } else if (parts[0] === "echo-headers") {
-      res.writeHead(200, { "Content-Type": "application/json" });
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify(req.headers));
+    } else if (parts[0] === "set-cookie") {
+      const name = decodeURIComponent(parts[1] || "cookie");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Set-Cookie": `${name}=1; Max-Age=86400; Path=/` });
+      res.end(page(name, origin));
+    } else if (parts[0] === "embed") {
+      const src = url.searchParams.get("src") || "about:blank";
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Embed</title></head><body><iframe id="inner" src="${src.replace(/"/g, "&quot;")}" style="width:600px;height:300px"></iframe></body></html>`);
     } else {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("not found");

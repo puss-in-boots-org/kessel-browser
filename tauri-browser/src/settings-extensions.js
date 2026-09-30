@@ -151,6 +151,8 @@ export async function extensionsPanel(settings, { el, settingRow, switchHtml, wi
     card.querySelector(".ext-desc").textContent = x.description || `From the ${SOURCE_NAMES[x.source] || "store"}`;
     const status = [];
     if (x.error) status.push(`<span style="color:var(--danger)">Couldn't run: ${escapeHtml(x.error)}</span>`);
+    if (x.flagged === "malware") status.push(`<span style="color:var(--danger)">The Chrome Web Store took it down as malware${x.enabled ? "" : ", so Kessel turned it off"}. Remove it unless you're sure.</span>`);
+    if (x.flagged === "removed") status.push(`<span style="color:var(--warning)">It's no longer in its store -- it may have been taken down. It won't get updates.</span>`);
     if (x.restart) status.push(`<span style="color:var(--warning)">Restart Kessel to finish its last change.</span>`);
     if (x.pending) status.push(`<span style="color:var(--warning)">Version ${escapeHtml(x.pending)} asks for more than this one -- <a href="#" class="ext-review">look it over</a>.</span>`);
     card.querySelector(".ext-status").innerHTML = status.join("<br>");
@@ -224,6 +226,7 @@ export async function extensionsPanel(settings, { el, settingRow, switchHtml, wi
   await render();
   listen("extensions-changed", render);
   listen("extensions-updated", (e) => toast(`Updated ${(e.payload || []).join(", ")}`));
+  listen("extensions-flagged", (e) => toast(`Turned off ${(e.payload || []).join(", ")}: its store took it down as malware`, { duration: 6000 }));
   return p;
 }
 
