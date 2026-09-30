@@ -33,10 +33,26 @@
     .dl-row .dl-meta { min-width: 0; flex: 1; }
     .dl-row .dl-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dl-row .dl-sub { font-size: 11px; color: var(--text-faint); }
+    .dl-row .bar { height: 4px; border-radius: 2px; background: var(--surface-hover); margin-top: 5px; overflow: hidden; }
+    .dl-row .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s; }
+    .dl-row .bar.paused > i { background: var(--text-faint); }
+    .dl-row .bar.unknown > i { width: 30% !important; animation: slide 1.2s linear infinite; }
+    @keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
+    .dl-row .actions { display: flex; gap: 2px; opacity: 0; flex-shrink: 0; }
+    .dl-row:hover .actions, .dl-row.running .actions { opacity: 1; }
+    .dl-row .actions button { width: 28px; height: 28px; border-radius: 7px; border: none; background: transparent; color: inherit; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .dl-row .actions button:hover { background: var(--surface-hover); }
+    .dl-row.missing .dl-name { text-decoration: line-through; opacity: 0.6; }
+    #q { flex: 1; min-width: 0; }
+    #sort { width: 130px; }
   </style>
 </head>
 <body>
   <h1>Downloads</h1>
+  <div class="toolbar-row">
+    <input class="field" id="q" placeholder="Search downloads" spellcheck="false" />
+    <select class="field" id="sort"><option value="new">Newest first</option><option value="old">Oldest first</option><option value="name">By name</option><option value="site">By site</option></select>
+  </div>
   <div class="toolbar-row">
     <button class="btn sm" id="open-folder-btn">Open folder</button>
     <button class="btn danger sm" id="clear-btn">Clear list</button>

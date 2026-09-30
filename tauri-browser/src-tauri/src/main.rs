@@ -26,6 +26,8 @@ mod store;
 mod suggest;
 mod tabdrag;
 mod tools;
+mod downloads;
+mod permissions;
 mod vault;
 mod zip;
 
@@ -625,10 +627,7 @@ fn create_tab_internal(
             match event {
                 DownloadEvent::Requested { url, destination } => {
                     let dl_id = st.next_download_id.fetch_add(1, Ordering::SeqCst);
-                    let dir = app_for_download
-                        .path()
-                        .download_dir()
-                        .unwrap_or_else(|_| data_dir.clone());
+                    let dir = downloads::download_dir(&app_for_download).unwrap_or_else(|| data_dir.clone());
                     let filename = url
                         .path_segments()
                         .and_then(|mut s| s.next_back())
@@ -2621,6 +2620,7 @@ unsafe fn install_shields_hooks(
         set_timezone_override(&core, true);
     }
     security::install_hooks(app, &core, id, &label)?;
+    permissions::install_hooks(app, &core, id)?;
 
     let app_req = app.clone();
     let label_req = label.clone();
@@ -3219,15 +3219,16 @@ async fn toggle_popup(
         "download" => "download-warning.html",
         "media" => "media.html",
         "palette" => "palette.html",
+        "permission" => "permission.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
     let at_point = kind == "context" || kind == "dropdown";
     // The site info popup hangs from the address bar's left end (x, y = its
     // button's bottom left); the others from their button's right end.
-    let from_left = kind == "siteinfo";
+    let from_left = kind == "siteinfo" || kind == "permission";
     // A download prompt isn't a button's: the next one replaces it.
-    let toggles = kind != "context" && kind != "download";
+    let toggles = kind != "context" && kind != "download" && kind != "permission";
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
@@ -4244,7 +4245,7 @@ fn clear_downloads(state: tauri::State<BrowserState>) {
 
 #[tauri::command]
 fn open_downloads_folder(app: tauri::AppHandle) -> Result<(), String> {
-    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let dir = downloads::download_dir(&app).ok_or("no downloads folder")?;
     tauri_plugin_opener::open_path(dir.to_string_lossy().to_string(), None::<&str>).map_err(|e| e.to_string())
 }
 
@@ -5006,6 +5007,9 @@ fn main() {
             tools::page_tool,
             tools::take_screenshot,
             tools::save_pdf,
+            downloads::download_control,
+            downloads::show_download,
+            permissions::resolve_permission,
             tools::highlights_all,
             tools::highlight_delete,
             tools::shot_image,

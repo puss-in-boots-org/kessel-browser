@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" data-glass-role="page">
+<head>
+  <meta charset="UTF-8" />
+  <title>Permission</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* A site asking for something (the camera, your location...): it waits
+       here, under the address bar, until you answer (permissions.rs). */
+    html, body { height: 100%; overflow: hidden; user-select: none; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 14px); }
+    html.glass body { background: #0a1433; border: none; }
+    main { position: relative; height: 100%; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; color: var(--text); box-sizing: border-box; }
+    html.glass main { color: var(--lg-text); }
+    .head { display: flex; gap: 10px; align-items: center; }
+    .glyph { flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+    h1 { font-size: 13px; margin: 0; font-weight: 500; line-height: 1.4; }
+    h1 b { font-weight: 700; word-break: break-all; }
+    label { display: flex; gap: 8px; align-items: center; font-size: 12px; opacity: 0.8; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="head"><div class="glyph" id="glyph"></div><h1 id="title"></h1></div>
+    <label id="remember-row"><input type="checkbox" id="remember" /> Remember for this site</label>
+    <div class="actions">
+      <button class="btn sm" id="block">Block</button>
+      <button class="btn primary sm" id="allow">Allow</button>
+    </div>
+  </main>
+  <script type="module" src="permission.js"></script>
+</body>
+</html>

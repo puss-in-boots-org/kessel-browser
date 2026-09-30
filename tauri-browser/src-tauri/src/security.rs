@@ -388,7 +388,13 @@ pub(crate) unsafe fn install_hooks(app: &tauri::AppHandle, core: &webview2_com::
                 let Some(args) = args else { return Ok(()) };
                 let mut cancelled = BOOL::default();
                 args.Cancel(&mut cancelled)?;
-                if cancelled.as_bool() || !app.state::<BrowserState>().store.settings.lock().unwrap().warn_dangerous_downloads {
+                if cancelled.as_bool() {
+                    return Ok(());
+                }
+                // Its progress, pause and resume (downloads.rs).
+                let entry = crate::downloads::track(&app, &args);
+                if !app.state::<BrowserState>().store.settings.lock().unwrap().warn_dangerous_downloads {
+                    crate::downloads::maybe_ask(&app, &args, id, entry);
                     return Ok(());
                 }
                 let mut uri = PWSTR::null();
@@ -397,7 +403,10 @@ pub(crate) unsafe fn install_hooks(app: &tauri::AppHandle, core: &webview2_com::
                 let mut path = PWSTR::null();
                 args.ResultFilePath(&mut path)?;
                 let path = take_pwstr(path);
-                let Some((kind, detail)) = download_risk(&app, &uri, &path) else { return Ok(()) };
+                let Some((kind, detail)) = download_risk(&app, &uri, &path) else {
+                    crate::downloads::maybe_ask(&app, &args, id, entry);
+                    return Ok(());
+                };
                 // The download waits (a deferral) until you decide.
                 let deferral = args.GetDeferral()?;
                 let n = NEXT_WARNING.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

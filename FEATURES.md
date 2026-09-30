@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**53% overall** -- 387 done (✅ 🟢 🌐), 90 built and waiting for their first run on Windows or a phone (🧪), 56 partly done (🟡), 419 to do (⏳), 93 skipped (⏭️), of 1045.
+**60% overall** -- 422 done (✅ 🟢 🌐), 124 built and waiting for their first run on Windows or a phone (🧪), 57 partly done (🟡), 349 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -46,20 +46,20 @@ branch, one small commit per feature or group of features.
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
 | [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 12 | 1 | `███░░░░░░░` 28% |
 | [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
-| [6. Downloads](#6-downloads) | 5 |  | 1 | 16 |  | `███░░░░░░░` 25% |
+| [6. Downloads](#6-downloads) | 7 | 12 | 1 | 2 |  | `█████████░` 89% |
 | [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 24 | 2 | `███░░░░░░░` 26% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
 | [12. DNS & networking](#12-dns--networking) | 9 | 4 |  | 10 |  | `██████░░░░` 57% |
-| [13. Website permissions](#13-website-permissions) |  |  |  | 20 |  | `░░░░░░░░░░` 0% |
-| [14. Site-specific settings](#14-site-specific-settings) |  |  |  | 22 |  | `░░░░░░░░░░` 0% |
+| [13. Website permissions](#13-website-permissions) |  | 10 |  | 10 |  | `█████░░░░░` 50% |
+| [14. Site-specific settings](#14-site-specific-settings) | 1 | 8 |  | 13 |  | `████░░░░░░` 41% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
-| [17. Reading & research](#17-reading--research) | 5 | 10 | 1 | 6 |  | `███████░░░` 70% |
+| [17. Reading & research](#17-reading--research) | 6 | 10 | 1 | 5 |  | `████████░░` 75% |
 | [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
-| [19. PDF](#19-pdf) |  |  |  | 18 |  | `░░░░░░░░░░` 0% |
+| [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 1 | 18 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
 | [22. Accessibility](#22-accessibility) | 3 | 2 | 1 | 10 |  | `███░░░░░░░` 34% |
@@ -70,11 +70,11 @@ branch, one small commit per feature or group of features.
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
-| [30. Web platform support](#30-web-platform-support) |  |  |  | 6 |  | `░░░░░░░░░░` 0% |
+| [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
 | [31. Progressive Web Apps](#31-progressive-web-apps) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
-| [32. Notifications](#32-notifications) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
-| [33. Clipboard](#33-clipboard) |  |  |  | 7 |  | `░░░░░░░░░░` 0% |
-| [34. File system](#34-file-system) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [32. Notifications](#32-notifications) |  | 3 |  | 7 |  | `███░░░░░░░` 30% |
+| [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
+| [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [35. Hardware acceleration](#35-hardware-acceleration) |  | 8 | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 11 | 1 |  | 5 |  | `███████░░░` 71% |
 | [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
@@ -317,26 +317,26 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 6.01 | Download manager | 🟡 | Basic list |
 | 6.02 | Download list | 🟢 | |
-| 6.03 | Download progress | ⏳ | |
-| 6.04 | Pause downloads | ⏳ | |
-| 6.05 | Resume downloads | ⏳ | |
-| 6.06 | Cancel downloads | ⏳ | |
-| 6.07 | Retry failed downloads | ⏳ | |
+| 6.03 | Download progress | 🧪 | Downloads list: size so far, of how much, and a progress bar |
+| 6.04 | Pause downloads | 🧪 | Downloads list -> Pause |
+| 6.05 | Resume downloads | 🧪 | Downloads list -> Resume (also after a dropped connection, if the site allows) |
+| 6.06 | Cancel downloads | 🧪 | Downloads list -> Cancel |
+| 6.07 | Retry failed downloads | 🧪 | Downloads list -> Try again (fetches it anew) |
 | 6.08 | Open downloaded file | 🟢 | |
-| 6.09 | Show downloaded file in folder | ⏳ | |
-| 6.10 | Change download location | ⏳ | |
-| 6.11 | Ask where to save every file | ⏳ | |
-| 6.12 | Automatic downloads | ⏳ | |
+| 6.09 | Show downloaded file in folder | 🧪 | Downloads list -> Show in folder |
+| 6.10 | Change download location | 🧪 | Settings -> Downloads -> Save downloads to |
+| 6.11 | Ask where to save every file | 🧪 | Settings -> Downloads -> Ask where to save each file |
+| 6.12 | Automatic downloads | 🧪 | Site permissions -> Several downloads at once (ask, allow or block, per site) |
 | 6.13 | Multiple simultaneous downloads | 🟢 | |
 | 6.14 | Download notifications | 🟢 | Toasts |
-| 6.15 | Dangerous-download detection | ⏳ | |
-| 6.16 | File-type warnings | ⏳ | |
+| 6.15 | Dangerous-download detection | 🟢 | Risky downloads wait for you to keep or discard them (Settings -> Security) |
+| 6.16 | File-type warnings | 🟢 | Programs and scripts (exe, msi, bat, ps1...) from plain http or bad sites are held back |
 | 6.17 | Download scanning | ⏳ | |
 | 6.18 | Download history | 🟢 | |
-| 6.19 | Download sorting | ⏳ | |
-| 6.20 | Download search | ⏳ | |
+| 6.19 | Download sorting | 🧪 | Downloads list: newest, oldest, by name or by site |
+| 6.20 | Download search | 🧪 | Downloads list: search by name or address |
 | 6.21 | Automatic download organization | ⏳ | |
-| 6.22 | Per-site download permissions | ⏳ | |
+| 6.22 | Per-site download permissions | 🧪 | Site permissions -> Several downloads at once, per site |
 
 ### 7. Passwords & identity
 
@@ -529,43 +529,43 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 13.01 | Camera permission | ⏳ | |
-| 13.02 | Microphone permission | ⏳ | |
-| 13.03 | Location permission | ⏳ | |
-| 13.04 | Notifications permission | ⏳ | |
-| 13.05 | Clipboard permission | ⏳ | |
+| 13.01 | Camera permission | 🧪 | Settings -> Site permissions: Kessel's own prompt, answers kept per site |
+| 13.02 | Microphone permission | 🧪 | Settings -> Site permissions |
+| 13.03 | Location permission | 🧪 | Settings -> Site permissions |
+| 13.04 | Notifications permission | 🧪 | Settings -> Site permissions |
+| 13.05 | Clipboard permission | 🧪 | Settings -> Site permissions |
 | 13.06 | Fullscreen permission | ⏳ | |
-| 13.07 | Motion sensor permission | ⏳ | |
+| 13.07 | Motion sensor permission | 🧪 | Settings -> Site permissions (allowed unless you change it) |
 | 13.08 | Bluetooth permission | ⏳ | |
 | 13.09 | USB permission | ⏳ | |
 | 13.10 | Serial-device permission | ⏳ | |
 | 13.11 | HID-device permission | ⏳ | |
-| 13.12 | MIDI permission | ⏳ | |
+| 13.12 | MIDI permission | 🧪 | Settings -> Site permissions |
 | 13.13 | Payment permission | ⏳ | |
-| 13.14 | Autoplay permission | ⏳ | |
+| 13.14 | Autoplay permission | 🧪 | Settings -> Site permissions -> Playing sound on its own |
 | 13.15 | Pop-up permission | ⏳ | |
-| 13.16 | Downloads permission | ⏳ | |
+| 13.16 | Downloads permission | 🧪 | Settings -> Site permissions -> Several downloads at once |
 | 13.17 | Background activity permission | ⏳ | |
 | 13.18 | VR/AR permission | ⏳ | |
 | 13.19 | Local-network permission | ⏳ | |
-| 13.20 | File-system permission | ⏳ | |
+| 13.20 | File-system permission | 🧪 | Settings -> Site permissions -> Editing files on your computer |
 
 ### 14. Site-specific settings
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 14.01 | JavaScript | ⏳ | |
-| 14.02 | Cookies | ⏳ | |
+| 14.02 | Cookies | 🟢 | Settings -> Cookies & site data: allow, block or clear on exit, per site |
 | 14.03 | Pop-ups | ⏳ | |
 | 14.04 | Redirects | ⏳ | |
-| 14.05 | Camera | ⏳ | |
-| 14.06 | Microphone | ⏳ | |
-| 14.07 | Location | ⏳ | |
-| 14.08 | Notifications | ⏳ | |
-| 14.09 | Clipboard | ⏳ | |
-| 14.10 | Downloads | ⏳ | |
-| 14.11 | Autoplay | ⏳ | |
-| 14.12 | MIDI | ⏳ | |
+| 14.05 | Camera | 🧪 | Settings -> Site permissions, per site |
+| 14.06 | Microphone | 🧪 | Settings -> Site permissions, per site |
+| 14.07 | Location | 🧪 | Settings -> Site permissions, per site |
+| 14.08 | Notifications | 🧪 | Settings -> Site permissions, per site |
+| 14.09 | Clipboard | 🧪 | Settings -> Site permissions, per site |
+| 14.10 | Downloads | 🧪 | Settings -> Site permissions, per site |
+| 14.11 | Autoplay | 🧪 | Settings -> Site permissions, per site |
+| 14.12 | MIDI | 🧪 | Settings -> Site permissions, per site |
 | 14.13 | Bluetooth | ⏳ | |
 | 14.14 | USB | ⏳ | |
 | 14.15 | Serial | ⏳ | |
@@ -639,7 +639,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
 | 17.14 | Search selected text | 🧪 | Right-click selected text -> Search the web for… |
 | 17.15 | Search image | 🧪 | Right-click an image -> Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
-| 17.16 | Copy selected text | ⏳ | |
+| 17.16 | Copy selected text | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 17.17 | Highlight text | 🧪 | Select text, Ctrl+Shift+H or right-click -> Highlight; found again when you come back |
 | 17.18 | Page annotations | 🧪 | Notes on highlights (click one); kept on this computer, never from private windows |
 | 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
@@ -666,21 +666,21 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 19.01 | PDF viewer | ⏳ | |
-| 19.02 | PDF search | ⏳ | |
-| 19.03 | PDF zoom | ⏳ | |
-| 19.04 | PDF page navigation | ⏳ | |
+| 19.01 | PDF viewer | 🌐 | The engine's own PDF viewer (Edge's) |
+| 19.02 | PDF search | 🌐 | In the PDF viewer's toolbar |
+| 19.03 | PDF zoom | 🌐 | In the PDF viewer's toolbar |
+| 19.04 | PDF page navigation | 🌐 | In the PDF viewer's toolbar |
 | 19.05 | PDF thumbnails | ⏳ | |
-| 19.06 | PDF printing | ⏳ | |
-| 19.07 | PDF download | ⏳ | |
-| 19.08 | PDF save | ⏳ | |
-| 19.09 | PDF rotation | ⏳ | |
-| 19.10 | PDF text selection | ⏳ | |
-| 19.11 | PDF copying | ⏳ | |
+| 19.06 | PDF printing | 🌐 | In the PDF viewer's toolbar |
+| 19.07 | PDF download | 🌐 | In the PDF viewer's toolbar |
+| 19.08 | PDF save | 🌐 | In the PDF viewer's toolbar |
+| 19.09 | PDF rotation | 🌐 | In the PDF viewer's toolbar |
+| 19.10 | PDF text selection | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 19.11 | PDF copying | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 19.12 | PDF annotation | ⏳ | |
 | 19.13 | PDF highlighting | ⏳ | |
 | 19.14 | PDF drawing | ⏳ | |
-| 19.15 | PDF form filling | ⏳ | |
+| 19.15 | PDF form filling | 🌐 | The PDF viewer fills in PDF forms |
 | 19.16 | PDF signing | ⏳ | |
 | 19.17 | PDF editing | ⏳ | |
 | 19.18 | PDF presentation mode | ⏳ | |
@@ -857,12 +857,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 30.01 | JavaScript: modern ECMAScript, Web/Shared/Service Workers, WebAssembly | ⏳ | |
-| 30.02 | Graphics: Canvas, WebGL, WebGL2, WebGPU, SVG, CSS animations and transitions | ⏳ | |
-| 30.03 | Storage: cookies, localStorage, sessionStorage, IndexedDB, Cache API, File System Access | ⏳ | |
-| 30.04 | Communication: WebSockets, WebRTC, WebTransport, Server-Sent Events, Fetch, Streams | ⏳ | |
-| 30.05 | Hardware: camera, microphone, Bluetooth, USB, HID, Serial, MIDI, NFC, sensors | ⏳ | |
-| 30.06 | OS integration: clipboard, notifications, file picker, Share API, fullscreen, Wake Lock, Badging, credential management | ⏳ | |
+| 30.01 | JavaScript: modern ECMAScript, Web/Shared/Service Workers, WebAssembly | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 30.02 | Graphics: Canvas, WebGL, WebGL2, WebGPU, SVG, CSS animations and transitions | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 30.03 | Storage: cookies, localStorage, sessionStorage, IndexedDB, Cache API, File System Access | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 30.04 | Communication: WebSockets, WebRTC, WebTransport, Server-Sent Events, Fetch, Streams | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 30.05 | Hardware: camera, microphone, Bluetooth, USB, HID, Serial, MIDI, NFC, sensors | 🟡 | Camera, microphone, MIDI and sensors (with Site permissions); WebView2 has no Bluetooth, USB, HID, Serial or NFC device pickers |
+| 30.06 | OS integration: clipboard, notifications, file picker, Share API, fullscreen, Wake Lock, Badging, credential management | 🌐 | Comes with the engine (WebView2, Chromium); notifications and clipboard go through Site permissions |
 
 ### 31. Progressive Web Apps
 
@@ -889,9 +889,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 32.01 | Website notifications | ⏳ | |
-| 32.02 | Permission prompts | ⏳ | |
-| 32.03 | Notification blocking | ⏳ | |
-| 32.04 | Per-site notification permissions | ⏳ | |
+| 32.02 | Permission prompts | 🧪 | Kessel's own prompt under the address bar |
+| 32.03 | Notification blocking | 🧪 | Site permissions -> Notifications: Block, for every site or one |
+| 32.04 | Per-site notification permissions | 🧪 | Settings -> Site permissions -> Notifications, per site |
 | 32.05 | Notification history | ⏳ | |
 | 32.06 | Push notifications | ⏳ | |
 | 32.07 | Notification sounds | ⏳ | |
@@ -903,27 +903,27 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 33.01 | Copy | ⏳ | |
-| 33.02 | Paste | ⏳ | |
-| 33.03 | Cut | ⏳ | |
-| 33.04 | Rich-text clipboard | ⏳ | |
-| 33.05 | Image clipboard | ⏳ | |
-| 33.06 | Clipboard permissions | ⏳ | |
-| 33.07 | Clipboard history integration | ⏳ | |
+| 33.01 | Copy | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 33.02 | Paste | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 33.03 | Cut | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 33.04 | Rich-text clipboard | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 33.05 | Image clipboard | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 33.06 | Clipboard permissions | 🧪 | Settings -> Site permissions -> Reading what you copied |
+| 33.07 | Clipboard history integration | 🌐 | Windows' clipboard history (Win+V) sees everything Kessel copies |
 
 ### 34. File system
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 34.01 | File picker | ⏳ | |
-| 34.02 | Folder picker | ⏳ | |
-| 34.03 | Drag-and-drop files | ⏳ | |
-| 34.04 | Upload directories | ⏳ | |
-| 34.05 | Save file dialog | ⏳ | |
-| 34.06 | File System Access API | ⏳ | |
-| 34.07 | File reading | ⏳ | |
-| 34.08 | File writing | ⏳ | |
-| 34.09 | File handles | ⏳ | |
+| 34.01 | File picker | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.02 | Folder picker | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.03 | Drag-and-drop files | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.04 | Upload directories | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.05 | Save file dialog | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.06 | File System Access API | 🌐 | Comes with the engine (WebView2, Chromium); editing files asks first (Site permissions) |
+| 34.07 | File reading | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.08 | File writing | 🌐 | Comes with the engine (WebView2, Chromium) |
+| 34.09 | File handles | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 34.10 | Persistent file permissions | ⏳ | |
 
 ### 35. Hardware acceleration

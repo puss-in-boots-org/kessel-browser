@@ -666,3 +666,114 @@ export function backupCard({ el, settingRow }) {
   });
   return card;
 }
+
+// --- Site permissions ----------------------------------------------------------------------
+
+const PERMISSION_KINDS = [
+  ["camera", "Camera", "ask"],
+  ["microphone", "Microphone", "ask"],
+  ["location", "Location", "ask"],
+  ["notifications", "Notifications", "ask"],
+  ["clipboard", "Reading what you copied", "ask"],
+  ["downloads", "Several downloads at once", "ask"],
+  ["files", "Editing files on your computer", "ask"],
+  ["midi", "MIDI devices", "ask"],
+  ["fonts", "Your installed fonts", "ask"],
+  ["windows", "Placing windows on your screens", "ask"],
+  ["sensors", "Motion sensors", "allow"],
+  ["autoplay", "Playing sound on its own", "allow"],
+];
+const ANSWERS = [["ask", "Ask"], ["allow", "Allow"], ["block", "Block"]];
+
+export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
+  const f = features();
+  const p = el(`<div class="panel" id="panel-permissions">
+    <h2>Site permissions</h2>
+    <p class="sub">What sites may use. Kessel asks the first time (under the address bar); your answers for each site are below, and you can change them any time.</p>
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">For every site</span></div>
+      <div id="perm-defaults"></div>
+      ${settingRow({ title: "Remember my answer", desc: "The prompt's “Remember for this site” starts ticked. Answers from private windows are never kept.", controlHtml: switchHtml("perm-remember", f.permission_remember !== false) })}
+    </div>
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Sites you've answered</span></div>
+      <div class="setting-row"><div class="info"></div><div class="control"><input class="field" id="perm-q" placeholder="Find a site" style="width:220px" spellcheck="false" /></div></div>
+      <div id="perm-sites"></div>
+    </div>
+  </div>`);
+  const defaults = p.querySelector("#perm-defaults");
+  for (const [kind, label, fallback] of PERMISSION_KINDS) {
+    const row = el(settingRow({ title: label, controlHtml: selectHtml(`perm-default-${kind}`, ANSWERS, 120) }));
+    const sel = row.querySelector("select");
+    sel.value = f.permission_defaults?.[kind] || fallback;
+    sel.addEventListener("change", () => saveFeature("permission_defaults", { ...(features().permission_defaults || {}), [kind]: sel.value }));
+    defaults.appendChild(row);
+  }
+  const remember = p.querySelector("#perm-remember");
+  remember.addEventListener("click", async () => {
+    const on = !remember.classList.contains("on");
+    await saveFeature("permission_remember", on);
+    remember.classList.toggle("on", on);
+  });
+  const sites = p.querySelector("#perm-sites");
+  const labelOf = (kind) => PERMISSION_KINDS.find((k) => k[0] === kind)?.[1] || kind;
+  const render = () => {
+    const q = p.querySelector("#perm-q").value.trim().toLowerCase();
+    const all = Object.entries(features().site_permissions || {}).filter(([site, own]) => own && Object.keys(own).length && (!q || site.includes(q))).sort(([a], [b]) => a.localeCompare(b));
+    sites.innerHTML = all.length ? "" : `<div style="padding:4px 18px 12px;font-size:12px;opacity:.6">${q ? "No site matches." : "No answers yet."}</div>`;
+    for (const [site, own] of all.slice(0, 300)) {
+      const box = el(`<div class="setting-row" style="display:block">
+        <div style="display:flex;align-items:center;gap:8px"><b style="flex:1;font-size:13px"></b><button class="btn sm ghost">Reset this site</button></div>
+        <div class="kinds" style="display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px"></div></div>`);
+      box.querySelector("b").textContent = site;
+      box.querySelector("button").addEventListener("click", async () => {
+        const next = { ...(features().site_permissions || {}) };
+        delete next[site];
+        await saveFeature("site_permissions", next);
+        render();
+      });
+      const kinds = box.querySelector(".kinds");
+      for (const [kind, answer] of Object.entries(own)) {
+        const item = el(`<label style="display:flex;align-items:center;gap:6px;font-size:12px"><span></span>${selectHtml("", ANSWERS, 90)}</label>`);
+        item.querySelector("span").textContent = labelOf(kind);
+        const sel = item.querySelector("select");
+        sel.value = answer;
+        sel.addEventListener("change", async () => {
+          const next = { ...(features().site_permissions || {}) };
+          next[site] = { ...next[site], [kind]: sel.value };
+          // "Ask" for a site is the same as no answer.
+          if (sel.value === "ask") delete next[site][kind];
+          await saveFeature("site_permissions", next);
+        });
+        kinds.appendChild(item);
+      }
+      sites.appendChild(box);
+    }
+  };
+  p.querySelector("#perm-q").addEventListener("input", render);
+  window.addEventListener("kessel-settings", () => {
+    if (!p.contains(document.activeElement)) render();
+  });
+  render();
+  return p;
+}
+
+// --- Downloads -------------------------------------------------------------------------------
+
+export function downloadsExtras(panel, { el, settingRow, switchHtml }) {
+  const f = features();
+  const card = el(`<div class="setting-card">
+    ${settingRow({ title: "Save downloads to", desc: "Empty: your Downloads folder", controlHtml: `<input class="field mono" id="dl-dir" style="width:260px" spellcheck="false" placeholder="C:\\Users\\you\\Downloads" />` })}
+    ${settingRow({ title: "Ask where to save each file", desc: "A Save As window for every download", controlHtml: switchHtml("dl-ask", f.download_ask === true) })}
+  </div>`);
+  const dir = card.querySelector("#dl-dir");
+  dir.value = f.download_dir || "";
+  dir.addEventListener("change", () => saveFeature("download_dir", dir.value.trim() || undefined));
+  const ask = card.querySelector("#dl-ask");
+  ask.addEventListener("click", async () => {
+    const on = !ask.classList.contains("on");
+    await saveFeature("download_ask", on);
+    ask.classList.toggle("on", on);
+  });
+  panel.querySelector(".setting-card").before(card);
+}

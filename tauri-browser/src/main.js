@@ -3150,6 +3150,19 @@ async function toggleSiteInfo() {
 // A download security.rs holds back until you decide: one prompt at a time
 // (download-warning.html), the rest wait their turn.
 
+// --- Site permission requests (permissions.rs) --------------------------------------
+// One prompt at a time under the address bar (permission.html); the rest
+// wait their turn.
+
+const permissionRequests = [];
+
+function showPermissionRequest() {
+  const next = permissionRequests[0];
+  if (!next) return;
+  const rect = document.getElementById("lock-icon").getBoundingClientRect();
+  invoke("toggle_popup", { kind: "permission", x: Math.round(rect.left - 6), y: Math.round(rect.bottom), width: 340, height: 150, init: next }).catch(() => {});
+}
+
 const downloadWarnings = [];
 
 function showDownloadWarning() {
@@ -4394,6 +4407,18 @@ window.addEventListener("DOMContentLoaded", async () => {
   listen("side-panel-message", (event) => onSidePanelMessage(event.payload));
   listen("page-menu", (event) => onPageMenu(event.payload || {}));
   listen("area-picked", (event) => onAreaPicked(event.payload || {}));
+  listen("permission-request", (event) => {
+    permissionRequests.push(event.payload || {});
+    if (permissionRequests.length === 1) showPermissionRequest();
+  });
+  listen("permission-resolved", (event) => {
+    const n = event.payload?.n;
+    const at = permissionRequests.findIndex((r) => r.n === n);
+    if (at < 0) return;
+    const wasShown = at === 0;
+    permissionRequests.splice(at, 1);
+    if (wasShown) setTimeout(showPermissionRequest, 150);
+  });
   window.addEventListener("kessel-settings", () => {
     // The style's colours were just put back: the workspace's go on again.
     styleAccent = null;
