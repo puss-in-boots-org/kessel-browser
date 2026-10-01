@@ -337,6 +337,45 @@ impl Vault {
         *self.session.lock().unwrap() = None;
     }
 
+    // Whether `master_password` is the vault's (asked again before
+    // exporting every password). Needs the vault unlocked.
+    pub fn check_master(&self, master_password: &str) -> bool {
+        let Some(file) = self.read_file() else { return false };
+        let Ok(salt) = B64.decode(&file.salt) else { return false };
+        let key = derive_key(master_password, &salt);
+        let session = self.session.lock().unwrap();
+        // Every byte compared, whatever the first difference.
+        session.as_ref().map(|s| s.key.iter().zip(key.iter()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0).unwrap_or(false)
+    }
+
+    // A login you just used (passwords.rs): saved for `host`, or the saved
+    // one for that user name updated. Ok(true) when one was updated.
+    pub fn save_login(&self, timeout_minutes: u32, host: &str, username: &str, password: &str) -> Result<bool, String> {
+        self.enforce_timeout(timeout_minutes);
+        self.touch();
+        let mut session = self.session.lock().unwrap();
+        let s = session.as_mut().ok_or("vault is locked")?;
+        if let Some(item) = s.data.items.iter_mut().find(|i| site_matches_host(&i.site, host) && i.username == username) {
+            item.password = password.to_string();
+            item.updated_at = now();
+            self.save_locked(s);
+            return Ok(true);
+        }
+        let id = format!("{:x}", now()) + &format!("{:x}", random_bytes(4).iter().fold(0u32, |a, &b| (a << 8) | b as u32));
+        s.data.items.push(VaultItem { id, site: host.to_string(), username: username.to_string(), password: password.to_string(), notes: String::new(), updated_at: now() });
+        self.save_locked(s);
+        Ok(false)
+    }
+
+    // What's saved for `host` with `username`: None if nothing is, else
+    // whether the password is the same one.
+    pub fn saved_login(&self, timeout_minutes: u32, host: &str, username: &str, password: &str) -> Option<bool> {
+        self.enforce_timeout(timeout_minutes);
+        let session = self.session.lock().unwrap();
+        let s = session.as_ref()?;
+        s.data.items.iter().find(|i| site_matches_host(&i.site, host) && i.username == username).map(|i| i.password == password)
+    }
+
     pub fn list_items(&self, timeout_minutes: u32) -> Result<Vec<VaultItem>, String> {
         self.enforce_timeout(timeout_minutes);
         self.touch();

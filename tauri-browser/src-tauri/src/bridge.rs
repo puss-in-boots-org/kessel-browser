@@ -212,6 +212,11 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::tools::highlight_change(app, id, url, message.kind.as_str(), d);
             None
         }
+        // A login just sent (page-tools.js): offer to save it (passwords.rs).
+        "login" if top_frame => {
+            crate::passwords::on_login(app, id, url, d.get("username").and_then(|v| v.as_str()).unwrap_or(""), d.get("password")?.as_str()?);
+            None
+        }
         // A mouse gesture drawn in the page.
         "gesture" => {
             crate::tools::on_gesture(app, label, d.get("g")?.as_str()?);

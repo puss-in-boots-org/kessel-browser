@@ -27,6 +27,7 @@ mod store;
 mod suggest;
 mod tabdrag;
 mod tools;
+mod passwords;
 mod downloads;
 mod permissions;
 mod vault;
@@ -3221,15 +3222,16 @@ async fn toggle_popup(
         "palette" => "palette.html",
         "bookmark" => "bookmark.html",
         "permission" => "permission.html",
+        "password" => "password-offer.html",
         "context" | "dropdown" => "context.html",
         _ => return Err("no such popup".into()),
     };
     let at_point = kind == "context" || kind == "dropdown";
     // The site info popup hangs from the address bar's left end (x, y = its
     // button's bottom left); the others from their button's right end.
-    let from_left = kind == "siteinfo" || kind == "permission";
+    let from_left = kind == "siteinfo" || kind == "permission" || kind == "password";
     // A download prompt isn't a button's: the next one replaces it.
-    let toggles = kind != "context" && kind != "download" && kind != "permission";
+    let toggles = kind != "context" && kind != "download" && kind != "permission" && kind != "password";
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
@@ -5006,6 +5008,10 @@ fn main() {
             tools::page_tool,
             tools::take_screenshot,
             tools::save_pdf,
+            passwords::vault_health,
+            passwords::vault_breach_check,
+            passwords::vault_export_csv,
+            passwords::password_offer_answer,
             downloads::download_control,
             downloads::show_download,
             permissions::resolve_permission,
@@ -5163,6 +5169,7 @@ fn main() {
             commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);
             app.manage(page::ZoomLevels::load(&data_dir));
             app.manage(tools::ReaderPages::default());
+            app.manage(passwords::Offers::default());
             app.manage(tools::ShotPages::default());
             app.manage(tools::Highlights::load(&data_dir));
 

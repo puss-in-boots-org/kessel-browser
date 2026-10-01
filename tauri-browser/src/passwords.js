@@ -1,5 +1,5 @@
 import { icon } from "./shared/icons.js";
-import { initTheme, currentSettings } from "./shared/theme.js";
+import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, debounce, confirmDialog, escapeHtml } from "./shared/api.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -8,6 +8,11 @@ let items = [];
 let pendingPassword = null; // held only in memory between "wrong/needs 2FA" retries
 let lastActivity = Date.now();
 let editingId = null;
+// Password health (passwords.rs): id -> { strength, why, reused }; and,
+// once you've asked, id -> times seen in breaches.
+let health = new Map();
+let breaches = null;
+let healthFilter = "all";
 
 function el(html) {
   const t = document.createElement("template");
@@ -145,6 +150,8 @@ async function showLockScreen(message) {
 async function refreshItems() {
   try {
     items = await invoke("vault_list_items");
+    health = new Map(((await invoke("vault_health").catch(() => [])) || []).map((h) => [h.id, h]));
+    renderHealth();
     renderList(items);
   } catch (e) {
     if (String(e).includes("locked")) await showLockScreen("Vault locked");
@@ -159,7 +166,14 @@ function itemMatches(item, query) {
 function renderList(list) {
   const container = document.getElementById("vault-list");
   const query = document.getElementById("vault-search").value.trim();
-  const filtered = query ? list.filter((i) => itemMatches(i, query)) : list;
+  const byHealth = list.filter((i) => {
+    const h = health.get(i.id);
+    if (healthFilter === "weak") return h && h.strength <= 1;
+    if (healthFilter === "reused") return h && h.reused > 0;
+    if (healthFilter === "breached") return breaches && breaches[i.id] > 0;
+    return true;
+  });
+  const filtered = query ? byHealth.filter((i) => itemMatches(i, query)) : byHealth;
   if (filtered.length === 0) {
     container.innerHTML = `<div class="empty">${query ? "No matches." : "No saved passwords yet -- tap + to add one."}</div>`;
     return;
@@ -180,6 +194,22 @@ function renderList(list) {
     </div>`);
     row.querySelector(".item-site").textContent = item.site;
     row.querySelector(".item-user").textContent = item.username || "(no username)";
+    const h = health.get(item.id);
+    const flags = [];
+    if (breaches && breaches[item.id] > 0) flags.push(["", `in ${breaches[item.id].toLocaleString()} data breaches -- change it`]);
+    if (h && h.reused > 0) flags.push(["", `also used on ${h.reused} other site${h.reused === 1 ? "" : "s"}`]);
+    if (h && h.strength <= 1) flags.push(["warn", `weak: ${h.why[0] || "easy to guess"}`]);
+    if (flags.length) {
+      const box = document.createElement("div");
+      box.className = "item-flags";
+      for (const [kind, text] of flags) {
+        const f = document.createElement("span");
+        f.className = `flag ${kind}`;
+        f.textContent = text;
+        box.appendChild(f);
+      }
+      row.querySelector(".item-info").appendChild(box);
+    }
     const passEl = row.querySelector(".item-pass");
     let revealed = false;
     row.querySelector(".reveal-btn").addEventListener("click", (e) => {
@@ -198,6 +228,61 @@ function renderList(list) {
     });
     row.addEventListener("click", () => openItemModal(item));
     container.appendChild(row);
+  }
+}
+
+// --- Password health ---------------------------------------------------------------
+// Weak and reused passwords are worked out on this computer; breaches only
+// when you ask (just the first 5 characters of each password's hash are sent).
+
+function renderHealth() {
+  const box = document.getElementById("vault-health");
+  if (!items.length) {
+    box.innerHTML = "";
+    return;
+  }
+  const all = [...health.values()];
+  const weak = all.filter((h) => h.strength <= 1).length;
+  const reused = all.filter((h) => h.reused > 0).length;
+  const breached = breaches ? Object.values(breaches).filter((n) => n > 0).length : null;
+  const chips = [
+    ["all", `All ${items.length}`],
+    ["weak", `Weak ${weak}`, weak],
+    ["reused", `Reused ${reused}`, reused],
+    ...(breached !== null ? [["breached", `In breaches ${breached}`, breached]] : []),
+  ];
+  box.innerHTML = "";
+  for (const [id, label, bad] of chips) {
+    const b = document.createElement("button");
+    b.className = `chip${healthFilter === id ? " on" : ""}${bad ? " bad" : ""}`;
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      healthFilter = id;
+      renderHealth();
+      renderList(items);
+    });
+    box.appendChild(b);
+  }
+  box.insertAdjacentHTML("beforeend", `<span class="spacer"></span>`);
+  const check = document.createElement("button");
+  check.className = "btn sm";
+  check.textContent = breaches ? "Check breaches again" : "Check for breaches…";
+  check.addEventListener("click", checkBreaches);
+  box.appendChild(check);
+}
+
+async function checkBreaches() {
+  if (!breaches && !(await confirmDialog("Check your passwords against known data breaches? Kessel sends only the first 5 characters of each password's SHA-1 hash to Have I Been Pwned -- never the password, and never enough to tell which one it is.", "Check"))) return;
+  toast("Checking…");
+  try {
+    breaches = await invoke("vault_breach_check");
+    const bad = Object.values(breaches).filter((n) => n > 0).length;
+    toast(bad ? `${bad} password${bad === 1 ? " was" : "s were"} found in data breaches` : "None of your passwords was found in a data breach");
+    if (bad) healthFilter = "breached";
+    renderHealth();
+    renderList(items);
+  } catch (e) {
+    toast(String(e));
   }
 }
 
@@ -293,6 +378,20 @@ async function openVaultSettings() {
       </div>
     </div>
     <div id="twofa-setup-area"></div>
+    <div class="setting-card" style="margin-bottom:14px">
+      <div class="setting-row">
+        <div class="info"><div class="title">Offer to save passwords</div><div class="desc">After you sign in on a site, Kessel asks whether to save the password (never in private windows)</div></div>
+        <div class="control"><button class="switch ${currentSettings()?.features?.password_offer !== false ? "on" : ""}" id="offer-toggle" role="switch"></button></div>
+      </div>
+      <div id="never-list" style="padding:0 18px 12px"></div>
+    </div>
+    <div class="setting-card" style="margin-bottom:14px">
+      <div class="setting-row"><div class="info"><div class="title">Export passwords</div><div class="desc">Every saved password in a CSV file (the columns Chrome, Edge and Firefox import). Anyone with the file can read them.</div></div></div>
+      <div style="padding:0 18px 16px;display:flex;gap:8px">
+        <input class="field" id="export-master" type="password" placeholder="Master password" />
+        <button class="btn" id="export-btn">Export…</button>
+      </div>
+    </div>
     <div class="setting-card">
       <div class="setting-row"><div class="info"><div class="title">Change master password</div></div></div>
       <div style="padding:0 18px 16px">
@@ -302,6 +401,39 @@ async function openVaultSettings() {
       </div>
     </div>
   `;
+  const features = () => currentSettings()?.features || {};
+  const offer = document.getElementById("offer-toggle");
+  offer.addEventListener("click", async () => {
+    const on = !offer.classList.contains("on");
+    await saveSettings({ features: { ...features(), password_offer: on } });
+    offer.classList.toggle("on", on);
+  });
+  const renderNever = () => {
+    const list = features().password_never || [];
+    const box = document.getElementById("never-list");
+    box.innerHTML = list.length ? `<div class="desc" style="margin-bottom:6px">Never saved for:</div>` : "";
+    for (const site of list) {
+      const row = el(`<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0"><span style="flex:1"></span><button class="btn ghost sm">Remove</button></div>`);
+      row.querySelector("span").textContent = site;
+      row.querySelector("button").addEventListener("click", async () => {
+        await saveSettings({ features: { ...features(), password_never: (features().password_never || []).filter((s) => s !== site) } });
+        renderNever();
+      });
+      box.appendChild(row);
+    }
+  };
+  renderNever();
+  document.getElementById("export-btn").addEventListener("click", async () => {
+    const master = document.getElementById("export-master").value;
+    if (!master) return document.getElementById("export-master").focus();
+    try {
+      const path = await invoke("vault_export_csv", { masterPassword: master });
+      document.getElementById("export-master").value = "";
+      if (path) toast(`Saved to ${path} -- keep it somewhere safe, or delete it when you're done`);
+    } catch (e) {
+      toast(String(e));
+    }
+  });
   document.getElementById("twofa-toggle-btn").addEventListener("click", () => {
     if (status.twofa_enabled) beginDisable2fa();
     else beginEnable2fa();

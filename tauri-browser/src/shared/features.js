@@ -84,6 +84,11 @@ export const FEATURES = [
     ["Engine switches", "Settings -> Network: your own Chromium command-line switches, for experiments."],
     ["Back up settings", "Settings -> About -> Save to a file / Restore."],
   ]],
+  ["Passwords", [
+    ["Save passwords as you sign in", "After you sign in, Kessel asks whether to save the password (or update the saved one). “Never for this site” remembers; turn the offer off in Passwords -> settings."],
+    ["Password health", "Passwords page: Weak and Reused show the passwords to change; “Check for breaches” looks them up in Have I Been Pwned (only 5 characters of each hash leave your computer)."],
+    ["Export passwords", "Passwords -> settings -> Export: a CSV file other browsers import, after you type your master password."],
+  ]],
   ["Your data", [
     ["History", "Ctrl+H. Search, by site, delete days or sites."],
     ["Downloads", "Ctrl+J, or the rail's download button."],

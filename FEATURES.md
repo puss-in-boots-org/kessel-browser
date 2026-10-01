@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**62% overall** -- 503 done (✅ 🟢 🌐), 59 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 335 to do (⏳), 93 skipped (⏭️), of 1045.
+**63% overall** -- 503 done (✅ 🟢 🌐), 65 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 329 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -47,7 +47,7 @@ branch, one small commit per feature or group of features.
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
 | [6. Downloads](#6-downloads) | 17 | 2 | 1 | 2 |  | `█████████░` 89% |
-| [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 24 | 2 | `███░░░░░░░` 26% |
+| [7. Passwords & identity](#7-passwords--identity) | 7 | 6 | 4 | 18 | 2 | `████░░░░░░` 43% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
@@ -343,19 +343,19 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 7.01 | Password manager | 🟢 | Encrypted vault (AES-256-GCM, Argon2id, optional TOTP) |
-| 7.02 | Save passwords | ⏳ | |
+| 7.02 | Save passwords | 🧪 | After you sign in, Kessel offers to save the password (or update the saved one); never in private windows; never-list per site |
 | 7.03 | Autofill passwords | 🟡 | Chip only worked on Kessel's own pages |
 | 7.04 | Generate strong passwords | 🟢 | |
 | 7.05 | Password editing | 🟢 | |
 | 7.06 | Password deletion | 🟢 | |
 | 7.07 | Password search | 🟢 | The Passwords page's search box |
 | 7.08 | Password import | 🟢 | Browsers and CSV |
-| 7.09 | Password export | ⏳ | |
+| 7.09 | Password export | 🧪 | Passwords -> settings -> Export: a CSV file Chrome, Edge and Firefox import; asks for the master password first |
 | 7.10 | Password synchronization | ⏭️ | Needs an online account or server: left out |
-| 7.11 | Password security checks | ⏳ | |
-| 7.12 | Weak-password detection | ⏳ | |
-| 7.13 | Reused-password detection | ⏳ | |
-| 7.14 | Compromised-password detection | ⏳ | |
+| 7.11 | Password security checks | 🧪 | Passwords page: weak, reused and (when you ask) breached passwords, each flagged |
+| 7.12 | Weak-password detection | 🧪 | Common passwords, short ones, one kind of character, repeats and runs like 1234 |
+| 7.13 | Reused-password detection | 🧪 | Passwords used on more than one site |
+| 7.14 | Compromised-password detection | 🧪 | Have I Been Pwned range check, only when you ask: just 5 characters of each password's SHA-1 hash leave the computer |
 | 7.15 | Password notes | 🟢 | |
 | 7.16 | Password organization | ⏳ | |
 | 7.17 | Passkeys | ⏳ | |
