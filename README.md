@@ -158,11 +158,19 @@ lists are checked locally.
   which sites each one can access.
 - The full Chromium DevTools (F12).
 
-### Moving in
-- Import from Opera GX, Opera, Brave and Chrome, including each Chrome
-  profile separately. Bookmarks, Speed Dial / New Tab shortcuts, cookies
-  (so you stay signed in) and passwords come across.
-- Bookmark HTML files and password CSV files from any browser also import.
+### Moving in, and moving out
+- Import from Chrome, Edge, Brave, Opera, Opera GX, Vivaldi and Firefox,
+  each profile separately. What comes across:
+  - bookmarks, with their folders (and Firefox's tags);
+  - Speed Dial / New Tab shortcuts;
+  - history;
+  - the tabs you had open, as saved tab groups;
+  - cookies, so you stay signed in;
+  - passwords;
+  - Web Store extensions, each added after you've seen what it can do.
+- Bookmark HTML files and password CSV files from any browser import too.
+- Everything goes back out: bookmarks and open tabs as HTML, history and
+  passwords as CSV, and your settings as a file.
 
 ### Kessel for phones
 The Android app, in [`kessel-mobile/`](kessel-mobile/), has the same

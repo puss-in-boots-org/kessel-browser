@@ -169,7 +169,8 @@ pub async fn vault_breach_check(app: tauri::AppHandle, webview: Webview) -> Resu
 
 // --- Export ------------------------------------------------------------------------------
 
-fn csv_field(s: &str) -> String {
+// One CSV field (the history export uses it too).
+pub(crate) fn csv_field(s: &str) -> String {
     if s.contains([',', '"', '\n', '\r']) || s.starts_with([' ', '=', '+', '-', '@']) {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {

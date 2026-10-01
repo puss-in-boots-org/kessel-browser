@@ -184,22 +184,35 @@ pub fn add(app: &tauri::AppHandle, url: String, title: String, tab: Option<u32>)
     Some(id)
 }
 
-// Bookmarks from another browser (import.rs), in a folder named for it;
-// addresses already bookmarked are left out. Returns (added, already there).
-pub fn add_imported(app: &tauri::AppHandle, folder_title: &str, links: Vec<(String, String)>) -> (usize, usize) {
+// Bookmarks from another browser (import.rs), in a folder named for it --
+// with their own folders inside it, and their tags; addresses already
+// bookmarked are left out. Returns (added, already there).
+pub fn add_imported(app: &tauri::AppHandle, folder_title: &str, links: Vec<crate::import::Link>) -> (usize, usize) {
     change(app, |tree| {
         let mut known: HashSet<String> = tree.bookmarks.iter().map(|b| b.url.clone()).collect();
         let total = links.len();
-        let fresh: Vec<(String, String)> = links.into_iter().filter(|(url, _)| known.insert(url.clone())).collect();
+        let fresh: Vec<crate::import::Link> = links.into_iter().filter(|l| known.insert(l.url.clone())).collect();
         let existing = total - fresh.len();
         if fresh.is_empty() {
             return Ok((0, existing));
         }
-        let folder = new_id();
-        tree.folders.push(Folder { id: folder.clone(), title: folder_title.to_string(), parent: String::new(), added: now_unix() });
+        let top = new_id();
+        tree.folders.push(Folder { id: top.clone(), title: folder_title.to_string(), parent: String::new(), added: now_unix() });
+        // Each folder path, made the first time it's needed.
+        let mut folders: HashMap<Vec<String>, String> = HashMap::from([(Vec::new(), top)]);
         let added = fresh.len();
-        for (url, title) in fresh {
-            tree.bookmarks.push(Bookmark { id: new_id(), url, title, folder: folder.clone(), added: now_unix(), ..Default::default() });
+        for link in fresh {
+            for depth in 1..=link.folder.len() {
+                let path = link.folder[..depth].to_vec();
+                if !folders.contains_key(&path) {
+                    let id = new_id();
+                    let parent = folders[&link.folder[..depth - 1].to_vec()].clone();
+                    tree.folders.push(Folder { id: id.clone(), title: path[depth - 1].clone(), parent, added: now_unix() });
+                    folders.insert(path, id);
+                }
+            }
+            let folder = folders[&link.folder].clone();
+            tree.bookmarks.push(Bookmark { id: new_id(), url: link.url, title: link.title, folder, tags: clean_tags(&link.tags), added: now_unix(), ..Default::default() });
         }
         Ok((added, existing))
     })

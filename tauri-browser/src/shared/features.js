@@ -95,7 +95,8 @@ export const FEATURES = [
     ["Passwords", "Ctrl+Shift+L or the rail's key. Autofill offers saved logins."],
     ["Clear browsing data", "Ctrl+Shift+Delete."],
     ["Accounts", "The person button in the address bar: be signed in as several people at once."],
-    ["Import", "Settings -> Import, from Chrome, Opera, Opera GX, Brave."],
+    ["Import", "Settings -> Import, from Chrome, Edge, Brave, Opera, Opera GX, Vivaldi and Firefox: bookmarks (with their folders), Speed Dial, history, the tabs that were open (as saved groups), cookies, passwords and Web Store extensions."],
+    ["Export", "History as a CSV file (Settings -> History), the open tabs as a bookmarks file (Settings -> Tabs), bookmarks (the bookmark manager), passwords (Passwords -> settings) and settings (Settings -> About)."],
   ]],
   ["Kessel", [
     ["Menu", "Alt+F, F10 or the dots at the top right."],

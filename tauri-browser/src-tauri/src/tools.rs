@@ -662,9 +662,10 @@ pub async fn page_feeds(app: tauri::AppHandle, webview: Webview, id: u32) -> Res
 
 // --- Settings backup ------------------------------------------------------------------------
 
-// Saves Kessel's settings to a file you pick. Some(path) once saved.
+// Saves Kessel's settings to a file you pick (or `path`). Some(path) once
+// saved.
 #[tauri::command]
-pub async fn export_settings(app: tauri::AppHandle, webview: Webview) -> Result<Option<String>, String> {
+pub async fn export_settings(app: tauri::AppHandle, webview: Webview, path: Option<String>) -> Result<Option<String>, String> {
     crate::require_internal_page(&webview)?;
     let text = {
         let state = app.state::<BrowserState>();
@@ -672,25 +673,42 @@ pub async fn export_settings(app: tauri::AppHandle, webview: Webview) -> Result<
         serde_json::to_string_pretty(&serde_json::json!({ "kessel_settings": 1, "settings": settings })).map_err(|e| e.to_string())?
     };
     let name = format!("Kessel settings {}.json", timestamp(crate::store::now_unix()).replace(' ', "_").replace('.', "-"));
-    let Some(path) = crate::extensions::dialog(&app, &webview, move |owner| crate::dialogs::save_file(owner, "Save Kessel's settings", &name, &[("Kessel settings", "*.json")])).await? else {
-        return Ok(None);
+    let path = match path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => match crate::extensions::dialog(&app, &webview, move |owner| crate::dialogs::save_file(owner, "Save Kessel's settings", &name, &[("Kessel settings", "*.json")])).await? {
+            Some(p) => p,
+            None => return Ok(None),
+        },
     };
     std::fs::write(&path, text).map_err(|e| e.to_string())?;
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-// Takes settings from a file saved by export_settings (or a settings.json).
-// true once they're in use.
+// Takes settings from a file saved by export_settings (or a settings.json)
+// -- the one you pick, or `path`. true once they're in use.
 #[tauri::command]
-pub async fn import_settings(app: tauri::AppHandle, webview: Webview) -> Result<bool, String> {
+pub async fn import_settings(app: tauri::AppHandle, webview: Webview, path: Option<String>) -> Result<bool, String> {
     crate::require_internal_page(&webview)?;
-    let Some(path) = crate::extensions::dialog(&app, &webview, |owner| crate::dialogs::open_file(owner, "Restore Kessel's settings", &[("Kessel settings", "*.json")])).await? else {
-        return Ok(false);
+    let path = match path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => match crate::extensions::dialog(&app, &webview, |owner| crate::dialogs::open_file(owner, "Restore Kessel's settings", &[("Kessel settings", "*.json")])).await? {
+            Some(p) => p,
+            None => return Ok(false),
+        },
     };
+    let not_ours = || "That isn't a Kessel settings file".to_string();
     let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|_| "That isn't a Kessel settings file".to_string())?;
-    let inner = value.get("settings").cloned().unwrap_or(value);
-    let settings: crate::store::Settings = serde_json::from_value(inner).map_err(|_| "That isn't a Kessel settings file".to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&text).map_err(|_| not_ours())?;
+    let inner = if value.get("kessel_settings").is_some() { value.get("settings").cloned().ok_or_else(not_ours)? } else { value };
+    // A bare settings.json has to look like one: anything it leaves out
+    // takes its default, so any JSON object at all would otherwise be
+    // "restored" -- and put every setting back to its default.
+    let known = serde_json::to_value(crate::store::Settings::default()).map_err(|e| e.to_string())?;
+    let shared = inner.as_object().ok_or_else(not_ours)?.keys().filter(|k| known.get(k.as_str()).is_some()).count();
+    if shared < 3 {
+        return Err(not_ours());
+    }
+    let settings: crate::store::Settings = serde_json::from_value(inner).map_err(|_| not_ours())?;
     let state = app.state::<BrowserState>();
     crate::commands::rebuild_keymap(&settings.shortcuts);
     *state.store.settings.lock().unwrap() = settings.clone();

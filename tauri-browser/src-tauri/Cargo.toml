@@ -25,6 +25,10 @@ ureq = { version = "3.4.2", default-features = false, features = ["native-tls", 
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 flate2 = "1.1"
 sha2 = "0.10"
+pbkdf2 = "0.12"
+cbc = "0.1"
+des = "0.8"
+aes = "0.8"
 
 [[bin]]
 name = "kessel"
