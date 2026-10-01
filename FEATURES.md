@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**63% overall** -- 503 done (✅ 🟢 🌐), 65 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 329 to do (⏳), 93 skipped (⏭️), of 1045.
+**63% overall** -- 514 done (✅ 🟢 🌐), 59 built and waiting for their first run on Windows or a phone (🧪), 51 partly done (🟡), 328 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -47,7 +47,7 @@ branch, one small commit per feature or group of features.
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
 | [6. Downloads](#6-downloads) | 17 | 2 | 1 | 2 |  | `█████████░` 89% |
-| [7. Passwords & identity](#7-passwords--identity) | 7 | 6 | 4 | 18 | 2 | `████░░░░░░` 43% |
+| [7. Passwords & identity](#7-passwords--identity) | 17 |  |  | 18 | 2 | `█████░░░░░` 49% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
@@ -92,7 +92,7 @@ branch, one small commit per feature or group of features.
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
-| [52. Import / export](#52-import--export) | 6 | 2 |  | 9 |  | `█████░░░░░` 47% |
+| [52. Import / export](#52-import--export) | 7 | 2 |  | 8 |  | `█████░░░░░` 53% |
 | [53. Updates](#53-updates) |  |  |  | 1 | 8 | `░░░░░░░░░░` 0% |
 | [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
 | [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
@@ -343,19 +343,19 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 7.01 | Password manager | 🟢 | Encrypted vault (AES-256-GCM, Argon2id, optional TOTP) |
-| 7.02 | Save passwords | 🧪 | After you sign in, Kessel offers to save the password (or update the saved one); never in private windows; never-list per site |
-| 7.03 | Autofill passwords | 🟡 | Chip only worked on Kessel's own pages |
+| 7.02 | Save passwords | ✅ | After you sign in, Kessel offers to save the password (or update the saved one); never in private windows; never-list per site |
+| 7.03 | Autofill passwords | ✅ | A chip under the password field on a saved site's sign-in page fills it in on click; Kessel matches the site by the page's real address |
 | 7.04 | Generate strong passwords | 🟢 | |
 | 7.05 | Password editing | 🟢 | |
 | 7.06 | Password deletion | 🟢 | |
 | 7.07 | Password search | 🟢 | The Passwords page's search box |
 | 7.08 | Password import | 🟢 | Browsers and CSV |
-| 7.09 | Password export | 🧪 | Passwords -> settings -> Export: a CSV file Chrome, Edge and Firefox import; asks for the master password first |
+| 7.09 | Password export | ✅ | Passwords -> settings -> Export: a CSV file Chrome, Edge and Firefox import; asks for the master password first |
 | 7.10 | Password synchronization | ⏭️ | Needs an online account or server: left out |
-| 7.11 | Password security checks | 🧪 | Passwords page: weak, reused and (when you ask) breached passwords, each flagged |
-| 7.12 | Weak-password detection | 🧪 | Common passwords, short ones, one kind of character, repeats and runs like 1234 |
-| 7.13 | Reused-password detection | 🧪 | Passwords used on more than one site |
-| 7.14 | Compromised-password detection | 🧪 | Have I Been Pwned range check, only when you ask: just 5 characters of each password's SHA-1 hash leave the computer |
+| 7.11 | Password security checks | ✅ | Passwords page: weak, reused and (when you ask) breached passwords, each flagged |
+| 7.12 | Weak-password detection | ✅ | Common passwords, short ones, one kind of character, repeats and runs like 1234 |
+| 7.13 | Reused-password detection | ✅ | Passwords used on more than one site |
+| 7.14 | Compromised-password detection | ✅ | Have I Been Pwned range check, only when you ask: just 5 characters of each password's SHA-1 hash leave the computer |
 | 7.15 | Password notes | 🟢 | |
 | 7.16 | Password organization | ⏳ | |
 | 7.17 | Passkeys | ⏳ | |
@@ -368,8 +368,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.24 | WebAuthn | ⏳ | |
 | 7.25 | FIDO2 | ⏳ | |
 | 7.26 | Security-key support | ⏳ | |
-| 7.27 | Username autofill | 🟡 | With the password chip |
-| 7.28 | Password autofill | 🟡 | See 7.03 |
+| 7.27 | Username autofill | ✅ | With the password (7.03) |
+| 7.28 | Password autofill | ✅ | See 7.03 |
 | 7.29 | Name autofill | ⏳ | |
 | 7.30 | Address autofill | ⏳ | |
 | 7.31 | Phone-number autofill | ⏳ | |
@@ -378,7 +378,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.34 | Credit/debit card storage | ⏳ | |
 | 7.35 | Expiration-date autofill | ⏳ | |
 | 7.36 | Form-data autofill | ⏳ | |
-| 7.37 | One-click autofill | 🟡 | See 7.03 |
+| 7.37 | One-click autofill | ✅ | See 7.03 |
 
 ### 8. Profiles
 
@@ -1255,7 +1255,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 52.11 | Import from Safari | ⏳ | |
 | 52.12 | Import HTML bookmarks | ✅ | |
 | 52.13 | Export bookmarks | ✅ | |
-| 52.14 | Export passwords | ⏳ | |
+| 52.14 | Export passwords | ✅ | See 7.09 |
 | 52.15 | Export history | ⏳ | |
 | 52.16 | Export settings | 🧪 | Settings -> About -> Save to a file |
 | 52.17 | Export sessions | ⏳ | |
