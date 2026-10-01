@@ -3156,6 +3156,18 @@ async function toggleSiteInfo() {
 // One prompt at a time under the address bar (permission.html); the rest
 // wait their turn.
 
+// --- Save password? (passwords.rs) -------------------------------------------------
+// After you sign in somewhere: one offer at a time under the address bar.
+
+const passwordOffers = [];
+function showPasswordOffer() {
+  const next = passwordOffers[0];
+  if (!next) return;
+  const rect = document.getElementById("lock-icon").getBoundingClientRect();
+  const height = next.locked && next.initialized ? 240 : next.initialized ? 190 : 220;
+  invoke("toggle_popup", { kind: "password", x: Math.round(rect.left - 6), y: Math.round(rect.bottom), width: 360, height, init: next }).catch(() => {});
+}
+
 const permissionRequests = [];
 
 function showPermissionRequest() {
@@ -4519,6 +4531,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   listen("side-panel-message", (event) => onSidePanelMessage(event.payload));
   listen("page-menu", (event) => onPageMenu(event.payload || {}));
   listen("area-picked", (event) => onAreaPicked(event.payload || {}));
+  listen("password-offer", (event) => {
+    passwordOffers.length = 0; // only the latest sign-in is worth asking about
+    passwordOffers.push(event.payload || {});
+    showPasswordOffer();
+  });
   listen("permission-request", (event) => {
     permissionRequests.push(event.payload || {});
     if (permissionRequests.length === 1) showPermissionRequest();

@@ -574,4 +574,62 @@
       document.documentElement.appendChild(hlMenu);
     }, true);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHlMenu(); }, true);
+
+    // --- Logins: what you typed, as you sign in (passwords.rs asks whether
+    // to save it). Never sent anywhere else; nothing here when the page
+    // has no password field. ---
+    if (window.top === window) (function () {
+      var lastSent = '';
+      function visible(el) {
+        var r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      }
+      // The password that counts: with two or more (sign up, change
+      // password), the last one -- the new one.
+      function passwordIn(scope) {
+        var all = scope.querySelectorAll('input[type="password"]');
+        var pick = null;
+        for (var i = 0; i < all.length; i++) if (all[i].value && visible(all[i])) pick = all[i];
+        return pick;
+      }
+      function userFieldFor(pw) {
+        var scope = pw.closest('form') || document;
+        var named = scope.querySelector('input[autocomplete="username"], input[autocomplete="email"]');
+        if (named && named.value) return named;
+        var fields = scope.querySelectorAll('input[type="email"], input[type="text"], input[type="tel"], input:not([type])');
+        var best = null;
+        // The last text field before the password.
+        for (var i = 0; i < fields.length; i++) {
+          var f = fields[i];
+          if (!f.value || !visible(f)) continue;
+          if (f.compareDocumentPosition(pw) & Node.DOCUMENT_POSITION_FOLLOWING) best = f;
+        }
+        return best;
+      }
+      function capture(pw) {
+        if (!pw || !pw.value) return;
+        var user = userFieldFor(pw);
+        var username = user ? String(user.value).trim() : '';
+        var key = username + '\n' + pw.value;
+        if (key === lastSent) return;
+        lastSent = key;
+        BRIDGE.send('login', { username: username.slice(0, 500), password: String(pw.value).slice(0, 500) });
+      }
+      document.addEventListener('submit', function (e) {
+        var pw = e.target && e.target.querySelectorAll ? passwordIn(e.target) : null;
+        if (pw) capture(pw);
+      }, true);
+      // Sign-ins that never send a form (most new sites): Enter in the
+      // password field, or a click on a button next to it.
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target && e.target.type === 'password') capture(e.target);
+      }, true);
+      document.addEventListener('click', function (e) {
+        var button = e.target && e.target.closest && e.target.closest('button, input[type="submit"], input[type="button"], [role="button"]');
+        if (!button) return;
+        var scope = button.closest('form') || button.parentElement && button.parentElement.closest('div, section, main') || document;
+        var pw = passwordIn(scope) || passwordIn(document);
+        if (pw) capture(pw);
+      }, true);
+    })();
   })();
