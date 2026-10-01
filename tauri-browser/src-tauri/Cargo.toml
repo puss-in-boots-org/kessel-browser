@@ -39,5 +39,8 @@ windows = { version = "0.61", features = ["ApplicationModel_DataTransfer", "Foun
 # wry with a fix Kessel needs: page messages reach Kessel's page bridge, and a
 # page can no longer crash the browser through Tauri's IPC listener. See
 # vendor/wry/KESSEL-PATCH.md.
+# tao with a fix for full screen from a maximized window (a video's full
+# screen stopped where the taskbar starts). See vendor/tao/KESSEL-PATCH.md.
 [patch.crates-io]
 wry = { path = "vendor/wry" }
+tao = { path = "vendor/tao" }

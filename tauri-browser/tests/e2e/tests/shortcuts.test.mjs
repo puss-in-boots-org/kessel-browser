@@ -162,6 +162,35 @@ export const tests = [
       await toolbar.waitFor(`(async () => !document.documentElement.classList.contains('fullscreen') && !(await window.__TAURI__.window.getCurrentWindow().isFullscreen()))()`, { message: "back to normal" });
     },
   },
+  {
+    name: "a video's full screen from a maximized window covers the whole screen, taskbar's place too, and comes back maximized",
+    async run({ launch, site, assert, sleep }) {
+      const k = await launch();
+      const { page } = await openPage(k, site, "Video");
+      const toolbar = await k.toolbar();
+      const geometry = `(async () => { const w = window.__TAURI__.window.getCurrentWindow(); const p = await w.outerPosition(); const s = await w.outerSize(); return { full: await w.isFullscreen(), max: await w.isMaximized(), chrome: !document.documentElement.classList.contains('fullscreen'), at: [p.x, p.y, s.width, s.height] }; })()`;
+      // (The screen's real size from Kessel's own page: a website is told the
+      // window's -- fingerprinting protection.)
+      const screenSize = await toolbar.evaluate(`[screen.width * devicePixelRatio, screen.height * devicePixelRatio]`);
+      await toolbar.evaluate(`window.__TAURI__.window.getCurrentWindow().toggleMaximize()`);
+      await toolbar.waitFor(`window.__TAURI__.window.getCurrentWindow().isMaximized()`, { message: "maximized" });
+      await sleep(500);
+      const before = await toolbar.evaluate(geometry);
+
+      // (A tauri-runtime-wry handler puts the window in full screen; the
+      // patched tao gives a maximized one the whole monitor -- see
+      // vendor/tao/KESSEL-PATCH.md.)
+      await page.evaluate(`document.getElementById('p0').requestFullscreen()`, { userGesture: true });
+      await toolbar.waitFor(`document.documentElement.classList.contains('fullscreen')`, { message: "the chrome hidden" });
+      await page.waitFor(`innerWidth * devicePixelRatio === ${screenSize[0]} && innerHeight * devicePixelRatio === ${screenSize[1]}`, { message: `the page as big as the screen (${screenSize})` });
+      assert.equal((await toolbar.evaluate(geometry)).full, true, "the window is in full screen");
+
+      await page.evaluate(`document.exitFullscreen()`);
+      await toolbar.waitFor(`!document.documentElement.classList.contains('fullscreen')`, { message: "the chrome back" });
+      await sleep(800);
+      assert.deepEqual(await toolbar.evaluate(geometry), before, "maximized again, just as before -- not left over the taskbar");
+    },
+  },
 
   // --- Bookmarks, find, help ----------------------------------------------------
   {
