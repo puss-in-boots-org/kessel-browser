@@ -2,6 +2,7 @@ import { icon } from "./shared/icons.js";
 import { initTheme, currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, confirmDialog } from "./shared/api.js";
 import { FEATURES } from "./shared/features.js";
+import { permissionLines } from "./shared/extension-info.js";
 import { buildStyleSection } from "./appearance.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
@@ -197,6 +198,7 @@ async function tabsPanel(settings) {
 
     <div class="setting-card">
       ${settingRow({ title: "Keep tabs when Kessel closes", desc: "Your windows and tabs -- pinned tabs and tab groups too -- come back the next time you open Kessel. Tabs you weren't looking at come back asleep, so starting stays quick.", controlHtml: switchHtml("tabs-restore", settings.restore_tabs) })}
+      ${settingRow({ title: "Save open tabs to a file", desc: "Every window's tabs as a bookmarks file (a folder for each window) that any browser -- or Kessel's bookmark manager -- can import", controlHtml: `<button class="btn sm" id="export-session-btn">${icon("save", 13)} Save…</button>` })}
     </div>
 
     <div class="setting-card">
@@ -230,6 +232,13 @@ async function tabsPanel(settings) {
   </div>`);
 
   wireSwitch(p, "tabs-restore", "restore_tabs");
+  p.querySelector("#export-session-btn").addEventListener("click", async () => {
+    const path = await invoke("export_session", { path: null }).catch((err) => {
+      toast(String(err));
+      return null;
+    });
+    if (path) toast(`Saved to ${path}`);
+  });
   wireSwitch(p, "tab-drag-split", "tab_drag_split", { defaultOn: true });
   wireSwitch(p, "pull-other-browsers", "pull_other_browsers", { defaultOn: true });
   wireSwitch(p, "tab-cycle-mru", "tab_cycle_mru");
@@ -926,6 +935,7 @@ async function historyPanel() {
 
     <div class="setting-card">
       ${settingRow({ title: "All history", desc: "Search it, delete pages or whole sites (Ctrl+H)", controlHtml: `<button class="btn primary sm" id="open-history-btn">${icon("history", 13)} Open history</button>` })}
+      ${settingRow({ title: "Export history", desc: "Every visit Kessel keeps, as a CSV file (time, title, address) -- for a spreadsheet, or another browser", controlHtml: `<button class="btn sm" id="export-history-btn">${icon("save", 13)} Export…</button>` })}
     </div>
 
     <div class="setting-card" id="recently-closed-card" style="display:none">
@@ -939,6 +949,13 @@ async function historyPanel() {
     </div>
   </div>`);
   p.querySelector("#open-history-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://history" }));
+  p.querySelector("#export-history-btn").addEventListener("click", async () => {
+    const path = await invoke("export_history", { path: null }).catch((err) => {
+      toast(String(err));
+      return null;
+    });
+    if (path) toast(`Saved to ${path}`);
+  });
 
   if (closedTabs.length) {
     p.querySelector("#recently-closed-card").style.display = "block";
@@ -1035,7 +1052,7 @@ function passwordsPanel(settings) {
 async function importPanel() {
   const p = el(`<div class="panel" id="panel-import">
     <h2>Import</h2>
-    <p class="sub">Bring your bookmarks, Speed Dial, sign-ins and passwords over from another browser.</p>
+    <p class="sub">Bring your bookmarks, Speed Dial, history, open tabs, sign-ins, passwords and extensions over from another browser.</p>
     <div id="import-sources"><div class="setting-card"><div class="setting-row"><div class="info"><div class="desc">Looking for browsers…</div></div></div></div></div>
   </div>`);
 
@@ -1052,7 +1069,7 @@ async function importPanel() {
   const holder = p.querySelector("#import-sources");
   holder.innerHTML = "";
   if (!sources.length) {
-    holder.appendChild(el(`<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">No supported browser found</div><div class="desc">Kessel can import from Opera GX, Opera, Brave and Chrome on this PC.</div></div></div></div>`));
+    holder.appendChild(el(`<div class="setting-card"><div class="setting-row"><div class="info"><div class="title">No supported browser found</div><div class="desc">Kessel can import from Opera GX, Opera, Brave, Chrome, Edge, Vivaldi and Firefox on this PC.</div></div></div></div>`));
   }
   for (const src of sources) holder.appendChild(importCard(src, vault, vaultNote));
   holder.appendChild(csvImportCard(vault, vaultNote));
@@ -1064,31 +1081,78 @@ function importCard(src, vault, vaultNote) {
     return el(`<div class="setting-card">${settingRow({ title: src.name, desc: src.blocked, controlHtml: "" })}</div>`);
   }
   const isOpera = src.browser.startsWith("Opera");
-  const speedLabel = isOpera ? "Speed Dial" : "New Tab shortcuts";
+  const isFirefox = src.engine === "firefox";
+  const speedLabel = isOpera ? "Speed Dial" : isFirefox ? "Pinned New Tab sites" : "New Tab shortcuts";
   const speedDesc = isOpera || src.speed_dial
     ? `${src.speed_dial} sites, added to your pinned sites`
     : "None pinned (only shortcuts you added yourself are saved, not most-visited ones)";
+  const days = currentSettings()?.history_days ?? 90;
   // Chrome's app-bound encryption: only Chrome itself can read its newer
   // cookies and passwords -- say so up front instead of failing silently.
   const cookieDesc = src.app_bound
     ? `${src.browser} locks most of its cookies with app-bound encryption that only ${src.browser} itself can read, so few or none will come over -- you may need to sign in again.`
-    : "Stay signed in to your sites. Decrypted on this PC only and saved straight into Kessel.";
+    : `Stay signed in to your sites. ${isFirefox ? "Read" : "Decrypted"} on this PC only and saved straight into Kessel.`;
   const passwordDesc = src.app_bound
     ? `${src.passwords} saved logins, but ${src.browser} locks them the same way. Use ${src.browser}'s "Export passwords" and the file import below instead.`
-    : `${src.passwords} saved logins. ${vaultNote}`;
+    : `${src.passwords} saved logins. ${vaultNote}${isFirefox ? " (With a Primary Password set in Firefox, export them from Firefox and use the file import below.)" : ""}`;
+  const tabsDesc = src.tabs
+    ? `${src.tabs} tab${src.tabs === 1 ? "" : "s"}, as saved tab groups on the bookmarks bar (one a window) -- they open when you click them`
+    : "None saved";
   const card = el(`<div class="setting-card">
-    ${settingRow({ title: src.name, desc: src.running ? `Close ${src.browser} first so its cookies can be read.` : "Pick what to bring over. Things you already have in Kessel are skipped.", controlHtml: "" })}
-    ${settingRow({ title: "Bookmarks", desc: `${src.bookmarks} from the bookmarks bar and other bookmarks`, controlHtml: switchHtml("imp-bookmarks", src.bookmarks > 0) })}
+    ${settingRow({ title: escapeHtml(src.name), desc: src.running ? `Close ${src.browser} first so its ${isFirefox ? "files" : "cookies"} can be read.` : "Pick what to bring over. Things you already have in Kessel are skipped.", controlHtml: "" })}
+    ${settingRow({ title: "Bookmarks", desc: `${src.bookmarks}, in a folder of their own, with their folders${isFirefox ? " and tags" : ""}`, controlHtml: switchHtml("imp-bookmarks", src.bookmarks > 0) })}
     ${settingRow({ title: speedLabel, desc: speedDesc, controlHtml: switchHtml("imp-speed", src.speed_dial > 0) })}
+    ${settingRow({ title: "History", desc: `The pages you went to${days ? ` in the last ${days} days (as long as Kessel keeps history)` : ""}`, controlHtml: switchHtml("imp-history", true) })}
+    ${settingRow({ title: "Open tabs", desc: tabsDesc, controlHtml: switchHtml("imp-tabs", src.tabs > 0) })}
     ${settingRow({ title: "Cookies", desc: cookieDesc, controlHtml: switchHtml("imp-cookies", !src.app_bound) })}
     ${settingRow({ title: "Passwords", desc: passwordDesc, controlHtml: switchHtml("imp-passwords", src.passwords > 0 && vault.unlocked && !src.app_bound) })}
+    <div id="imp-extensions"></div>
     <div class="add-row" style="justify-content:space-between;align-items:center">
       <span class="faint" id="imp-result" style="font-size:12px"></span>
-      <button class="btn primary sm" id="imp-go">Import from ${src.name}</button>
+      <button class="btn primary sm" id="imp-go"></button>
     </div>
   </div>`);
+  card.querySelector("#imp-go").textContent = `Import from ${src.name}`;
   for (const sw of card.querySelectorAll(".switch")) {
     sw.addEventListener("click", () => sw.classList.toggle("on"));
+  }
+  // Extensions: each one fetched from its store again, and added only after
+  // you've seen what it can do -- like adding it from the store yourself.
+  if (src.extensions?.length) {
+    const box = card.querySelector("#imp-extensions");
+    box.append(el(settingRow({ title: "Extensions", desc: `${src.extensions.length} from the Chrome Web Store and Edge Add-ons. Each is downloaded from its store again, and you see what it can do before it's added.`, controlHtml: "" })));
+    const list = el(`<div class="list-panel" style="margin:0 14px 10px"></div>`);
+    for (const x of src.extensions) {
+      const row = el(`<div class="list-row"><span class="lr-title"></span><span class="faint lr-note" style="font-size:11.5px;flex:2"></span><button class="btn sm">Add…</button></div>`);
+      row.querySelector(".lr-title").textContent = x.name;
+      const note = row.querySelector(".lr-note");
+      const button = row.querySelector("button");
+      let preview = null;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        if (!preview) {
+          note.textContent = "Downloading…";
+          preview = await invoke("preview_store_extension", { store: x.store, id: x.id }).catch((err) => {
+            note.textContent = String(err);
+            return null;
+          });
+          button.disabled = false;
+          if (!preview) return;
+          const lines = preview.extension.theme ? [] : permissionLines(preview.extension);
+          note.textContent = preview.have ? `You have it (${preview.have}).` : lines.length ? `It will be able to: ${lines.join("; ")}.` : "It asks for nothing that reaches your data.";
+          button.textContent = preview.have ? "Update" : "Add";
+          button.classList.add("primary");
+          return;
+        }
+        const done = await invoke("confirm_extension_install", { token: preview.token }).catch((err) => (toast(String(err)), null));
+        note.textContent = done ? (done.error ? `Added, but it couldn't run: ${done.error}` : "Added") : note.textContent;
+        button.textContent = done ? "Added" : "Add";
+        button.classList.remove("primary");
+        button.disabled = !!done;
+      });
+      list.append(row);
+    }
+    box.append(list);
   }
   const go = card.querySelector("#imp-go");
   const result = card.querySelector("#imp-result");
@@ -1099,8 +1163,10 @@ function importCard(src, vault, vaultNote) {
       speed_dial: card.querySelector("#imp-speed").classList.contains("on"),
       cookies: card.querySelector("#imp-cookies").classList.contains("on"),
       passwords: card.querySelector("#imp-passwords").classList.contains("on"),
+      history: card.querySelector("#imp-history").classList.contains("on"),
+      tabs: card.querySelector("#imp-tabs").classList.contains("on"),
     };
-    if (!choice.bookmarks && !choice.speed_dial && !choice.cookies && !choice.passwords) return;
+    if (!["bookmarks", "speed_dial", "cookies", "passwords", "history", "tabs"].some((k) => choice[k])) return;
     go.disabled = true;
     result.textContent = "Importing…";
     try {
@@ -1111,8 +1177,10 @@ function importCard(src, vault, vaultNote) {
       if (choice.speed_dial) parts.push(`${r.speed_dial_added} ${speedLabel.toLowerCase()}${r.speed_dial_existing ? ` (${r.speed_dial_existing} already here)` : ""}`);
       if (choice.cookies) parts.push(r.cookie_error ? `cookies failed: ${r.cookie_error}` : `${r.cookies_imported} cookies (${r.cookies_skipped} expired or not transferable${locked(r.cookies_app_bound)})`);
       if (choice.passwords) parts.push(r.password_error ? `passwords failed: ${r.password_error}` : `${r.passwords_added} passwords${r.passwords_existing ? ` (${r.passwords_existing} already saved)` : ""}${r.passwords_app_bound ? ` -- ${r.passwords_app_bound} locked, use the file import below` : ""}`);
+      if (choice.history) parts.push(r.history_error ? `history failed: ${r.history_error}` : `${r.history_added} visits${r.history_existing ? ` (${r.history_existing} already here)` : ""}`);
+      if (choice.tabs) parts.push(r.tabs_error ? `tabs failed: ${r.tabs_error}` : `${r.tabs_imported} tabs in ${r.tab_groups} saved group${r.tab_groups === 1 ? "" : "s"}`);
       result.textContent = `Imported ${parts.join(", ")}.`;
-      toast(r.cookie_error || r.password_error ? "Import finished with a problem" : "Import complete");
+      toast(r.cookie_error || r.password_error || r.history_error || r.tabs_error ? "Import finished with a problem" : "Import complete");
     } catch (err) {
       result.textContent = String(err);
     } finally {

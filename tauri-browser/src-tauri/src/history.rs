@@ -161,6 +161,31 @@ impl History {
         }
     }
 
+    // Visits from another browser's history (import.rs): (address, title,
+    // when). One already here (the same address at the same second) isn't
+    // added again, so importing twice changes nothing. Returns (added, already
+    // here).
+    pub fn import_visits(&self, visits: &[(String, String, u64)]) -> (usize, usize) {
+        let mut conn = self.conn.lock().unwrap();
+        let Ok(tx) = conn.transaction() else { return (0, 0) };
+        let (mut added, mut existing) = (0, 0);
+        {
+            let Ok(mut have) = tx.prepare("SELECT 1 FROM visits WHERE url = ?1 AND visited_at = ?2 LIMIT 1") else { return (0, 0) };
+            let Ok(mut insert) = tx.prepare("INSERT INTO visits (url, title, host, visited_at) VALUES (?1, ?2, ?3, ?4)") else { return (0, 0) };
+            for (url, title, at) in visits {
+                if have.exists(params![url, *at as i64]).unwrap_or(false) {
+                    existing += 1;
+                } else if insert.execute(params![url, title, site_of(url), *at as i64]).is_ok() {
+                    added += 1;
+                }
+            }
+        }
+        if tx.commit().is_err() {
+            return (0, 0);
+        }
+        (added, existing)
+    }
+
     // A visit is recorded as the page starts loading, before it has a
     // title; this fills the title in once it has one.
     pub fn set_title(&self, url: &str, title: &str) {

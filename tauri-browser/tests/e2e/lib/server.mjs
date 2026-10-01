@@ -208,5 +208,15 @@ async function startMedia() {
   });
   await new Promise((resolve) => server.listen(0, host, resolve));
   const { port } = server.address();
-  return { origin: `http://${host}:${port}`, close: () => new Promise((r) => server.close(r)) };
+  // close() drops connections still open too: a browser can keep one going
+  // (a request it never finished), and server.close() alone waits for it --
+  // up to Node's five-minute request timeout.
+  return {
+    origin: `http://${host}:${port}`,
+    close: () =>
+      new Promise((r) => {
+        server.close(r);
+        server.closeAllConnections();
+      }),
+  };
 }

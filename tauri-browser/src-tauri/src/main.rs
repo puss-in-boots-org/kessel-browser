@@ -1510,6 +1510,12 @@ struct ImportSource {
     // Why this profile can't be read at all (e.g. guarded by a security
     // program), if so.
     blocked: Option<String>,
+    // "chromium" or "firefox".
+    engine: &'static str,
+    // Tabs open when the browser last saved them (in all its windows).
+    tabs: usize,
+    // Extensions from the Chrome Web Store / Edge Add-ons, to add here.
+    extensions: Vec<import::StoreExtension>,
 }
 
 #[tauri::command]
@@ -1532,6 +1538,9 @@ async fn detect_browsers(webview: Webview) -> Result<Vec<ImportSource>, String> 
                 passwords: if blocked.is_some() { 0 } else { import::count_logins(p) },
                 running: import::is_running(p),
                 app_bound: import::uses_app_bound_encryption(p),
+                engine: if p.engine == import::Engine::Firefox { "firefox" } else { "chromium" },
+                tabs: if blocked.is_some() { 0 } else { import::read_open_tabs(p).map(|w| w.iter().map(Vec::len).sum()).unwrap_or(0) },
+                extensions: if blocked.is_some() { Vec::new() } else { import::read_extensions(p) },
                 blocked,
             }
         })
@@ -1546,6 +1555,11 @@ struct ImportChoice {
     cookies: bool,
     #[serde(default)]
     passwords: bool,
+    #[serde(default)]
+    history: bool,
+    // The tabs that were open -> saved tab groups.
+    #[serde(default)]
+    tabs: bool,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -1563,6 +1577,12 @@ struct ImportReport {
     passwords_skipped: usize,
     passwords_app_bound: usize,
     password_error: Option<String>,
+    history_added: usize,
+    history_existing: usize,
+    history_error: Option<String>,
+    tab_groups: usize,
+    tabs_imported: usize,
+    tabs_error: Option<String>,
 }
 
 // Speed Dial / New Tab shortcuts become Kessel's pinned sites (the new-tab
@@ -1586,9 +1606,8 @@ async fn import_from_browser(
     if choice.bookmarks || choice.speed_dial {
         let (bookmarks, speed_dial) = import::read_bookmarks(&profile)?;
         if choice.bookmarks {
-            // In a folder of their own.
-            let links = bookmarks.into_iter().map(|b| (b.url, b.title)).collect();
-            let (added, existing) = bookmarks::add_imported(&app, &format!("From {}", profile.browser), links);
+            // In a folder of their own, keeping theirs inside it.
+            let (added, existing) = bookmarks::add_imported(&app, &format!("From {}", profile.browser), bookmarks);
             report.bookmarks_added += added;
             report.bookmarks_existing += existing;
         }
@@ -1651,6 +1670,49 @@ async fn import_from_browser(
                     }
                 }
             },
+        }
+    }
+
+    // History, as far back as Kessel keeps its own (Settings -> History).
+    if choice.history {
+        let days = state.store.settings.lock().unwrap().history_days;
+        let since = if days == 0 { 0 } else { now_unix().saturating_sub(days as u64 * 86_400) };
+        match import::read_history(&profile, since, 200_000) {
+            Err(e) => report.history_error = Some(e),
+            Ok(visits) => {
+                let rows: Vec<(String, String, u64)> = visits.into_iter().map(|v| (v.url, v.title, v.at)).collect();
+                let (added, existing) = state.store.history.import_visits(&rows);
+                report.history_added = added;
+                report.history_existing = existing;
+            }
+        }
+    }
+
+    // The tabs that were open: a saved tab group per window, on the
+    // bookmarks bar -- opened only when you click it. Importing again
+    // replaces them.
+    if choice.tabs {
+        match import::read_open_tabs(&profile) {
+            Err(e) => report.tabs_error = Some(e),
+            Ok(windows) => {
+                const COLORS: [&str; 8] = ["blue", "green", "purple", "orange", "cyan", "pink", "yellow", "red"];
+                let several = windows.len() > 1;
+                let mut groups = None;
+                for (i, tabs) in windows.into_iter().enumerate() {
+                    report.tabs_imported += tabs.len();
+                    report.tab_groups += 1;
+                    groups = Some(state.store.save_group(store::SavedGroup {
+                        id: format!("import-{}-{}", profile.id, i + 1),
+                        name: if several { format!("{} window {}", profile.browser, i + 1) } else { format!("{} tabs", profile.browser) },
+                        color: COLORS[i % COLORS.len()].into(),
+                        tabs: tabs.into_iter().map(|(url, title)| store::SavedGroupTab { url, title }).collect(),
+                        saved_at: now_unix(),
+                    }));
+                }
+                if let Some(groups) = groups {
+                    let _ = app.emit("saved-groups-changed", groups);
+                }
+            }
         }
     }
     Ok(report)
@@ -4841,6 +4903,63 @@ fn write_session(state: &BrowserState) {
     }
 }
 
+// Saves to `path`, or where you pick.
+async fn save_where(app: &tauri::AppHandle, webview: &Webview, path: Option<String>, title: &'static str, name: String, kind: (&'static str, &'static str)) -> Result<Option<PathBuf>, String> {
+    match path {
+        Some(p) => Ok(Some(PathBuf::from(p))),
+        None => extensions::dialog(app, webview, move |owner| dialogs::save_file(owner, title, &name, &[kind])).await,
+    }
+}
+
+// Every window's tabs, asleep or not, as a bookmarks file -- a folder per
+// window -- that any browser imports. Private windows aren't kept.
+#[tauri::command]
+async fn export_session(app: tauri::AppHandle, webview: Webview, path: Option<String>) -> Result<Option<String>, String> {
+    require_internal_page(&webview)?;
+    let day = tools::timestamp(now_unix())[..10].to_string();
+    let tree = {
+        let state = app.state::<BrowserState>();
+        let sessions = state.sessions.lock().unwrap();
+        let mut tree = bookmarks::Tree::default();
+        for (i, (_, s)) in sessions.iter().filter(|(_, s)| !s.tabs.is_empty()).enumerate() {
+            let folder = format!("w{}", i + 1);
+            tree.folders.push(bookmarks::Folder { id: folder.clone(), title: format!("Window {} ({})", i + 1, day), parent: String::new(), added: now_unix() });
+            for t in s.tabs.iter().filter(|t| t.url.starts_with("http://") || t.url.starts_with("https://")) {
+                let title = t.title.clone().filter(|x| !x.trim().is_empty()).unwrap_or_else(|| t.url.clone());
+                tree.bookmarks.push(store::Bookmark { url: t.url.clone(), title, folder: folder.clone(), added: now_unix(), ..Default::default() });
+            }
+        }
+        tree
+    };
+    if tree.bookmarks.is_empty() {
+        return Err("No web pages are open".into());
+    }
+    let Some(path) = save_where(&app, &webview, path, "Save open tabs", format!("Kessel tabs {}.html", day), ("Bookmarks file", "*.html;*.htm")).await? else {
+        return Ok(None);
+    };
+    fs::write(&path, bookmarks::to_html(&tree)).map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
+// Your history as a CSV file -- when (UTC), title, address -- newest first.
+#[tauri::command]
+async fn export_history(app: tauri::AppHandle, webview: Webview, path: Option<String>) -> Result<Option<String>, String> {
+    require_internal_page(&webview)?;
+    let visits = app.state::<BrowserState>().store.history.query("", None, None, None, 1_000_000, 0);
+    let mut csv = String::from("visited_at,title,url\n");
+    for v in &visits {
+        // "2026-10-01 12.34.56" -> "2026-10-01T12:34:56Z"
+        let at = format!("{}Z", tools::timestamp(v.visited_at).replacen(' ', "T", 1).replace('.', ":"));
+        csv.push_str(&format!("{},{},{}\n", at, passwords::csv_field(&v.title), passwords::csv_field(&v.url)));
+    }
+    let name = format!("Kessel history {}.csv", &tools::timestamp(now_unix())[..10]);
+    let Some(path) = save_where(&app, &webview, path, "Export history", name, ("CSV file", "*.csv")).await? else {
+        return Ok(None);
+    };
+    fs::write(&path, csv).map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
 // A toolbar's current tabs, for session restore. Private windows keep none.
 #[tauri::command]
 fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs: Vec<SessionTab>, active: usize, groups: Option<Vec<serde_json::Value>>, workspace: Option<String>) {
@@ -5086,6 +5205,8 @@ fn main() {
             get_toolbar_snapshot,
             detect_browsers,
             import_from_browser,
+            export_history,
+            export_session,
             vault_import_csv,
             shields_cosmetics,
             shields_hidden_selectors,

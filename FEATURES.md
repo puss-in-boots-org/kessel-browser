@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**63% overall** -- 514 done (✅ 🟢 🌐), 59 built and waiting for their first run on Windows or a phone (🧪), 51 partly done (🟡), 328 to do (⏳), 93 skipped (⏭️), of 1045.
+**64% overall** -- 523 done (✅ 🟢 🌐), 57 built and waiting for their first run on Windows or a phone (🧪), 54 partly done (🟡), 318 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -66,7 +66,7 @@ branch, one small commit per feature or group of features.
 | [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
 | [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
 | [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
-| [26. Session management](#26-session-management) | 1 |  | 5 | 4 | 1 | `████░░░░░░` 35% |
+| [26. Session management](#26-session-management) | 2 |  | 6 | 2 | 1 | `█████░░░░░` 50% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
@@ -92,7 +92,7 @@ branch, one small commit per feature or group of features.
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
-| [52. Import / export](#52-import--export) | 7 | 2 |  | 8 |  | `█████░░░░░` 53% |
+| [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) |  |  |  | 1 | 8 | `░░░░░░░░░░` 0% |
 | [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
 | [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
@@ -279,7 +279,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 4.07 | Bookmark editing | ✅ | |
 | 4.08 | Bookmark deletion | 🟢 | |
 | 4.09 | Bookmark sorting | ✅ | By name, address or date; drag to reorder |
-| 4.10 | Bookmark import | ✅ | Any browser's HTML export; straight from Opera GX, Opera, Brave and Chrome |
+| 4.10 | Bookmark import | ✅ | Any browser's HTML export; straight from Opera GX, Opera, Brave, Chrome, Edge, Vivaldi and Firefox, folders kept |
 | 4.11 | Bookmark export | ✅ | HTML (the format every browser imports) |
 | 4.12 | Bookmark synchronization | ⏭️ | Needs an online account or server: left out |
 | 4.13 | Bookmark tags | ✅ | |
@@ -805,8 +805,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
 | 26.07 | Restore window | 🟡 | Reopen closed window |
 | 26.08 | Suspend session | ⏳ | |
-| 26.09 | Export session | ⏳ | |
-| 26.10 | Import session | ⏳ | |
+| 26.09 | Export session | ✅ | See 52.17 |
+| 26.10 | Import session | 🟡 | The saved file imports as bookmarks (a folder per window); Open all reopens a window |
 | 26.11 | Cross-device session restore | ⏭️ | Needs an online account or server: left out |
 
 ### 27. Browser workspaces
@@ -1243,22 +1243,22 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 52.01 | Import bookmarks | 🟢 | |
-| 52.02 | Import history | ⏳ | |
+| 52.02 | Import history | ✅ | Chrome, Edge, Brave, Opera, Vivaldi and Firefox: as far back as Kessel keeps history; no frames, reloads or redirect steps |
 | 52.03 | Import passwords | 🟢 | |
 | 52.04 | Import cookies where supported | 🟢 | |
-| 52.05 | Import settings | 🧪 | Settings -> About -> Restore (a Kessel settings file) |
-| 52.06 | Import open tabs | ⏳ | |
-| 52.07 | Import extensions | ⏳ | |
+| 52.05 | Import settings | ✅ | Settings -> About -> Restore (a Kessel settings file) |
+| 52.06 | Import open tabs | ✅ | Each window's tabs as a saved tab group on the bookmarks bar (Chromium session files, Firefox's session) |
+| 52.07 | Import extensions | 🟡 | Chrome Web Store and Edge Add-ons extensions from Chromium browsers, each added after you see what it can do; Firefox add-ons don't run in Kessel |
 | 52.08 | Import from Chrome | 🟢 | |
-| 52.09 | Import from Edge | ⏳ | |
-| 52.10 | Import from Firefox | ⏳ | |
-| 52.11 | Import from Safari | ⏳ | |
+| 52.09 | Import from Edge | ✅ | Each Edge profile: bookmarks with their folders, history, open tabs, cookies, passwords, extensions |
+| 52.10 | Import from Firefox | ✅ | Bookmarks (folders and tags), pinned New Tab sites, history, open tabs, cookies, passwords (without a Primary Password; with one, Firefox's CSV export) |
+| 52.11 | Import from Safari | 🟡 | Its bookmarks, from Safari's HTML export; Safari doesn't run on Windows |
 | 52.12 | Import HTML bookmarks | ✅ | |
 | 52.13 | Export bookmarks | ✅ | |
 | 52.14 | Export passwords | ✅ | See 7.09 |
-| 52.15 | Export history | ⏳ | |
-| 52.16 | Export settings | 🧪 | Settings -> About -> Save to a file |
-| 52.17 | Export sessions | ⏳ | |
+| 52.15 | Export history | ✅ | Settings -> History -> Export: a CSV file |
+| 52.16 | Export settings | ✅ | Settings -> About -> Save to a file |
+| 52.17 | Export sessions | ✅ | Settings -> Tabs -> Save open tabs: a bookmarks file, a folder per window |
 
 ### 53. Updates
 
