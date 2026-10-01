@@ -189,8 +189,9 @@ pub fn to_csv(items: &[VaultItem]) -> String {
     out
 }
 
+// Into `path`, or the file you pick.
 #[tauri::command]
-pub async fn vault_export_csv(app: tauri::AppHandle, webview: Webview, master_password: String) -> Result<Option<String>, String> {
+pub async fn vault_export_csv(app: tauri::AppHandle, webview: Webview, master_password: String, path: Option<String>) -> Result<Option<String>, String> {
     crate::require_internal_page(&webview)?;
     let csv = {
         let vault = app.state::<Vault>();
@@ -201,8 +202,12 @@ pub async fn vault_export_csv(app: tauri::AppHandle, webview: Webview, master_pa
         let timeout = state.store.settings.lock().unwrap().vault_lock_minutes;
         to_csv(&vault.list_items(timeout)?)
     };
-    let Some(path) = crate::extensions::dialog(&app, &webview, |owner| crate::dialogs::save_file(owner, "Export passwords", "Kessel passwords.csv", &[("CSV file", "*.csv")])).await? else {
-        return Ok(None);
+    let path = match path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => match crate::extensions::dialog(&app, &webview, |owner| crate::dialogs::save_file(owner, "Export passwords", "Kessel passwords.csv", &[("CSV file", "*.csv")])).await? {
+            Some(p) => p,
+            None => return Ok(None),
+        },
     };
     std::fs::write(&path, csv).map_err(|e| e.to_string())?;
     Ok(Some(path.to_string_lossy().to_string()))

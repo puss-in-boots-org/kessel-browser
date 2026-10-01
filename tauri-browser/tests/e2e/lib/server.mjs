@@ -18,6 +18,11 @@
 //   /amp/<name>           an AMP copy of /article/<name>
 //   /missing              a 404 page
 //   /big/<name>           3 MB, slowly and resumably, saved as <name>
+//   /login                a sign-in form (#user, #pass, #go) that posts to
+//                         /signed-in, a page titled "Welcome"
+//   /app-login            a sign-in with no form: #user, #pass and a button
+//                         (#go) that just says "Signed in"
+//   /change-password      #user, #old, #new and a form to send them
 
 import http from "node:http";
 
@@ -92,6 +97,22 @@ export async function startServer(host = "127.0.0.2") {
     } else if (parts[0] === "amp") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
+    } else if (parts[0] === "login") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Sign in</title></head><body>
+<form method="post" action="/signed-in"><input id="user" name="user" autocomplete="username"><input id="pass" name="pass" type="password"><button id="go">Sign in</button></form></body></html>`);
+    } else if (parts[0] === "app-login") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>App sign in</title></head><body>
+<div class="card"><input id="user" type="email"><input id="pass" type="password"><button id="go" type="button" onclick="document.title='Signed in'">Continue</button></div></body></html>`);
+    } else if (parts[0] === "change-password") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Change password</title></head><body>
+<form method="post" action="/signed-in"><input id="user" name="user" autocomplete="username"><input id="old" name="old" type="password"><input id="new" name="new" type="password"><button id="go">Change</button></form></body></html>`);
+    } else if (parts[0] === "signed-in") {
+      req.resume();
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><title>Welcome</title><h1>Welcome</h1>`);
     } else if (parts[0] === "missing") {
       res.writeHead(404, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><title>Not found</title><h1>404</h1>`);
