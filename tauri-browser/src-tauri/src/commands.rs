@@ -137,6 +137,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("save-pdf", "Save as PDF", "Page", &[]),
     cmd("highlight", "Highlight the selected text", "Page tools", &["Ctrl+Shift+H"]),
     cmd("feeds", "Feeds", "Kessel", &[]),
+    cmd("bookmark-manager", "Bookmark manager", "Bookmarks & history", &["Ctrl+Shift+O"]),
     cmd("follow-feed", "Follow this site's feed", "Page tools", &[]),
     cmd("break-mode", "Pause everything", "Page tools", &[]),
     cmd("wayback", "Open in the Wayback Machine", "Page tools", &[]),

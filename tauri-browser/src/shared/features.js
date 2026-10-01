@@ -70,6 +70,9 @@ export const FEATURES = [
     ["Feeds", "Palette -> Follow this site's feed, or add a site on the feeds page (palette -> Feeds). Kessel fetches them itself; OPML import and export."],
     ["Site permissions", "Camera, microphone, location, notifications and more: Kessel asks under the address bar; answers per site and defaults in Settings -> Site permissions."],
     ["Download manager", "Downloads: progress, pause, resume, cancel, try again, show in folder, search and sort. Folder and “ask where to save”: Settings -> Downloads."],
+    ["Bookmark manager", "Ctrl+Shift+O: folders (nested), tags, notes, search, sorting, drag to move or reorder, several at once, duplicates, daily backups."],
+    ["Bookmark folders on the bar", "Folders show on the bookmarks bar as menus. Which folder the bar shows: Settings -> Bookmarks."],
+    ["Import and export bookmarks", "Bookmark manager -> Import… / Export…: the HTML file every browser reads and writes."],
   ]],
   ["Search", [
     ["Search keywords", "Type a keyword and a space: “yt cats” searches YouTube, “w Budapest” Wikipedia. Keywords and your own engines: Settings -> Search & Startup."],

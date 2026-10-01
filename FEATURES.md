@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**60% overall** -- 422 done (✅ 🟢 🌐), 124 built and waiting for their first run on Windows or a phone (🧪), 57 partly done (🟡), 349 to do (⏳), 93 skipped (⏭️), of 1045.
+**62% overall** -- 422 done (✅ 🟢 🌐), 137 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 338 to do (⏳), 93 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -44,7 +44,7 @@ branch, one small commit per feature or group of features.
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
-| [4. Bookmarks](#4-bookmarks) | 4 |  | 2 | 12 | 1 | `███░░░░░░░` 28% |
+| [4. Bookmarks](#4-bookmarks) | 4 | 13 |  | 1 | 1 | `█████████░` 94% |
 | [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
 | [6. Downloads](#6-downloads) | 7 | 12 | 1 | 2 |  | `█████████░` 89% |
 | [7. Passwords & identity](#7-passwords--identity) | 7 |  | 4 | 24 | 2 | `███░░░░░░░` 26% |
@@ -271,24 +271,24 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 4.01 | Bookmark page | 🟢 | |
-| 4.02 | Bookmark folders | ⏳ | |
-| 4.03 | Nested folders | ⏳ | |
+| 4.02 | Bookmark folders | 🧪 | Bookmark manager (Ctrl+Shift+O): folders; on the bookmarks bar as menus |
+| 4.03 | Nested folders | 🧪 | Folders inside folders, as deep as you like |
 | 4.04 | Bookmark bar | 🟢 | |
-| 4.05 | Bookmark manager | ⏳ | |
-| 4.06 | Bookmark search | ⏳ | |
-| 4.07 | Bookmark editing | ⏳ | |
+| 4.05 | Bookmark manager | 🧪 | kessel://bookmarks: folders, tags, search, sort, drag to move or reorder, several at once |
+| 4.06 | Bookmark search | 🧪 | By title, address, tag, note or folder |
+| 4.07 | Bookmark editing | 🧪 | Name, address, folder, tags and a note |
 | 4.08 | Bookmark deletion | 🟢 | |
-| 4.09 | Bookmark sorting | ⏳ | |
-| 4.10 | Bookmark import | 🟡 | From Opera GX, Opera, Brave and Chrome |
-| 4.11 | Bookmark export | ⏳ | |
+| 4.09 | Bookmark sorting | 🧪 | Your order (drag), by name, newest, oldest or site |
+| 4.10 | Bookmark import | 🧪 | From Opera GX, Opera, Brave and Chrome directly, and any browser's bookmark file (HTML) |
+| 4.11 | Bookmark export | 🧪 | Bookmark manager -> Export… (the HTML file every browser imports) |
 | 4.12 | Bookmark synchronization | ⏭️ | Needs an online account or server: left out |
-| 4.13 | Bookmark tags | ⏳ | |
-| 4.14 | Bookmark descriptions | ⏳ | |
+| 4.13 | Bookmark tags | 🧪 | Tags on bookmarks; each tag is a list of its own |
+| 4.14 | Bookmark descriptions | 🧪 | A note on each bookmark |
 | 4.15 | Favicons | 🟢 | |
 | 4.16 | Bookmark previews | ⏳ | |
-| 4.17 | Bookmark duplicate detection | 🟡 | The same address is never saved twice |
-| 4.18 | Bookmark organization tools | ⏳ | |
-| 4.19 | Bookmark backup | ⏳ | |
+| 4.17 | Bookmark duplicate detection | 🧪 | Bookmark manager -> Find duplicates (http/https, www., trailing slash count as the same) |
+| 4.18 | Bookmark organization tools | 🧪 | Move, tag, open or delete several at once; duplicates; folders on the bar |
+| 4.19 | Bookmark backup | 🧪 | A copy each day you change them, the last 14 days; Bookmark manager -> Backups to restore |
 
 ### 5. History
 

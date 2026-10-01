@@ -887,8 +887,23 @@ async function bookmarksPanel() {
   const p = el(`<div class="panel" id="panel-bookmarks">
     <h2>Bookmarks</h2>
     <p class="sub">${bookmarks.length} saved.</p>
+    <div class="setting-card">
+      ${settingRow({ title: "Bookmark manager", desc: "Folders, tags, notes, search, import and export, backups (Ctrl+Shift+O)", controlHtml: `<button class="btn primary sm" id="open-bm-manager">${icon("bookmark", 13)} Open</button>` })}
+      ${settingRow({ title: "The bookmarks bar shows", desc: "Which folder's bookmarks and folders", controlHtml: `<select class="field" id="bm-bar-folder" style="width:200px"></select>` })}
+      ${settingRow({ title: "Imported files go into", desc: "A folder for bookmarks from another browser's file (empty: straight in)", controlHtml: `<input class="field" id="bm-import-folder" style="width:200px" placeholder="(top)" />` })}
+    </div>
     <div class="setting-card"><div class="list-panel" id="bookmarks-list-settings" style="max-height:520px"></div></div>
   </div>`);
+  p.querySelector("#open-bm-manager").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://bookmarks" }));
+  const tree = await invoke("bookmark_tree").catch(() => ({ folders: [] }));
+  const barFolder = p.querySelector("#bm-bar-folder");
+  barFolder.innerHTML = `<option value="">Top level</option>${(tree.folders || []).map((f) => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join("")}`;
+  const features = () => currentSettings()?.features || {};
+  barFolder.value = features().bookmarks_bar_folder || "";
+  barFolder.addEventListener("change", () => saveSettings({ features: { ...features(), bookmarks_bar_folder: barFolder.value } }));
+  const importFolder = p.querySelector("#bm-import-folder");
+  importFolder.value = features().bookmark_import_folder ?? "Imported";
+  importFolder.addEventListener("change", () => saveSettings({ features: { ...features(), bookmark_import_folder: importFolder.value.trim() } }));
   const list = p.querySelector("#bookmarks-list-settings");
   list.innerHTML = bookmarks.length ? "" : `<div class="empty">No bookmarks yet.</div>`;
   for (const b of bookmarks) {

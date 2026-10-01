@@ -26,6 +26,7 @@ mod store;
 mod suggest;
 mod tabdrag;
 mod tools;
+mod bookmarks;
 mod downloads;
 mod permissions;
 mod vault;
@@ -130,6 +131,7 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("reader", "reader.html"),
     ("shot", "shot.html"),
     ("feeds", "feeds.html"),
+    ("bookmarks", "bookmarks.html"),
 ];
 
 // The pages Kessel starts with when it isn't bringing back your last
@@ -5007,6 +5009,20 @@ fn main() {
             tools::page_tool,
             tools::take_screenshot,
             tools::save_pdf,
+            bookmarks::bookmark_tree,
+            bookmarks::update_bookmark,
+            bookmarks::move_bookmarks,
+            bookmarks::delete_bookmarks,
+            bookmarks::reorder_bookmarks,
+            bookmarks::add_bookmark_to,
+            bookmarks::create_bookmark_folder,
+            bookmarks::rename_bookmark_folder,
+            bookmarks::delete_bookmark_folder,
+            bookmarks::add_bookmarks,
+            bookmarks::export_bookmarks,
+            bookmarks::read_bookmark_file,
+            bookmarks::bookmark_backups,
+            bookmarks::restore_bookmark_backup,
             downloads::download_control,
             downloads::show_download,
             permissions::resolve_permission,

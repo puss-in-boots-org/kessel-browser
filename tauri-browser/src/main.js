@@ -2762,7 +2762,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2925,6 +2925,7 @@ async function runCommand(id, ctx = {}) {
     case "save-pdf": return page && savePdf(page);
     case "highlight": return page && invoke("page_tool", { id: page, tool: "highlight" }).catch((err) => toast(String(err)));
     case "feeds": return openSingleton("kessel://feeds");
+    case "bookmark-manager": return openSingleton("kessel://bookmarks");
     case "follow-feed": return followFeed(findTab(page) || findTab(activeTabId));
     case "break-mode": return toggleBreakMode();
     case "wayback": {
@@ -3276,7 +3277,30 @@ function renderBookmarksBar() {
     if (!bar.children.length) bar.innerHTML = `<span class="bm-empty">Bookmarks you star show up here</span>`;
     return;
   }
-  for (const b of bookmarks) {
+  // The folder the bar shows (Settings -> Bookmarks; the top level unless
+  // you pick one): its folders first, as menus, then its bookmarks.
+  const barFolder = currentSettings()?.features?.bookmarks_bar_folder || "";
+  const inBar = (b) => (b.folder || "") === barFolder;
+  const subfolders = [...new Set(bookmarks.map((b) => b.folder || "").filter((f) => f && (barFolder ? f.startsWith(`${barFolder}/`) : true)).map((f) => f.slice(barFolder ? barFolder.length + 1 : 0).split("/")[0]))];
+  for (const name of subfolders.sort((a, b) => a.localeCompare(b))) {
+    const path = barFolder ? `${barFolder}/${name}` : name;
+    const chip = document.createElement("div");
+    chip.className = "bm-chip bm-folder";
+    chip.title = path;
+    const title = document.createElement("span");
+    title.className = "bm-title";
+    title.textContent = name;
+    const glyph = document.createElement("span");
+    glyph.innerHTML = icon("folder", 13);
+    glyph.style.display = "inline-flex";
+    chip.append(glyph, title);
+    chip.addEventListener("click", () => {
+      const r = chip.getBoundingClientRect();
+      bookmarkFolderMenu(path, r.left, r.bottom + 4);
+    });
+    bar.appendChild(chip);
+  }
+  for (const b of bookmarks.filter(inBar)) {
     const chip = document.createElement("div");
     chip.className = "bm-chip";
     chip.title = `${b.title}\n${b.url}`;
@@ -3296,6 +3320,26 @@ function renderBookmarksBar() {
     });
     bar.appendChild(chip);
   }
+}
+
+// A bookmarks bar folder: its bookmarks, and its folders (each opens its own menu).
+function bookmarkFolderMenu(path, x, y) {
+  const here = bookmarks.filter((b) => (b.folder || "") === path);
+  const kids = [...new Set(bookmarks.map((b) => b.folder || "").filter((f) => f.startsWith(`${path}/`)).map((f) => f.slice(path.length + 1).split("/")[0]))].sort((a, b) => a.localeCompare(b));
+  const all = bookmarks.filter((b) => (b.folder || "") === path || (b.folder || "").startsWith(`${path}/`));
+  showContextMenu(
+    [
+      { header: path.split("/").pop() },
+      ...kids.map((k) => ({ label: `${k} ›`, iconName: "folder", action: () => setTimeout(() => bookmarkFolderMenu(`${path}/${k}`, x + 20, y), 60) })),
+      ...here.slice(0, 60).map((b) => ({ label: b.title || hostOf(b.url), iconName: "globe", action: () => openInActiveTab(b.url) })),
+      "-",
+      { label: `Open all ${all.length} in tabs`, iconName: "layers", disabled: !all.length, action: () => all.slice(0, 50).forEach((b) => createTab(b.url)) },
+      { label: "Open in the bookmark manager", iconName: "bookmark", action: () => openSingleton(`kessel://bookmarks?folder=${encodeURIComponent(path)}`) },
+    ],
+    x,
+    y,
+    { dropdown: true, width: 280 }
+  );
 }
 
 async function openInActiveTab(url) {

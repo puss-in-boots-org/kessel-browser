@@ -25,10 +25,21 @@ fn write_json<T: Serialize>(path: &Path, value: &T) {
 
 // --- Bookmarks -------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Clone)]
+// A bookmark. `folder` is where it's filed ("" = the top, "Work/Projects"
+// = Projects inside Work); `tags`, `note` and `added` are the bookmark
+// manager's (bookmarks.rs). Older files have only url and title.
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Debug)]
 pub struct Bookmark {
     pub url: String,
     pub title: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub folder: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+    #[serde(default)]
+    pub added: u64,
 }
 
 // --- Pinned sites (left rail quick-launch) ---------------------------------
@@ -465,19 +476,65 @@ impl Store {
     }
 
     pub fn add_bookmark(&self, url: String, title: String) {
-        let path = self.bookmarks_path();
-        let mut bookmarks: Vec<Bookmark> = read_json_or_default(&path);
-        if !bookmarks.iter().any(|b| b.url == url) {
-            bookmarks.push(Bookmark { url, title });
-            write_json(&path, &bookmarks);
-        }
+        self.add_bookmark_in(url, title, String::new());
+    }
+
+    pub fn add_bookmark_in(&self, url: String, title: String, folder: String) {
+        self.change_bookmarks(|bookmarks| {
+            if !bookmarks.iter().any(|b| b.url == url) {
+                bookmarks.push(Bookmark { url, title, folder, added: now_unix(), ..Default::default() });
+            }
+        });
     }
 
     pub fn remove_bookmark(&self, url: &str) {
+        self.change_bookmarks(|bookmarks| bookmarks.retain(|b| b.url != url));
+    }
+
+    // Changes the bookmarks and saves them -- keeping a copy of the day's
+    // first version in bookmark-backups/ (the last 14 days; Bookmarks ->
+    // Backups puts one back).
+    pub fn change_bookmarks(&self, change: impl FnOnce(&mut Vec<Bookmark>)) -> Vec<Bookmark> {
         let path = self.bookmarks_path();
         let mut bookmarks: Vec<Bookmark> = read_json_or_default(&path);
-        bookmarks.retain(|b| b.url != url);
-        write_json(&path, &bookmarks);
+        let before = bookmarks.clone();
+        change(&mut bookmarks);
+        if bookmarks != before {
+            self.backup_bookmarks(&before);
+            write_json(&path, &bookmarks);
+        }
+        bookmarks
+    }
+
+    pub fn bookmark_backups_dir(&self) -> PathBuf {
+        self.dir.join("bookmark-backups")
+    }
+
+    fn backup_bookmarks(&self, current: &[Bookmark]) {
+        if current.is_empty() {
+            return;
+        }
+        let dir = self.bookmark_backups_dir();
+        let _ = fs::create_dir_all(&dir);
+        let day = now_unix() / 86400;
+        let file = dir.join(format!("bookmarks-{}.json", day));
+        if !file.exists() {
+            write_json(&file, &current);
+            let mut old: Vec<PathBuf> = fs::read_dir(&dir).map(|d| d.flatten().map(|e| e.path()).collect()).unwrap_or_default();
+            old.sort();
+            while old.len() > 14 {
+                let _ = fs::remove_file(old.remove(0));
+            }
+        }
+    }
+
+    // Folders you made, empty ones too ("Work", "Work/Projects").
+    pub fn bookmark_folders(&self) -> Vec<String> {
+        read_json_or_default(&self.dir.join("bookmark_folders.json"))
+    }
+
+    pub fn set_bookmark_folders(&self, folders: &[String]) {
+        write_json(&self.dir.join("bookmark_folders.json"), &folders);
     }
 
     pub fn saved_groups(&self) -> Vec<SavedGroup> {
