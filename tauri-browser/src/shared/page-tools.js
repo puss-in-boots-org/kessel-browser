@@ -109,7 +109,12 @@
     var autoplayAllowed = true;
     var interacted = function () { return !!(navigator.userActivation && navigator.userActivation.hasBeenActive); };
     var nativePlay = HTMLMediaElement.prototype.play;
+    // (Until the site's settings are here, a play() waits for them.)
+    var settingsKnown = false;
+    var settingsReady = null;
     HTMLMediaElement.prototype.play = function () {
+      var media = this, args = arguments;
+      if (!settingsKnown && settingsReady) return settingsReady.then(function () { return HTMLMediaElement.prototype.play.apply(media, args); });
       if (!autoplayAllowed && !interacted()) return Promise.reject(new DOMException('Sound playing on its own is turned off for this site', 'NotAllowedError'));
       return nativePlay.apply(this, arguments);
     };
@@ -120,6 +125,10 @@
       fullscreenAllowed = !t || t.fullscreen !== false;
       autoplayAllowed = !t || t.autoplay !== false;
       if (!fullscreenAllowed && document.fullscreenElement) document.exitFullscreen();
+      // What started before they were here.
+      if (!autoplayAllowed && !interacted()) {
+        Array.prototype.forEach.call(document.querySelectorAll('video, audio'), function (m) { if (!m.paused) m.pause(); });
+      }
     }
     // Pop-ups: a window.open without a click is one the engine's pop-up
     // blocker stops anyway -- Kessel hears of it instead, and opens it as a
@@ -140,7 +149,10 @@
       apply(t);
       siteSettings(t);
     }
-    BRIDGE.request('site-tweaks').then(tweaksArrived);
+    // (Only the page itself hears back: a frame's play() never waits.)
+    var tweaks = BRIDGE.request('site-tweaks').then(tweaksArrived, function () {});
+    if (window.top === window) settingsReady = tweaks.then(function () { settingsKnown = true; });
+    else settingsKnown = true;
     BRIDGE.on('tweaks-changed', function () { BRIDGE.request('site-tweaks').then(tweaksArrived); });
 
     // --- Mouse gestures: hold the right button and draw ---

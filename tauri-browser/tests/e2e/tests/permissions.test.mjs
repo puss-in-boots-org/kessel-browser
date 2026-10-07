@@ -90,7 +90,14 @@ export const tests = [
       const k = await launch({ settings: { features: { site_permissions: { "127.0.0.3": { autoplay: "block" } } } } });
       const other = await startServer("127.0.0.3");
       try {
-        const { page: quiet } = await open(k, `${other.origin}/page/Quiet`);
+        // A page you haven't touched: now and then the engine starts one as
+        // if you had (navigator.userActivation), and then it may play.
+        let quiet = null;
+        for (let i = 0; i < 4; i++) {
+          quiet = (await open(k, `${other.origin}/page/Quiet?fresh=${i}`)).page;
+          if (!(await quiet.evaluate(`navigator.userActivation.hasBeenActive`))) break;
+        }
+        assert.equal(await quiet.evaluate(`navigator.userActivation.hasBeenActive`), false, "a page you haven't touched");
         assert.equal(await quiet.evaluate(`new Audio('/tone.wav').play().then(() => 'played', (e) => e.name + ': ' + e.message)`), "NotAllowedError: Sound playing on its own is turned off for this site", "turned down");
         assert(!(await k.targets()).some((t) => t.url.includes("permission.html")), "without asking");
         // After a click on the page, it's yours: it plays.
