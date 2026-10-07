@@ -647,6 +647,15 @@ function paintStaticIcons() {
     badge.innerHTML = `${icon("incognito", 14)}<span>Private</span>`;
     badge.hidden = false;
   }
+  // A profile other than the default says which (Ctrl+Shift+M: the others).
+  if (WIN.profile) {
+    const badge = document.getElementById("profile-badge");
+    badge.innerHTML = `${icon("user", 13)}<span></span>`;
+    badge.querySelector("span").textContent = WIN.profile;
+    badge.title = `Profile “${WIN.profile}” -- click for your other profiles (Ctrl+Shift+M)`;
+    badge.hidden = false;
+    badge.addEventListener("click", () => openSingleton("kessel://settings/profiles"));
+  }
 }
 
 // --- Frameless window: title-bar dragging + window controls -------------------
@@ -2859,6 +2868,7 @@ async function runCommand(id, ctx = {}) {
     case "reopen-closed-window":
       return invoke("reopen_closed_window", {}).then((w) => { if (!w) toast("No recently closed windows"); });
     case "name-window": return editWindowName();
+    case "profiles": return openSingleton("kessel://settings/profiles");
     case "save-session": return saveSession(false);
     case "save-window-session": return saveSession(true);
     case "saved-sessions": return openSingleton("kessel://history/sessions");

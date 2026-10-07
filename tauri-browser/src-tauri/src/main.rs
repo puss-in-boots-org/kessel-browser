@@ -23,6 +23,7 @@ mod page;
 mod privacy;
 mod privacy_stats;
 mod profile;
+mod profiles;
 mod saved_sessions;
 mod security;
 mod shields;
@@ -5439,6 +5440,10 @@ fn main() {
             watch::check_watched_now,
             privacy_stats::privacy_stats,
             privacy_stats::reset_privacy_stats,
+            profiles::list_profiles,
+            profiles::open_profile,
+            profiles::create_profile,
+            profiles::profile_shortcut,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,

@@ -20,6 +20,7 @@ export const FEATURES = [
   ]],
   ["Windows", [
     ["New window", "Ctrl+N. Shift+Enter in the address bar opens it there."],
+    ["Profiles", "Ctrl+Shift+M (Settings -> Profiles): Kessels of their own -- history, bookmarks, passwords, settings, cookies, extensions, search engines, downloads folder. Open one, make one, or put a shortcut that opens it on your desktop."],
     ["Private window", "Ctrl+Shift+N. No history, no saved session, cookies forgotten."],
     ["Close window", "Ctrl+Shift+W or Alt+F4. Reopen with Ctrl+Shift+T."],
     ["Full screen", "F11."],

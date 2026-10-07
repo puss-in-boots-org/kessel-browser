@@ -132,8 +132,43 @@ fn marker_path() -> Option<PathBuf> {
 
 fn write_marker(state: &str, startup_crashes: u32) {
     if let Some(path) = marker_path() {
-        let _ = std::fs::write(path, serde_json::json!({ "state": state, "startup_crashes": startup_crashes }).to_string());
+        let _ = std::fs::write(path, serde_json::json!({ "state": state, "startup_crashes": startup_crashes, "pid": std::process::id() }).to_string());
     }
+}
+
+// Whether another Kessel has the profile in `data_dir` open right now (its
+// running.json names a kessel.exe that's still running).
+pub(crate) fn running_elsewhere(data_dir: &Path) -> bool {
+    let pid = std::fs::read_to_string(data_dir.join("running.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|m| m.get("pid").and_then(|p| p.as_u64()))
+        .map(|p| p as u32);
+    match pid {
+        Some(pid) if pid != std::process::id() => kessel_alive(pid),
+        _ => false,
+    }
+}
+
+#[cfg(windows)]
+fn kessel_alive(pid: u32) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+    use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
+    unsafe {
+        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return false };
+        let mut code = 0u32;
+        let running = GetExitCodeProcess(process, &mut code).is_ok() && code == STILL_ACTIVE.0 as u32;
+        let mut buf = [0u16; 520];
+        let mut len = buf.len() as u32;
+        let named = QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, windows::core::PWSTR(buf.as_mut_ptr()), &mut len).is_ok();
+        let _ = CloseHandle(process);
+        running && named && String::from_utf16_lossy(&buf[..len as usize]).to_lowercase().ends_with("kessel.exe")
+    }
+}
+
+#[cfg(not(windows))]
+fn kessel_alive(_pid: u32) -> bool {
+    false
 }
 
 fn has_flag(name: &str) -> bool {

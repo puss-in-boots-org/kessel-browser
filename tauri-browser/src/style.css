@@ -217,6 +217,27 @@ html, body { overflow: hidden; user-select: none; }
 }
 #private-badge[hidden] { display: none; }
 
+/* Which profile this is, unless it's the default (profiles.rs). */
+#profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  align-self: center;
+  flex-shrink: 0;
+  max-width: 150px;
+  margin: 0 4px 6px 2px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+#profile-badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#profile-badge[hidden] { display: none; }
+
 /* The window's own name ("Name window…"); a click renames it. */
 #window-name {
   align-self: center;
