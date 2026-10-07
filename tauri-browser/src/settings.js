@@ -1387,7 +1387,7 @@ async function buildPanel(id, settings) {
     case "security": return await securityPanel(settings, { el, settingRow, switchHtml, wireSwitch });
     case "performance": return performancePanel(settings);
     case "tools": return await toolsPanel(settings, { el, settingRow, switchHtml });
-    case "network": return networkPanel(settings, { el, settingRow });
+    case "network": return networkPanel(settings, { el, settingRow, switchHtml });
     case "permissions": return permissionsPanel(settings, { el, settingRow, switchHtml });
     case "pinned": return await pinnedPanel();
     case "bookmarks": return await bookmarksPanel();

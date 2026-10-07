@@ -88,4 +88,26 @@ export const tests = [
       }
     },
   },
+  {
+    name: "experiments: switches for the engine; every feature list ends up as one, Kessel's own kept with yours",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch({ settings: { features: { experiments: { web_platform: true, parallel_downloads: true }, engine_flags: "--enable-features=KesselTestFlag --disable-features=KesselOff" } } });
+      const args = (await k.invoke("graphics_info")).engine_args;
+      assert(args.includes("--enable-experimental-web-platform-features"), "the experimental web features");
+      const list = (name) => (args.match(new RegExp(`--${name}=(\\S+)`, "g")) || []);
+      assert.equal(list("enable-features").length, 1, `one --enable-features: ${args}`);
+      assert.equal(list("disable-features").length, 1, `one --disable-features: ${args}`);
+      assert(list("enable-features")[0].includes("ParallelDownloading") && list("enable-features")[0].includes("KesselTestFlag"), "the experiment's and yours");
+      assert(list("disable-features")[0].includes("msWebOOUI") && list("disable-features")[0].includes("KesselOff"), "Kessel's own and yours");
+
+      // Settings -> Network: turned off there, kept for the next start.
+      await k.invoke("open_singleton_tab", { route: "kessel://settings/network" });
+      const settings = await k.page((t) => t.url.includes("settings.html"));
+      await settings.waitFor(`!!document.getElementById('exp-web_platform')`, { message: "the Experiments card" });
+      assert(await settings.evaluate(`document.getElementById('exp-web_platform').classList.contains('on')`), "shown as on");
+      await settings.evaluate(`document.getElementById('exp-web_platform').click()`);
+      await waitFor(async () => !(await k.invoke("get_settings")).features.experiments?.web_platform, { message: "off" });
+      assert.equal((await k.invoke("get_settings")).features.experiments.parallel_downloads, true, "the other one kept");
+    },
+  },
 ];

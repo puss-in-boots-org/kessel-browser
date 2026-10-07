@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**87% overall** -- 722 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 44 partly done (🟡), 100 to do (⏳), 111 skipped (⏭️), of 1045.
+**87% overall** -- 725 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 43 partly done (🟡), 98 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -78,7 +78,7 @@ branch, one small commit per feature or group of features.
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 14 |  |  | 3 |  | `████████░░` 82% |
 | [37. Cache](#37-cache) | 9 |  | 1 |  |  | `██████████` 95% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) | 5 | 4 | 1 | 3 |  | `███████░░░` 73% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) | 8 | 4 |  | 1 |  | `█████████░` 92% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
 | [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
 | [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
@@ -981,10 +981,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 38.01 | Experimental features | 🟡 | Settings -> Network -> Engine switches (your own Chromium switches) |
+| 38.01 | Experimental features | ✅ | Settings -> Network -> Experiments (38.03), and engine switches of your own (38.02) |
 | 38.02 | Feature flags | ✅ | Settings -> Network -> Engine switches: --enable-features / --disable-features |
-| 38.03 | Browser experiments | ⏳ | |
-| 38.04 | Experimental APIs | ⏳ | |
+| 38.03 | Browser experiments | ✅ | Settings -> Network -> Experiments: experimental web features, faster (parallel) downloads, dark pages everywhere, no smooth scrolling, no HTTP/3 -- after a restart |
+| 38.04 | Experimental APIs | ✅ | Settings -> Network -> Experiments -> Experimental web features: the engine's web platform features not yet turned on |
 | 38.05 | Rendering flags | 🧪 | Any rendering switch in Settings -> Network -> Engine switches |
 | 38.06 | GPU flags | 🧪 | Any GPU switch in Settings -> Network -> Engine switches |
 | 38.07 | Networking flags | 🧪 | Any networking switch in Settings -> Network -> Engine switches |

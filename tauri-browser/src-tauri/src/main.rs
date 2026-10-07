@@ -12,6 +12,7 @@ mod browser_windows;
 mod commands;
 mod crash;
 mod dialogs;
+mod experiments;
 mod extensions;
 mod forms;
 mod graphics;
@@ -5288,11 +5289,14 @@ fn engine_args(settings: &Settings) -> String {
     } else {
         args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
         args.push_str(&proxy_args(&settings.features));
+        // Settings -> Network -> Experiments (not in safe mode either).
+        args.push_str(&experiments::args(&settings.features));
     }
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
-    args
+    // (One of each feature list: the engine would keep only the last.)
+    experiments::merge_feature_lists(&args)
 }
 
 fn main() {

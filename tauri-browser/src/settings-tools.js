@@ -659,7 +659,17 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
 
 // --- Network ---------------------------------------------------------------------------
 
-export function networkPanel(settings, { el, settingRow }) {
+// Settings -> Network -> Experiments (experiments.rs keeps what each one
+// switches on in the engine).
+const EXPERIMENTS = [
+  ["web_platform", "Experimental web features", "Web platform features the engine has but hasn't turned on yet -- for web developers"],
+  ["parallel_downloads", "Faster downloads", "Big files come down in several parts at once"],
+  ["force_dark", "Dark pages everywhere", "The engine darkens pages that have no dark look of their own"],
+  ["no_smooth_scrolling", "No smooth scrolling", "Pages jump instead of gliding when you scroll"],
+  ["no_quic", "No HTTP/3 (QUIC)", "Older TCP-only connections -- for networks that block QUIC"],
+];
+
+export function networkPanel(settings, { el, settingRow, switchHtml }) {
   const f = features();
   const proxy = { mode: "system", server: "", bypass: "", pac: "", ...(f.proxy || {}) };
   const p = el(`<div class="panel" id="panel-network">
@@ -674,6 +684,10 @@ export function networkPanel(settings, { el, settingRow }) {
       <div id="proxy-pac">
         ${settingRow({ title: "Script address", controlHtml: `<input class="field mono" id="proxy-pac-url" style="width:260px" spellcheck="false" placeholder="http://wpad/wpad.dat" />` })}
       </div>
+    </div>
+    <div class="setting-card" id="experiments-card">
+      <div class="k-card-title"><span class="k-label">Experiments</span></div>
+      ${EXPERIMENTS.map(([id, title, desc]) => settingRow({ title, desc, controlHtml: switchHtml(`exp-${id}`, f.experiments?.[id] === true) })).join("")}
     </div>
     <div class="setting-card">
       ${settingRow({ title: "Engine switches", desc: "For experiments: Chromium command-line switches, separated by spaces (like --enable-features=…). A wrong one can stop pages from working -- empty this to undo.", controlHtml: "" })}
@@ -708,6 +722,18 @@ export function networkPanel(settings, { el, settingRow }) {
     if (bad.length) toast(`Left out ${bad[0]} -- switches start with --`);
     saveFeature("engine_flags", flags.value.trim() || undefined);
   });
+  for (const [id] of EXPERIMENTS) {
+    const sw = p.querySelector(`#exp-${id}`);
+    sw.addEventListener("click", async () => {
+      const on = !sw.classList.contains("on");
+      const next = { ...(features().experiments || {}) };
+      if (on) next[id] = true;
+      else delete next[id];
+      await saveFeature("experiments", Object.keys(next).length ? next : undefined);
+      sw.classList.toggle("on", on);
+      sw.setAttribute("aria-checked", String(on));
+    });
+  }
   p.querySelector("#net-restart").addEventListener("click", () => invoke("restart_kessel").catch((err) => toast(String(err))));
   return p;
 }
