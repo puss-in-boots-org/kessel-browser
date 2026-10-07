@@ -3901,7 +3901,85 @@ async function onPageMenu({ action, value, page, title, tab }) {
       await invoke("pop_out", { url: value, title, account: findTab(tab)?.account ?? null, x: Math.round(window.screenX + w * 0.2), y: Math.round(window.screenY + h * 0.12) }).catch(fail);
       break;
     }
+    // Like a Ctrl+click: in front or behind, as Settings -> Tabs says.
+    case "open-link-tab":
+      if (currentSettings()?.ctrl_click_background) await invoke("open_background_tab", { url: value, ofTab: tab }).catch(fail);
+      else await createTab(value, findTab(tab)?.account ?? activeAccount(), { after: tab });
+      break;
+    case "open-link-window":
+      await invoke("new_window", { private: WIN.private, url: value }).catch(fail);
+      break;
+    case "open-link-private":
+      await invoke("new_window", { private: true, url: value }).catch(fail);
+      break;
+    case "copy-link-text":
+      await invoke("copy_text", { text: value }).then(() => toast("Link text copied"), fail);
+      break;
+    case "open-image-tab":
+      await createTab(value, findTab(tab)?.account ?? activeAccount(), { after: tab });
+      break;
+    case "translate-selection":
+      await createTab(translateTextUrl(value), findTab(tab)?.account ?? activeAccount(), { after: tab });
+      break;
+    case "translate-page":
+      await createTab(translatePageUrl(value), findTab(tab)?.account ?? activeAccount(), { after: tab });
+      break;
+    case "define-selection": {
+      const d = await invoke("define_word", { word: value }).catch(() => null);
+      if (d) toast(`${d.word}${d.part ? ` (${d.part})` : ""}: ${d.definition}`, { duration: 10000 });
+      else await createTab(searchUrlFor(`define ${value}`), findTab(tab)?.account ?? activeAccount(), { after: tab });
+      break;
+    }
+    case "speak-selection":
+      speakAloud(value);
+      break;
+    case "stop-speaking":
+      speechSynthesis.cancel();
+      invoke("set_page_speaking", { on: false }).catch(() => {});
+      break;
+    case "share-selection":
+      // Windows' Share window, with the text.
+      await invoke("share_page", { url: value, title: `From ${hostOf(page) || "a page"}` }).catch(fail);
+      break;
+    case "screenshot-page":
+      await runCommand("screenshot-visible", { page: tab });
+      break;
   }
+}
+
+// Translating (the page menu): with the service picked in Settings -> Page
+// tools, into your language (or the one picked there). Only Google
+// translates whole pages.
+function translateTarget() {
+  const lang = currentSettings()?.features?.translate_to || navigator.language || "en";
+  return /^zh/i.test(lang) ? lang : lang.split("-")[0];
+}
+
+function translateTextUrl(text) {
+  const to = encodeURIComponent(translateTarget());
+  const q = encodeURIComponent(text);
+  switch (currentSettings()?.features?.translate_service) {
+    case "deepl": return `https://www.deepl.com/translator#auto/${to}/${q}`;
+    case "bing": return `https://www.bing.com/translator?to=${to}&text=${q}`;
+    default: return `https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate`;
+  }
+}
+
+const translatePageUrl = (url) => `https://translate.google.com/translate?sl=auto&tl=${encodeURIComponent(translateTarget())}&u=${encodeURIComponent(url)}`;
+
+// Read aloud (the page menu), with the reader view's voice and speed.
+function speakAloud(text) {
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  const reader = currentSettings()?.features?.reader || {};
+  const voice = speechSynthesis.getVoices().find((v) => v.voiceURI === reader.voice);
+  if (voice) utterance.voice = voice;
+  utterance.rate = Number(reader.rate) || 1;
+  const done = () => !speechSynthesis.speaking && invoke("set_page_speaking", { on: false }).catch(() => {});
+  utterance.onend = done;
+  utterance.onerror = done;
+  invoke("set_page_speaking", { on: true }).catch(() => {});
+  speechSynthesis.speak(utterance);
 }
 
 // What the side panel's page asks of this window (sidebar.js).

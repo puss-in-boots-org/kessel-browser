@@ -213,6 +213,171 @@ pub(crate) fn tell_side_panel(app: tauri::AppHandle, webview: Webview, state: ta
 }
 
 // --- The page's right-click menu ------------------------------------------------
+//
+// The engine's menu (back, reload, save, print, copy, save image...) with
+// Kessel's items added: on a link, open it in a new tab, window or private
+// window (instead of the engine's "Open link in new window"), copy its
+// text, search for it, peek; on an image, open it in a new tab or search
+// for it; on selected text, search, translate, define, read aloud, share,
+// highlight, keep in notes, ask AI; on the page, translate it or take a
+// screenshot.
+
+// What was right-clicked.
+#[derive(Default, Clone, Debug)]
+pub(crate) struct MenuTarget {
+    pub page: String,
+    pub link: String,
+    pub link_text: String,
+    pub selection: String,
+    pub image: String,
+}
+
+// One of Kessel's items: what the toolbar does ("page-menu"), its label,
+// and what it acts on.
+pub(crate) type MenuItem = (&'static str, String, String);
+
+fn quoted(text: &str, max: usize) -> String {
+    let short: String = text.chars().take(max).collect();
+    format!("“{}{}”", short, if text.chars().count() > max { "…" } else { "" })
+}
+
+// A word (or two or three) worth looking up in a dictionary.
+fn word_to_define(text: &str) -> Option<String> {
+    let t = text.trim().trim_matches(|c: char| c.is_ascii_punctuation());
+    let words = t.split_whitespace().count();
+    let ok = (1..=3).contains(&words) && t.chars().count() <= 40 && t.chars().all(|c| c.is_alphabetic() || c == ' ' || c == '-' || c == '\'');
+    ok.then(|| t.to_string())
+}
+
+// Kessel's items for `t`: the ones on top (opening a link), and the ones
+// below the engine's. `on`: whether an optional one is wanted (Settings ->
+// Page tools); `speaking`: something's being read aloud.
+pub(crate) fn page_menu_items(t: &MenuTarget, on: &dyn Fn(&str) -> bool, speaking: bool) -> (Vec<MenuItem>, Vec<MenuItem>) {
+    let mut top: Vec<MenuItem> = Vec::new();
+    let mut items: Vec<MenuItem> = Vec::new();
+    let one_line = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if web_page(&t.link) {
+        top.push(("open-link-tab", "Open link in new tab".into(), t.link.clone()));
+        top.push(("open-link-window", "Open link in new window".into(), t.link.clone()));
+        top.push(("open-link-private", "Open link in private window".into(), t.link.clone()));
+        if on("peek") {
+            items.push(("peek-link", "Peek at link".into(), t.link.clone()));
+        }
+        let text = one_line(&t.link_text);
+        if !text.is_empty() {
+            items.push(("copy-link-text", "Copy link text".into(), text.clone()));
+            if on("search") && t.selection.trim().is_empty() {
+                items.push(("search-selection", format!("Search the web for {}", quoted(&text, 24)), text.chars().take(500).collect()));
+            }
+        }
+        items.push(("reading-link", "Add link to reading list".into(), t.link.clone()));
+    }
+    if web_page(&t.image) {
+        items.push(("open-image-tab", "Open image in new tab".into(), t.image.clone()));
+        if on("image_search") {
+            items.push(("search-image", "Search the web for this image".into(), t.image.clone()));
+        }
+    }
+    let picked = one_line(&t.selection);
+    if !picked.is_empty() {
+        if on("search") {
+            items.push(("search-selection", format!("Search the web for {}", quoted(&picked, 24)), picked.chars().take(500).collect()));
+        }
+        if on("translate") {
+            items.push(("translate-selection", format!("Translate {}", quoted(&picked, 24)), picked.chars().take(2000).collect()));
+        }
+        if let Some(word) = word_to_define(&picked).filter(|_| on("define")) {
+            items.push(("define-selection", format!("Define “{}”", word), word));
+        }
+        if speaking {
+            items.push(("stop-speaking", "Stop reading aloud".into(), String::new()));
+        } else {
+            items.push(("speak-selection", "Read aloud".into(), t.selection.chars().take(10000).collect()));
+        }
+        items.push(("share-selection", "Share…".into(), picked.chars().take(2000).collect()));
+        if web_page(&t.page) && on("highlight") {
+            items.push(("highlight-selection", "Highlight".into(), String::new()));
+        }
+        items.push(("note-selection", "Save selection to notes".into(), t.selection.clone()));
+        items.push(("ai-selection", "Ask AI about this".into(), t.selection.clone()));
+    } else if web_page(&t.page) && t.link.is_empty() {
+        if t.image.is_empty() {
+            if on("translate") {
+                items.push(("translate-page", "Translate this page".into(), t.page.clone()));
+            }
+            items.push(("screenshot-page", "Take a screenshot".into(), String::new()));
+        }
+        if speaking {
+            items.push(("stop-speaking", "Stop reading aloud".into(), String::new()));
+        }
+        items.push(("reading-page", "Add page to reading list".into(), t.page.clone()));
+        items.push(("ai-page", "Ask AI about this page".into(), t.page.clone()));
+    }
+    (top, items)
+}
+
+// Puts `text` on the clipboard: "Copy link text" (the toolbar, which the
+// web's clipboard wants focused, usually isn't).
+#[tauri::command]
+pub(crate) async fn copy_text(app: tauri::AppHandle, webview: Webview, text: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    #[cfg(windows)]
+    {
+        return crate::on_main(&app, move || -> Result<(), String> {
+            use windows::ApplicationModel::DataTransfer::{Clipboard, DataPackage};
+            let package = DataPackage::new().map_err(|e| e.message())?;
+            package.SetText(&windows::core::HSTRING::from(text.as_str())).map_err(|e| e.message())?;
+            Clipboard::SetContent(&package).map_err(|e| e.message())?;
+            let _ = Clipboard::Flush();
+            Ok(())
+        })
+        .await
+        .and_then(|r| r);
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = (app, text);
+        Err("not on this system".into())
+    }
+}
+
+// Something is being read aloud ("Read aloud"): the menu offers to stop.
+static SPEAKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[tauri::command]
+pub(crate) fn set_page_speaking(webview: Webview, on: bool) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    SPEAKING.store(on, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}
+
+// The end-to-end tests can't see a native menu: in a test run they can ask
+// for the next one to be kept (not shown) -- the engine's item names and
+// Kessel's items -- and pick one of Kessel's.
+static MENU_CAPTURE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static LAST_MENU: Mutex<Option<(Vec<String>, Vec<serde_json::Value>)>> = Mutex::new(None);
+
+#[tauri::command]
+pub(crate) fn test_page_menu(app: tauri::AppHandle, webview: Webview, capture: Option<bool>, pick: Option<String>) -> Result<serde_json::Value, String> {
+    require_internal_page(&webview)?;
+    if crate::profile::remote_debugging_port().is_none() {
+        return Err("only in a test run".into());
+    }
+    if let Some(on) = capture {
+        MENU_CAPTURE.store(on, std::sync::atomic::Ordering::SeqCst);
+        *LAST_MENU.lock().unwrap() = None;
+    }
+    let last = LAST_MENU.lock().unwrap().clone();
+    if let (Some(action), Some((_, items))) = (pick, &last) {
+        let payload = items.iter().find(|i| i["action"] == action.as_str()).ok_or("no such item")?.clone();
+        let tab = payload["tab"].as_u64().unwrap_or(0) as u32;
+        emit_to_tab_window(&app, tab, "page-menu", payload);
+    }
+    Ok(match last {
+        Some((engine, kessel)) => serde_json::json!({ "engine": engine, "kessel": kessel }),
+        None => serde_json::Value::Null,
+    })
+}
 
 // Adds Kessel's items to the right-click menu of page `id`'s webview; the
 // window's toolbar hears which was picked, with what it was picked on:
@@ -250,49 +415,38 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
                     let _ = target.Kind(&mut kind);
                     let mut has_source = BOOL::default();
                     let _ = target.HasSourceUri(&mut has_source);
-                    let image = if kind == COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND_IMAGE && has_source.as_bool() { text(&|p| target.SourceUri(p)) } else { String::new() };
+                    // (An image's address, whether or not the engine says it
+                    // has a "source".)
+                    let image = if kind == COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND_IMAGE || has_source.as_bool() { text(&|p| target.SourceUri(p)) } else { String::new() };
+                    let image = if kind == COREWEBVIEW2_CONTEXT_MENU_TARGET_KIND_IMAGE { image } else { String::new() };
                     // Which of Kessel's items you want (Settings -> Page tools).
                     let menu_on = {
                         let settings = app.state::<crate::BrowserState>().store.settings.lock().unwrap().features.clone();
                         move |key: &str| settings.get("page_menu").and_then(|m| m.get(key)).and_then(|v| v.as_bool()).unwrap_or(true)
                     };
-                    let mut items: Vec<(&str, String, String)> = Vec::new();
-                    if web_page(&link) && menu_on("peek") {
-                        items.push(("peek-link", "Peek at link".into(), link.clone()));
-                    }
-                    if web_page(&link) {
-                        items.push(("reading-link", "Add link to reading list".into(), link.clone()));
-                    }
-                    if web_page(&image) && menu_on("image_search") {
-                        items.push(("search-image", "Search the web for this image".into(), image.clone()));
-                    }
-                    let picked = selection.split_whitespace().collect::<Vec<_>>().join(" ");
-                    if !picked.is_empty() && menu_on("search") {
-                        let short: String = picked.chars().take(24).collect();
-                        let label = format!("Search the web for “{}{}”", short, if picked.chars().count() > 24 { "…" } else { "" });
-                        items.push(("search-selection", label, picked.chars().take(500).collect()));
-                    }
-                    if !selection.trim().is_empty() && web_page(&page) && menu_on("highlight") {
-                        items.push(("highlight-selection", "Highlight".into(), String::new()));
-                    }
-                    if !selection.trim().is_empty() {
-                        items.push(("note-selection", "Save selection to notes".into(), selection.clone()));
-                        items.push(("ai-selection", "Ask AI about this".into(), selection.clone()));
-                    } else if web_page(&page) && link.is_empty() {
-                        items.push(("reading-page", "Add page to reading list".into(), page.clone()));
-                        items.push(("ai-page", "Ask AI about this page".into(), page.clone()));
-                    }
-                    if items.is_empty() {
-                        return Ok(());
-                    }
+                    let target = MenuTarget { page: page.clone(), link, link_text: link_text.clone(), selection, image };
+                    let (top, items) = page_menu_items(&target, &menu_on, SPEAKING.load(std::sync::atomic::Ordering::SeqCst));
                     let menu = args.MenuItems()?;
+                    // The engine's own items, by name -- its "Open link in new
+                    // window" gives way to Kessel's three.
+                    let mut engine_names = Vec::new();
                     let mut count = 0u32;
                     let _ = menu.Count(&mut count);
-                    let separator = env.CreateContextMenuItem(&HSTRING::new(), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR)?;
-                    let _ = menu.InsertValueAtIndex(count, &separator);
-                    for (i, (action, label, value)) in items.into_iter().enumerate() {
-                        let item = env.CreateContextMenuItem(&HSTRING::from(label.as_str()), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND)?;
-                        let (app, action, page, title) = (app.clone(), action.to_string(), page.clone(), link_text.clone());
+                    let mut i = 0u32;
+                    while i < count {
+                        let Ok(item) = menu.GetValueAtIndex(i) else { break };
+                        let name = text(&|p| item.Name(p));
+                        if !top.is_empty() && name == "openLinkInNewWindow" {
+                            let _ = menu.RemoveValueAtIndex(i);
+                            count -= 1;
+                            continue;
+                        }
+                        engine_names.push(name);
+                        i += 1;
+                    }
+                    let make = |action: &'static str, label: &str, value: String| -> windows::core::Result<ICoreWebView2ContextMenuItem> {
+                        let item = env.CreateContextMenuItem(&HSTRING::from(label), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND)?;
+                        let (app, page, title) = (app.clone(), page.clone(), link_text.clone());
                         let mut item_token = 0i64;
                         let _ = item.add_CustomItemSelected(
                             &CustomItemSelectedEventHandler::create(Box::new(move |_, _| {
@@ -302,7 +456,40 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
                             })),
                             &mut item_token,
                         );
-                        let _ = menu.InsertValueAtIndex(count + 1 + i as u32, &item);
+                        Ok(item)
+                    };
+                    let separator = || env.CreateContextMenuItem(&HSTRING::new(), None::<&IStream>, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR);
+                    if MENU_CAPTURE.load(std::sync::atomic::Ordering::SeqCst) {
+                        // A test run: kept, not shown.
+                        let kessel = top
+                            .iter()
+                            .chain(items.iter())
+                            .map(|(action, label, value)| serde_json::json!({ "action": action, "label": label, "value": value, "page": page, "title": link_text, "tab": id }))
+                            .collect();
+                        *LAST_MENU.lock().unwrap() = Some((engine_names, kessel));
+                        args.SetHandled(true)?;
+                        return Ok(());
+                    }
+                    let mut at = 0u32;
+                    for (action, label, value) in top.iter().cloned() {
+                        let _ = menu.InsertValueAtIndex(at, &make(action, &label, value)?);
+                        at += 1;
+                    }
+                    // (The engine's own separator may already follow.)
+                    let separated = menu.GetValueAtIndex(at).ok().is_some_and(|next| {
+                        let mut kind = COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND::default();
+                        next.Kind(&mut kind).is_ok() && kind == COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR
+                    });
+                    if at > 0 && count > 0 && !separated {
+                        let _ = menu.InsertValueAtIndex(at, &separator()?);
+                    }
+                    if !items.is_empty() {
+                        let mut end = 0u32;
+                        let _ = menu.Count(&mut end);
+                        let _ = menu.InsertValueAtIndex(end, &separator()?);
+                        for (i, (action, label, value)) in items.into_iter().enumerate() {
+                            let _ = menu.InsertValueAtIndex(end + 1 + i as u32, &make(action, &label, value)?);
+                        }
                     }
                     Ok(())
                 })),
@@ -317,6 +504,47 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn actions(items: &[MenuItem]) -> Vec<&'static str> {
+        items.iter().map(|(a, _, _)| *a).collect()
+    }
+
+    #[test]
+    fn the_page_menu_fits_what_was_clicked() {
+        let all = |_: &str| true;
+        let page = "https://example.com/a".to_string();
+        // A link.
+        let link = MenuTarget { page: page.clone(), link: "https://example.com/b".into(), link_text: "  Read   more ".into(), ..Default::default() };
+        let (top, items) = page_menu_items(&link, &all, false);
+        assert_eq!(actions(&top), ["open-link-tab", "open-link-window", "open-link-private"]);
+        assert_eq!(actions(&items), ["peek-link", "copy-link-text", "search-selection", "reading-link"]);
+        assert_eq!(items[1].2, "Read more", "the link's text, on one line");
+        assert_eq!(items[2].1, "Search the web for “Read more”");
+        // Not a web link: nothing to open.
+        let mail = MenuTarget { page: page.clone(), link: "mailto:a@b.c".into(), ..Default::default() };
+        assert!(page_menu_items(&mail, &all, false).0.is_empty());
+        // An image.
+        let image = MenuTarget { page: page.clone(), image: "https://example.com/i.png".into(), ..Default::default() };
+        assert_eq!(actions(&page_menu_items(&image, &all, false).1), ["open-image-tab", "search-image", "reading-page", "ai-page"]);
+        // Text: a word can be defined, a sentence can't.
+        let word = MenuTarget { page: page.clone(), selection: "serendipity".into(), ..Default::default() };
+        let (_, items) = page_menu_items(&word, &all, false);
+        assert_eq!(actions(&items), ["search-selection", "translate-selection", "define-selection", "speak-selection", "share-selection", "highlight-selection", "note-selection", "ai-selection"]);
+        assert_eq!(items[2].1, "Define “serendipity”");
+        let sentence = MenuTarget { page: page.clone(), selection: "This is a whole sentence, really.".into(), ..Default::default() };
+        assert!(!actions(&page_menu_items(&sentence, &all, false).1).contains(&"define-selection"));
+        // While something's read aloud: stop.
+        assert!(actions(&page_menu_items(&word, &all, true).1).contains(&"stop-speaking"));
+        // The page.
+        let plain = MenuTarget { page: page.clone(), ..Default::default() };
+        assert_eq!(actions(&page_menu_items(&plain, &all, false).1), ["translate-page", "screenshot-page", "reading-page", "ai-page"]);
+        // Turned off in Settings -> Page tools.
+        let none = |_: &str| false;
+        assert_eq!(actions(&page_menu_items(&word, &none, false).1), ["speak-selection", "share-selection", "note-selection", "ai-selection"]);
+        // Kessel's own pages: nothing but what works anywhere.
+        let internal = MenuTarget { page: "kessel://settings".into(), ..Default::default() };
+        assert!(page_menu_items(&internal, &all, false).1.is_empty());
+    }
 
     #[test]
     fn only_web_pages_are_kept_to_read() {
