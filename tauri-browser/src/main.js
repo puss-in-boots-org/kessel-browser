@@ -3142,7 +3142,28 @@ let omnibox = null;
 // Settings that change the toolbar itself.
 function applyToolbarSettings() {
   document.getElementById("home-btn").hidden = currentSettings()?.show_home_button === false;
+  // Settings -> Appearance -> Toolbar buttons: which show, in what order
+  // (each group in its own place).
+  const toolbar = currentSettings()?.features?.toolbar || {};
+  const hidden = new Set(toolbar.hidden || []);
+  for (const [group, ids] of Object.entries(TOOLBAR_GROUPS)) {
+    const order = [...(toolbar.order?.[group] || []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(toolbar.order?.[group] || []).includes(id))];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.style.order = String(order.indexOf(id) + 1);
+      el.classList.toggle("k-off", TOOLBAR_HIDEABLE.includes(id) && hidden.has(id));
+    }
+  }
 }
+
+// The toolbar's buttons that can be moved (within their group), and those
+// that can be hidden. Settings -> Appearance shows the same lists.
+const TOOLBAR_GROUPS = {
+  nav: ["back-btn", "forward-btn", "reload-btn", "home-btn"],
+  address: ["engine-btn", "shields-btn", "share-btn", "ext-btn", "star-btn", "account-btn"],
+};
+const TOOLBAR_HIDEABLE = ["forward-btn", "reload-btn", "engine-btn", "shields-btn", "share-btn", "ext-btn", "star-btn", "account-btn"];
 
 // --- The window's name ("Name window…") ---------------------------------------
 //

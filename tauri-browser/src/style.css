@@ -217,6 +217,10 @@ html, body { overflow: hidden; user-select: none; }
 }
 #private-badge[hidden] { display: none; }
 
+/* A toolbar button you hid (Settings -> Appearance -> Toolbar buttons),
+   whatever the button would otherwise do about showing itself. */
+.k-off { display: none !important; }
+
 /* Which profile this is, unless it's the default (profiles.rs). */
 #profile-badge {
   display: flex;

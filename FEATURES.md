@@ -36,14 +36,14 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**86% overall** -- 714 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 45 partly done (🟡), 107 to do (⏳), 111 skipped (⏭️), of 1045.
+**87% overall** -- 722 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 44 partly done (🟡), 100 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
 | [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
-| [3. Windows](#3-windows) | 8 | 2 | 3 | 2 |  | `████████░░` 77% |
+| [3. Windows](#3-windows) | 11 | 2 | 2 |  |  | `█████████░` 93% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
@@ -63,7 +63,7 @@ branch, one small commit per feature or group of features.
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
-| [23. Appearance](#23-appearance) | 14 |  |  | 2 |  | `█████████░` 88% |
+| [23. Appearance](#23-appearance) | 16 |  |  |  |  | `██████████` 100% |
 | [24. Search engines](#24-search-engines) | 8 |  |  | 1 |  | `█████████░` 89% |
 | [25. Startup behavior](#25-startup-behavior) | 8 |  | 1 |  |  | `█████████░` 94% |
 | [26. Session management](#26-session-management) | 9 |  | 1 |  | 1 | `██████████` 95% |
@@ -78,7 +78,7 @@ branch, one small commit per feature or group of features.
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 14 |  |  | 3 |  | `████████░░` 82% |
 | [37. Cache](#37-cache) | 9 |  | 1 |  |  | `██████████` 95% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) | 4 | 4 | 1 | 4 |  | `███████░░░` 65% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) | 5 | 4 | 1 | 3 |  | `███████░░░` 73% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
 | [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
 | [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
@@ -86,12 +86,12 @@ branch, one small commit per feature or group of features.
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 27 | 1 |  |  |  | `██████████` 100% |
-| [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 9 |  |  | 3 |  | `████████░░` 75% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
-| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 7 |  |  | 4 | 3 | `██████░░░░` 64% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
@@ -262,9 +262,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 3.10 | Window session saving | ✅ | Each window's tabs are saved as they change |
 | 3.11 | Window organization | 🟡 | Name windows, move tabs between them, save them as sessions |
 | 3.12 | Window naming | ✅ | Command palette -> Name window…: the name shows in its tab bar and is its title on the taskbar; it comes back with the session |
-| 3.13 | Split-screen browser windows | ⏳ | |
-| 3.14 | Side-by-side page viewing | 🟡 | The side panel shows a second page beside the tab |
-| 3.15 | Window-specific tab groups | ⏳ | |
+| 3.13 | Split-screen browser windows | ✅ | Split view: two tabs side by side in one window -- tab menu -> Open side by side with this tab, or drag a tab to the page's edge; swap sides, a divider to resize, exit |
+| 3.14 | Side-by-side page viewing | ✅ | Split view (3.13), and the side panel's page beside the tab |
+| 3.15 | Window-specific tab groups | ✅ | Each window has its own tab groups, saved and restored with it |
 
 ### 4. Bookmarks
 
@@ -755,8 +755,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 23.05 | Custom background | 🟢 | Wallpapers |
 | 23.06 | Custom new-tab wallpaper | 🟢 | |
 | 23.07 | Custom accent color | 🟢 | |
-| 23.08 | Custom toolbar | ⏳ | |
-| 23.09 | Toolbar button rearrangement | ⏳ | |
+| 23.08 | Custom toolbar | ✅ | Settings -> Appearance -> Toolbar buttons: hide Forward, Reload, the search engine, Shields, Share, Extensions, the star or Accounts |
+| 23.09 | Toolbar button rearrangement | ✅ | Settings -> Appearance -> Toolbar buttons: move each left or right, beside the address bar and in it |
 | 23.10 | Compact mode | ✅ | Settings -> Appearance -> Density: Compact -- smaller tab strip, toolbar, bookmarks bar, rail and menus, in any style |
 | 23.11 | Normal mode | 🟢 | |
 | 23.12 | Touch mode | ✅ | Settings -> Appearance -> Density: Touch -- tabs, buttons and menu items big enough for a finger |
@@ -989,7 +989,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 38.06 | GPU flags | 🧪 | Any GPU switch in Settings -> Network -> Engine switches |
 | 38.07 | Networking flags | 🧪 | Any networking switch in Settings -> Network -> Engine switches |
 | 38.08 | JavaScript flags | 🧪 | --js-flags in Settings -> Network -> Engine switches |
-| 38.09 | Developer mode | ⏳ | |
+| 38.09 | Developer mode | ✅ | Settings -> Extensions -> Developer mode: load an unpacked extension, reload it, pack it |
 | 38.10 | Internal diagnostics | ✅ | kessel://diagnostics, kessel://gpu and kessel://tasks |
 | 38.11 | Browser logs | ⏳ | |
 | 38.12 | Crash logs | ✅ | crashes.json, in kessel://diagnostics (54.04) |
@@ -1138,7 +1138,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 46.01 | Middle-click new tab | ✅ | Behind the current tab by default (Settings -> Keyboard & Mouse) |
 | 46.02 | Middle-click close tab | 🟢 | |
 | 46.03 | Ctrl-click links | ✅ | Ctrl+click: new tab; Ctrl+Shift+click: behind; Shift+click: new window |
-| 46.04 | Drag links | ⏳ | |
+| 46.04 | Drag links | ✅ | A link (or text, searched for) dragged onto the tab strip: between tabs it opens there, onto a tab it goes into that tab |
 | 46.05 | Drag tabs | 🟢 | |
 | 46.06 | Mouse gestures | ✅ | Right button + draw; every gesture and its command is yours to change (Settings -> Page tools) |
 | 46.07 | Trackpad gestures | ⏳ | |
@@ -1235,7 +1235,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 51.10 | VPN integration | ⏭️ | Needs an online account or server: left out |
 | 51.11 | Proxy integration | ⏳ | |
 | 51.12 | Encrypted DNS | ⏳ | |
-| 51.13 | Anti-bounce tracking | ⏳ | |
+| 51.13 | Anti-bounce tracking | ✅ | See 10.20: click-tracking redirect pages skipped |
 | 51.14 | URL tracking-parameter removal | 🟢 | |
 
 ### 52. Import / export

@@ -26,6 +26,7 @@ export const FEATURES = [
     ["Full screen", "F11."],
     ["Pop-out window", "Drag a tab below the toolbar, or tab menu -> Pop out."],
     ["Compact or touch", "Settings -> Appearance -> Density: Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger. Any style."],
+    ["Your own toolbar", "Settings -> Appearance -> Toolbar buttons: hide the buttons you don't use, and move the others where you want them."],
     ["Name a window", "Palette -> Name window…: the name shows in its tab bar and on the taskbar, and comes back with the session. Click it to rename."],
     ["Saved sessions", "Palette -> Save all windows (or this window) as a session, or History -> Saved sessions. Open one again whenever you like -- or every time Kessel starts (Settings -> Search & Startup)."],
   ]],

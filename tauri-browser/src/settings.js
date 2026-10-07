@@ -10,6 +10,7 @@ import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./sett
 import { a11yPanel } from "./settings-a11y.js";
 import { profilesPanel } from "./settings-profiles.js";
 import { autofillPanel } from "./settings-autofill.js";
+import { toolbarCard } from "./settings-toolbar.js";
 import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard, permissionsPanel, downloadsExtras } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -82,6 +83,7 @@ function appearancePanel(settings) {
   </div>`);
 
   p.querySelector("#style-section").replaceWith(buildStyleSection());
+  p.querySelector("#zoom-card").before(toolbarCard({ el, switchHtml }));
 
   const zoomSelect = p.querySelector("#default-zoom");
   for (const z of ZOOM_CHOICES) {
