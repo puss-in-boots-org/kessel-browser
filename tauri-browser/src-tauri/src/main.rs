@@ -13,6 +13,7 @@ mod commands;
 mod crash;
 mod dialogs;
 mod extensions;
+mod forms;
 mod graphics;
 mod history;
 mod import;
@@ -5444,6 +5445,13 @@ fn main() {
             profiles::open_profile,
             profiles::create_profile,
             profiles::profile_shortcut,
+            forms::autofill_list,
+            forms::autofill_save_address,
+            forms::autofill_delete_address,
+            forms::autofill_save_card,
+            forms::autofill_delete_card,
+            forms::autofill_offer_answer,
+            forms::forms_pick,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,

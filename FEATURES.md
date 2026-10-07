@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**85% overall** -- 707 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 44 partly done (🟡), 115 to do (⏳), 111 skipped (⏭️), of 1045.
+**86% overall** -- 714 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 45 partly done (🟡), 107 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -47,7 +47,7 @@ branch, one small commit per feature or group of features.
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
-| [7. Passwords & identity](#7-passwords--identity) | 17 |  |  | 18 | 2 | `█████░░░░░` 49% |
+| [7. Passwords & identity](#7-passwords--identity) | 24 |  | 1 | 10 | 2 | `███████░░░` 70% |
 | [8. Profiles](#8-profiles) | 16 |  |  |  |  | `██████████` 100% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
@@ -370,14 +370,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.26 | Security-key support | ⏳ | |
 | 7.27 | Username autofill | ✅ | With the password (7.03) |
 | 7.28 | Password autofill | ✅ | See 7.03 |
-| 7.29 | Name autofill | ⏳ | |
-| 7.30 | Address autofill | ⏳ | |
-| 7.31 | Phone-number autofill | ⏳ | |
-| 7.32 | Email autofill | ⏳ | |
-| 7.33 | Payment autofill | ⏳ | |
-| 7.34 | Credit/debit card storage | ⏳ | |
-| 7.35 | Expiration-date autofill | ⏳ | |
-| 7.36 | Form-data autofill | ⏳ | |
+| 7.29 | Name autofill | ✅ | Settings -> Addresses & cards: a name (whole, first or last) filled in from Kessel's own list under the field -- the page never sees the list |
+| 7.30 | Address autofill | ✅ | Street, city, region, postal code and country -- a country list is picked by its name |
+| 7.31 | Phone-number autofill | ✅ | Phone numbers, from the same addresses |
+| 7.32 | Email autofill | ✅ | Email addresses, from the same addresses |
+| 7.33 | Payment autofill | ✅ | Cards filled in from the list under the field, on secure pages: number, name, expiry -- never a security code |
+| 7.34 | Credit/debit card storage | ✅ | Kept encrypted for your Windows account (DPAPI); lists show only its last 4 digits |
+| 7.35 | Expiration-date autofill | ✅ | MM/YY, MM/YYYY, or a month and a year field (lists too) |
+| 7.36 | Form-data autofill | 🟡 | Addresses and cards, offered to save when a form is sent (7.29-7.35); other fields aren't remembered |
 | 7.37 | One-click autofill | ✅ | See 7.03 |
 
 ### 8. Profiles

@@ -506,6 +506,163 @@
       else window.addEventListener('load', afterLoad, { once: true });
     }
 
+    // --- Addresses and cards (forms.rs) ---
+    // A field that wants an address or a card: Kessel shows what you've
+    // saved under it, in its own list -- this page never sees that list.
+    // What you pick comes back as "form-fill" and goes into the form. A
+    // form sent with an address or a card in it is offered to keep.
+    if (window.top === window) {
+      var setInput = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      var FORM_RULES = [
+        ['cc-number', ['cc-number'], /card.?num|cc.?num|cardnumber|kartennummer|kártyaszám/i],
+        ['cc-name', ['cc-name'], /name.?on.?card|card.?holder|cc.?name|karteninhaber/i],
+        ['cc-exp', ['cc-exp'], /expir|exp.?date|valid.?thru|^mm.?\/?.?yy/i],
+        ['cc-month', ['cc-exp-month'], /exp.?month|cc.?month|ccmonth/i],
+        ['cc-year', ['cc-exp-year'], /exp.?year|cc.?year|ccyear/i],
+        ['cc-csc', ['cc-csc'], /cvc|cvv|csc|security.?code/i],
+        ['given', ['given-name'], /first.?name|given.?name|^fname$|vorname|keresztn/i],
+        ['family', ['family-name'], /last.?name|surname|family.?name|^lname$|nachname|vezetékn/i],
+        ['name', ['name'], /^(full.?name|name|your.?name|teljes.?név)$/i],
+        ['email', ['email'], /e.?mail/i],
+        ['tel', ['tel', 'tel-national'], /phone|mobile|telephone|^tel$/i],
+        ['org', ['organization'], /company|organi[sz]ation/i],
+        ['street2', ['address-line2'], /address.?2|line.?2|apartment|suite/i],
+        ['street', ['street-address', 'address-line1'], /street|address|^addr|line.?1|utca/i],
+        ['city', ['address-level2'], /^city|town|locality|település|város/i],
+        ['region', ['address-level1'], /^state|province|region|county|megye/i],
+        ['postal', ['postal-code'], /zip|postal|post.?code|postcode|irányítószám|irsz/i],
+        ['country', ['country', 'country-name'], /country|ország/i],
+      ];
+      var formKind = function (el) {
+        if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement)) return '';
+        var type = (el.type || '').toLowerCase();
+        if (/^(password|hidden|checkbox|radio|submit|button|file|image|reset|search|range|color|date)$/.test(type)) return '';
+        var ac = (el.getAttribute('autocomplete') || '').toLowerCase().trim().split(/\s+/).pop();
+        var i;
+        if (ac && ac !== 'on' && ac !== 'off') {
+          for (i = 0; i < FORM_RULES.length; i++) if (FORM_RULES[i][1].indexOf(ac) >= 0) return FORM_RULES[i][0];
+        }
+        if (type === 'email') return 'email';
+        if (type === 'tel') return 'tel';
+        var label = el.labels && el.labels[0] ? el.labels[0].textContent : '';
+        var pieces = [el.name, el.id, el.getAttribute('placeholder'), el.getAttribute('aria-label'), label].map(function (p) { return (p || '').trim(); }).filter(Boolean);
+        for (i = 0; i < FORM_RULES.length; i++) {
+          for (var j = 0; j < pieces.length; j++) if (FORM_RULES[i][2].test(pieces[j])) return FORM_RULES[i][0];
+        }
+        return '';
+      };
+      var groupOf = function (k) { return k.indexOf('cc-') === 0 ? 'card' : 'address'; };
+      var formField = null, formOpen = false;
+      var closeList = function () {
+        if (formOpen) BRIDGE.send('form-blur', {});
+        formOpen = false;
+      };
+      document.addEventListener('focusin', function (e) {
+        var el = e.target, k = formKind(el);
+        if (!k || k === 'cc-csc' || el.value) return closeList();
+        formField = el;
+        var r = el.getBoundingClientRect();
+        formOpen = true;
+        BRIDGE.send('form-focus', { kind: groupOf(k), rect: [r.left, r.top, r.width, r.height], dpr: window.devicePixelRatio || 1 });
+      }, true);
+      document.addEventListener('focusout', function (e) { if (e.target === formField) closeList(); }, true);
+      document.addEventListener('input', function (e) { if (e.target === formField) closeList(); }, true);
+      document.addEventListener('keydown', function (e) {
+        if (!formOpen || e.target !== formField) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') e.preventDefault();
+        else if (e.key !== 'Escape') return;
+        BRIDGE.send('form-key', { key: e.key });
+        if (e.key === 'Escape') formOpen = false;
+      }, true);
+
+      var two = function (n) { return (n < 10 ? '0' : '') + n; };
+      var valueFor = function (k, d, f) {
+        var parts = (d.name || '').trim().split(/\s+/);
+        var year = String(d.exp_year || '');
+        switch (k) {
+          case 'name': case 'cc-name': return d.name;
+          case 'given': return parts.length > 1 ? parts.slice(0, -1).join(' ') : parts[0];
+          case 'family': return parts.length > 1 ? parts[parts.length - 1] : '';
+          case 'email': return d.email;
+          case 'tel': return d.phone;
+          case 'org': return d.organization;
+          case 'street': return d.street;
+          case 'city': return d.city;
+          case 'region': return d.region;
+          case 'postal': return d.postal_code;
+          case 'country': return d.country;
+          case 'cc-number': return d.number;
+          case 'cc-exp': return two(d.exp_month) + '/' + (/yyyy/i.test(f.placeholder || '') || f.maxLength === 7 ? year : year.slice(2));
+          case 'cc-month': return two(d.exp_month);
+          case 'cc-year': return f.maxLength === 2 ? year.slice(2) : year;
+        }
+        return '';
+      };
+      var setField = function (f, v) {
+        if (f.tagName === 'SELECT') {
+          var want = String(v).toLowerCase(), num = parseInt(v, 10), found = -1;
+          for (var i = 0; i < f.options.length && found < 0; i++) {
+            var o = f.options[i];
+            if (o.value.toLowerCase() === want || o.text.trim().toLowerCase() === want || (!isNaN(num) && parseInt(o.value, 10) === num) || (!isNaN(num) && String(num).length === 4 && o.value === String(num).slice(2))) found = i;
+          }
+          if (found < 0) return;
+          f.selectedIndex = found;
+        } else {
+          setInput.call(f, v);
+        }
+        f.dispatchEvent(new Event('input', { bubbles: true }));
+        f.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      BRIDGE.on('form-fill', function (m) {
+        formOpen = false;
+        if (!formField || !m.data) return;
+        var fields = (formField.form || document).querySelectorAll('input, select');
+        for (var i = 0; i < fields.length; i++) {
+          var f = fields[i], k = formKind(f);
+          if (!k || k === 'cc-csc' || groupOf(k) !== m.kind || f.disabled || f.readOnly) continue;
+          var v = valueFor(k, m.data, f);
+          if (v) setField(f, v);
+        }
+      });
+
+      // Sent: what it had in it, to offer keeping (never from a private tab:
+      // Kessel decides).
+      document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        var address = {}, card = {}, given = '', family = '', street2 = '';
+        var fields = form.querySelectorAll('input, select');
+        for (var i = 0; i < fields.length; i++) {
+          var f = fields[i], k = formKind(f);
+          var v = f.tagName === 'SELECT' ? (f.selectedIndex >= 0 ? (k === 'country' ? f.options[f.selectedIndex].text : f.value) : '') : f.value;
+          v = (v || '').trim();
+          if (!k || !v) continue;
+          switch (k) {
+            case 'name': address.name = v; break;
+            case 'given': given = v; break;
+            case 'family': family = v; break;
+            case 'email': address.email = v; break;
+            case 'tel': address.phone = v; break;
+            case 'org': address.organization = v; break;
+            case 'street': address.street = v; break;
+            case 'street2': street2 = v; break;
+            case 'city': address.city = v; break;
+            case 'region': address.region = v; break;
+            case 'postal': address.postal_code = v; break;
+            case 'country': address.country = v; break;
+            case 'cc-number': card.number = v; break;
+            case 'cc-name': card.name = v; break;
+            case 'cc-exp': var m = /^(\d{1,2})\s*\/\s*(\d{2,4})$/.exec(v); if (m) { card.exp_month = m[1]; card.exp_year = m[2]; } break;
+            case 'cc-month': card.exp_month = v; break;
+            case 'cc-year': card.exp_year = v; break;
+          }
+        }
+        if (!address.name && (given || family)) address.name = (given + ' ' + family).trim();
+        if (street2 && address.street) address.street += ', ' + street2;
+        if (card.number || Object.keys(address).length) BRIDGE.send('form-sent', { address: address, card: card });
+      }, true);
+    }
+
     // --- The site's own search engine (OpenSearch), offered in Settings ---
     function findSearch() {
       var link = document.querySelector('link[rel="search"][type="application/opensearchdescription+xml"][href]');

@@ -3487,8 +3487,9 @@ function renderNotices() {
   btn.hidden = !first;
   if (!first) return;
   const watched = first.id.startsWith("watch:");
-  const label = watched ? "Page changed" : { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
-  btn.innerHTML = `${icon(watched ? "eye" : first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
+  const offer = first.id === "form-offer";
+  const label = watched ? "Page changed" : offer ? (first.detail?.kind === "card" ? "Save card?" : "Save address?") : { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
+  btn.innerHTML = `${icon(watched ? "eye" : offer ? (first.detail?.kind === "card" ? "card" : "user") : first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
   btn.querySelector("span").textContent = notices.length > 1 ? `${label} +${notices.length - 1}` : label;
   btn.dataset.notice = first.id;
 }
@@ -3522,6 +3523,16 @@ function noticeItems(n) {
         },
         dismiss,
       ];
+    // A form sent with an address or a card that isn't saved (forms.rs).
+    case "form-offer": {
+      const answer = (save) => invoke("autofill_offer_answer", { offer: n.detail.offer, save }).catch((err) => toast(String(err)));
+      const card = n.detail.kind === "card";
+      return [
+        { header: `Save ${card ? "this card" : "this address"} for filling in forms? ${n.detail.label}${card ? " -- kept encrypted for your Windows account; the security code never is" : ""}` },
+        { label: card ? "Save card" : "Save address", iconName: card ? "card" : "user", action: () => answer(true) },
+        { label: "Not now", iconName: "close", action: () => answer(false) },
+      ];
+    }
     default:
       if (n.id.startsWith("watch:")) return watchedNoticeItems(n.detail);
       return [dismiss];

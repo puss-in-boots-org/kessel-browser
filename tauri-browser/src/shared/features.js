@@ -98,6 +98,7 @@ export const FEATURES = [
     ["Save passwords as you sign in", "After you sign in, Kessel asks whether to save the password (or update the saved one). “Never for this site” remembers; turn the offer off in Passwords -> settings."],
     ["Password health", "Passwords page: Weak and Reused show the passwords to change; “Check for breaches” looks them up in Have I Been Pwned (only 5 characters of each hash leave your computer)."],
     ["Export passwords", "Passwords -> settings -> Export: a CSV file other browsers import, after you type your master password."],
+    ["Addresses and cards", "Settings -> Addresses & cards: click a form's field and pick one from Kessel's list under it (the page never sees the list); after you send a form with a new one, the toolbar offers to save it. Cards are encrypted for your Windows account; security codes are never kept."],
   ]],
   ["Your data", [
     ["History", "Ctrl+H. Search, by site, delete days or sites -- and by the words on pages, once Settings -> History lets it remember them."],
