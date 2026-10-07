@@ -2864,6 +2864,11 @@ async function runCommand(id, ctx = {}) {
     case "engine-task-manager": return act("task-manager");
     case "diagnostics": return openSingleton("kessel://diagnostics");
     case "restart-safe-mode": return invoke("restart_in_mode", { safe: true }).catch((err) => toast(String(err)));
+    case "lock-browser":
+      return invoke("lock_browser").catch((err) => {
+        toast(String(err));
+        openSingleton("kessel://settings/security");
+      });
     case "home": return openInActiveTab(currentSettings()?.homepage || "kessel://newtab");
     case "focus-address-bar": return focusAddressBar(false);
     case "focus-search": return focusAddressBar(true);
@@ -5011,6 +5016,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   notices = await invoke("kessel_notices").catch(() => []);
   renderNotices();
   await listen("task-action", (event) => taskAction(event.payload || {}));
+  // Kessel locked (browser_lock.rs): nothing of the tabs is said aloud.
+  await listen("browser-locked", (event) => {
+    if (!event.payload) return;
+    speechSynthesis.cancel();
+    invoke("set_page_speaking", { on: false }).catch(() => {});
+    hideHoverCard();
+  });
 
   await listen("tab-navigated", (event) => {
     // Rust only emits this for genuine external http(s) navigation --

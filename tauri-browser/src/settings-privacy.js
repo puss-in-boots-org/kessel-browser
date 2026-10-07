@@ -5,6 +5,7 @@
 import { icon } from "./shared/icons.js";
 import { currentSettings, saveSettings } from "./shared/theme.js";
 import { toast, escapeHtml, confirmDialog, debounce } from "./shared/api.js";
+import { lockCard } from "./settings-lock.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -376,6 +377,7 @@ export async function securityPanel(settings, { el, settingRow, switchHtml, wire
   wireSwitch(panel, "smartscreen-toggle", "smartscreen");
   wireRestart(panel, "smartscreen-toggle");
   wireSwitch(panel, "https-only-toggle", "https_only");
+  lockCard(panel, { el, settingRow, switchHtml });
 
   const holder = panel.querySelector("#security-lists");
   async function renderLists() {

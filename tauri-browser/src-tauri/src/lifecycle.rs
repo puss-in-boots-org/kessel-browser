@@ -109,8 +109,12 @@ fn is_active(app: &tauri::AppHandle, id: u32) -> bool {
     state.win(&win, |w| w.active == Some(id)).unwrap_or(false)
 }
 
-// Tab `id` is the one you're looking at: drawn, full speed, full memory.
+// Tab `id` is the one you're looking at: drawn, full speed, full memory --
+// unless its window is locked (browser_lock.rs), which shows it on unlocking.
 pub fn show(webview: &Webview) {
+    if crate::browser_lock::keep_hidden(webview) {
+        return;
+    }
     #[cfg(windows)]
     let _ = webview.with_webview(|platform| unsafe {
         use webview2_com::Microsoft::Web::WebView2::Win32::*;
@@ -510,6 +514,10 @@ pub fn track_focus(webview: &Webview) {
 // Window `win` was activated: if the focus landed on the window itself
 // rather than in one of its webviews, it goes back where it was.
 pub fn restore_focus(app: &tauri::AppHandle, win: &str) {
+    // Locked: the lock page has it, whatever had it before.
+    if crate::browser_lock::focus_lock_page(app, win) {
+        return;
+    }
     #[cfg(windows)]
     unsafe {
         use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
