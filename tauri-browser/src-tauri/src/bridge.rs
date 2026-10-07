@@ -191,6 +191,20 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::side_panel_drag(app, label, x, done);
             None
         }
+        // What the page says (Settings -> History -> "Remember what pages
+        // say"), for finding it in the history by its words: only for web
+        // pages, never a private tab's, under WebView2's address for it.
+        "page-text" if top_frame => {
+            let text = d.get("text")?.as_str()?;
+            let state = app.state::<BrowserState>();
+            let on = crate::history_page_text_on(&state.store.settings.lock().unwrap().features);
+            let private = state.private_tabs.lock().unwrap().contains(&id);
+            if on && !private && (url.starts_with("https://") || url.starts_with("http://")) {
+                let text: String = text.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(50_000).collect();
+                state.store.set_history_page_text(url, &text);
+            }
+            None
+        }
         // An element picked with "Hide an element on this site" (tools.rs).
         "zap" if top_frame => {
             crate::tools::add_zapped(app, url, d.get("selector")?.as_str()?);

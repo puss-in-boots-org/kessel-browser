@@ -490,6 +490,22 @@
       else tellLanguage();
     }
 
+    // --- What the page says, for finding it in History by its words ---
+    // (Settings -> History -> "Remember what pages say"; bridge.rs keeps it
+    // only for a web page in a tab that isn't private.)
+    if (window.top === window) {
+      var tellText = function () {
+        BRIDGE.request('site-tweaks').then(function (t) {
+          if (!t || !t.remember_text || !document.body) return;
+          var text = (document.body.innerText || '').slice(0, 60000);
+          if (text.trim()) BRIDGE.send('page-text', { text: text });
+        }, function () {});
+      };
+      var afterLoad = function () { later(tellText, 1500); };
+      if (document.readyState === 'complete') afterLoad();
+      else window.addEventListener('load', afterLoad, { once: true });
+    }
+
     // --- The site's own search engine (OpenSearch), offered in Settings ---
     function findSearch() {
       var link = document.querySelector('link[rel="search"][type="application/opensearchdescription+xml"][href]');

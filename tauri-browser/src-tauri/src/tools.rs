@@ -55,6 +55,9 @@ pub fn site_tweaks_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
         // Settings -> Accessibility (a11y.rs): smallest font, focus outlines,
         // animations stopped.
         "a11y": crate::a11y::page_script_options(&f),
+        // Settings -> History -> "Remember what pages say": the page sends
+        // its text once it has loaded (bridge.rs decides what's kept).
+        "remember_text": crate::history_page_text_on(&f),
     })
 }
 

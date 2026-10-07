@@ -17,6 +17,9 @@ pub struct Visit {
     pub title: String,
     pub host: String,
     pub visited_at: u64,
+    // Found by what the page says (query_in): the words around it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippet: Option<String>,
 }
 
 // A site in the "by site" view: how often and how recently you went there.
@@ -47,6 +50,21 @@ pub struct Suggestion {
 
 pub struct History {
     conn: Mutex<Connection>,
+    // Whether the engine has full-text search for what pages say (FTS5).
+    has_text: bool,
+}
+
+// The words of `text` as a full-text query: every one, each as the start
+// of a word. None when nothing searchable is left.
+fn text_query(text: &str) -> Option<String> {
+    let words: Vec<String> = text
+        .split_whitespace()
+        .take(8)
+        .map(|w| w.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+        .filter(|w| !w.is_empty())
+        .map(|w| format!("\"{}\"*", w))
+        .collect();
+    (!words.is_empty()).then(|| words.join(" "))
 }
 
 // How much a visit this many days ago still counts (Firefox-style frecency:
@@ -113,7 +131,11 @@ impl History {
              CREATE INDEX IF NOT EXISTS visits_url ON visits(url);
              CREATE INDEX IF NOT EXISTS visits_host ON visits(host);",
         );
-        let history = History { conn: Mutex::new(conn) };
+        // What pages said (Settings -> History -> "Remember what pages say").
+        let has_text = conn
+            .execute_batch("CREATE VIRTUAL TABLE IF NOT EXISTS page_text USING fts5(url UNINDEXED, text, tokenize = 'unicode61 remove_diacritics 2');")
+            .is_ok();
+        let history = History { conn: Mutex::new(conn), has_text };
         history.import_json(&dir.join("history.json"));
         history
     }
@@ -196,19 +218,56 @@ impl History {
         );
     }
 
+    // What the page at `url` says, for finding it by its words later -- only
+    // for a page that's in the history (and gone with it).
+    pub fn set_page_text(&self, url: &str, text: &str) {
+        if !self.has_text {
+            return;
+        }
+        let conn = self.conn.lock().unwrap();
+        if !conn.query_row("SELECT 1 FROM visits WHERE url = ?1 LIMIT 1", params![url], |_| Ok(())).optional().ok().flatten().is_some() {
+            return;
+        }
+        let _ = conn.execute("DELETE FROM page_text WHERE url = ?1", params![url]);
+        let _ = conn.execute("INSERT INTO page_text (url, text) VALUES (?1, ?2)", params![url, text]);
+    }
+
+    // What pages said, for pages no longer in the history.
+    fn forget_page_text(&self, conn: &Connection) {
+        if self.has_text {
+            let _ = conn.execute("DELETE FROM page_text WHERE url NOT IN (SELECT url FROM visits)", []);
+        }
+    }
+
     // Visits, newest first: matching `text` (in the title or address), in
     // [from, to) (unix seconds), on `site`.
     pub fn query(&self, text: &str, from: Option<u64>, to: Option<u64>, site: Option<&str>, limit: u32, offset: u32) -> Vec<Visit> {
+        self.query_in(text, false, from, to, site, limit, offset)
+    }
+
+    // The same -- and with `in_text`, also visits to pages that say every
+    // word of `text`, with the words around it as their snippet.
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_in(&self, text: &str, in_text: bool, from: Option<u64>, to: Option<u64>, site: Option<&str>, limit: u32, offset: u32) -> Vec<Visit> {
         let mut sql = String::from("SELECT id, url, title, host, visited_at FROM visits WHERE 1 = 1");
         let mut args: Vec<rusqlite::types::Value> = Vec::new();
         let text = text.trim();
+        let said = if in_text && self.has_text { text_query(text) } else { None };
         if !text.is_empty() {
-            // Every word must appear, in the title or the address.
+            // Every word must appear, in the title or the address -- or the
+            // page says them all.
+            sql.push_str(" AND ((1 = 1");
             for word in text.split_whitespace().take(8) {
                 sql.push_str(" AND (title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\')");
                 args.push(like_pattern(word).into());
                 args.push(like_pattern(word).into());
             }
+            sql.push(')');
+            if let Some(q) = &said {
+                sql.push_str(" OR url IN (SELECT url FROM page_text WHERE page_text MATCH ?)");
+                args.push(q.clone().into());
+            }
+            sql.push(')');
         }
         if let Some(from) = from {
             sql.push_str(" AND visited_at >= ?");
@@ -227,11 +286,26 @@ impl History {
         args.push((offset as i64).into());
         let conn = self.conn.lock().unwrap();
         let Ok(mut stmt) = conn.prepare(&sql) else { return Vec::new() };
-        stmt.query_map(params_from_iter(args), |r| {
-            Ok(Visit { id: r.get(0)?, url: r.get(1)?, title: r.get(2)?, host: r.get(3)?, visited_at: r.get::<_, i64>(4)? as u64 })
-        })
-        .map(|rows| rows.filter_map(Result::ok).collect())
-        .unwrap_or_default()
+        let mut visits: Vec<Visit> = stmt
+            .query_map(params_from_iter(args), |r| {
+                Ok(Visit { id: r.get(0)?, url: r.get(1)?, title: r.get(2)?, host: r.get(3)?, visited_at: r.get::<_, i64>(4)? as u64, snippet: None })
+            })
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default();
+        // Found only by what the page says: show where.
+        if let Some(q) = said {
+            let words: Vec<String> = text.split_whitespace().take(8).map(str::to_lowercase).collect();
+            if let Ok(mut snip) = conn.prepare("SELECT snippet(page_text, 1, '', '', '…', 14) FROM page_text WHERE page_text MATCH ?1 AND url = ?2 LIMIT 1") {
+                for v in visits.iter_mut() {
+                    let (title, url) = (v.title.to_lowercase(), v.url.to_lowercase());
+                    if words.iter().all(|w| title.contains(w.as_str()) || url.contains(w.as_str())) {
+                        continue;
+                    }
+                    v.snippet = snip.query_row(params![q, v.url], |r| r.get::<_, String>(0)).optional().ok().flatten();
+                }
+            }
+        }
+        visits
     }
 
     // Pages for the address bar: every word of `text` in the title or the
@@ -376,29 +450,46 @@ impl History {
 
     pub fn delete(&self, ids: &[i64]) -> usize {
         let conn = self.conn.lock().unwrap();
-        ids.iter().map(|id| conn.execute("DELETE FROM visits WHERE id = ?1", params![id]).unwrap_or(0)).sum()
+        let n = ids.iter().map(|id| conn.execute("DELETE FROM visits WHERE id = ?1", params![id]).unwrap_or(0)).sum();
+        self.forget_page_text(&conn);
+        n
     }
 
     // Everything from [from, to) (unix seconds).
     pub fn delete_range(&self, from: u64, to: u64) -> usize {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM visits WHERE visited_at >= ?1 AND visited_at < ?2", params![from as i64, to as i64]).unwrap_or(0)
+        let n = conn.execute("DELETE FROM visits WHERE visited_at >= ?1 AND visited_at < ?2", params![from as i64, to as i64]).unwrap_or(0);
+        self.forget_page_text(&conn);
+        n
     }
 
     // Every visit to one address (Shift+Delete on an address bar suggestion).
     pub fn delete_url(&self, url: &str) -> usize {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM visits WHERE url = ?1", params![url]).unwrap_or(0)
+        let n = conn.execute("DELETE FROM visits WHERE url = ?1", params![url]).unwrap_or(0);
+        self.forget_page_text(&conn);
+        n
     }
 
     pub fn delete_site(&self, site: &str) -> usize {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM visits WHERE host = ?1", params![site.trim_start_matches("www.").to_lowercase()]).unwrap_or(0)
+        let n = conn.execute("DELETE FROM visits WHERE host = ?1", params![site.trim_start_matches("www.").to_lowercase()]).unwrap_or(0);
+        self.forget_page_text(&conn);
+        n
+    }
+
+    // Only what pages said (the setting turned off): the visits stay.
+    pub fn clear_page_text(&self) {
+        if self.has_text {
+            let conn = self.conn.lock().unwrap();
+            let _ = conn.execute("DELETE FROM page_text", []);
+        }
     }
 
     pub fn clear(&self) {
         let conn = self.conn.lock().unwrap();
         let _ = conn.execute("DELETE FROM visits", []);
+        self.forget_page_text(&conn);
         let _ = conn.execute_batch("VACUUM;");
     }
 
@@ -410,6 +501,7 @@ impl History {
         let cutoff = now.saturating_sub(days as u64 * 86_400);
         let conn = self.conn.lock().unwrap();
         let _ = conn.execute("DELETE FROM visits WHERE visited_at < ?1", params![cutoff as i64]);
+        self.forget_page_text(&conn);
     }
 
     pub fn count(&self) -> u64 {
@@ -509,6 +601,28 @@ mod tests {
         let left = h.query("", None, None, None, 10, 0);
         assert_eq!(left.len(), 1);
         assert_eq!(left[0].url, "https://new.example/");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn found_by_what_the_page_says() {
+        let (h, dir) = temp_history();
+        assert!(h.has_text, "full-text search in the engine");
+        h.record("https://recipes.example/soup", "Soup", 1_000);
+        h.set_page_text("https://recipes.example/soup", "Lentil soup with smoked paprika and a squeeze of lemon");
+        h.set_page_text("https://never.visited/", "smoked paprika");
+        // Not without asking, and only every word.
+        assert!(h.query("paprika", None, None, None, 10, 0).is_empty(), "titles and addresses only");
+        let found = h.query_in("smoked papr", true, None, None, None, 10, 0);
+        assert_eq!(found.len(), 1, "a page never visited isn't kept");
+        assert!(found[0].snippet.as_deref().unwrap_or("").contains("smoked paprika"), "{:?}", found[0].snippet);
+        assert!(h.query_in("paprika chocolate", true, None, None, None, 10, 0).is_empty(), "every word");
+        // Found by its title: no snippet needed.
+        assert!(h.query_in("soup", true, None, None, None, 10, 0)[0].snippet.is_none());
+        // Gone with its history.
+        h.delete_url("https://recipes.example/soup");
+        h.record("https://recipes.example/soup", "Soup", 2_000);
+        assert!(h.query_in("paprika", true, None, None, None, 10, 0).is_empty(), "what it said went with its visits");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

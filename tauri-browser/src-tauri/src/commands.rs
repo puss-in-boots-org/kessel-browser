@@ -138,6 +138,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("media-controls", "Media controls", "Kessel", &[]),
     cmd("gpu", "Graphics and media diagnostics", "Kessel", &[]),
     cmd("diagnostics", "Diagnostics: system, storage, crash reports", "Kessel", &[]),
+    cmd("privacy-dashboard", "Privacy dashboard: what Shields blocked, your protections", "Kessel", &[]),
     cmd("restart-safe-mode", "Restart in safe mode", "Kessel", &[]),
     cmd("lock-browser", "Lock Kessel", "Kessel", &[]),
     cmd("theater-mode", "Theater mode: the video fills the tab", "Page tools", &[]),

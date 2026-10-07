@@ -465,6 +465,7 @@ pub struct Store {
 enum HistoryWrite {
     Visit { url: String, title: String, at: u64 },
     Title { url: String, title: String },
+    PageText { url: String, text: String },
 }
 
 impl Store {
@@ -482,6 +483,7 @@ impl Store {
                 match write {
                     HistoryWrite::Visit { url, title, at } => writer.record(&url, &title, at),
                     HistoryWrite::Title { url, title } => writer.set_title(&url, &title),
+                    HistoryWrite::PageText { url, text } => writer.set_page_text(&url, &text),
                 }
             }
         });
@@ -520,6 +522,12 @@ impl Store {
     // title; this fills the title in once it has one.
     pub fn set_history_title(&self, url: &str, title: &str) {
         let _ = self.history_writes.send(HistoryWrite::Title { url: url.to_string(), title: title.to_string() });
+    }
+
+    // What the page at `url` says (Settings -> History -> "Remember what
+    // pages say"), after its visit.
+    pub fn set_history_page_text(&self, url: &str, text: &str) {
+        let _ = self.history_writes.send(HistoryWrite::PageText { url: url.to_string(), text: text.to_string() });
     }
 
     // Every bookmark, in whatever folder (changes go through bookmarks.rs).

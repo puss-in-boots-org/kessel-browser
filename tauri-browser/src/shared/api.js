@@ -60,6 +60,7 @@ export const INTERNAL_TITLES = {
   "kessel://shot": "Screenshot",
   "kessel://feeds": "Feeds",
   "kessel://bookmarks": "Bookmarks",
+  "kessel://privacy": "Privacy dashboard",
 };
 
 // kessel://settings/privacy -> kessel://settings.

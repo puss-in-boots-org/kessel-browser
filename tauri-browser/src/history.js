@@ -184,6 +184,14 @@ function visitRow(v) {
   link.textContent = title;
   link.href = v.url;
   link.title = `${title}\n${v.url}`;
+  // Found by what the page says ("Remember what pages say"): where.
+  if (v.snippet) {
+    const said = document.createElement("span");
+    said.className = "said";
+    said.textContent = `“${v.snippet}”`;
+    said.title = v.snippet;
+    link.after(said);
+  }
   const host = row.querySelector(".host");
   host.textContent = v.host || hostOf(v.url);
   host.title = `More from ${host.textContent}`;

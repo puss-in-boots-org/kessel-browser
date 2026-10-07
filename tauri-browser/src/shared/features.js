@@ -99,11 +99,12 @@ export const FEATURES = [
     ["Export passwords", "Passwords -> settings -> Export: a CSV file other browsers import, after you type your master password."],
   ]],
   ["Your data", [
-    ["History", "Ctrl+H. Search, by site, delete days or sites."],
+    ["History", "Ctrl+H. Search, by site, delete days or sites -- and by the words on pages, once Settings -> History lets it remember them."],
     ["Downloads", "Ctrl+J, or the rail's download button."],
     ["Read offline", "Put a page on the reading list while it's open: a whole copy is kept, and opens when you're offline."],
     ["Passwords", "Ctrl+Shift+L or the rail's key. Autofill offers saved logins."],
     ["Clear browsing data", "Ctrl+Shift+Delete."],
+    ["Privacy dashboard", "Palette -> Privacy dashboard (or Settings -> Privacy): what Shields blocked and cleaned, day by day and per site; your protections; what sites may use; what Kessel connects to by itself -- no telemetry."],
     ["Accounts", "The person button in the address bar: be signed in as several people at once."],
     ["Import", "Settings -> Import, from Chrome, Edge, Brave, Opera, Opera GX, Vivaldi and Firefox: bookmarks (with their folders), Speed Dial, history, the tabs that were open (as saved groups), cookies, passwords and Web Store extensions."],
     ["Export", "History as a CSV file (Settings -> History), the open tabs as a bookmarks file (Settings -> Tabs), bookmarks (the bookmark manager), passwords (Passwords -> settings) and settings (Settings -> About)."],

@@ -2782,7 +2782,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks", "kessel://tasks", "kessel://diagnostics"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks", "kessel://tasks", "kessel://diagnostics", "kessel://privacy"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2880,6 +2880,7 @@ async function runCommand(id, ctx = {}) {
     case "task-manager": return openSingleton("kessel://tasks");
     case "engine-task-manager": return act("task-manager");
     case "diagnostics": return openSingleton("kessel://diagnostics");
+    case "privacy-dashboard": return openSingleton("kessel://privacy");
     case "restart-safe-mode": return invoke("restart_in_mode", { safe: true }).catch((err) => toast(String(err)));
     case "lock-browser":
       return invoke("lock_browser").catch((err) => {

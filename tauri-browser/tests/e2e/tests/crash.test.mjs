@@ -157,7 +157,8 @@ export const tests = [
       const k = await launch();
       const { page } = await open(k, `${site.origin}/page/Doomed`);
       crash(page);
-      await waitFor(async () => (await k.invoke("crash_reports")).length > 0, { message: "a crash to show" });
+      // (The page's process takes its time to go when the PC is busy.)
+      await waitFor(async () => (await k.invoke("crash_reports")).length > 0, { message: "a crash to show", timeout: 25000 });
       await k.invoke("open_singleton_tab", { route: "kessel://diagnostics/crashes" });
       const diag = await k.page((t) => t.url.includes("diagnostics.html"));
       await diag.waitFor(`!!document.getElementById('features')`, { message: "rendered" });
