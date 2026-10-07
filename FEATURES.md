@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**73% overall** -- 603 done (✅ 🟢 🌐), 56 built and waiting for their first run on Windows or a phone (🧪), 47 partly done (🟡), 233 to do (⏳), 106 skipped (⏭️), of 1045.
+**78% overall** -- 648 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 52 partly done (🟡), 179 to do (⏳), 108 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -56,17 +56,17 @@ branch, one small commit per feature or group of features.
 | [13. Website permissions](#13-website-permissions) | 9 | 3 | 1 |  | 7 | `██████████` 96% |
 | [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
-| [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
+| [16. Built-in content blocking](#16-built-in-content-blocking) | 15 |  | 1 |  |  | `██████████` 97% |
 | [17. Reading & research](#17-reading--research) | 14 | 4 | 1 | 3 |  | `████████░░` 84% |
 | [18. Translation](#18-translation) | 3 |  |  | 7 |  | `███░░░░░░░` 30% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
-| [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
+| [23. Appearance](#23-appearance) | 12 |  |  | 4 |  | `████████░░` 75% |
 | [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
 | [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
-| [26. Session management](#26-session-management) | 4 |  | 4 | 2 | 1 | `██████░░░░` 60% |
+| [26. Session management](#26-session-management) | 5 |  | 4 | 1 | 1 | `███████░░░` 70% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
@@ -77,14 +77,14 @@ branch, one small commit per feature or group of features.
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 12 |  |  | 5 |  | `███████░░░` 71% |
-| [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
+| [37. Cache](#37-cache) | 6 |  | 1 | 3 |  | `███████░░░` 65% |
 | [38. Developer / experimental controls](#38-developer--experimental-controls) | 4 | 4 | 1 | 4 |  | `███████░░░` 65% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
 | [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
 | [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
-| [42. Sharing](#42-sharing) |  |  |  | 6 | 3 | `░░░░░░░░░░` 0% |
+| [42. Sharing](#42-sharing) | 2 | 2 |  | 2 | 3 | `███████░░░` 67% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
-| [44. Desktop-specific features](#44-desktop-specific-features) | 7 |  | 1 | 5 |  | `██████░░░░` 58% |
+| [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 |  |  | 2 |  | `█████████░` 93% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
@@ -93,16 +93,16 @@ branch, one small commit per feature or group of features.
 | [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
-| [53. Updates](#53-updates) |  |  |  | 1 | 8 | `░░░░░░░░░░` 0% |
+| [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
-| [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
+| [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
 | [56. Account system](#56-account-system) |  |  |  | 2 | 12 | `░░░░░░░░░░` 0% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
-| [58. Search / history intelligence](#58-search--history-intelligence) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
+| [58. Search / history intelligence](#58-search--history-intelligence) | 7 |  |  | 6 |  | `█████░░░░░` 54% |
 | [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
-| [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
-| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 7 |  | 1 | 8 | 1 | `█████░░░░░` 47% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 3 | 1 | 1 | 19 | 8 | `██░░░░░░░░` 19% |
+| [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
+| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 10 | 1 | 2 | 11 | 8 | `█████░░░░░` 50% |
 | [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
@@ -612,10 +612,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 16.07 | Cryptomining blocker | 🟢 | Shields lists |
 | 16.08 | Fingerprinting protection | 🟢 | |
 | 16.09 | Annoyance filter | 🟢 | Optional list |
-| 16.10 | Autoplay blocker | ⏳ | |
-| 16.11 | Script blocking | ⏳ | |
+| 16.10 | Autoplay blocker | ✅ | Settings -> Site permissions -> Sound playing on its own: block it for every site or one -- a page can't start sound before you've clicked there |
+| 16.11 | Script blocking | ✅ | Site settings -> JavaScript: off for a site, or for every site (section 14) |
 | 16.12 | Element blocking | 🟡 | Cosmetic filtering only ran on Kessel's own pages; element picker to do |
-| 16.13 | Custom filter lists | ⏳ | |
+| 16.13 | Custom filter lists | ✅ | Settings -> Privacy -> Add list: your own filter list by its address, downloaded and refreshed like the others; remove it again |
 | 16.14 | Allowlist | 🟢 | |
 | 16.15 | Blocklist | 🟢 | |
 | 16.16 | Per-site exceptions | 🟢 | |
@@ -762,7 +762,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 23.12 | Touch mode | ⏳ | |
 | 23.13 | Sidebar | 🟢 | Rail + side panel |
 | 23.14 | Vertical tabs | ✅ | See 2.30 |
-| 23.15 | Custom fonts | ⏳ | |
+| 23.15 | Custom fonts | ✅ | Settings -> Accessibility: your standard, sans-serif, serif and fixed-width fonts (22.04) |
 | 23.16 | Custom UI scaling | 🟢 | Interface size |
 
 ### 24. Search engines
@@ -804,7 +804,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 26.05 | Session snapshots | ⏳ | |
 | 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
 | 26.07 | Restore window | 🟡 | Reopen closed window |
-| 26.08 | Suspend session | ⏳ | |
+| 26.08 | Suspend session | 🟢 | Tab menu -> Put other tabs to sleep; the task manager puts any tab to sleep and wakes it |
 | 26.09 | Export session | ✅ | See 52.17 |
 | 26.10 | Import session | 🟡 | The saved file imports as bookmarks (a folder per window); Open all reopens a window |
 | 26.11 | Cross-device session restore | ⏭️ | Needs an online account or server: left out |
@@ -971,7 +971,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 37.03 | Disk cache | 🌐 | |
 | 37.04 | Cache inspection | ⏳ | |
 | 37.05 | Cache clearing | ✅ | Clear browsing data -> Cached images and files, for a time range |
-| 37.06 | Per-site cache deletion | ⏳ | |
+| 37.06 | Per-site cache deletion | 🟡 | The lock -> site data: a site's storage, service-worker caches and cookies go; the engine's HTTP cache only clears whole (Clear browsing data) |
 | 37.07 | Full cache deletion | ✅ | Clear browsing data -> All time |
 | 37.08 | Cache-control handling | 🌐 | Ctrl+F5 skips it |
 | 37.09 | Offline cache | ⏳ | |
@@ -1050,12 +1050,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 42.01 | Share current page | ⏳ | |
-| 42.02 | Share selected text | ⏳ | |
+| 42.01 | Share current page | 🟢 | The share button in the address bar: copy the link, the QR code, a Markdown link, or Windows' Share window |
+| 42.02 | Share selected text | 🧪 | Right-click selected text -> Share…: Windows' Share window with the text; not tried (it opens Windows' own window) |
 | 42.03 | Share image | ⏳ | |
 | 42.04 | Share file | ⏳ | |
-| 42.05 | OS share sheet | ⏳ | |
-| 42.06 | QR-code sharing | ⏳ | |
+| 42.05 | OS share sheet | 🧪 | The share button -> Share…: Windows' Share window; not tried (it opens Windows' own window) |
+| 42.06 | QR-code sharing | 🟢 | The share button: the page's QR code, to copy as a picture (tested) |
 | 42.07 | Send to another device | ⏭️ | Needs an online account or server: left out |
 | 42.08 | Send tab to phone | ⏭️ | Needs an online account or server: left out |
 | 42.09 | Send tab to computer | ⏭️ | Needs an online account or server: left out |
@@ -1087,15 +1087,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 44.01 | Multiple windows | ✅ | See 3.01 |
 | 44.02 | Keyboard shortcuts | ✅ | See the shortcut table |
 | 44.03 | Full developer tools | 🌐 | Edge DevTools (F12) |
-| 44.04 | Extensions | ⏳ | |
+| 44.04 | Extensions | 🟢 | Section 30: Chrome Web Store, Edge Add-ons, unpacked; turned on, off, updated |
 | 44.05 | Vertical tabs | ✅ | See 2.30 |
 | 44.06 | Sidebars | 🟢 | |
-| 44.07 | Workspaces | ⏳ | |
+| 44.07 | Workspaces | 🟢 | The side panel's workspaces: their own tabs, asleep while you're away (tested) |
 | 44.08 | Profiles | 🟡 | Accounts |
-| 44.09 | Window management | ⏳ | |
+| 44.09 | Window management | 🟢 | Several windows, tabs dragged between them, pop-out windows, closed windows reopened (section 3) |
 | 44.10 | Desktop notifications | ⏳ | |
 | 44.11 | Hardware acceleration | ✅ | See 35.01 |
-| 44.12 | Advanced downloads | ⏳ | |
+| 44.12 | Advanced downloads | 🟢 | The download manager: pause, resume, try again, search, sort, ask where to save (section 6) |
 | 44.13 | Advanced DevTools | 🌐 | Edge DevTools (F12) |
 
 ### 45. Keyboard shortcuts
@@ -1268,7 +1268,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 53.02 | Background updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 | 53.03 | Update notifications | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 | 53.04 | Update channels (stable, beta, developer, canary) | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
-| 53.05 | Extension updates | ⏳ | |
+| 53.05 | Extension updates | 🟢 | Store extensions update by themselves, keeping their data (tested) |
 | 53.06 | Component updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 | 53.07 | Security updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 | 53.08 | Rollback/recovery | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
@@ -1294,18 +1294,18 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 55.01 | General: startup, homepage, new tab | 🟡 | Homepage + restore tabs |
 | 55.02 | General: default browser | ⏳ | |
-| 55.03 | General: downloads | ⏳ | |
+| 55.03 | General: downloads | 🟢 | Settings -> Downloads: the folder, ask where to save each file |
 | 55.04 | General: appearance | 🟢 | |
 | 55.05 | General: language | ⏳ | |
 | 55.06 | Search: default engine, suggestions, shortcuts, private search | 🟡 | Default engine only |
 | 55.07 | Privacy: cookies, tracking, fingerprinting, history, cache, site data, DNS, Do Not Track | 🟡 | Tracking + fingerprinting |
 | 55.08 | Security: safe browsing, HTTPS-only, certificates, passwords, passkeys, security keys | 🟡 | HTTPS upgrade + passwords |
-| 55.09 | Permissions: location, camera, microphone, notifications, pop-ups, autoplay, downloads, clipboard, sensors, USB, Bluetooth | ⏳ | |
+| 55.09 | Permissions: location, camera, microphone, notifications, pop-ups, autoplay, downloads, clipboard, sensors, USB, Bluetooth | ✅ | Settings -> Site permissions: location, camera, microphone, notifications, pop-ups, sound, downloads, clipboard, sensors, MIDI, fonts, files -- per site and for every site; USB and Bluetooth: WebView2 has no device chooser |
 | 55.10 | Performance: hardware acceleration, memory saver, energy saver, tab sleeping, preloading | 🟡 | Tab sleeping |
 | 55.11 | Sync: accounts, devices, data types, encryption, status | ⏭️ | Needs an online account or server: left out |
 | 55.12 | Profiles: create, delete, switch, customize, default | 🟡 | Accounts popup |
-| 55.13 | Extensions: installed, permissions, developer mode, store | ⏳ | |
-| 55.14 | Accessibility: zoom, fonts, reader mode, screen reader, reduced motion | ⏳ | |
+| 55.13 | Extensions: installed, permissions, developer mode, store | 🟢 | Settings -> Extensions: installed ones, their site access, developer mode (load unpacked), the stores |
+| 55.14 | Accessibility: zoom, fonts, reader mode, screen reader, reduced motion | ✅ | Settings -> Accessibility (section 22); zoom in Appearance; reader mode with F9 |
 
 ### 56. Account system
 
@@ -1346,17 +1346,17 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 58.01 | Semantic history search | ⏳ | |
-| 58.02 | Search by title | ⏳ | |
-| 58.03 | Search by URL | ⏳ | |
+| 58.02 | Search by title | ✅ | History: search by title (tested) |
+| 58.03 | Search by URL | ✅ | History: search by a piece of the address (tested) |
 | 58.04 | Search by text content | ⏳ | |
-| 58.05 | Search by date | ⏳ | |
-| 58.06 | Search by domain | ⏳ | |
-| 58.07 | Search by tab | ⏳ | |
+| 58.05 | Search by date | ✅ | History: today, yesterday, the last 7 or 30 days, or a day you pick (tested) |
+| 58.06 | Search by domain | ✅ | History: by site (tested) |
+| 58.07 | Search by tab | 🟢 | Tab search (Ctrl+Shift+A): open, sleeping and closed tabs (tested) |
 | 58.08 | Search by workspace | ⏳ | |
 | 58.09 | Search by profile | ⏳ | |
 | 58.10 | Search screenshots | ⏳ | |
-| 58.11 | Search downloaded files | ⏳ | |
-| 58.12 | Search bookmarks | ⏳ | |
+| 58.11 | Search downloaded files | 🟢 | Downloads page: search and sort (tested) |
+| 58.12 | Search bookmarks | 🟢 | Bookmark manager: search, #tag for a tag (tested) |
 | 58.13 | Search reading list | ⏳ | |
 
 ### 59. Offline functionality
@@ -1378,29 +1378,29 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 60.01 | HTML, CSS, JavaScript, WebAssembly | ⏳ | |
-| 60.02 | WebGL, WebGPU | ⏳ | |
-| 60.03 | WebRTC, WebSockets, Fetch, Streams | ⏳ | |
-| 60.04 | Web Workers, Service Workers, IndexedDB | ⏳ | |
-| 60.05 | Web Crypto, WebAuthn | ⏳ | |
-| 60.06 | Notifications, Push API | ⏳ | |
-| 60.07 | Payment Request | ⏳ | |
-| 60.08 | Clipboard API, File System Access, Web Share | ⏳ | |
-| 60.09 | Fullscreen API, Wake Lock | ⏳ | |
-| 60.10 | Web Bluetooth, WebUSB, WebHID, Web Serial, MIDI | ⏳ | |
-| 60.11 | Sensors, Geolocation | ⏳ | |
-| 60.12 | Media APIs, Accessibility APIs | ⏳ | |
+| 60.01 | HTML, CSS, JavaScript, WebAssembly | 🌐 | WebView2's: today's HTML, CSS and JavaScript, WebAssembly (tested in a page) |
+| 60.02 | WebGL, WebGPU | 🌐 | WebGL 2 and WebGPU (tested; kessel://gpu shows the adapters) |
+| 60.03 | WebRTC, WebSockets, Fetch, Streams | 🌐 | WebRTC, WebSockets, fetch with streams (tested) |
+| 60.04 | Web Workers, Service Workers, IndexedDB | 🌐 | Web workers, service workers (one answering its scope's requests), IndexedDB (tested) |
+| 60.05 | Web Crypto, WebAuthn | 🌐 | Web Crypto; WebAuthn with Windows Hello as the platform authenticator (tested: it's there) |
+| 60.06 | Notifications, Push API | 🟡 | Notifications: Kessel asks (tested); the Push API is there but WebView2 has no push service -- a subscription never gets an answer |
+| 60.07 | Payment Request | ⏭️ | WebView2 has no Payment Request |
+| 60.08 | Clipboard API, File System Access, Web Share | 🌐 | Clipboard API (writing; reading asks), File System Access (pickers, the private file system), Web Share (Windows' Share window) (tested) |
+| 60.09 | Fullscreen API, Wake Lock | 🌐 | Fullscreen API, Wake Lock (tested) |
+| 60.10 | Web Bluetooth, WebUSB, WebHID, Web Serial, MIDI | 🟡 | MIDI: Kessel asks (tested); Bluetooth, USB, HID and Serial are in the engine but WebView2 has no device chooser |
+| 60.11 | Sensors, Geolocation | 🟡 | Geolocation: Kessel asks (tested); sensors untried (no sensors on this PC) |
+| 60.12 | Media APIs, Accessibility APIs | 🌐 | Media Source, MediaRecorder, Web Audio, WebCodecs; the accessibility tree (tested) |
 
 ### 61. Developer-facing browser architecture
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 61.01 | Browser, renderer, GPU, network and storage processes | 🌐 | WebView2's processes; kessel://tasks lists them by job |
-| 61.02 | JavaScript engine, JIT, WebAssembly engine | ⏳ | |
-| 61.03 | Rendering engine: HTML/CSS parsers, DOM, layout, paint, compositor, GPU backend | ⏳ | |
-| 61.04 | Networking stack, DNS resolver, certificate verifier, HTTP cache, cookie store | ⏳ | |
-| 61.05 | Permission manager | ⏳ | |
-| 61.06 | Extension system | ⏳ | |
+| 61.02 | JavaScript engine, JIT, WebAssembly engine | 🌐 | V8, WebView2's |
+| 61.03 | Rendering engine: HTML/CSS parsers, DOM, layout, paint, compositor, GPU backend | 🌐 | Blink, WebView2's |
+| 61.04 | Networking stack, DNS resolver, certificate verifier, HTTP cache, cookie store | 🌐 | Chromium's network stack, DNS and certificate checks, cache and cookies; Kessel adds its cookie rules, Shields and HTTPS-only |
+| 61.05 | Permission manager | 🟢 | permissions.rs: Kessel's own prompt and per-site answers over the engine's |
+| 61.06 | Extension system | 🟢 | extensions.rs over the engine's extension support |
 | 61.07 | Profile manager | 🟢 | Accounts |
 | 61.08 | Sync engine | ⏭️ | Needs an online account or server: left out |
 | 61.09 | Password manager | 🟢 | |
@@ -1409,9 +1409,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 61.12 | Bookmark database | 🟢 | |
 | 61.13 | DevTools | 🌐 | F12: the engine's DevTools (section 29) |
 | 61.14 | Crash reporter | ✅ | crash.rs: crashes.json and kessel://diagnostics; nothing is sent anywhere |
-| 61.15 | Update system | ⏳ | |
-| 61.16 | Sandbox, site-isolation system, IPC system | ⏳ | |
-| 61.17 | Accessibility layer | ⏳ | |
+| 61.15 | Update system | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out (as 53.01) |
+| 61.16 | Sandbox, site-isolation system, IPC system | 🌐 | Chromium's sandbox, site isolation and IPC |
+| 61.17 | Accessibility layer | 🌐 | UI Automation, through WebView2; see section 22 |
 
 ### 62. "Crazy advanced" features
 
@@ -1421,15 +1421,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.02 | AI semantic history | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
 | 62.03 | AI tab organization | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
 | 62.04 | AI workspace creation | ⏭️ | Needs an AI service account (the side panel's AI assistant is the account-free part): left out |
-| 62.05 | Automatic session recovery | ⏳ | |
+| 62.05 | Automatic session recovery | ✅ | As 26.03 |
 | 62.06 | Automatic tab cleanup | 🟢 | Idle tab discarding |
 | 62.07 | Automatic duplicate-tab detection | ✅ | Command palette -> Close duplicate tabs |
-| 62.08 | Tab memory visualization | ⏳ | |
+| 62.08 | Tab memory visualization | ✅ | The task manager: memory and CPU of each page's process, with its tabs; hover cards |
 | 62.09 | Tab dependency detection | ⏳ | |
 | 62.10 | Website change monitoring | ⏳ | |
 | 62.11 | Page-change notifications | ⏳ | |
-| 62.12 | Built-in notes | ⏳ | |
-| 62.13 | Notes attached to URLs | ⏳ | |
+| 62.12 | Built-in notes | 🟢 | Side panel -> Notes (tested) |
+| 62.13 | Notes attached to URLs | 🟢 | A note keeps the page it was written on (right-click -> Save selection to notes) |
 | 62.14 | Web annotations | 🧪 | Highlights with notes on any web page (Ctrl+Shift+H) |
 | 62.15 | Collaborative tabs | ⏭️ | Needs an online account or server: left out |
 | 62.16 | Collaborative workspaces | ⏭️ | Needs an online account or server: left out |
@@ -1443,12 +1443,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.24 | Browser macros | ⏳ | |
 | 62.25 | Workflow automation | ⏳ | |
 | 62.26 | Command palette | ✅ | F2: every command, searchable, recent ones first |
-| 62.27 | Keyboard-first UI | ⏳ | |
-| 62.28 | Power-user settings | ⏳ | |
+| 62.27 | Keyboard-first UI | 🟢 | The command palette (F2), every shortcut yours to change, links opened from the keyboard, F6 / Shift+F6 |
+| 62.28 | Power-user settings | 🟢 | Engine switches, command chains, mouse gestures, your own shortcuts, your own CSS per site |
 | 62.29 | Browser telemetry dashboard | ⏳ | |
 | 62.30 | Privacy dashboard | ⏳ | |
-| 62.31 | Permission dashboard | ⏳ | |
-| 62.32 | Site resource dashboard | ⏳ | |
+| 62.31 | Permission dashboard | 🟢 | Settings -> Site permissions: every site's answers in one place |
+| 62.32 | Site resource dashboard | 🟡 | The task manager: memory and CPU of each page's process |
 
 ### 63. Researched additions (2026)
 

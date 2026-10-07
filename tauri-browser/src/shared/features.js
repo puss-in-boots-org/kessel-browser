@@ -103,7 +103,7 @@ export const FEATURES = [
   ]],
   ["Kessel", [
     ["Menu", "Alt+F, F10 or the dots at the top right."],
-    ["Shields (ad blocking)", "The shield in the address bar or on the rail."],
+    ["Shields (ad blocking)", "The shield in the address bar or on the rail. Settings -> Privacy: which filter lists, and your own by its address."],
     ["Sidebar sites", "Tab menu -> Add to sidebar, or the + on the rail."],
     ["Your own shortcuts", "Settings -> Keyboard & Mouse."],
     ["Look", "Settings -> Appearance: theme, Liquid Glass, wallpaper, bookmarks bar."],

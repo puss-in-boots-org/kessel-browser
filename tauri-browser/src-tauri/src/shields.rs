@@ -53,6 +53,20 @@ pub const FILTER_LISTS: &[FilterList] = &[
     FilterList { id: "hufilter", name: "Hungarian (hufilter)", description: "Ads on Hungarian sites", url: "https://cdn.jsdelivr.net/gh/hufilter/hufilter@gh-pages/hufilter.txt", default_on: false },
 ];
 
+// A download that is a filter list: not a web page, and (for one of
+// Shields' own lists) big.
+fn looks_like_list(text: &str, own: bool) -> bool {
+    let start = text.trim_start();
+    if start.is_empty() || start.starts_with('<') {
+        return false;
+    }
+    if !own {
+        return text.len() > 1_000;
+    }
+    // Yours: at least one line that's a rule, not a comment.
+    text.lines().map(str::trim).any(|l| !l.is_empty() && !l.starts_with('!') && !l.starts_with('['))
+}
+
 pub fn default_list_ids() -> Vec<String> {
     FILTER_LISTS.iter().filter(|l| l.default_on).map(|l| l.id.to_string()).collect()
 }
@@ -82,13 +96,34 @@ pub struct TabStats {
 
 #[derive(Clone, Serialize)]
 pub struct ListState {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub description: &'static str,
+    pub id: String,
+    pub name: String,
+    pub description: String,
     pub enabled: bool,
     // Unix seconds of the cached copy, if any.
     pub updated_at: Option<u64>,
     pub error: Option<String>,
+    // One you added yourself (Settings -> Privacy), and where it's from.
+    pub own: bool,
+    pub url: String,
+}
+
+// A filter list you added by its address (settings.features.own_filter_lists).
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct OwnList {
+    pub id: String,
+    pub url: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+// A list Shields can load: one of its own, or one of yours.
+struct Source {
+    id: String,
+    name: String,
+    description: String,
+    url: String,
+    own: bool,
 }
 
 #[derive(Clone, Serialize, Default)]
@@ -103,7 +138,9 @@ pub struct Shields {
     dir: PathBuf,
     engine: RwLock<Engine>,
     state: Mutex<EngineState>,
-    list_errors: Mutex<HashMap<&'static str, String>>,
+    list_errors: Mutex<HashMap<String, String>>,
+    // Your own lists (see set_own_lists).
+    own: RwLock<Vec<OwnList>>,
     tab_stats: Mutex<HashMap<u32, TabStats>>,
     // Webview label -> the http:// URL we upgraded, until that navigation
     // finishes; lets a failed https attempt fall back (see main.rs).
@@ -209,6 +246,7 @@ impl Shields {
             engine: RwLock::new(engine),
             state: Mutex::new(EngineState { lists_loaded: false, updating: false, rules }),
             list_errors: Mutex::new(HashMap::new()),
+            own: RwLock::new(Vec::new()),
             tab_stats: Mutex::new(HashMap::new()),
             https_pending: Mutex::new(HashMap::new()),
             https_failed: Mutex::new(HashSet::new()),
@@ -228,13 +266,38 @@ impl Shields {
         SystemTime::now().duration_since(modified).ok()
     }
 
+    /// Your own lists, as Settings has them now (before rebuild / refresh).
+    pub fn set_own_lists(&self, lists: Vec<OwnList>) {
+        let lists = lists
+            .into_iter()
+            .filter(|l| l.id.starts_with("own-") && l.id.len() <= 40 && l.id[4..].chars().all(|c| c.is_ascii_alphanumeric()))
+            .filter(|l| l.url.starts_with("https://") || l.url.starts_with("http://"))
+            .collect();
+        *self.own.write().unwrap() = lists;
+    }
+
+    // Every list Shields knows: its own, then yours.
+    fn sources(&self) -> Vec<Source> {
+        let mut out: Vec<Source> = FILTER_LISTS
+            .iter()
+            .map(|l| Source { id: l.id.into(), name: l.name.into(), description: l.description.into(), url: l.url.into(), own: false })
+            .collect();
+        for l in self.own.read().unwrap().iter() {
+            let name = if l.name.trim().is_empty() { tauri::Url::parse(&l.url).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_else(|| l.url.clone()) } else { l.name.clone() };
+            out.push(Source { id: l.id.clone(), name, description: "Your own list".into(), url: l.url.clone(), own: true });
+        }
+        out
+    }
+
     /// Recompiles the engine from the cached copies of the enabled lists.
     pub fn rebuild(&self, enabled: &[String], custom: &[String]) {
-        let texts: Vec<(&str, String)> = FILTER_LISTS
-            .iter()
-            .filter(|l| enabled.iter().any(|e| e == l.id))
-            .filter_map(|l| fs::read_to_string(self.list_path(l.id)).ok().map(|text| (l.id, text)))
+        let owned: Vec<(String, String)> = self
+            .sources()
+            .into_iter()
+            .filter(|l| enabled.iter().any(|e| *e == l.id))
+            .filter_map(|l| fs::read_to_string(self.list_path(&l.id)).ok().map(|text| (l.id, text)))
             .collect();
+        let texts: Vec<(&str, String)> = owned.iter().map(|(id, text)| (id.as_str(), text.clone())).collect();
         let lists_loaded = !texts.is_empty();
         // With no list cached yet, keep the built-in domains as a floor.
         let (engine, rules) = build_engine(&texts, custom, !lists_loaded);
@@ -250,12 +313,12 @@ impl Shields {
         self.state.lock().unwrap().updating = true;
         let agent = http_agent();
         let mut changed = false;
-        for list in FILTER_LISTS.iter().filter(|l| enabled.iter().any(|e| e == l.id)) {
-            if !force && self.list_age(list.id).map(|age| age < LIST_MAX_AGE).unwrap_or(false) {
+        for list in self.sources().into_iter().filter(|l| enabled.iter().any(|e| *e == l.id)) {
+            if !force && self.list_age(&list.id).map(|age| age < LIST_MAX_AGE).unwrap_or(false) {
                 continue;
             }
             let result = agent
-                .get(list.url)
+                .get(&list.url)
                 .call()
                 .map_err(|e| e.to_string())
                 .and_then(|mut r| {
@@ -266,13 +329,13 @@ impl Shields {
                         .map_err(|e| e.to_string())
                 });
             match result {
-                // Sanity check: a real list is big and made of filter lines,
-                // not an error page.
-                Ok(text) if text.len() > 1_000 && !text.trim_start().starts_with('<') => {
+                // Sanity check: made of filter lines, not an error page -- and
+                // one of Shields' own is big (yours can be a few lines).
+                Ok(text) if looks_like_list(&text, list.own) => {
                     let tmp = self.dir.join(format!("{}.tmp", list.id));
-                    if fs::write(&tmp, &text).and_then(|_| fs::rename(&tmp, self.list_path(list.id))).is_ok() {
+                    if fs::write(&tmp, &text).and_then(|_| fs::rename(&tmp, self.list_path(&list.id))).is_ok() {
                         changed = true;
-                        self.list_errors.lock().unwrap().remove(list.id);
+                        self.list_errors.lock().unwrap().remove(&list.id);
                     }
                 }
                 Ok(_) => {
@@ -293,15 +356,17 @@ impl Shields {
 
     pub fn list_states(&self, enabled: &[String]) -> Vec<ListState> {
         let errors = self.list_errors.lock().unwrap();
-        FILTER_LISTS
-            .iter()
+        self.sources()
+            .into_iter()
             .map(|l| ListState {
+                enabled: enabled.iter().any(|e| *e == l.id),
+                updated_at: self.list_age(&l.id).map(|age| unix_now().saturating_sub(age.as_secs())),
+                error: errors.get(&l.id).cloned(),
                 id: l.id,
                 name: l.name,
                 description: l.description,
-                enabled: enabled.iter().any(|e| e == l.id),
-                updated_at: self.list_age(l.id).map(|age| unix_now().saturating_sub(age.as_secs())),
-                error: errors.get(l.id).cloned(),
+                own: l.own,
+                url: l.url,
             })
             .collect()
     }
@@ -709,6 +774,25 @@ mod tests {
         assert!(!s.should_block("https://tracker.example/pixel.gif", "https://tracker.example/", "image"));
         assert!(s.should_block("https://ads.example/banner.js", "https://news.site/", "script"));
         assert!(!s.should_block("https://cdn.news.site/app.js", "https://news.site/", "script"));
+    }
+
+    #[test]
+    fn your_own_lists_can_be_small_but_not_pages() {
+        assert!(looks_like_list("! Title: mine\n||ads.example^\n", true), "a few lines of yours");
+        assert!(!looks_like_list("! only a comment\n", true), "nothing in it");
+        assert!(!looks_like_list("<!doctype html><title>404</title>", true), "an error page");
+        assert!(!looks_like_list("||ads.example^\n", false), "one of Shields' own is big");
+        let shields = Shields::new(&std::env::temp_dir().join(format!("kessel-own-lists-{}", std::process::id())), &[]);
+        shields.set_own_lists(vec![
+            OwnList { id: "own-abc123".into(), url: "https://lists.example/mine.txt".into(), name: String::new() },
+            OwnList { id: "evil/../x".into(), url: "https://lists.example/a.txt".into(), name: "bad id".into() },
+            OwnList { id: "own-def456".into(), url: "file:///c:/secret".into(), name: "not the web".into() },
+        ]);
+        let states = shields.list_states(&["own-abc123".to_string()]);
+        let own: Vec<&ListState> = states.iter().filter(|l| l.own).collect();
+        assert_eq!(own.len(), 1, "only the one that's a list on the web");
+        assert_eq!(own[0].name, "lists.example", "named after its site");
+        assert!(own[0].enabled);
     }
 
     #[test]

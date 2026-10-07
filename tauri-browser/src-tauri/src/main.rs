@@ -2978,6 +2978,12 @@ unsafe fn install_shields_hooks(
     Ok(())
 }
 
+// Your own filter lists (Settings -> Privacy): settings.features.own_filter_lists.
+fn own_lists(state: &BrowserState) -> Vec<shields::OwnList> {
+    let lists = state.store.settings.lock().unwrap().features.get("own_filter_lists").cloned().unwrap_or_default();
+    serde_json::from_value(lists).unwrap_or_default()
+}
+
 // Recompiles the engine off the UI thread (a full set of lists takes a moment).
 fn rebuild_shields_async(app: &tauri::AppHandle) {
     let app = app.clone();
@@ -2985,6 +2991,7 @@ fn rebuild_shields_async(app: &tauri::AppHandle) {
         let st = app.state::<BrowserState>();
         let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
         let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
+        app.state::<shields::Shields>().set_own_lists(own_lists(&st));
         app.state::<shields::Shields>().rebuild(&enabled, &custom);
         let _ = app.emit("shields-lists-changed", ());
     });
@@ -3000,6 +3007,7 @@ fn start_shields(app: &tauri::AppHandle) {
             let st = app.state::<BrowserState>();
             let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
             let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
+            app.state::<shields::Shields>().set_own_lists(own_lists(&st));
             (enabled, custom)
         };
         let (enabled, custom) = lists(&app);
@@ -3066,6 +3074,7 @@ fn shields_hidden_selectors(app: tauri::AppHandle, classes: Vec<String>, ids: Ve
 #[tauri::command]
 fn shields_status(state: tauri::State<BrowserState>, shields: tauri::State<shields::Shields>) -> serde_json::Value {
     let enabled = state.store.settings.lock().unwrap().filter_lists.clone();
+    shields.set_own_lists(own_lists(&state));
     serde_json::json!({ "engine": shields.engine_state(), "lists": shields.list_states(&enabled) })
 }
 
@@ -3078,6 +3087,7 @@ async fn shields_update_lists(app: tauri::AppHandle) -> Result<serde_json::Value
         let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
         let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
         let shields = app2.state::<shields::Shields>();
+        shields.set_own_lists(own_lists(&st));
         shields.refresh_lists(&enabled, true);
         shields.rebuild(&enabled, &custom);
         let _ = app2.emit("shields-lists-changed", ());
@@ -4407,7 +4417,7 @@ fn get_settings(state: tauri::State<BrowserState>) -> Settings {
 fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<BrowserState>, settings: Settings) -> Result<(), String> {
     require_internal_page(&webview)?;
     let before = state.store.settings.lock().unwrap().clone();
-    let lists_changed = before.filter_lists != settings.filter_lists;
+    let lists_changed = before.filter_lists != settings.filter_lists || before.features.get("own_filter_lists") != settings.features.get("own_filter_lists");
     if before.shortcuts != settings.shortcuts {
         commands::rebuild_keymap(&settings.shortcuts);
     }
@@ -4440,6 +4450,7 @@ fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<
             let enabled = st.store.settings.lock().unwrap().filter_lists.clone();
             let custom = st.store.adblock_lists.lock().unwrap().custom.clone();
             let shields = app2.state::<shields::Shields>();
+            shields.set_own_lists(own_lists(&st));
             shields.refresh_lists(&enabled, false);
             shields.rebuild(&enabled, &custom);
             let _ = app2.emit("shields-lists-changed", ());
