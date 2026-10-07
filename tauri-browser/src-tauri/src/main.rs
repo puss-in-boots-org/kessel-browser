@@ -13,6 +13,7 @@ mod commands;
 mod crash;
 mod dialogs;
 mod extensions;
+mod forms;
 mod graphics;
 mod history;
 mod import;
@@ -23,6 +24,7 @@ mod page;
 mod privacy;
 mod privacy_stats;
 mod profile;
+mod profiles;
 mod saved_sessions;
 mod security;
 mod shields;
@@ -5439,6 +5441,17 @@ fn main() {
             watch::check_watched_now,
             privacy_stats::privacy_stats,
             privacy_stats::reset_privacy_stats,
+            profiles::list_profiles,
+            profiles::open_profile,
+            profiles::create_profile,
+            profiles::profile_shortcut,
+            forms::autofill_list,
+            forms::autofill_save_address,
+            forms::autofill_delete_address,
+            forms::autofill_save_card,
+            forms::autofill_delete_card,
+            forms::autofill_offer_answer,
+            forms::forms_pick,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,

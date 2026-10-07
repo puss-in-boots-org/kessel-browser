@@ -101,11 +101,13 @@ fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value,
         crate::tabdrag::place_under_pointer(&window, grab);
     }
 
+    // (And which profile this is, unless it's the default: profiles.rs.)
     let toolbar_init = format!(
-        "window.__KESSEL_WINDOW__ = {{ label: {}, number: {}, private: {} }};",
+        "window.__KESSEL_WINDOW__ = {{ label: {}, number: {}, private: {}, profile: {} }};",
         serde_json::to_string(&label).unwrap_or_default(),
         number,
-        private
+        private,
+        serde_json::to_string(&crate::profiles::current_label(app)).unwrap_or_else(|_| "null".into())
     );
     let toolbar = window
         .add_child(

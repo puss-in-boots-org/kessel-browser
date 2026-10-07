@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" data-page="forms">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fill in</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <link rel="stylesheet" href="shared/glass.css" />
+  <style>
+    /* The suggestions under a form's field (forms.js, forms.rs): your saved
+       addresses or cards -- Kessel's own list, which the page can't read. */
+    html, body { height: 100%; overflow: hidden; user-select: none; background: transparent; margin: 0; }
+    body { background: var(--surface); border: var(--k-border-w, 1px) var(--k-border-style, solid) var(--border); border-radius: var(--k-popup-radius, 12px); display: flex; flex-direction: column; padding: 4px; box-sizing: border-box; }
+    html.glass body { background: #0a1433; border: none; }
+    .item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; color: var(--text); cursor: default; flex-shrink: 0; }
+    .item .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item svg { flex-shrink: 0; opacity: 0.75; }
+    .item.on, .item:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+    .foot { margin-top: auto; height: 30px; display: flex; align-items: center; padding: 0 10px; font-size: 11.5px; color: var(--text-faint); cursor: default; flex-shrink: 0; }
+    .foot:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+  <div id="list"></div>
+  <div class="foot" id="manage"></div>
+  <script type="module" src="forms.js"></script>
+</body>
+</html>

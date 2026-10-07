@@ -36,19 +36,19 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**84% overall** -- 693 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 51 partly done (🟡), 122 to do (⏳), 111 skipped (⏭️), of 1045.
+**86% overall** -- 714 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 45 partly done (🟡), 107 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
 | [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
-| [3. Windows](#3-windows) | 7 | 2 | 4 | 2 |  | `███████░░░` 73% |
+| [3. Windows](#3-windows) | 8 | 2 | 3 | 2 |  | `████████░░` 77% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
-| [7. Passwords & identity](#7-passwords--identity) | 17 |  |  | 18 | 2 | `█████░░░░░` 49% |
-| [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
+| [7. Passwords & identity](#7-passwords--identity) | 24 |  | 1 | 10 | 2 | `███████░░░` 70% |
+| [8. Profiles](#8-profiles) | 16 |  |  |  |  | `██████████` 100% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
@@ -64,8 +64,8 @@ branch, one small commit per feature or group of features.
 | [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
 | [23. Appearance](#23-appearance) | 14 |  |  | 2 |  | `█████████░` 88% |
-| [24. Search engines](#24-search-engines) | 7 |  |  | 2 |  | `████████░░` 78% |
-| [25. Startup behavior](#25-startup-behavior) | 7 |  | 1 | 1 |  | `████████░░` 83% |
+| [24. Search engines](#24-search-engines) | 8 |  |  | 1 |  | `█████████░` 89% |
+| [25. Startup behavior](#25-startup-behavior) | 8 |  | 1 |  |  | `█████████░` 94% |
 | [26. Session management](#26-session-management) | 9 |  | 1 |  | 1 | `██████████` 95% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
@@ -85,7 +85,7 @@ branch, one small commit per feature or group of features.
 | [42. Sharing](#42-sharing) | 2 | 2 |  | 2 | 3 | `███████░░░` 67% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
-| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 | 1 |  | 1 |  | `██████████` 96% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 27 | 1 |  |  |  | `██████████` 100% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
@@ -253,7 +253,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 3.01 | Multiple browser windows | ✅ | Any number of windows, each with its own tabs, side panel and popups |
 | 3.02 | Private windows | ✅ | InPrivate tabs: no history, session or recently-closed entries; Private badge in the tab bar |
 | 3.03 | Incognito windows | ✅ | Same as private windows |
-| 3.04 | Separate profile windows | 🟡 | Account pop-out windows |
+| 3.04 | Separate profile windows | ✅ | Another profile opens in windows of its own, its name on them; account pop-out windows too |
 | 3.05 | Always-on-top window mode | 🟡 | Pop-out windows only |
 | 3.06 | Picture-in-picture windows | 🧪 | The engine's picture-in-picture window: media controls or Alt+P (20.05) |
 | 3.07 | Pop-out video windows | 🧪 | A video pops out into the engine's picture-in-picture window (media controls or Alt+P) |
@@ -370,35 +370,35 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.26 | Security-key support | ⏳ | |
 | 7.27 | Username autofill | ✅ | With the password (7.03) |
 | 7.28 | Password autofill | ✅ | See 7.03 |
-| 7.29 | Name autofill | ⏳ | |
-| 7.30 | Address autofill | ⏳ | |
-| 7.31 | Phone-number autofill | ⏳ | |
-| 7.32 | Email autofill | ⏳ | |
-| 7.33 | Payment autofill | ⏳ | |
-| 7.34 | Credit/debit card storage | ⏳ | |
-| 7.35 | Expiration-date autofill | ⏳ | |
-| 7.36 | Form-data autofill | ⏳ | |
+| 7.29 | Name autofill | ✅ | Settings -> Addresses & cards: a name (whole, first or last) filled in from Kessel's own list under the field -- the page never sees the list |
+| 7.30 | Address autofill | ✅ | Street, city, region, postal code and country -- a country list is picked by its name |
+| 7.31 | Phone-number autofill | ✅ | Phone numbers, from the same addresses |
+| 7.32 | Email autofill | ✅ | Email addresses, from the same addresses |
+| 7.33 | Payment autofill | ✅ | Cards filled in from the list under the field, on secure pages: number, name, expiry -- never a security code |
+| 7.34 | Credit/debit card storage | ✅ | Kept encrypted for your Windows account (DPAPI); lists show only its last 4 digits |
+| 7.35 | Expiration-date autofill | ✅ | MM/YY, MM/YYYY, or a month and a year field (lists too) |
+| 7.36 | Form-data autofill | 🟡 | Addresses and cards, offered to save when a form is sent (7.29-7.35); other fields aren't remembered |
 | 7.37 | One-click autofill | ✅ | See 7.03 |
 
 ### 8. Profiles
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 8.01 | Multiple browser profiles | 🟡 | Accounts: separate sign-ins in one window |
-| 8.02 | Separate profile history | 🟡 | kessel.exe --profile <name> runs a fully separate profile (own history, bookmarks, passwords, settings, cookies); switching UI to come |
-| 8.03 | Separate bookmarks | 🟡 | See 8.02 |
-| 8.04 | Separate passwords | 🟡 | See 8.02 |
-| 8.05 | Separate extensions | 🟡 | See 8.02 |
+| 8.01 | Multiple browser profiles | ✅ | Profiles (Settings -> Profiles, 8.02), and accounts for separate sign-ins in one window |
+| 8.02 | Separate profile history | ✅ | Settings -> Profiles (Ctrl+Shift+M): each profile its own history, bookmarks, passwords, settings, cookies and extensions, in a Kessel of its own; open one or make one there |
+| 8.03 | Separate bookmarks | ✅ | See 8.02 |
+| 8.04 | Separate passwords | ✅ | See 8.02 |
+| 8.05 | Separate extensions | ✅ | See 8.02 |
 | 8.06 | Separate cookies | 🟢 | Accounts |
 | 8.07 | Separate browsing sessions | 🟢 | Accounts |
 | 8.08 | Profile avatars | 🟢 | Accounts |
 | 8.09 | Profile names | 🟢 | Accounts |
-| 8.10 | Profile colors/themes | 🟡 | Account colours |
+| 8.10 | Profile colors/themes | ✅ | Each profile has its own look (Settings -> Appearance) and its name on its windows; accounts their colours |
 | 8.11 | Profile switching | 🟢 | Accounts |
-| 8.12 | Profile startup shortcuts | ⏳ | |
-| 8.13 | Profile-specific settings | ⏳ | |
-| 8.14 | Profile-specific search engines | ⏳ | |
-| 8.15 | Profile-specific downloads | ⏳ | |
+| 8.12 | Profile startup shortcuts | ✅ | Settings -> Profiles -> Desktop shortcut: opens Kessel straight into that profile |
+| 8.13 | Profile-specific settings | ✅ | Each profile keeps its own settings |
+| 8.14 | Profile-specific search engines | ✅ | Each profile keeps its own search engines and keywords |
+| 8.15 | Profile-specific downloads | ✅ | Each profile keeps its own downloads folder and list |
 | 8.16 | Profile isolation | 🟢 | Separate WebView2 data folder per account |
 
 ### 9. Sync
@@ -776,7 +776,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 24.05 | Search suggestions | 🟢 | As you type in the address bar (Settings -> Search & Startup); never from a private window |
 | 24.06 | Search history | ✅ | History -> Searches: what you searched, on which engine (5.12) |
 | 24.07 | Private search | ✅ | Settings -> Search & Startup -> In private windows: a search engine of its own there |
-| 24.08 | Search engine per profile | ⏳ | |
+| 24.08 | Search engine per profile | ✅ | Each profile keeps its own default and own search engines (8.14) |
 | 24.09 | Search engine per window | ⏳ | |
 
 ### 25. Startup behavior
@@ -788,7 +788,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 25.03 | Open specific pages | ✅ | Settings -> Search & Startup -> Pages to start with (or your open tabs) |
 | 25.04 | Restore previous session | 🟢 | |
 | 25.05 | Restore selected windows | 🟡 | Every window of the last session comes back; a saved session can open just one of its windows |
-| 25.06 | Open specific profile | ⏳ | |
+| 25.06 | Open specific profile | ✅ | A profile's desktop shortcut, or kessel.exe --profile <name>, opens straight into it |
 | 25.07 | Continue where you left off | 🟢 | |
 | 25.08 | Startup tab groups | ✅ | A saved session to start with brings its tab groups back (25.09) |
 | 25.09 | Startup workspace | ✅ | Settings -> Search & Startup -> Or a saved session: its windows, tabs, groups and workspaces every time Kessel starts |
@@ -1110,7 +1110,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 45.06 | Next tab | ✅ | Ctrl+Tab, Ctrl+PageDown |
 | 45.07 | Previous tab | ✅ | Ctrl+Shift+Tab, Ctrl+PageUp |
 | 45.08 | Jump to tab | ✅ | Ctrl+1 ... 8, Ctrl+9 for the last |
-| 45.09 | New profile | ⏳ | |
+| 45.09 | New profile | ✅ | Ctrl+Shift+M: Settings -> Profiles -- open another or make one |
 | 45.10 | Search | ✅ | Ctrl+E, Ctrl+K |
 | 45.11 | Find | ✅ | Ctrl+F, F3 |
 | 45.12 | Zoom | ✅ | Ctrl +/-, Ctrl + wheel |

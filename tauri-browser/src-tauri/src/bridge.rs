@@ -205,6 +205,25 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             }
             None
         }
+        // Addresses and cards (forms.rs): a field that wants one has the
+        // focus (Kessel shows what you've saved, the page never sees it);
+        // it lost it; a key for the list; a form sent with one in it.
+        "form-focus" if top_frame => {
+            crate::forms::on_focus(app, id, url, d);
+            None
+        }
+        "form-blur" if top_frame => {
+            crate::forms::on_blur(app, id);
+            None
+        }
+        "form-key" if top_frame => {
+            crate::forms::on_key(app, id, d.get("key")?.as_str()?);
+            None
+        }
+        "form-sent" if top_frame => {
+            crate::forms::on_sent(app, id, url, d);
+            None
+        }
         // An element picked with "Hide an element on this site" (tools.rs).
         "zap" if top_frame => {
             crate::tools::add_zapped(app, url, d.get("selector")?.as_str()?);

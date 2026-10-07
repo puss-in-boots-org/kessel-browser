@@ -519,7 +519,9 @@ pub(crate) fn install_page_menu(app: &tauri::AppHandle, webview: &Webview, id: u
                             count -= 1;
                             continue;
                         }
-                        engine_names.push(name);
+                        // (The engine names some items only "other": their
+                        // label says which, for the tests.)
+                        engine_names.push(if name == "other" { format!("other:{}", text(&|p| item.Label(p))) } else { name });
                         i += 1;
                     }
                     let make = |action: &'static str, label: &str, value: String| -> windows::core::Result<ICoreWebView2ContextMenuItem> {

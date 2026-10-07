@@ -8,6 +8,8 @@ import { DENSITIES } from "./shared/styles.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
 import { a11yPanel } from "./settings-a11y.js";
+import { profilesPanel } from "./settings-profiles.js";
+import { autofillPanel } from "./settings-autofill.js";
 import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard, permissionsPanel, downloadsExtras } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -33,7 +35,9 @@ const SECTIONS = [
   { id: "history", label: "History", icon: "history" },
   { id: "downloads", label: "Downloads", icon: "download" },
   { id: "passwords", label: "Passwords", icon: "key" },
+  { id: "autofill", label: "Addresses & cards", icon: "card" },
   { id: "import", label: "Import", icon: "arrowRight" },
+  { id: "profiles", label: "Profiles", icon: "user" },
   { id: "features", label: "All features", icon: "help" },
   { id: "about", label: "About", icon: "bolt" },
 ];
@@ -1389,6 +1393,8 @@ async function buildPanel(id, settings) {
     case "downloads": return await downloadsPanel();
     case "passwords": return passwordsPanel(settings);
     case "import": return await importPanel();
+    case "profiles": return await profilesPanel({ el, settingRow });
+    case "autofill": return await autofillPanel({ el, settingRow, switchHtml });
     case "features": return featuresPanel();
     case "about": return await aboutPanel();
     default: return el(`<div class="panel"></div>`);

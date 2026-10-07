@@ -24,6 +24,7 @@ const PATHS = {
   cookie: '<path d="M12 3a9 9 0 1 0 9 9 3 3 0 0 1-3.5-3.5A3 3 0 0 1 14 5a3 3 0 0 1-2-2z"/><circle cx="8.5" cy="11" r=".9" fill="currentColor"/><circle cx="12.5" cy="15.5" r=".9" fill="currentColor"/><circle cx="16" cy="12.5" r=".9" fill="currentColor"/>',
   unlock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.4-2"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 20 3"/><path d="M16 7l2.5 2.5"/><path d="M13 10l2 2"/>',
+  card: '<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M7 15h4"/>',
   user: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.6 7.5-5.6s6.7 2 7.5 5.6"/>',
   userPlus: '<circle cx="10" cy="8.5" r="3.6"/><path d="M3.5 20c.7-3.5 3.3-5.5 6.5-5.5 1.3 0 2.5.3 3.5.9"/><path d="M18 14v6"/><path d="M15 17h6"/>',
   edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',

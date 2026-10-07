@@ -139,6 +139,21 @@ export async function startServer(host = "127.0.0.2", wantedPort = 0) {
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
 self.addEventListener('sync', (e) => e.waitUntil(caches.open('kessel').then((c) => c.put('/synced', new Response(e.tag)))));`);
+    } else if (parts[0] === "checkout") {
+      // A form with an address and a card in it; sent, it goes to /page/Thanks.
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Checkout</title></head><body>
+<form id="f" action="/page/Thanks" method="get">
+<p><label for="name">Full name</label> <input id="name" name="name" autocomplete="name"></p>
+<p><input id="email" type="email" name="email" placeholder="Email"></p>
+<p><input id="tel" type="tel" name="phone" placeholder="Phone"></p>
+<p><input id="street" name="address" autocomplete="street-address"></p>
+<p><input id="city" name="city" placeholder="City"> <input id="zip" name="zip" placeholder="ZIP"></p>
+<p><select id="country" name="country"><option value="">Country</option><option value="DE">Germany</option><option value="HU">Hungary</option></select></p>
+<p><input id="ccnum" name="cardnumber" autocomplete="cc-number"> <input id="ccname" name="ccname" autocomplete="cc-name"></p>
+<p><input id="ccexp" name="exp" placeholder="MM/YY" autocomplete="cc-exp"> <input id="cvc" name="cvc" autocomplete="cc-csc"></p>
+<p><button id="send">Pay</button></p>
+</form></body></html>`);
     } else if (parts[0] === "speculate") {
       // A page that asks for the next pages early: one prefetched (<link
       // rel=prefetch>), one prerendered (speculation rules).
