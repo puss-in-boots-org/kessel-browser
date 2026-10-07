@@ -9,7 +9,8 @@ async function open(k, url) {
   const [tab] = await k.tabs();
   await k.invoke("navigate", { id: tab.id, url });
   const page = await k.page((t) => t.url === url);
-  await page.waitFor(`document.readyState === "complete"`);
+  // (Not the page it was on: that one may answer first.)
+  await page.waitFor(`location.href === ${JSON.stringify(url)} && document.readyState === "complete"`);
   return { id: tab.id, page };
 }
 
