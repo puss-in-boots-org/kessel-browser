@@ -36,14 +36,14 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**81% overall** -- 678 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 151 to do (⏳), 108 skipped (⏭️), of 1045.
+**83% overall** -- 681 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 137 to do (⏳), 109 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
 | [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
-| [3. Windows](#3-windows) | 7 |  | 4 | 4 |  | `██████░░░░` 60% |
+| [3. Windows](#3-windows) | 7 | 2 | 4 | 2 |  | `███████░░░` 73% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
@@ -61,7 +61,7 @@ branch, one small commit per feature or group of features.
 | [18. Translation](#18-translation) | 7 |  | 1 | 2 |  | `████████░░` 75% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
-| [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
+| [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
 | [23. Appearance](#23-appearance) | 14 |  |  | 2 |  | `█████████░` 88% |
 | [24. Search engines](#24-search-engines) | 7 |  |  | 2 |  | `████████░░` 78% |
@@ -85,12 +85,12 @@ branch, one small commit per feature or group of features.
 | [42. Sharing](#42-sharing) | 2 | 2 |  | 2 | 3 | `███████░░░` 67% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
-| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 |  |  | 2 |  | `█████████░` 93% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 | 1 |  | 1 |  | `██████████` 96% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
-| [50. Media & entertainment extras](#50-media--entertainment-extras) | 1 |  |  | 7 | 3 | `█░░░░░░░░░` 13% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
@@ -255,8 +255,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 3.03 | Incognito windows | ✅ | Same as private windows |
 | 3.04 | Separate profile windows | 🟡 | Account pop-out windows |
 | 3.05 | Always-on-top window mode | 🟡 | Pop-out windows only |
-| 3.06 | Picture-in-picture windows | ⏳ | |
-| 3.07 | Pop-out video windows | ⏳ | |
+| 3.06 | Picture-in-picture windows | 🧪 | The engine's picture-in-picture window: media controls or Alt+P (20.05) |
+| 3.07 | Pop-out video windows | 🧪 | A video pops out into the engine's picture-in-picture window (media controls or Alt+P) |
 | 3.08 | Restore previous windows | ✅ | Session restore reopens every window with its own tabs |
 | 3.09 | Restore individual windows | ✅ | Reopen closed window, any closed window from History -> Recently closed, or one window of a saved session |
 | 3.10 | Window session saving | ✅ | Each window's tabs are saved as they change |
@@ -714,14 +714,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 21.01 | Video pop-out | ⏳ | |
-| 21.02 | Always-on-top video | ⏳ | |
-| 21.03 | Resize PiP window | ⏳ | |
-| 21.04 | Move PiP window | ⏳ | |
-| 21.05 | Pause/play | ⏳ | |
-| 21.06 | Next/previous | ⏳ | |
+| 21.01 | Video pop-out | 🧪 | Media controls -> picture-in-picture, or Alt+P: the engine's floating video window |
+| 21.02 | Always-on-top video | 🧪 | The engine's picture-in-picture window stays on top of other windows |
+| 21.03 | Resize PiP window | 🧪 | The picture-in-picture window resizes from its edges (the engine's own) |
+| 21.04 | Move PiP window | 🧪 | The picture-in-picture window moves by dragging it (the engine's own) |
+| 21.05 | Pause/play | 🧪 | Its own play/pause button; Kessel's media controls too |
+| 21.06 | Next/previous | 🧪 | Its previous/next buttons when the page offers them (Media Session, 20.10) |
 | 21.07 | Subtitle support | ⏳ | |
-| 21.08 | Multiple PiP windows where supported | ⏳ | |
+| 21.08 | Multiple PiP windows where supported | ⏭️ | The engine shows one picture-in-picture window at a time |
 
 ### 22. Accessibility
 
@@ -1124,7 +1124,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 45.20 | Downloads | ✅ | Ctrl+J |
 | 45.21 | Developer tools | ✅ | F12 |
 | 45.22 | Fullscreen | ✅ | F11 |
-| 45.23 | Picture-in-picture | ⏳ | |
+| 45.23 | Picture-in-picture | 🧪 | Alt+P (or the command palette): the tab's video in picture-in-picture and back; the key is tested, the window itself waits for a run on screen |
 | 45.24 | Screenshot | ✅ | Ctrl+Shift+S; PNG or JPEG, folder of your choice |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
@@ -1208,16 +1208,16 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 50.01 | Video enhancement | ⏳ | |
-| 50.02 | Picture-in-picture | ⏳ | |
-| 50.03 | Playback controls | ⏳ | |
+| 50.02 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture, or Alt+P (20.05) |
+| 50.03 | Playback controls | ✅ | Kessel's media controls (20.03): play/pause, ±10 s, a seek bar, speed, previous/next, for any tab without switching to it |
 | 50.04 | Volume normalization | ⏳ | |
 | 50.05 | Media-key support | ⏳ | |
 | 50.06 | Casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.07 | Chromecast-style casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.08 | AirPlay-style integration | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
-| 50.09 | Subtitle customization | ⏳ | |
+| 50.09 | Subtitle customization | ✅ | Settings -> Accessibility -> Subtitles: a video's captions larger, in another colour, on another background -- on every site |
 | 50.10 | Theater mode | ✅ | Command palette -> Theater mode: the video fills the tab on black; Esc puts it back |
-| 50.11 | Fullscreen mode | ⏳ | |
+| 50.11 | Fullscreen mode | ✅ | F11 for the window; a video's own full screen button fills the whole screen and comes back as it was |
 
 ### 51. Privacy-focused advanced features
 

@@ -2939,6 +2939,8 @@ async function runCommand(id, ctx = {}) {
       return page && takeScreenshot(page, id === "screenshot-full");
     case "reader-mode": return page && openReader(page);
     case "theater-mode": return page && invoke("page_tool", { id: page, tool: "theater" }).catch((err) => toast(String(err)));
+    // (Through media.rs, as a click in the page: the engine wants one.)
+    case "picture-in-picture": return page && invoke("media_action", { id: page, action: "pip" }).catch((err) => toast(String(err)));
     case "zap-element":
       if (!page) return;
       await invoke("page_tool", { id: page, tool: "zap-start" }).catch((err) => toast(String(err)));

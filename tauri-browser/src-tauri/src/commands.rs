@@ -141,6 +141,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("restart-safe-mode", "Restart in safe mode", "Kessel", &[]),
     cmd("lock-browser", "Lock Kessel", "Kessel", &[]),
     cmd("theater-mode", "Theater mode: the video fills the tab", "Page tools", &[]),
+    cmd("picture-in-picture", "Picture-in-picture: the video in a window of its own", "Page tools", &["Alt+P"]),
     cmd("command-palette", "Command palette", "Kessel", &["F2"]),
     // Page tools (tools.rs, src/shared/page-tools.js)
     cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),
@@ -449,6 +450,7 @@ mod tests {
             ("F12", "devtools"),
             ("Ctrl+U", "view-source"),
             ("Alt+F", "menu"),
+            ("Alt+P", "picture-in-picture"),
             ("Ctrl+N", "new-window"),
             ("Ctrl+Tab", "next-tab"),
             ("Ctrl+Shift+Tab", "prev-tab"),
