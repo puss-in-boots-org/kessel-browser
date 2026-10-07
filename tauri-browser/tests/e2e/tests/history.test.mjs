@@ -33,4 +33,33 @@ export const tests = [
       await page.waitFor(`document.querySelectorAll('#list .visit').length === 0`, { message: "yesterday: not there" });
     },
   },
+  {
+    name: "right-click Back: the tab's own history, nearest first; picking a page goes straight there",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch();
+      const [tab] = await k.tabs();
+      for (const name of ["One", "Two", "Three"]) {
+        const url = `${site.origin}/page/${name}`;
+        await k.invoke("navigate", { id: tab.id, url });
+        const page = await k.page((t) => t.url === url);
+        await page.waitFor(`location.href === ${JSON.stringify(url)} && document.readyState === 'complete'`);
+      }
+      const history = await k.invoke("tab_history", { id: tab.id });
+      assert.deepEqual(history.entries.slice(-3).map((e) => e.title), ["One", "Two", "Three"], "where it's been");
+      assert.equal(history.entries[history.current].title, "Three", "where it is");
+
+      const toolbar = await k.toolbar();
+      await toolbar.clickSelector("#back-btn", { button: "right" });
+      const menu = await k.page((t) => t.url.includes("/context.html"));
+      await menu.waitFor(`document.querySelectorAll('.item').length > 0`);
+      const labels = await menu.evaluate(`[...document.querySelectorAll('.item .label')].map((l) => l.textContent)`);
+      assert.deepEqual(labels.slice(0, 2), ["Two", "One"], "nearest first");
+      assert(labels.includes("Show full history"), "and the whole history");
+      const box = await menu.evaluate(`(() => { const r = [...document.querySelectorAll('.item')].find((i) => i.querySelector('.label').textContent === 'One').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      await menu.click(box.x, box.y);
+      await waitFor(async () => (await k.tabs()).find((t) => t.id === tab.id)?.url === `${site.origin}/page/One`, { message: "two pages back" });
+      const after = await k.invoke("tab_history", { id: tab.id });
+      assert.equal(after.entries.slice(after.current + 1).length, 2, "Two and Three ahead, for Forward");
+    },
+  },
 ];

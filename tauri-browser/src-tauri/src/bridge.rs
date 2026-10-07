@@ -233,6 +233,16 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::count_ads_hidden(app, count);
             None
         }
+        // The language the page says it's in: the toolbar offers to
+        // translate it.
+        "page-lang" if top_frame => {
+            let lang = d.get("lang")?.as_str()?;
+            let ok = lang.len() <= 20 && lang.split('-').all(|p| !p.is_empty() && p.len() <= 8 && p.chars().all(|c| c.is_ascii_alphanumeric()));
+            if ok {
+                crate::emit_to_tab_window(app, id, "page-language", serde_json::json!({ "id": id, "lang": lang.to_ascii_lowercase(), "url": url }));
+            }
+            None
+        }
         // Requests (top-level page only): what to hide, autofill.
         "req" if top_frame => request(app, id, url, d.get("name")?.as_str()?, d),
         _ => None,

@@ -73,6 +73,14 @@ function findTab(id) {
   return tabs.find((t) => t.id === id);
 }
 
+// Settings as searching from this window sees them: a private window
+// searches with the engine Settings -> Search & Startup picked for those.
+function searchSettings() {
+  const s = currentSettings();
+  const own = WIN.private && s?.features?.private_search_engine;
+  return own ? { ...s, search_engine: own } : s;
+}
+
 // A read-only view of the tab strip for the end-to-end tests (tests/e2e).
 window.__kesselTest = {
   tabs: () =>
@@ -1706,7 +1714,7 @@ function wireExternalDrops() {
     const moz = (dt.getData("text/x-moz-url") || "").split(/\r?\n/)[0]?.trim();
     if (moz) return [moz];
     const text = (dt.getData("text/plain") || "").trim();
-    return text ? [resolveTyped(text, currentSettings())] : [];
+    return text ? [resolveTyped(text, searchSettings())] : [];
   };
   const accepts = (e) => !drag && [...(e.dataTransfer?.types || [])].some((t) => t === "text/uri-list" || t === "text/plain" || t === "text/x-moz-url");
   let overTab = null;
@@ -2343,6 +2351,7 @@ function updateAddressBarForActiveTab(force = false) {
   updateZoomIndicator();
   updateBlockedButton();
   updateHangButton();
+  updateTranslateButton();
   updateExtensionButtons();
 }
 
@@ -2781,7 +2790,7 @@ async function openSingleton(route) {
 async function navigateActiveTab(rawInput) {
   const tab = findTab(activeTabId);
   if (!tab) return;
-  const url = resolveTyped(rawInput, currentSettings());
+  const url = resolveTyped(rawInput, searchSettings());
   if (!url) return;
   if (SINGLETON_ROUTES.has(internalPageKey(url))) {
     await openSingleton(url);
@@ -2921,6 +2930,7 @@ async function runCommand(id, ctx = {}) {
     case "screenshot-full":
       return page && takeScreenshot(page, id === "screenshot-full");
     case "reader-mode": return page && openReader(page);
+    case "theater-mode": return page && invoke("page_tool", { id: page, tool: "theater" }).catch((err) => toast(String(err)));
     case "zap-element":
       if (!page) return;
       await invoke("page_tool", { id: page, tool: "zap-start" }).catch((err) => toast(String(err)));
@@ -3086,7 +3096,7 @@ function urlInputEl() {
 // Enter in the address bar: `where` is "here", "tab" (Alt+Enter) or
 // "window" (Shift+Enter).
 async function navigateFromAddressBar(text, where) {
-  const url = resolveTyped(text, currentSettings());
+  const url = resolveTyped(text, searchSettings());
   if (!url) return;
   urlInputEl().blur();
   if (where === "tab") await createTab(url);
@@ -3144,7 +3154,7 @@ function warnedUrl(url) {
 
 function siteState(url) {
   // A crashed page (crash.rs) warns about nothing.
-  if (warnedUrl(url) !== null) return /[?&]kind=crashed(&|$)/.test(url) ? "none" : "danger";
+  if (warnedUrl(url) !== null) return /[?&]kind=(crashed|offline)(&|$)/.test(url) ? "none" : "danger";
   if (/^https:/i.test(url)) return "secure";
   if (/^http:/i.test(url)) {
     let host = "";
@@ -3961,6 +3971,110 @@ async function onPageMenu({ action, value, page, title, tab }) {
       await runCommand("screenshot-visible", { page: tab });
       break;
   }
+}
+
+// The tab's own history, from Back (`forward` false) or Forward: up to 15
+// pages, nearest first; picking one goes straight there.
+async function historyMenu(forward, e) {
+  e.preventDefault();
+  const tab = findTab(activeTabId);
+  if (!tab || tab.id <= 0) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const history = await invoke("tab_history", { id: tab.id }).catch(() => null);
+  if (!history) return;
+  const pages = forward ? history.entries.slice(history.current + 1) : history.entries.slice(0, history.current).reverse();
+  if (!pages.length) return;
+  showContextMenu(
+    [
+      ...pages.slice(0, 15).map((page) => ({
+        label: page.title || internalTitle(page.url) || page.url,
+        iconName: "history",
+        action: () => invoke("go_to_history_entry", { id: tab.id, entry: page.id }).catch((err) => toast(String(err))),
+      })),
+      "-",
+      { label: "Show full history", iconName: "history", action: () => openSingleton("kessel://history") },
+    ],
+    rect.left,
+    rect.bottom + 4,
+    { dropdown: true, width: 320 }
+  );
+}
+
+// --- The translation chip ------------------------------------------------------
+// A page in another language than yours (it says so in <html lang>) gets a
+// Translate chip by the address. "Always translate" a language does it by
+// itself from then on; "Never" keeps quiet about a language or a site.
+// Settings: features.translate_always_langs / translate_never_langs /
+// translate_never_sites.
+
+const primaryLang = (lang) => String(lang || "").toLowerCase().split("-")[0];
+
+function langName(code) {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(code) || code;
+  } catch {
+    return code;
+  }
+}
+
+// The page at `url`, in language `lang`: worth offering to translate?
+function translationWantedFor(lang, url) {
+  lang = primaryLang(lang);
+  if (!lang || !/^https?:/.test(url || "")) return false;
+  const host = hostOf(url);
+  if (/(^|\.)translate\.goog$/.test(host) || host === "translate.google.com") return false;
+  const f = currentSettings()?.features || {};
+  if (f.page_menu?.translate === false || lang === primaryLang(translateTarget())) return false;
+  return !(f.translate_never_langs || []).includes(lang) && !(f.translate_never_sites || []).includes(host);
+}
+
+// (The language heard for the page the tab is on now.)
+const translationWanted = (tab) => !!tab && tab.pageLangUrl === tab.url && translationWantedFor(tab.pageLang, tab.url);
+
+function updateTranslateButton() {
+  const btn = document.getElementById("translate-btn");
+  if (!btn) return;
+  const tab = findTab(activeTabId);
+  btn.hidden = !translationWanted(tab);
+  if (btn.hidden) return;
+  btn.innerHTML = `${icon("globe", 12)}<span>Translate</span>`;
+  btn.title = `This page is in ${langName(primaryLang(tab.pageLang))}`;
+}
+
+// (`translatedFrom`: a page the translator sent back as it was -- one it
+// can't reach, say -- isn't sent to it again and again.)
+function translateTab(tab, url = tab.url) {
+  tab.translatedFrom = url;
+  return invoke("navigate", { id: tab.id, url: translatePageUrl(url) }).catch((err) => toast(String(err)));
+}
+
+async function saveTranslateList(key, value) {
+  const f = currentSettings()?.features || {};
+  await saveSettings({ features: { ...f, [key]: [...new Set([...(f[key] || []), value])] } });
+  updateTranslateButton();
+}
+
+function translateMenu() {
+  const tab = findTab(activeTabId);
+  if (!translationWanted(tab)) return;
+  const lang = primaryLang(tab.pageLang);
+  const name = langName(lang);
+  const rect = document.getElementById("translate-btn").getBoundingClientRect();
+  showContextMenu(
+    [
+      { header: `This page is in ${name}` },
+      { label: `Translate into ${langName(primaryLang(translateTarget()))}`, iconName: "globe", action: () => translateTab(tab) },
+      { label: `Always translate ${name}`, iconName: "check", action: async () => { await saveTranslateList("translate_always_langs", lang); translateTab(tab); } },
+      "-",
+      { label: `Never translate ${name}`, iconName: "close", action: () => saveTranslateList("translate_never_langs", lang) },
+      { label: `Never translate ${hostOf(tab.url)}`, iconName: "close", action: () => saveTranslateList("translate_never_sites", hostOf(tab.url)) },
+      "-",
+      { label: "Translation settings…", iconName: "settings", action: () => openSingleton("kessel://settings/tools") },
+    ],
+    rect.left,
+    rect.bottom + 4,
+    { dropdown: true, width: 300 }
+  );
 }
 
 // Translating (the page menu): with the service picked in Settings -> Page
@@ -4884,6 +4998,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("new-tab-btn").addEventListener("click", () => createTab());
   document.getElementById("back-btn").addEventListener("click", () => runCommand("back"));
+  // Right-click Back or Forward: where the tab has been (or can go on to).
+  document.getElementById("back-btn").addEventListener("contextmenu", (e) => historyMenu(false, e));
+  document.getElementById("forward-btn").addEventListener("contextmenu", (e) => historyMenu(true, e));
   document.getElementById("forward-btn").addEventListener("click", () => runCommand("forward"));
   // Reload, or stop while the page is still loading (like Chrome's button).
   document.getElementById("reload-btn").addEventListener("click", () => runCommand(findTab(activeTabId)?.loading ? "stop" : "reload"));
@@ -4892,10 +5009,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
   document.getElementById("blocked-btn").addEventListener("click", blockedMenu);
   document.getElementById("hang-btn").addEventListener("click", hangMenu);
+  document.getElementById("translate-btn").addEventListener("click", translateMenu);
   document.getElementById("notice-btn").addEventListener("click", noticeMenu);
   document.getElementById("media-btn").addEventListener("click", toggleMediaPopup);
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
+  window.addEventListener("kessel-settings", updateTranslateButton);
   document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
   document.getElementById("zoom-btn").addEventListener("click", () => runCommand("zoom-reset"));
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
@@ -4941,7 +5060,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     anchor: document.getElementById("address-wrap"),
     win: WIN,
     listen,
-    getSettings: currentSettings,
+    getSettings: searchSettings,
     getBookmarks: () => bookmarks,
     getCommands: () => commandList,
     go: openFromAddressBar,
@@ -5027,6 +5146,20 @@ window.addEventListener("DOMContentLoaded", async () => {
   notices = await invoke("kessel_notices").catch(() => []);
   renderNotices();
   await listen("task-action", (event) => taskAction(event.payload || {}));
+  // The language a page says it's in (page-tools.js): the translation chip,
+  // or the translation itself for a language you always translate.
+  await listen("page-language", (event) => {
+    const { id, lang, url } = event.payload || {};
+    const tab = findTab(id);
+    if (!tab) return;
+    // (It can come before the tab hears its new address: kept with its page.)
+    tab.pageLang = lang;
+    tab.pageLangUrl = url;
+    if (translationWantedFor(lang, url) && tab.translatedFrom !== url && (currentSettings()?.features?.translate_always_langs || []).includes(primaryLang(lang))) {
+      translateTab(tab, url);
+    }
+    if (id === activeTabId) updateTranslateButton();
+  });
   // Kessel locked (browser_lock.rs): nothing of the tabs is said aloud.
   await listen("browser-locked", (event) => {
     if (!event.payload) return;
@@ -5042,6 +5175,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     const { id, url } = event.payload;
     shieldsStats.delete(id); // a new page starts counting from zero
     const tab = findTab(id);
+    // A new page says its own language (page-language).
+    if (tab && tab.pageLangUrl !== url) tab.pageLang = null;
     // What was stopped on the last page isn't this page's.
     if (tab?.blockedNotice && tab.blockedNotice.page !== url) {
       tab.blockedNotice = null;

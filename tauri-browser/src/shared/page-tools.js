@@ -441,6 +441,52 @@
       }
     });
 
+    // --- Theater mode: the page's biggest video fills the tab, on black;
+    // again (or Esc) puts it back ---
+    var theater = null;
+    function endTheater() {
+      if (!theater) return;
+      if (theater.style === null) theater.video.removeAttribute('style');
+      else theater.video.setAttribute('style', theater.style);
+      theater.backdrop.remove();
+      window.removeEventListener('keydown', theaterKey, true);
+      theater = null;
+    }
+    function theaterKey(e) {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      endTheater();
+    }
+    BRIDGE.on('theater', function () {
+      if (theater) return endTheater();
+      var best = null, bestArea = 0;
+      var videos = document.querySelectorAll('video');
+      for (var i = 0; i < videos.length; i++) {
+        var r = videos[i].getBoundingClientRect();
+        if (r.width * r.height > bestArea) { best = videos[i]; bestArea = r.width * r.height; }
+      }
+      if (!best) return;
+      var backdrop = document.createElement('div');
+      backdrop.setAttribute('data-kessel', 'theater');
+      backdrop.style.cssText = 'position:fixed;inset:0;background:#000;z-index:2147483646';
+      document.documentElement.appendChild(backdrop);
+      theater = { video: best, style: best.getAttribute('style'), backdrop: backdrop };
+      best.style.cssText += ';position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;margin:0!important;transform:none!important;object-fit:contain!important;background:#000!important;z-index:2147483647!important';
+      window.addEventListener('keydown', theaterKey, true);
+    });
+
+    // --- The language the page says it's in (the translation chip) ---
+    if (window.top === window) {
+      var tellLanguage = function () {
+        var meta = document.querySelector('meta[http-equiv="content-language" i]');
+        var lang = (document.documentElement.getAttribute('lang') || (meta && meta.getAttribute('content')) || '').trim();
+        if (/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i.test(lang)) BRIDGE.send('page-lang', { lang: lang });
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tellLanguage);
+      else tellLanguage();
+    }
+
     // --- The site's own search engine (OpenSearch), offered in Settings ---
     function findSearch() {
       var link = document.querySelector('link[rel="search"][type="application/opensearchdescription+xml"][href]');

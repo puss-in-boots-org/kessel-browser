@@ -21,6 +21,26 @@ pub fn download_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
     app.path().download_dir().ok()
 }
 
+// Settings -> Downloads -> "Sort downloads into folders by kind": the
+// folder (inside the downloads folder) a file of this name goes to.
+pub fn kind_folder(app: &tauri::AppHandle, filename: &str) -> Option<&'static str> {
+    let on = app.state::<BrowserState>().store.settings.lock().unwrap().features.get("download_sort").and_then(|v| v.as_bool()).unwrap_or(false);
+    on.then(|| folder_for(filename))
+}
+
+fn folder_for(filename: &str) -> &'static str {
+    let ext = std::path::Path::new(filename).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "avif" | "bmp" | "svg" | "heic" | "ico" | "tif" | "tiff" => "Pictures",
+        "mp4" | "mkv" | "webm" | "mov" | "avi" | "m4v" | "wmv" => "Videos",
+        "mp3" | "flac" | "wav" | "ogg" | "m4a" | "aac" | "opus" | "wma" => "Music",
+        "pdf" | "doc" | "docx" | "odt" | "rtf" | "txt" | "md" | "xls" | "xlsx" | "ods" | "csv" | "ppt" | "pptx" | "odp" | "epub" => "Documents",
+        "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "zst" => "Archives",
+        "exe" | "msi" | "msix" | "msixbundle" | "appx" | "appinstaller" | "bat" | "cmd" | "ps1" => "Programs",
+        _ => "Other",
+    }
+}
+
 fn ask_every_time(app: &tauri::AppHandle) -> bool {
     app.state::<BrowserState>().store.settings.lock().unwrap().features.get("download_ask").and_then(|v| v.as_bool()).unwrap_or(false)
 }

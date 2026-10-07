@@ -665,7 +665,7 @@ fn create_tab_internal(
             match event {
                 DownloadEvent::Requested { url, destination } => {
                     let dl_id = st.next_download_id.fetch_add(1, Ordering::SeqCst);
-                    let dir = downloads::download_dir(&app_for_download).unwrap_or_else(|| data_dir.clone());
+                    let mut dir = downloads::download_dir(&app_for_download).unwrap_or_else(|| data_dir.clone());
                     // The name the engine worked out (the server's own, the
                     // link's download="..."), else the address's last part.
                     let filename = destination
@@ -674,6 +674,12 @@ fn create_tab_internal(
                         .filter(|n| !n.trim().is_empty())
                         .or_else(|| url.path_segments().and_then(|mut s| s.next_back()).filter(|s| !s.is_empty()).map(str::to_string))
                         .unwrap_or_else(|| "download".to_string());
+                    // Sorted into a folder by kind, if you asked for that.
+                    if let Some(folder) = downloads::kind_folder(&app_for_download, &filename) {
+                        if fs::create_dir_all(dir.join(folder)).is_ok() {
+                            dir = dir.join(folder);
+                        }
+                    }
                     let mut target = dir.join(&filename);
                     let mut counter = 1;
                     let stem = target
@@ -2915,7 +2921,20 @@ unsafe fn install_shields_hooks(
             if !success.as_bool() && status == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED {
                 return Ok(());
             }
-            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else { return Ok(()) };
+            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else {
+                // Not an https try of Kessel's: a page that can't be reached
+                // gets Kessel's page, which tries again (security.rs).
+                if !success.as_bool() && !security::warned_lately(id) {
+                    if let Some(reason) = security::unreachable_text(status) {
+                        if let Ok(url) = webview_source(&sender) {
+                            if url.starts_with("http://") || url.starts_with("https://") {
+                                security::show_warning(&app_nav, id, &label_nav, "offline", &url, reason);
+                            }
+                        }
+                    }
+                }
+                return Ok(());
+            };
             if success.as_bool() {
                 return Ok(());
             }
@@ -5319,6 +5338,8 @@ fn main() {
             commands::record_shortcut,
             commands::test_press,
             page::page_action,
+            page::tab_history,
+            page::go_to_history_entry,
             page::get_zoom_levels,
             page::remove_zoom_level,
             focus_webview,
@@ -5459,6 +5480,8 @@ fn main() {
             sidebar::set_side_panel_kind,
             sidebar::tell_side_panel,
             sidebar::copy_text,
+            sidebar::reading_offline_copy,
+            sidebar::open_offline_copy,
             sidebar::set_page_speaking,
             sidebar::test_page_menu,
             bookmarks::bookmark_tree,

@@ -74,7 +74,7 @@ function toneWav(seconds = 10, rate = 8000) {
   return buf;
 }
 
-export async function startServer(host = "127.0.0.2") {
+export async function startServer(host = "127.0.0.2", wantedPort = 0) {
   // Big enough for the tests' deliberately huge addresses.
   const server = http.createServer({ maxHeaderSize: 1024 * 1024 }, async (req, res) => {
     const origin = `http://${req.headers.host}`;
@@ -97,6 +97,16 @@ export async function startServer(host = "127.0.0.2") {
     } else if (parts[0] === "amp") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
+    } else if (parts[0] === "lang") {
+      // A page in language parts[1] (it says so: <html lang>).
+      const name = decodeURIComponent(parts[2] || "Page");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html lang="${encodeURIComponent(parts[1] || "en")}"><head><meta charset="utf-8"><title>${name}</title></head><body><h1>${name}</h1><p>Text in another language.</p></body></html>`);
+    } else if (parts[0] === "video") {
+      // A video in the page (nothing to play: the tests make no sound).
+      const name = decodeURIComponent(parts[1] || "Video");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head><body><h1>${name}</h1><video id="v" width="320" height="180" style="background:#333"></video><p>Below the video.</p></body></html>`);
     } else if (parts[0] === "filters.txt") {
       // A small filter list of your own: no pictures from 127.0.0.3.
       res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
@@ -229,7 +239,7 @@ async function startMedia() {
       res.end("not found");
     }
   });
-  await new Promise((resolve) => server.listen(0, host, resolve));
+  await new Promise((resolve) => server.listen(wantedPort, host, resolve));
   const { port } = server.address();
   // close() drops connections still open too: a browser can keep one going
   // (a request it never finished), and server.close() alone waits for it --

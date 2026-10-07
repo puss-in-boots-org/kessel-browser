@@ -27,6 +27,9 @@ async function menuAt(k, page, waitFor, [x, y]) {
   return waitFor(() => k.invoke("test_page_menu", {}), { message: "the menu" });
 }
 
+// Tab `t` shows `url` -- or Kessel's page saying it can't be reached.
+const shows = (t, url) => t.url === url || (t.url.startsWith("kessel://warning") && new URLSearchParams(t.url.slice(t.url.indexOf("?") + 1)).get("url") === url);
+
 const pick = (k, action) => k.invoke("test_page_menu", { pick: action });
 const actions = (menu) => menu.kessel.map((i) => i.action);
 
@@ -91,10 +94,10 @@ export const tests = [
       assert(menu.engine.includes("copy"), "the engine's Copy");
 
       await pick(k, "translate-selection");
-      await waitFor(async () => (await k.tabs()).some((t) => t.url === "https://translate.google.com/?sl=auto&tl=hu&text=Zqxjvbwor&op=translate"), { message: "Google Translate, into the language you picked" });
+      await waitFor(async () => (await k.tabs()).some((t) => shows(t, "https://translate.google.com/?sl=auto&tl=hu&text=Zqxjvbwor&op=translate")), { message: "Google Translate, into the language you picked" });
       // A word nobody has defined: your search engine instead.
       await pick(k, "define-selection");
-      await waitFor(async () => (await k.tabs()).some((t) => /define(\+|%20)Zqxjvbwor/i.test(t.url)), { message: "a search for its definition", timeout: 20000 });
+      await waitFor(async () => (await k.tabs()).some((t) => /define(\+|%20| )Zqxjvbwor/i.test(decodeURIComponent(t.url))), { message: "a search for its definition", timeout: 20000 });
 
       const toolbar = await k.toolbar();
       await pick(k, "speak-selection");
@@ -120,7 +123,7 @@ export const tests = [
         await pick(k, "screenshot-page");
         await waitFor(() => readdirSync(folder).some((f) => f.endsWith(".png")), { message: "a screenshot saved", timeout: 20000 });
         await pick(k, "translate-page");
-        await waitFor(async () => (await k.tabs()).some((t) => t.url === `https://translate.google.com/translate?sl=auto&tl=de&u=${encodeURIComponent(url)}` || /translate\.goog/.test(t.url)), { message: "the page in Google Translate" });
+        await waitFor(async () => (await k.tabs()).some((t) => shows(t, `https://translate.google.com/translate?sl=auto&tl=de&u=${encodeURIComponent(url)}`) || /translate\.goog/.test(t.url)), { message: "the page in Google Translate" });
 
         await k.invoke("switch_tab", { id: (await k.tabs())[0].id });
         await sleep(300);

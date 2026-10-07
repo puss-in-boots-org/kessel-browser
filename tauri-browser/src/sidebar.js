@@ -210,13 +210,16 @@ views.reading = async (root) => {
             row({
               leading: siteIcon(i.url, { label: i.title }),
               title: i.title,
-              sub: `${hostOf(i.url)} · ${formatRelativeTime(i.added)}`,
+              sub: `${hostOf(i.url)} · ${formatRelativeTime(i.added)}${i.offline ? " · saved to read offline" : ""}`,
               className: i.read ? "read" : "",
-              onOpen: (e) => {
-                open(i.url, e);
+              onOpen: async (e) => {
+                // Offline: the copy kept of it.
+                const copy = !navigator.onLine && i.offline ? await invoke("reading_offline_copy", { url: i.url }).catch(() => null) : null;
+                open(copy || i.url, e);
                 if (!i.read) invoke("set_reading_read", { url: i.url, read: true });
               },
               actions: [
+                ...(i.offline ? [{ icon: "save", title: "Read the saved copy", run: async () => { const copy = await invoke("reading_offline_copy", { url: i.url }).catch(() => null); if (copy) open(copy); } }] : []),
                 { icon: i.read ? "undo" : "check", title: i.read ? "Mark as unread" : "Mark as read", run: () => invoke("set_reading_read", { url: i.url, read: !i.read }) },
                 { icon: "trash", title: "Remove", danger: true, run: () => invoke("remove_from_reading_list", { url: i.url }) },
               ],
