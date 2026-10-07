@@ -323,6 +323,7 @@ async function privacyPanel(settings) {
     <div class="setting-card">
       <div class="setting-row"><div class="info"><div class="title">Filter lists</div><div class="desc">The same lists Brave and uBlock Origin use. Downloaded to this PC and refreshed every few days.</div></div><div class="control"><button class="btn sm" id="update-lists-btn">Update now</button></div></div>
       <div id="filter-lists"></div>
+      <div class="add-row"><input class="field" id="add-list-url" placeholder="Your own list's address (https://…/list.txt)" /><button class="btn sm" id="add-list-btn">Add list</button></div>
     </div>
 
     <div class="setting-card">
@@ -385,8 +386,17 @@ async function privacyPanel(settings) {
     const holder = p.querySelector("#filter-lists");
     holder.innerHTML = "";
     for (const list of status.lists) {
-      const detail = list.error ? `Couldn't update: ${list.error}` : `${list.description} · ${ago(list.updated_at)}`;
-      const row = el(settingRow({ title: list.name, desc: detail, controlHtml: switchHtml(`list-${list.id}`, list.enabled) }));
+      const detail = list.error ? `Couldn't update: ${list.error}` : `${list.own ? list.url : list.description} · ${ago(list.updated_at)}`;
+      const remove = list.own ? `<button class="btn sm ghost" data-remove-list="${list.id}" title="Remove this list">${icon("trash", 13)}</button>` : "";
+      const row = el(settingRow({ title: escapeHtml(list.name), desc: escapeHtml(detail), controlHtml: `${remove}${switchHtml(`list-${list.id}`, list.enabled)}` }));
+      row.querySelector("[data-remove-list]")?.addEventListener("click", async () => {
+        const s = currentSettings() || {};
+        await saveSettings({
+          filter_lists: (s.filter_lists || []).filter((id) => id !== list.id),
+          features: { ...(s.features || {}), own_filter_lists: (s.features?.own_filter_lists || []).filter((l) => l.id !== list.id) },
+        });
+        toast(`${list.name} removed`);
+      });
       row.querySelector(".switch").addEventListener("click", async (e) => {
         const on = !e.currentTarget.classList.contains("on");
         const current = currentSettings()?.filter_lists || [];
@@ -400,6 +410,27 @@ async function privacyPanel(settings) {
   }
   renderLists(shields);
   listen("shields-lists-changed", async () => renderLists(await invoke("shields_status")));
+  // Your own list, by its address: downloaded and refreshed like the others.
+  p.querySelector("#add-list-btn").addEventListener("click", async () => {
+    const input = p.querySelector("#add-list-url");
+    let url;
+    try {
+      url = new URL(input.value.trim());
+    } catch {
+      return toast("That isn't an address");
+    }
+    if (!/^https?:$/.test(url.protocol)) return toast("A list's address starts with https://");
+    const s = currentSettings() || {};
+    const own = s.features?.own_filter_lists || [];
+    if (own.some((l) => l.url === url.href)) return toast("That list is already there");
+    const id = `own-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    await saveSettings({
+      filter_lists: [...(s.filter_lists || []), id],
+      features: { ...(s.features || {}), own_filter_lists: [...own, { id, url: url.href, name: url.hostname + url.pathname.replace(/\/$/, "") }] },
+    });
+    input.value = "";
+    toast("Adding your list…");
+  });
   p.querySelector("#update-lists-btn").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;

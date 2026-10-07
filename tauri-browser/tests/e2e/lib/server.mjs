@@ -97,6 +97,16 @@ export async function startServer(host = "127.0.0.2") {
     } else if (parts[0] === "amp") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
+    } else if (parts[0] === "filters.txt") {
+      // A small filter list of your own: no pictures from 127.0.0.3.
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      res.end("! Title: Kessel test list\n||127.0.0.3^$image\n");
+    } else if (parts[0] === "sw.js") {
+      // A service worker that answers its own scope's /sw-hello.
+      res.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store" });
+      res.end(`self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (e) => { if (new URL(e.request.url).pathname === '/sw-hello') e.respondWith(new Response('hello from the service worker')); });`);
     } else if (parts[0] === "img") {
       // A 1x1 PNG (any name), any site may show it.
       res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
