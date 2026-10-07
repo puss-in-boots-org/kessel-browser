@@ -2339,6 +2339,7 @@ function updateAddressBarForActiveTab(force = false) {
   updateShieldsButton();
   updateAccountButton();
   updateZoomIndicator();
+  updateBlockedButton();
   updateExtensionButtons();
 }
 
@@ -3145,7 +3146,8 @@ async function toggleSiteInfo() {
   const tab = findTab(activeTabId);
   if (!tab || !/^(https?|file):/.test(tab.url || "")) return;
   const rect = document.getElementById("lock-icon").getBoundingClientRect();
-  await invoke("toggle_popup", { kind: "siteinfo", x: Math.round(rect.left - 6), y: Math.round(rect.bottom), width: 320, height: 330, init: { tab: tab.id, url: tab.url } }).catch(() => {});
+  const web = /^https?:/.test(tab.url);
+  await invoke("toggle_popup", { kind: "siteinfo", x: Math.round(rect.left - 6), y: Math.round(rect.bottom), width: 320, height: web ? 540 : 330, init: { tab: tab.id, url: tab.url } }).catch(() => {});
 }
 
 // --- Risky downloads ---------------------------------------------------------------
@@ -3208,6 +3210,68 @@ async function findInPage(command, page) {
 
 // The address bar's zoom badge: the active tab's zoom when it isn't the
 // default; clicking it resets it.
+// --- Pop-ups and redirects your site settings stopped (permissions.rs) ------------
+// One chip in the address bar for the active tab: what was stopped, a way
+// to open it anyway, and a way to allow the site from now on.
+
+function updateBlockedButton() {
+  const btn = document.getElementById("blocked-btn");
+  if (!btn) return;
+  const notice = findTab(activeTabId)?.blockedNotice;
+  btn.hidden = !notice;
+  if (!notice) return;
+  const what = notice.kind === "popup" ? (notice.count > 1 ? `${notice.count} pop-ups blocked` : "Pop-up blocked") : "Redirect blocked";
+  btn.innerHTML = `${icon("shield", 12)}<span></span>`;
+  btn.querySelector("span").textContent = what;
+  btn.title = `${what}: ${notice.url}`;
+}
+
+function blockedMenu() {
+  const tab = findTab(activeTabId);
+  const notice = tab?.blockedNotice;
+  if (!tab || !notice) return;
+  const popup = notice.kind === "popup";
+  const rect = document.getElementById("blocked-btn").getBoundingClientRect();
+  showContextMenu(
+    [
+      { header: popup ? `${hostOf(tab.url)} tried to open ${hostOf(notice.url)}` : `${hostOf(tab.url)} tried to send you to ${hostOf(notice.url)}` },
+      {
+        label: popup ? `Open ${hostOf(notice.url)}` : `Go to ${hostOf(notice.url)}`,
+        iconName: popup ? "plus" : "arrowRight",
+        action: () => {
+          tab.blockedNotice = null;
+          updateBlockedButton();
+          return popup ? createTab(notice.url) : invoke("navigate", { id: tab.id, url: notice.url });
+        },
+      },
+      {
+        label: popup ? `Always allow pop-ups on ${hostOf(tab.url)}` : `Always allow ${hostOf(tab.url)} to redirect`,
+        iconName: "check",
+        action: async () => {
+          await invoke("set_site_setting", { url: tab.url, kind: popup ? "popups" : "redirects", value: "allow" }).catch((err) => toast(String(err)));
+          tab.blockedNotice = null;
+          updateBlockedButton();
+          toast(popup ? "Pop-ups allowed on this site" : "Redirects allowed on this site");
+        },
+      },
+      "-",
+      { label: "Site permissions…", iconName: "settings", action: () => openSingleton("kessel://settings/permissions") },
+    ],
+    rect.left,
+    rect.bottom + 4,
+    { dropdown: true, width: 320 }
+  );
+}
+
+function noteBlocked(kind, payload) {
+  const tab = findTab(payload.id);
+  if (!tab) return;
+  const same = tab.blockedNotice?.kind === kind;
+  // `page`: the page it happened on -- it goes when the tab leaves that page.
+  tab.blockedNotice = { kind, url: payload.url, page: payload.page, count: same ? (tab.blockedNotice.count || 1) + 1 : 1 };
+  if (tab.id === activeTabId) updateBlockedButton();
+}
+
 function updateZoomIndicator() {
   const btn = document.getElementById("zoom-btn");
   if (!btn) return;
@@ -4565,6 +4629,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
   document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
+  document.getElementById("blocked-btn").addEventListener("click", blockedMenu);
   document.getElementById("media-btn").addEventListener("click", toggleMediaPopup);
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
@@ -4680,6 +4745,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // --- Backend events ----------------------------------------------------
 
+  await listen("popup-blocked", (event) => noteBlocked("popup", event.payload || {}));
+  await listen("redirect-blocked", (event) => noteBlocked("redirect", event.payload || {}));
+
   await listen("tab-navigated", (event) => {
     // Rust only emits this for genuine external http(s) navigation --
     // internal kessel://... pages are filtered out on the Rust side (see
@@ -4687,6 +4755,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     const { id, url } = event.payload;
     shieldsStats.delete(id); // a new page starts counting from zero
     const tab = findTab(id);
+    // What was stopped on the last page isn't this page's.
+    if (tab?.blockedNotice && tab.blockedNotice.page !== url) {
+      tab.blockedNotice = null;
+      if (id === activeTabId) updateBlockedButton();
+    }
     const next = tab && keepViewSource(tab, url);
     if (tab && next !== tab.url) {
       tab.url = next;

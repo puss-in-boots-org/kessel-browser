@@ -47,6 +47,11 @@ pub fn site_tweaks_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
         "wayback": f.get("wayback").and_then(|v| v.as_bool()).unwrap_or(true),
         "highlight_color": str_of(&f, "highlight_color"),
         "gestures": gestures_on(&f),
+        // Your site settings (permissions.rs) the page script keeps.
+        "fullscreen": crate::permissions::content_allowed(&f, &crate::permissions::site_of(url), "fullscreen"),
+        // Sound playing on its own: WebView2 never asks about it (the
+        // engine's own rule decides), so "block" is kept by the page script.
+        "autoplay": crate::permissions::decision(&f, &crate::permissions::site_of(url), "autoplay") != "block",
     })
 }
 

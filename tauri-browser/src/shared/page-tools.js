@@ -91,8 +91,69 @@
       else check();
     }
 
-    BRIDGE.request('site-tweaks').then(apply);
-    BRIDGE.on('tweaks-changed', function () { BRIDGE.request('site-tweaks').then(apply); });
+    // --- Your site settings (permissions.rs) the page itself keeps ---
+    // Full screen turned off for the site: a request for it is turned down
+    // (a player in another site's frame: main.rs page_fullscreen).
+    var fullscreenAllowed = true;
+    ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen'].forEach(function (name) {
+      var original = Element.prototype[name];
+      if (!original) return;
+      Element.prototype[name] = function () {
+        if (fullscreenAllowed) return original.apply(this, arguments);
+        return name === 'requestFullscreen' ? Promise.reject(new TypeError('Full screen is turned off for this site')) : undefined;
+      };
+    });
+    // Sound playing on its own turned off for the site: a video or sound
+    // can't start before you've done anything on the page -- play() is
+    // turned down, and one starting by itself (autoplay) is paused.
+    var autoplayAllowed = true;
+    var interacted = function () { return !!(navigator.userActivation && navigator.userActivation.hasBeenActive); };
+    var nativePlay = HTMLMediaElement.prototype.play;
+    // (Until the site's settings are here, a play() waits for them.)
+    var settingsKnown = false;
+    var settingsReady = null;
+    HTMLMediaElement.prototype.play = function () {
+      var media = this, args = arguments;
+      if (!settingsKnown && settingsReady) return settingsReady.then(function () { return HTMLMediaElement.prototype.play.apply(media, args); });
+      if (!autoplayAllowed && !interacted()) return Promise.reject(new DOMException('Sound playing on its own is turned off for this site', 'NotAllowedError'));
+      return nativePlay.apply(this, arguments);
+    };
+    document.addEventListener('play', function (e) {
+      if (!autoplayAllowed && !interacted() && e.target && e.target.pause) e.target.pause();
+    }, true);
+    function siteSettings(t) {
+      fullscreenAllowed = !t || t.fullscreen !== false;
+      autoplayAllowed = !t || t.autoplay !== false;
+      if (!fullscreenAllowed && document.fullscreenElement) document.exitFullscreen();
+      // What started before they were here.
+      if (!autoplayAllowed && !interacted()) {
+        Array.prototype.forEach.call(document.querySelectorAll('video, audio'), function (m) { if (!m.paused) m.pause(); });
+      }
+    }
+    // Pop-ups: a window.open without a click is one the engine's pop-up
+    // blocker stops anyway -- Kessel hears of it instead, and opens it as a
+    // tab if you allow the site's pop-ups, or says one was blocked.
+    if (window.top === window) {
+      var nativeOpen = window.open;
+      window.open = function (url) {
+        var activation = navigator.userActivation;
+        if (!activation || activation.isActive) return nativeOpen.apply(this, arguments);
+        var to = '';
+        try { to = String(new URL(url, location.href)); } catch (e) {}
+        if (/^https?:/.test(to)) BRIDGE.send('popup', { url: to });
+        return null;
+      };
+    }
+
+    function tweaksArrived(t) {
+      apply(t);
+      siteSettings(t);
+    }
+    // (Only the page itself hears back: a frame's play() never waits.)
+    var tweaks = BRIDGE.request('site-tweaks').then(tweaksArrived, function () {});
+    if (window.top === window) settingsReady = tweaks.then(function () { settingsKnown = true; });
+    else settingsKnown = true;
+    BRIDGE.on('tweaks-changed', function () { BRIDGE.request('site-tweaks').then(tweaksArrived); });
 
     // --- Mouse gestures: hold the right button and draw ---
     var trail = null;

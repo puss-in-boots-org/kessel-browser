@@ -684,6 +684,19 @@ const PERMISSION_KINDS = [
   ["autoplay", "Playing sound on its own", "allow"],
 ];
 const ANSWERS = [["ask", "Ask"], ["allow", "Allow"], ["block", "Block"]];
+// What a site's pages may do, which Kessel keeps itself -- never asked
+// (permissions.rs CONTENT): allowed or blocked.
+const CONTENT_KINDS = [
+  ["javascript", "JavaScript", "allow"],
+  ["images", "Images", "allow"],
+  ["popups", "Pop-ups (windows a page opens without a click)", "block"],
+  ["redirects", "Sending you to another site on its own", "allow"],
+  ["sound", "Sound", "allow"],
+  ["third_party", "Content from other sites", "allow"],
+  ["fullscreen", "Full screen", "allow"],
+];
+const ALLOW_BLOCK = [["allow", "Allow"], ["block", "Block"]];
+const isContentKind = (kind) => CONTENT_KINDS.some((k) => k[0] === kind);
 
 export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
   const f = features();
@@ -694,6 +707,11 @@ export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
       <div class="k-card-title"><span class="k-label">For every site</span></div>
       <div id="perm-defaults"></div>
       ${settingRow({ title: "Remember my answer", desc: "The prompt's “Remember for this site” starts ticked. Answers from private windows are never kept.", controlHtml: switchHtml("perm-remember", f.permission_remember !== false) })}
+    </div>
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Site content, for every site</span></div>
+      <div class="setting-row"><div class="info"><div class="desc">Never asked about -- change one site from the lock in the address bar, or below. JavaScript and sound take effect when the page loads again.</div></div></div>
+      <div id="perm-content"></div>
     </div>
     <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Sites you've answered</span></div>
@@ -709,6 +727,14 @@ export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
     sel.addEventListener("change", () => saveFeature("permission_defaults", { ...(features().permission_defaults || {}), [kind]: sel.value }));
     defaults.appendChild(row);
   }
+  const content = p.querySelector("#perm-content");
+  for (const [kind, label, fallback] of CONTENT_KINDS) {
+    const row = el(settingRow({ title: label, controlHtml: selectHtml(`perm-default-${kind}`, ALLOW_BLOCK, 120) }));
+    const sel = row.querySelector("select");
+    sel.value = f.permission_defaults?.[kind] || fallback;
+    sel.addEventListener("change", () => saveFeature("permission_defaults", { ...(features().permission_defaults || {}), [kind]: sel.value }));
+    content.appendChild(row);
+  }
   const remember = p.querySelector("#perm-remember");
   remember.addEventListener("click", async () => {
     const on = !remember.classList.contains("on");
@@ -716,7 +742,7 @@ export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
     remember.classList.toggle("on", on);
   });
   const sites = p.querySelector("#perm-sites");
-  const labelOf = (kind) => PERMISSION_KINDS.find((k) => k[0] === kind)?.[1] || kind;
+  const labelOf = (kind) => [...PERMISSION_KINDS, ...CONTENT_KINDS].find((k) => k[0] === kind)?.[1] || kind;
   const render = () => {
     const q = p.querySelector("#perm-q").value.trim().toLowerCase();
     const all = Object.entries(features().site_permissions || {}).filter(([site, own]) => own && Object.keys(own).length && (!q || site.includes(q))).sort(([a], [b]) => a.localeCompare(b));
@@ -734,15 +760,16 @@ export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
       });
       const kinds = box.querySelector(".kinds");
       for (const [kind, answer] of Object.entries(own)) {
-        const item = el(`<label style="display:flex;align-items:center;gap:6px;font-size:12px"><span></span>${selectHtml("", ANSWERS, 90)}</label>`);
+        const item = el(`<label style="display:flex;align-items:center;gap:6px;font-size:12px"><span></span>${selectHtml("", isContentKind(kind) ? [["default", "Default"], ...ALLOW_BLOCK] : ANSWERS, 90)}</label>`);
         item.querySelector("span").textContent = labelOf(kind);
         const sel = item.querySelector("select");
         sel.value = answer;
         sel.addEventListener("change", async () => {
           const next = { ...(features().site_permissions || {}) };
           next[site] = { ...next[site], [kind]: sel.value };
-          // "Ask" for a site is the same as no answer.
-          if (sel.value === "ask") delete next[site][kind];
+          // "Ask" (or a content setting's "Default") for a site is the same
+          // as no answer.
+          if (sel.value === "ask" || sel.value === "default") delete next[site][kind];
           await saveFeature("site_permissions", next);
         });
         kinds.appendChild(item);

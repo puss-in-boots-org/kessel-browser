@@ -70,6 +70,7 @@ export const FEATURES = [
     ["Screenshot editor", "Settings -> Page tools -> When you take one -> Open it in the editor: pen, highlighter, arrows, boxes, text, blur, crop, undo; then save or copy."],
     ["Feeds", "Palette -> Follow this site's feed, or add a site on the feeds page (palette -> Feeds). Kessel fetches them itself; OPML import and export."],
     ["Site permissions", "Camera, microphone, location, notifications and more: Kessel asks under the address bar; answers per site and defaults in Settings -> Site permissions."],
+    ["Site settings", "The lock in the address bar: JavaScript, images, pop-ups, redirects, sound, other sites' content and full screen, on or off for the site. Blocked pop-ups and redirects show a chip you can open them from."],
     ["Download manager", "Downloads: progress, pause, resume, cancel, try again, show in folder, search and sort. Folder and “ask where to save”: Settings -> Downloads."],
   ]],
   ["Search", [
