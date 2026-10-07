@@ -150,6 +150,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("highlight", "Highlight the selected text", "Page tools", &["Ctrl+Shift+H"]),
     cmd("feeds", "Feeds", "Kessel", &[]),
     cmd("follow-feed", "Follow this site's feed", "Page tools", &[]),
+    cmd("watch-page", "Watch this page for changes", "Page tools", &[]),
     cmd("break-mode", "Pause everything", "Page tools", &[]),
     cmd("wayback", "Open in the Wayback Machine", "Page tools", &[]),
     cmd("reader-mode", "Reader view", "Page tools", &["F9"]),

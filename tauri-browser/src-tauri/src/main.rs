@@ -36,6 +36,7 @@ mod passwords;
 mod downloads;
 mod permissions;
 mod vault;
+mod watch;
 mod zip;
 
 use std::collections::{HashMap, HashSet};
@@ -5408,6 +5409,12 @@ fn main() {
             saved_sessions::open_saved_session,
             saved_sessions::rename_saved_session,
             saved_sessions::delete_saved_session,
+            watch::watch_page,
+            watch::watched_pages,
+            watch::unwatch_page,
+            watch::set_watch_interval,
+            watch::seen_watched_page,
+            watch::check_watched_now,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,
@@ -5598,6 +5605,8 @@ fn main() {
             start_shields(app.handle());
             security::start(app.handle());
             privacy::start(app.handle());
+            // Watched pages, checked when they're due.
+            watch::start(app.handle());
             // Locked on start (if set), and after the PC is left alone.
             browser_lock::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());

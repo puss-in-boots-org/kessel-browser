@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**81% overall** -- 676 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 153 to do (⏳), 108 skipped (⏭️), of 1045.
+**81% overall** -- 678 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 151 to do (⏳), 108 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -102,7 +102,7 @@ branch, one small commit per feature or group of features.
 | [59. Offline functionality](#59-offline-functionality) | 7 |  |  | 3 |  | `███████░░░` 70% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 10 | 1 | 2 | 11 | 8 | `█████░░░░░` 50% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 12 | 1 | 2 | 9 | 8 | `██████░░░░` 58% |
 | [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
@@ -1426,8 +1426,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.07 | Automatic duplicate-tab detection | ✅ | Command palette -> Close duplicate tabs |
 | 62.08 | Tab memory visualization | ✅ | The task manager: memory and CPU of each page's process, with its tabs; hover cards |
 | 62.09 | Tab dependency detection | ⏳ | |
-| 62.10 | Website change monitoring | ⏳ | |
-| 62.11 | Page-change notifications | ⏳ | |
+| 62.10 | Website change monitoring | ✅ | Command palette -> Watch this page for changes: checked every 15 minutes to once a day (kessel://feeds), its text compared with last time |
+| 62.11 | Page-change notifications | ✅ | When a watched page's text changed the toolbar says so, with what's new; opening it from there or the feeds page marks it seen |
 | 62.12 | Built-in notes | 🟢 | Side panel -> Notes (tested) |
 | 62.13 | Notes attached to URLs | 🟢 | A note keeps the page it was written on (right-click -> Save selection to notes) |
 | 62.14 | Web annotations | 🧪 | Highlights with notes on any web page (Ctrl+Shift+H) |

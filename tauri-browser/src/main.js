@@ -2862,6 +2862,7 @@ async function runCommand(id, ctx = {}) {
     case "save-session": return saveSession(false);
     case "save-window-session": return saveSession(true);
     case "saved-sessions": return openSingleton("kessel://history/sessions");
+    case "watch-page": return watchActivePage(findTab(page) || findTab(activeTabId));
     case "fullscreen": return invoke("toggle_fullscreen", {});
     case "back":
     case "forward":
@@ -3472,8 +3473,9 @@ function renderNotices() {
   const first = notices[0];
   btn.hidden = !first;
   if (!first) return;
-  const label = { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
-  btn.innerHTML = `${icon(first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
+  const watched = first.id.startsWith("watch:");
+  const label = watched ? "Page changed" : { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
+  btn.innerHTML = `${icon(watched ? "eye" : first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
   btn.querySelector("span").textContent = notices.length > 1 ? `${label} +${notices.length - 1}` : label;
   btn.dataset.notice = first.id;
 }
@@ -3508,7 +3510,30 @@ function noticeItems(n) {
         dismiss,
       ];
     default:
+      if (n.id.startsWith("watch:")) return watchedNoticeItems(n.detail);
       return [dismiss];
+  }
+}
+
+// A watched page changed (watch.rs): what's new, and open it.
+function watchedNoticeItems(w) {
+  const seen = () => invoke("seen_watched_page", { id: w.id }).catch(() => {});
+  return [
+    { header: `“${w.title}” changed${w.change ? `: ${w.change}` : ""}` },
+    { label: "Open it", iconName: "popOut", action: async () => { await createTab(w.url); seen(); } },
+    { label: "Watched pages", iconName: "eye", action: () => openSingleton("kessel://feeds/watched") },
+    { label: "Stop watching it", iconName: "eyeOff", action: () => invoke("unwatch_page", { id: w.id }).catch(() => {}) },
+    { label: "Dismiss", iconName: "close", action: seen },
+  ];
+}
+
+async function watchActivePage(tab) {
+  if (!tab || !/^https?:/.test(tab.url || "")) return toast("Only web pages can be watched");
+  try {
+    const w = await invoke("watch_page", { url: tab.url, title: tab.title || null });
+    toast(`Watching “${w.title}” -- Kessel checks it every ${w.every_minutes >= 60 ? `${w.every_minutes / 60 === 1 ? "hour" : `${w.every_minutes / 60} hours`}` : `${w.every_minutes} minutes`} and says when it changes`, { duration: 4000 });
+  } catch (err) {
+    toast(String(err));
   }
 }
 

@@ -59,9 +59,80 @@ function renderList() {
     list.appendChild(row);
   }
   if (!all.length) list.insertAdjacentHTML("beforeend", `<div style="padding:10px;font-size:12px;opacity:.6;line-height:1.5">Follow a site: type its address above, or open it and pick “Follow this site's feed” in the command palette (F2).</div>`);
+
+  // Pages watched for changes (watch.rs).
+  list.insertAdjacentHTML("beforeend", `<div class="section">Watched pages</div>`);
+  for (const w of watched) {
+    const row = document.createElement("div");
+    row.className = `feed${showing === `watch:${w.id}` ? " on" : ""}`;
+    row.dataset.watch = w.id;
+    row.innerHTML = `<span class="name"></span>${w.error ? `<span class="err">!</span>` : w.unseen ? `<span class="count" title="Changed">new</span>` : ""}<span class="x" title="Stop watching">${icon("close", 11)}</span>`;
+    row.querySelector(".name").textContent = w.title;
+    if (w.error) row.querySelector(".err").title = w.error;
+    list.appendChild(row);
+  }
+  if (!watched.length) list.insertAdjacentHTML("beforeend", `<div style="padding:4px 10px 10px;font-size:12px;opacity:.6;line-height:1.5">Open a page and pick “Watch this page for changes” in the command palette (F2): Kessel says when it changes.</div>`);
+}
+
+// --- Watched pages -------------------------------------------------------------------
+
+let watched = [];
+
+async function loadWatched() {
+  watched = await invoke("watched_pages").catch(() => []);
+}
+
+const EVERY = [[15, "Every 15 minutes"], [60, "Every hour"], [360, "Every 6 hours"], [720, "Every 12 hours"], [1440, "Once a day"]];
+
+function renderWatched(w) {
+  const box = $("items");
+  $("heading").textContent = w.title;
+  box.innerHTML = `<div class="watched">
+    <a class="url" href="#"></a>
+    <div class="m"></div>
+    <div class="change" hidden><div class="m when"></div><div class="s"></div></div>
+    <div class="row">
+      <select class="field" style="width:170px">${EVERY.map(([m, label]) => `<option value="${m}">${label}</option>`).join("")}</select>
+      <button class="btn sm" data-check>Check now</button>
+      <button class="btn sm ghost" data-stop>Stop watching</button>
+    </div>
+    <p class="note">Kessel fetches the page itself, without your cookies -- what you'd see signed out -- and compares its text with last time.</p>
+  </div>`;
+  const url = box.querySelector(".url");
+  url.textContent = w.url;
+  url.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await invoke("open_url", { url: w.url, how: "tab" }).catch((err) => toast(String(err)));
+    if (w.unseen) invoke("seen_watched_page", { id: w.id }).catch(() => {});
+  });
+  box.querySelector(".m").textContent = w.error ? `Couldn't check it: ${w.error}` : w.checked_at ? `Checked ${formatRelativeTime(w.checked_at)}` : "Checking it for the first time…";
+  if (w.changed_at) {
+    box.querySelector(".change").hidden = false;
+    box.querySelector(".when").textContent = `Changed ${formatRelativeTime(w.changed_at)}${w.unseen ? " -- new" : ""}`;
+    box.querySelector(".change .s").textContent = w.change || "";
+  }
+  const every = box.querySelector("select");
+  every.value = String(w.every_minutes);
+  every.addEventListener("change", () => invoke("set_watch_interval", { id: w.id, everyMinutes: Number(every.value) }).catch((err) => toast(String(err))));
+  box.querySelector("[data-check]").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    watched = await invoke("check_watched_now", { id: w.id }).catch((err) => (toast(String(err)), watched));
+    render();
+  });
+  box.querySelector("[data-stop]").addEventListener("click", () => unwatch(w.id));
+}
+
+async function unwatch(id) {
+  await invoke("unwatch_page", { id }).catch((err) => toast(String(err)));
+  if (showing === `watch:${id}`) showing = "";
+  await loadWatched();
+  render();
 }
 
 function renderItems() {
+  const shownWatch = showing.startsWith("watch:") && watched.find((w) => `watch:${w.id}` === showing);
+  $("mark-read").hidden = $("refresh").hidden = !!shownWatch;
+  if (shownWatch) return renderWatched(shownWatch);
   const box = $("items");
   const chosen = showing ? feeds().filter((f) => f.url === showing) : feeds();
   $("heading").textContent = showing ? chosen[0]?.title || hostOf(showing) : "All feeds";
@@ -189,6 +260,12 @@ function wire() {
   $("list").addEventListener("click", async (e) => {
     const row = e.target.closest(".feed");
     if (!row) return;
+    if (row.dataset.watch) {
+      if (e.target.closest(".x")) return unwatch(row.dataset.watch);
+      showing = `watch:${row.dataset.watch}`;
+      render();
+      return;
+    }
     if (e.target.closest(".x")) {
       await saveFeeds(feeds().filter((f) => f.url !== row.dataset.url));
       if (showing === row.dataset.url) showing = "";
@@ -236,6 +313,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   $("title").innerHTML = `${icon("book", 17)}<span>Feeds</span>`;
   await initTheme();
   wire();
+  await loadWatched();
+  // kessel://feeds/watched: the watched pages, a changed one first.
+  if (location.hash === "#watched" && watched.length) showing = `watch:${(watched.find((w) => w.unseen) || watched[0]).id}`;
+  window.__TAURI__.event.listen("watched-pages-changed", async () => {
+    await loadWatched();
+    render();
+  });
   render();
   await refreshAll();
   setInterval(refreshAll, 5 * 60000);

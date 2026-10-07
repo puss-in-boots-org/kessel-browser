@@ -74,6 +74,9 @@ function toneWav(seconds = 10, rate = 8000) {
   return buf;
 }
 
+// The text of each /changing/<name> page.
+const changing = new Map();
+
 export async function startServer(host = "127.0.0.2", wantedPort = 0) {
   // Big enough for the tests' deliberately huge addresses.
   const server = http.createServer({ maxHeaderSize: 1024 * 1024 }, async (req, res) => {
@@ -94,6 +97,17 @@ export async function startServer(host = "127.0.0.2", wantedPort = 0) {
       res.writeHead(200, { "Content-Type": "application/rss+xml", "Cache-Control": "no-store" });
       const items = [1, 2, 3].map((i) => `<item><title>Story ${i}</title><link>${origin}/page/story${i}</link><guid>${origin}/page/story${i}</guid><pubDate>Tue, 29 Sep 2026 1${i}:00:00 GMT</pubDate><description>Story ${i}</description></item>`).join("");
       res.end(`<?xml version="1.0"?><rss version="2.0"><channel><title>Test News</title><link>${origin}/</link><description>Tests</description>${items}</channel></rss>`);
+    } else if (parts[0] === "changing") {
+      // A page whose text a test changes: /changing/<name>?set=<text>.
+      const name = decodeURIComponent(parts[1] || "page");
+      if (url.searchParams.has("set")) {
+        changing.set(name, url.searchParams.get("set"));
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("ok");
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title><script>var now = ${Date.now()};</script></head><body><h1>${name}</h1><p id="text">${changing.get(name) ?? "The first version"}</p><!-- ${Math.random()} --></body></html>`);
     } else if (parts[0] === "amp") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
