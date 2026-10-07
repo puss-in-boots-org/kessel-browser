@@ -2081,8 +2081,9 @@ async function tabMenuItems(tab) {
   }
   if (live.length) {
     for (const w of otherWindows) {
-      const name = w.title ? `“${w.title.length > 28 ? w.title.slice(0, 27) + "…" : w.title}”` : "another window";
-      items.push({ label: `Move to window with ${name} (${w.tabs} tab${w.tabs === 1 ? "" : "s"})`, iconName: "arrowRight", action: () => sendTabsToWindow(live, w.label) });
+      const short = (text) => `“${text.length > 28 ? text.slice(0, 27) + "…" : text}”`;
+      const name = w.name ? `window ${short(w.name)}` : w.title ? `window with ${short(w.title)}` : "another window";
+      items.push({ label: `Move to ${name} (${w.tabs} tab${w.tabs === 1 ? "" : "s"})`, iconName: "arrowRight", action: () => sendTabsToWindow(live, w.label) });
     }
   }
   if (single) {
@@ -2326,7 +2327,9 @@ function showContextMenu(items, x, y, { dropdown = false, width = 290 } = {}) {
   for (const item of wire) if (item !== "-" || (tidy.length && tidy[tidy.length - 1] !== "-")) tidy.push(item);
   while (tidy[tidy.length - 1] === "-") tidy.pop();
   contextMenu = { token, actions };
-  const height = 12 + tidy.reduce((h, item) => h + (item === "-" ? 11 : item.header ? 24 : 30), 0);
+  // (An item's height follows Settings -> Appearance -> Density.)
+  const itemHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--k-menu-item-h")) || 30;
+  const height = 12 + tidy.reduce((h, item) => h + (item === "-" ? 11 : item.header ? 24 : itemHeight), 0);
   invoke("toggle_popup", { kind: dropdown ? "dropdown" : "context", x: Math.round(x), y: Math.round(y), width, height, init: { items: tidy, opener: `toolbar-${WIN.number}`, token } }).catch(() => {});
 }
 
@@ -2855,6 +2858,11 @@ async function runCommand(id, ctx = {}) {
     case "close-window": return appWindow.close();
     case "reopen-closed-window":
       return invoke("reopen_closed_window", {}).then((w) => { if (!w) toast("No recently closed windows"); });
+    case "name-window": return editWindowName();
+    case "save-session": return saveSession(false);
+    case "save-window-session": return saveSession(true);
+    case "saved-sessions": return openSingleton("kessel://history/sessions");
+    case "watch-page": return watchActivePage(findTab(page) || findTab(activeTabId));
     case "fullscreen": return invoke("toggle_fullscreen", {});
     case "back":
     case "forward":
@@ -2931,6 +2939,8 @@ async function runCommand(id, ctx = {}) {
       return page && takeScreenshot(page, id === "screenshot-full");
     case "reader-mode": return page && openReader(page);
     case "theater-mode": return page && invoke("page_tool", { id: page, tool: "theater" }).catch((err) => toast(String(err)));
+    // (Through media.rs, as a click in the page: the engine wants one.)
+    case "picture-in-picture": return page && invoke("media_action", { id: page, action: "pip" }).catch((err) => toast(String(err)));
     case "zap-element":
       if (!page) return;
       await invoke("page_tool", { id: page, tool: "zap-start" }).catch((err) => toast(String(err)));
@@ -3121,6 +3131,67 @@ let omnibox = null;
 // Settings that change the toolbar itself.
 function applyToolbarSettings() {
   document.getElementById("home-btn").hidden = currentSettings()?.show_home_button === false;
+}
+
+// --- The window's name ("Name window…") ---------------------------------------
+//
+// Shown at the start of the tab bar, and the window's title on the taskbar
+// (browser_windows.rs set_window_name). A click on it renames it.
+
+let windowName = null;
+let windowNameEditing = false;
+
+function renderWindowName() {
+  const chip = document.getElementById("window-name");
+  if (windowNameEditing) return;
+  chip.hidden = !windowName;
+  chip.textContent = windowName || "";
+  chip.title = windowName ? `This window is “${windowName}” -- click to rename it` : "";
+}
+
+function editWindowName() {
+  const chip = document.getElementById("window-name");
+  if (WIN.private || windowNameEditing) return;
+  windowNameEditing = true;
+  chip.hidden = false;
+  chip.classList.add("editing");
+  chip.textContent = "";
+  const input = document.createElement("input");
+  input.id = "window-name-input";
+  input.value = windowName || "";
+  input.placeholder = "Name this window";
+  input.maxLength = 60;
+  input.spellcheck = false;
+  const finish = async (keep) => {
+    if (!windowNameEditing) return;
+    windowNameEditing = false;
+    chip.classList.remove("editing");
+    if (keep) windowName = await invoke("set_window_name", { name: input.value }).catch(() => windowName);
+    renderWindowName();
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    else if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  chip.appendChild(input);
+  invoke("focus_webview").catch(() => {});
+  input.focus();
+  input.select();
+}
+
+// --- Saved sessions (saved_sessions.rs; History -> Saved sessions) ----------
+
+async function saveSession(windowOnly) {
+  const when = new Date().toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const name = windowOnly && windowName ? windowName : `${windowOnly ? "Window" : "Session"} of ${when}`;
+  try {
+    const saved = await invoke("save_session", { name, windowOnly });
+    toast(`Saved “${saved.name}” -- ${saved.tabs} tab${saved.tabs === 1 ? "" : "s"}. It's in History -> Saved sessions.`, { duration: 4000 });
+  } catch (err) {
+    toast(String(err));
+  }
 }
 
 // The address bar's share button: copy the link, its QR code, or Windows'
@@ -3404,8 +3475,9 @@ function renderNotices() {
   const first = notices[0];
   btn.hidden = !first;
   if (!first) return;
-  const label = { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
-  btn.innerHTML = `${icon(first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
+  const watched = first.id.startsWith("watch:");
+  const label = watched ? "Page changed" : { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
+  btn.innerHTML = `${icon(watched ? "eye" : first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
   btn.querySelector("span").textContent = notices.length > 1 ? `${label} +${notices.length - 1}` : label;
   btn.dataset.notice = first.id;
 }
@@ -3440,7 +3512,30 @@ function noticeItems(n) {
         dismiss,
       ];
     default:
+      if (n.id.startsWith("watch:")) return watchedNoticeItems(n.detail);
       return [dismiss];
+  }
+}
+
+// A watched page changed (watch.rs): what's new, and open it.
+function watchedNoticeItems(w) {
+  const seen = () => invoke("seen_watched_page", { id: w.id }).catch(() => {});
+  return [
+    { header: `“${w.title}” changed${w.change ? `: ${w.change}` : ""}` },
+    { label: "Open it", iconName: "popOut", action: async () => { await createTab(w.url); seen(); } },
+    { label: "Watched pages", iconName: "eye", action: () => openSingleton("kessel://feeds/watched") },
+    { label: "Stop watching it", iconName: "eyeOff", action: () => invoke("unwatch_page", { id: w.id }).catch(() => {}) },
+    { label: "Dismiss", iconName: "close", action: seen },
+  ];
+}
+
+async function watchActivePage(tab) {
+  if (!tab || !/^https?:/.test(tab.url || "")) return toast("Only web pages can be watched");
+  try {
+    const w = await invoke("watch_page", { url: tab.url, title: tab.title || null });
+    toast(`Watching “${w.title}” -- Kessel checks it every ${w.every_minutes >= 60 ? `${w.every_minutes / 60 === 1 ? "hour" : `${w.every_minutes / 60} hours`}` : `${w.every_minutes} minutes`} and says when it changes`, { duration: 4000 });
+  } catch (err) {
+    toast(String(err));
   }
 }
 
@@ -5015,6 +5110,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
   window.addEventListener("kessel-settings", updateTranslateButton);
+  document.getElementById("window-name").addEventListener("click", editWindowName);
+  invoke("get_windows")
+    .then((list) => {
+      windowName = list.find((w) => w.current)?.name ?? null;
+      renderWindowName();
+    })
+    .catch(() => {});
   document.getElementById("menu-btn").addEventListener("click", toggleMainMenu);
   document.getElementById("zoom-btn").addEventListener("click", () => runCommand("zoom-reset"));
   document.getElementById("shields-btn").addEventListener("click", toggleShieldsPopup);
@@ -5311,6 +5413,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     activeTabId = event.payload.id;
     renderTabs();
     updateAddressBarForActiveTab();
+  });
+
+  await listen("window-named", (event) => {
+    windowName = event.payload.name ?? null;
+    renderWindowName();
   });
 
   // One of this window's tabs moved to another window (dragged there, or

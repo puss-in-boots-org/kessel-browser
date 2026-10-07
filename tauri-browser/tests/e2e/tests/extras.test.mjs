@@ -30,6 +30,18 @@ export const tests = [
     },
   },
   {
+    // (Only the key: a real picture-in-picture window would open on screen.)
+    name: "Alt+P is picture-in-picture's key; with no video there's nothing to do",
+    async run({ launch, site, assert }) {
+      const k = await launch();
+      // (In a page the page goes first and hands back keys it doesn't use;
+      // in the toolbar Kessel takes them straight away.)
+      const { page } = await open(k, `${site.origin}/page/NoVideo`);
+      assert(await k.press("Alt+P"), "one of Kessel's keys");
+      assert.equal(await page.evaluate(`document.pictureInPictureElement`), null, "nothing popped out");
+    },
+  },
+  {
     name: "a search engine of their own for private windows",
     async run({ launch, assert, waitFor }) {
       const k = await launch({ settings: { shields_https_upgrade: false, search_engine: "bing", features: { private_search_engine: "duckduckgo" } } });

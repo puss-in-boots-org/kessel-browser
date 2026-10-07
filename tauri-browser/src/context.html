@@ -17,7 +17,7 @@
     html.glass #sheet { position: fixed; inset: 0; background: var(--lg-gloss), color-mix(in srgb, var(--lg-menu-bg) 88%, transparent); box-shadow: var(--lg-edge); }
     main { position: relative; height: 100%; overflow-y: auto; padding: 5px; color: var(--text); scrollbar-width: thin; }
     html.glass main { color: var(--lg-text); }
-    .item { display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; cursor: default; outline: none; }
+    .item { display: flex; align-items: center; gap: 10px; height: var(--k-menu-item-h, 30px); padding: 0 10px; border-radius: 8px; font-size: 12.5px; cursor: default; outline: none; }
     .item svg { flex-shrink: 0; opacity: 0.85; }
     .item .label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .item .keys { font-size: 11px; opacity: 0.55; white-space: nowrap; }

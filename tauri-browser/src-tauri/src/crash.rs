@@ -294,7 +294,20 @@ pub(crate) async fn restart_in_mode(app: tauri::AppHandle, webview: Webview, saf
 
 static NOTICES: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 
-fn set_notice(app: Option<&tauri::AppHandle>, notice: serde_json::Value) {
+// Takes notice `id` away (acted on elsewhere: a watched page you opened...).
+pub(crate) fn drop_notice(app: &tauri::AppHandle, id: &str) {
+    let had = {
+        let mut list = NOTICES.lock().unwrap();
+        let before = list.len();
+        list.retain(|n| n["id"] != id);
+        list.len() != before
+    };
+    if had {
+        crate::emit_to_all_windows(app, "kessel-notices", NOTICES.lock().unwrap().clone());
+    }
+}
+
+pub(crate) fn set_notice(app: Option<&tauri::AppHandle>, notice: serde_json::Value) {
     {
         let mut list = NOTICES.lock().unwrap();
         list.retain(|n| n["id"] != notice["id"]);

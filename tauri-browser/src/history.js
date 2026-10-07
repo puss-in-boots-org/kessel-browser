@@ -17,6 +17,7 @@ const VIEWS = [
   { id: "sites", label: "By site", icon: "globe" },
   { id: "searches", label: "Searches", icon: "search" },
   { id: "closed", label: "Recently closed", icon: "window" },
+  { id: "sessions", label: "Saved sessions", icon: "layers" },
 ];
 
 const state = {
@@ -90,8 +91,9 @@ function timeLabel(unix) {
 function setView(view) {
   state.view = view;
   for (const item of document.querySelectorAll(".nav-item")) item.classList.toggle("active", item.dataset.view === view);
-  $("ranges").style.display = view === "closed" || view === "sites" ? "none" : "";
-  $("q").placeholder = view === "sites" ? "Search sites" : view === "searches" ? "Search your searches" : view === "closed" ? "Search recently closed" : "Search history";
+  $("ranges").style.display = view === "closed" || view === "sites" || view === "sessions" ? "none" : "";
+  $("q").placeholder = view === "sites" ? "Search sites" : view === "searches" ? "Search your searches" : view === "closed" ? "Search recently closed" : view === "sessions" ? "Search saved sessions" : "Search history";
+  $("sessions-bar").hidden = view !== "sessions";
   clearSelection();
   reload();
 }
@@ -113,6 +115,7 @@ function reload() {
     case "sites": return loadSites();
     case "searches": return loadSearches();
     case "closed": return loadClosed();
+    case "sessions": return loadSessions();
   }
 }
 
@@ -524,6 +527,88 @@ async function loadClosed() {
   }
 }
 
+// --- Saved sessions (saved_sessions.rs) -------------------------------------------
+
+async function loadSessions() {
+  const generation = state.generation;
+  const saved = await invoke("list_saved_sessions").catch(() => []);
+  if (generation !== state.generation) return;
+  const list = $("list");
+  const needle = state.text.toLowerCase();
+  const shown = saved.filter((s) => !needle || [s.name, ...s.windows.flatMap((w) => [w.name || "", ...w.titles])].some((t) => t.toLowerCase().includes(needle)));
+  if (!shown.length) {
+    list.appendChild(emptyState(needle ? "Nothing matches." : "Sessions you save show up here -- every open window, or one (the command palette: “Save this window as a session”).", "layers"));
+    return;
+  }
+  for (const s of shown) {
+    const row = document.createElement("div");
+    row.className = "visit";
+    row.dataset.session = s.id;
+    row.innerHTML = `
+      <span class="time"></span>
+      <span style="color:var(--text-faint);display:flex">${icon("layers", 16)}</span>
+      <span class="title"></span>
+      <span class="host"></span>
+      <button class="btn sm row-btn always" data-open>Open</button>
+      <button class="btn ghost icon-only sm row-btn always" data-more title="More">${icon("dotsV", 14)}</button>`;
+    row.querySelector(".time").textContent = s.saved_at ? timeLabel(s.saved_at) : "";
+    row.querySelector(".title").textContent = s.name;
+    const windows = s.windows.length;
+    row.querySelector(".host").textContent = `${windows} ${windows === 1 ? "window" : "windows"}, ${s.tabs} ${s.tabs === 1 ? "tab" : "tabs"} · ${s.windows.flatMap((w) => w.titles).slice(0, 3).join(", ")}`;
+    row.querySelector("[data-open]").addEventListener("click", () => invoke("open_saved_session", { id: s.id }).catch((err) => toast(String(err))));
+    row.querySelector("[data-more]").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openMenu(e.currentTarget, [
+        ...(windows > 1 ? s.windows.map((w, i) => [`Open only window ${i + 1}${w.name ? ` (${w.name})` : ""} -- ${w.tabs} ${w.tabs === 1 ? "tab" : "tabs"}`, "window", () => invoke("open_saved_session", { id: s.id, window: i })]) : []),
+        ["Rename", "edit", () => renameSession(row, s)],
+        null,
+        ["Delete", "trash", async () => {
+          await invoke("delete_saved_session", { id: s.id });
+          reload();
+        }, "danger"],
+      ]);
+    });
+    list.appendChild(row);
+  }
+}
+
+function renameSession(row, s) {
+  const title = row.querySelector(".title");
+  const input = document.createElement("input");
+  input.className = "field";
+  input.value = s.name;
+  input.maxLength = 80;
+  input.spellcheck = false;
+  title.replaceChildren(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (keep) => {
+    if (done) return;
+    done = true;
+    if (keep && input.value.trim() && input.value.trim() !== s.name) await invoke("rename_saved_session", { id: s.id, name: input.value }).catch((err) => toast(String(err)));
+    reload();
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    else if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
+async function saveOpenWindows() {
+  const name = $("session-name").value.trim() || `Session of ${new Date().toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
+  try {
+    const saved = await invoke("save_session", { name });
+    $("session-name").value = "";
+    toast(`Saved “${saved.name}”`);
+    reload();
+  } catch (err) {
+    toast(String(err));
+  }
+}
+
 // --- Row menu -------------------------------------------------------------------
 
 let openMenuEl = null;
@@ -625,6 +710,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   state.text = params.get("q") || "";
   state.site = params.get("site") || "";
   $("q").value = state.text;
+  // kessel://history/sessions opens on that view.
+  const wanted = location.hash.slice(1);
+  if (VIEWS.some((v) => v.id === wanted)) state.view = wanted;
+  $("save-session-btn").addEventListener("click", saveOpenWindows);
+  $("session-name").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveOpenWindows();
+  });
 
   $("q").addEventListener(
     "input",

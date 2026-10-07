@@ -64,6 +64,7 @@ export function searchExtras(panel, { el, settingRow }) {
     ${settingRow({ title: "Pages to start with", desc: "One address per line, opened when Kessel starts -- unless it's bringing back your last tabs. Leave empty for the new-tab page.", controlHtml: "" })}
     <div style="padding:0 14px 12px"><textarea class="field mono" id="startup-pages" rows="3" style="width:100%;resize:vertical" spellcheck="false" placeholder="https://example.com"></textarea>
     <div style="margin-top:8px"><button class="btn sm" id="startup-use-tabs">Use my open tabs</button></div></div>
+    ${settingRow({ title: "Or a saved session", desc: "Its windows and tabs instead of the pages above (History -> Saved sessions)", controlHtml: `<select class="field" id="startup-session" style="width:220px"></select>` })}
   </div>`);
   panel.querySelector(".setting-card").after(card);
   card.after(startup);
@@ -172,6 +173,18 @@ export function searchExtras(panel, { el, settingRow }) {
     pages.value = [...new Set(urls)].slice(0, 20).join("\n");
     await savePages(pages.value);
   });
+  const session = startup.querySelector("#startup-session");
+  const fillSessions = async () => {
+    const saved = await invoke("list_saved_sessions").catch(() => []);
+    const current = features().startup_session || "";
+    session.innerHTML = `<option value="">None</option>${saved.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("")}`;
+    session.value = saved.some((s) => s.id === current) ? current : "";
+    session.disabled = !saved.length;
+  };
+  fillSessions();
+  // (Saved meanwhile in another tab.)
+  document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && fillSessions());
+  session.addEventListener("change", () => saveFeature("startup_session", session.value || undefined));
 }
 
 // --- Tabs ------------------------------------------------------------------------------

@@ -42,6 +42,9 @@
       var a11y = tweaks.a11y || {};
       if (a11y.focus_rings) css += ':focus-visible{outline:3px solid #1a73e8!important;outline-offset:2px!important;box-shadow:0 0 0 5px rgba(255,255,255,.9)!important}\n';
       if (a11y.still) css += '*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important;scroll-behavior:auto!important}\n';
+      // Subtitles the way you can read them (a11y.rs picked the values).
+      var cue = a11y.captions;
+      if (cue) css += '::cue{' + (cue.size ? 'font-size:' + cue.size + '%!important;' : '') + (cue.color ? 'color:' + cue.color + '!important;' : '') + (cue.background ? 'background-color:' + cue.background + '!important;' : '') + '}\n';
       if (tweaks.css) css += tweaks.css + '\n';
       style.textContent = css;
       minimumFont(+a11y.min_font || 0);

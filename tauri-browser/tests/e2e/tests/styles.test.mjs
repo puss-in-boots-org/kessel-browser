@@ -127,4 +127,34 @@ export const tests = [
       assert(shown.length <= 3, `only matching options show (${shown.join(", ")})`);
     },
   },
+  {
+    name: "density: Compact makes the chrome smaller, Touch bigger -- menus too",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch();
+      const toolbar = await k.toolbar();
+      const px = async (name) => parseFloat(await cssVar(toolbar, name));
+      const normal = { top: await chromeTop(toolbar), tab: await px("--k-tab-h"), nav: await px("--k-nav-h") };
+      assert.equal(await px("--k-menu-item-h"), 30, "normal menu items");
+      const settings = await openSettings(k);
+      const pick = (value) => settings.evaluate(`(() => { const s = document.getElementById('ui-density'); s.value = '${value}'; s.dispatchEvent(new Event('change')); })()`);
+
+      await pick("compact");
+      await waitFor(async () => (await htmlAttr(toolbar, "data-k-density")) === "compact", { message: "compact" });
+      assert((await px("--k-tab-h")) < normal.tab && (await px("--k-nav-h")) < normal.nav, "smaller tabs and toolbar");
+      await waitFor(async () => (await chromeTop(toolbar)) < normal.top, { message: "the page starts higher up" });
+      assert.equal(await px("--k-menu-item-h"), 26, "smaller menu items");
+
+      await pick("touch");
+      await waitFor(async () => (await htmlAttr(toolbar, "data-k-density")) === "touch", { message: "touch" });
+      assert((await px("--k-tab-h")) > normal.tab && (await px("--k-nav-h")) > normal.nav, "bigger tabs and toolbar");
+      await waitFor(async () => (await chromeTop(toolbar)) > normal.top, { message: "the page starts lower down" });
+      assert.equal(await px("--k-menu-item-h"), 40, "menu items big enough for a finger");
+      assert.equal(await htmlAttr(settings, "data-k-density"), "touch", "every Kessel page follows");
+      await waitFor(() => saved(k).features?.ui_density === "touch", { message: "saved" });
+
+      await pick("normal");
+      await waitFor(async () => (await chromeTop(toolbar)) === normal.top, { message: "back as it was" });
+      assert.equal(saved(k).features?.ui_density, undefined, "nothing kept for Normal");
+    },
+  },
 ];

@@ -36,14 +36,14 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**80% overall** -- 665 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 53 partly done (🟡), 161 to do (⏳), 108 skipped (⏭️), of 1045.
+**83% overall** -- 681 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 137 to do (⏳), 109 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
 | [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
-| [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
+| [3. Windows](#3-windows) | 7 | 2 | 4 | 2 |  | `███████░░░` 73% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
@@ -61,12 +61,12 @@ branch, one small commit per feature or group of features.
 | [18. Translation](#18-translation) | 7 |  | 1 | 2 |  | `████████░░` 75% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
-| [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
+| [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
-| [23. Appearance](#23-appearance) | 12 |  |  | 4 |  | `████████░░` 75% |
-| [24. Search engines](#24-search-engines) | 6 |  |  | 3 |  | `███████░░░` 67% |
-| [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
-| [26. Session management](#26-session-management) | 5 |  | 4 | 1 | 1 | `███████░░░` 70% |
+| [23. Appearance](#23-appearance) | 14 |  |  | 2 |  | `█████████░` 88% |
+| [24. Search engines](#24-search-engines) | 7 |  |  | 2 |  | `████████░░` 78% |
+| [25. Startup behavior](#25-startup-behavior) | 7 |  | 1 | 1 |  | `████████░░` 83% |
+| [26. Session management](#26-session-management) | 9 |  | 1 |  | 1 | `██████████` 95% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
@@ -85,12 +85,12 @@ branch, one small commit per feature or group of features.
 | [42. Sharing](#42-sharing) | 2 | 2 |  | 2 | 3 | `███████░░░` 67% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
-| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 |  |  | 2 |  | `█████████░` 93% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 | 1 |  | 1 |  | `██████████` 96% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
-| [50. Media & entertainment extras](#50-media--entertainment-extras) | 1 |  |  | 7 | 3 | `█░░░░░░░░░` 13% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
@@ -102,7 +102,7 @@ branch, one small commit per feature or group of features.
 | [59. Offline functionality](#59-offline-functionality) | 7 |  |  | 3 |  | `███████░░░` 70% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 10 | 1 | 2 | 11 | 8 | `█████░░░░░` 50% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 12 | 1 | 2 | 9 | 8 | `██████░░░░` 58% |
 | [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
@@ -255,13 +255,13 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 3.03 | Incognito windows | ✅ | Same as private windows |
 | 3.04 | Separate profile windows | 🟡 | Account pop-out windows |
 | 3.05 | Always-on-top window mode | 🟡 | Pop-out windows only |
-| 3.06 | Picture-in-picture windows | ⏳ | |
-| 3.07 | Pop-out video windows | ⏳ | |
+| 3.06 | Picture-in-picture windows | 🧪 | The engine's picture-in-picture window: media controls or Alt+P (20.05) |
+| 3.07 | Pop-out video windows | 🧪 | A video pops out into the engine's picture-in-picture window (media controls or Alt+P) |
 | 3.08 | Restore previous windows | ✅ | Session restore reopens every window with its own tabs |
-| 3.09 | Restore individual windows | 🟡 | A closed window reopens with its tabs (reopen_closed_window) |
+| 3.09 | Restore individual windows | ✅ | Reopen closed window, any closed window from History -> Recently closed, or one window of a saved session |
 | 3.10 | Window session saving | ✅ | Each window's tabs are saved as they change |
-| 3.11 | Window organization | ⏳ | |
-| 3.12 | Window naming | ⏳ | |
+| 3.11 | Window organization | 🟡 | Name windows, move tabs between them, save them as sessions |
+| 3.12 | Window naming | ✅ | Command palette -> Name window…: the name shows in its tab bar and is its title on the taskbar; it comes back with the session |
 | 3.13 | Split-screen browser windows | ⏳ | |
 | 3.14 | Side-by-side page viewing | 🟡 | The side panel shows a second page beside the tab |
 | 3.15 | Window-specific tab groups | ⏳ | |
@@ -714,14 +714,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 21.01 | Video pop-out | ⏳ | |
-| 21.02 | Always-on-top video | ⏳ | |
-| 21.03 | Resize PiP window | ⏳ | |
-| 21.04 | Move PiP window | ⏳ | |
-| 21.05 | Pause/play | ⏳ | |
-| 21.06 | Next/previous | ⏳ | |
+| 21.01 | Video pop-out | 🧪 | Media controls -> picture-in-picture, or Alt+P: the engine's floating video window |
+| 21.02 | Always-on-top video | 🧪 | The engine's picture-in-picture window stays on top of other windows |
+| 21.03 | Resize PiP window | 🧪 | The picture-in-picture window resizes from its edges (the engine's own) |
+| 21.04 | Move PiP window | 🧪 | The picture-in-picture window moves by dragging it (the engine's own) |
+| 21.05 | Pause/play | 🧪 | Its own play/pause button; Kessel's media controls too |
+| 21.06 | Next/previous | 🧪 | Its previous/next buttons when the page offers them (Media Session, 20.10) |
 | 21.07 | Subtitle support | ⏳ | |
-| 21.08 | Multiple PiP windows where supported | ⏳ | |
+| 21.08 | Multiple PiP windows where supported | ⏭️ | The engine shows one picture-in-picture window at a time |
 
 ### 22. Accessibility
 
@@ -757,9 +757,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 23.07 | Custom accent color | 🟢 | |
 | 23.08 | Custom toolbar | ⏳ | |
 | 23.09 | Toolbar button rearrangement | ⏳ | |
-| 23.10 | Compact mode | ⏳ | |
+| 23.10 | Compact mode | ✅ | Settings -> Appearance -> Density: Compact -- smaller tab strip, toolbar, bookmarks bar, rail and menus, in any style |
 | 23.11 | Normal mode | 🟢 | |
-| 23.12 | Touch mode | ⏳ | |
+| 23.12 | Touch mode | ✅ | Settings -> Appearance -> Density: Touch -- tabs, buttons and menu items big enough for a finger |
 | 23.13 | Sidebar | 🟢 | Rail + side panel |
 | 23.14 | Vertical tabs | ✅ | See 2.30 |
 | 23.15 | Custom fonts | ✅ | Settings -> Accessibility: your standard, sans-serif, serif and fixed-width fonts (22.04) |
@@ -774,7 +774,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 24.03 | Custom search engines | ✅ | Settings -> Search & Startup: add, edit, remove engines (%s for the query); any can be the default |
 | 24.04 | Search shortcuts (g cats, yt ..., wiki ...) | ✅ | Type a keyword and a space: yt cats, w Budapest, !gh kessel; keywords are yours to change |
 | 24.05 | Search suggestions | 🟢 | As you type in the address bar (Settings -> Search & Startup); never from a private window |
-| 24.06 | Search history | ⏳ | |
+| 24.06 | Search history | ✅ | History -> Searches: what you searched, on which engine (5.12) |
 | 24.07 | Private search | ✅ | Settings -> Search & Startup -> In private windows: a search engine of its own there |
 | 24.08 | Search engine per profile | ⏳ | |
 | 24.09 | Search engine per window | ⏳ | |
@@ -787,23 +787,23 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 25.02 | Open homepage | 🟢 | |
 | 25.03 | Open specific pages | ✅ | Settings -> Search & Startup -> Pages to start with (or your open tabs) |
 | 25.04 | Restore previous session | 🟢 | |
-| 25.05 | Restore selected windows | 🟡 | Every window of the last session comes back; picking some is not done yet |
+| 25.05 | Restore selected windows | 🟡 | Every window of the last session comes back; a saved session can open just one of its windows |
 | 25.06 | Open specific profile | ⏳ | |
 | 25.07 | Continue where you left off | 🟢 | |
-| 25.08 | Startup tab groups | ⏳ | |
-| 25.09 | Startup workspace | ⏳ | |
+| 25.08 | Startup tab groups | ✅ | A saved session to start with brings its tab groups back (25.09) |
+| 25.09 | Startup workspace | ✅ | Settings -> Search & Startup -> Or a saved session: its windows, tabs, groups and workspaces every time Kessel starts |
 
 ### 26. Session management
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 26.01 | Save session | ✅ | Each window's tabs are saved as they change (3.10) |
-| 26.02 | Restore session | 🟡 | Last session on launch |
+| 26.02 | Restore session | ✅ | The last session on launch, or any saved session whenever you like (26.05) |
 | 26.03 | Automatic session recovery | ✅ | Tabs are saved as they change; after a crash they come back by themselves (Keep tabs when Kessel closes, or the engine crashing) or are offered (54.03) |
 | 26.04 | Crash recovery | ✅ | The toolbar watchdog, crashed pages and the engine itself (section 54) |
-| 26.05 | Session snapshots | ⏳ | |
-| 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
-| 26.07 | Restore window | 🟡 | Reopen closed window |
+| 26.05 | Session snapshots | ✅ | Save all windows (or just this one) as a session; History -> Saved sessions opens, renames and deletes them |
+| 26.06 | Save window | ✅ | Save this window as a session (26.05); it's also saved with the session as it changes |
+| 26.07 | Restore window | ✅ | Reopen closed window, any of them from History -> Recently closed, or a saved window |
 | 26.08 | Suspend session | 🟢 | Tab menu -> Put other tabs to sleep; the task manager puts any tab to sleep and wakes it |
 | 26.09 | Export session | ✅ | See 52.17 |
 | 26.10 | Import session | 🟡 | The saved file imports as bookmarks (a folder per window); Open all reopens a window |
@@ -1124,7 +1124,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 45.20 | Downloads | ✅ | Ctrl+J |
 | 45.21 | Developer tools | ✅ | F12 |
 | 45.22 | Fullscreen | ✅ | F11 |
-| 45.23 | Picture-in-picture | ⏳ | |
+| 45.23 | Picture-in-picture | 🧪 | Alt+P (or the command palette): the tab's video in picture-in-picture and back; the key is tested, the window itself waits for a run on screen |
 | 45.24 | Screenshot | ✅ | Ctrl+Shift+S; PNG or JPEG, folder of your choice |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
@@ -1208,16 +1208,16 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 50.01 | Video enhancement | ⏳ | |
-| 50.02 | Picture-in-picture | ⏳ | |
-| 50.03 | Playback controls | ⏳ | |
+| 50.02 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture, or Alt+P (20.05) |
+| 50.03 | Playback controls | ✅ | Kessel's media controls (20.03): play/pause, ±10 s, a seek bar, speed, previous/next, for any tab without switching to it |
 | 50.04 | Volume normalization | ⏳ | |
 | 50.05 | Media-key support | ⏳ | |
 | 50.06 | Casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.07 | Chromecast-style casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.08 | AirPlay-style integration | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
-| 50.09 | Subtitle customization | ⏳ | |
+| 50.09 | Subtitle customization | ✅ | Settings -> Accessibility -> Subtitles: a video's captions larger, in another colour, on another background -- on every site |
 | 50.10 | Theater mode | ✅ | Command palette -> Theater mode: the video fills the tab on black; Esc puts it back |
-| 50.11 | Fullscreen mode | ⏳ | |
+| 50.11 | Fullscreen mode | ✅ | F11 for the window; a video's own full screen button fills the whole screen and comes back as it was |
 
 ### 51. Privacy-focused advanced features
 
@@ -1426,8 +1426,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.07 | Automatic duplicate-tab detection | ✅ | Command palette -> Close duplicate tabs |
 | 62.08 | Tab memory visualization | ✅ | The task manager: memory and CPU of each page's process, with its tabs; hover cards |
 | 62.09 | Tab dependency detection | ⏳ | |
-| 62.10 | Website change monitoring | ⏳ | |
-| 62.11 | Page-change notifications | ⏳ | |
+| 62.10 | Website change monitoring | ✅ | Command palette -> Watch this page for changes: checked every 15 minutes to once a day (kessel://feeds), its text compared with last time |
+| 62.11 | Page-change notifications | ✅ | When a watched page's text changed the toolbar says so, with what's new; opening it from there or the feeds page marks it seen |
 | 62.12 | Built-in notes | 🟢 | Side panel -> Notes (tested) |
 | 62.13 | Notes attached to URLs | 🟢 | A note keeps the page it was written on (right-click -> Save selection to notes) |
 | 62.14 | Web annotations | 🧪 | Highlights with notes on any web page (Ctrl+Shift+H) |

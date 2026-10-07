@@ -88,6 +88,10 @@ pub const COMMANDS: &[CommandDef] = &[
     // same way the title bar's X does, whatever has the focus.
     reserved(cmd("close-window", "Close window", "Windows", &["Ctrl+Shift+W", "Alt+F4"])),
     cmd("reopen-closed-window", "Reopen closed window", "Windows", &[]),
+    cmd("name-window", "Name window…", "Windows", &[]),
+    cmd("save-session", "Save all windows as a session", "Windows", &[]),
+    cmd("save-window-session", "Save this window as a session", "Windows", &[]),
+    cmd("saved-sessions", "Saved sessions", "Windows", &[]),
     reserved(cmd("fullscreen", "Full screen", "Windows", &["F11"])),
     // Navigation
     repeating(cmd("back", "Back", "Navigation", &["Alt+Left", "BrowserBack"])),
@@ -137,6 +141,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("restart-safe-mode", "Restart in safe mode", "Kessel", &[]),
     cmd("lock-browser", "Lock Kessel", "Kessel", &[]),
     cmd("theater-mode", "Theater mode: the video fills the tab", "Page tools", &[]),
+    cmd("picture-in-picture", "Picture-in-picture: the video in a window of its own", "Page tools", &["Alt+P"]),
     cmd("command-palette", "Command palette", "Kessel", &["F2"]),
     // Page tools (tools.rs, src/shared/page-tools.js)
     cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),
@@ -146,6 +151,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("highlight", "Highlight the selected text", "Page tools", &["Ctrl+Shift+H"]),
     cmd("feeds", "Feeds", "Kessel", &[]),
     cmd("follow-feed", "Follow this site's feed", "Page tools", &[]),
+    cmd("watch-page", "Watch this page for changes", "Page tools", &[]),
     cmd("break-mode", "Pause everything", "Page tools", &[]),
     cmd("wayback", "Open in the Wayback Machine", "Page tools", &[]),
     cmd("reader-mode", "Reader view", "Page tools", &["F9"]),
@@ -444,6 +450,7 @@ mod tests {
             ("F12", "devtools"),
             ("Ctrl+U", "view-source"),
             ("Alt+F", "menu"),
+            ("Alt+P", "picture-in-picture"),
             ("Ctrl+N", "new-window"),
             ("Ctrl+Tab", "next-tab"),
             ("Ctrl+Shift+Tab", "prev-tab"),

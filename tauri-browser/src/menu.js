@@ -34,6 +34,7 @@ const LAYOUT = [
   "-",
   ["reopen-closed-tab", "refresh"],
   ["reopen-closed-window", "window"],
+  ["saved-sessions", "layers"],
   "-",
   ["devtools", "code"],
   ["view-source", "code"],

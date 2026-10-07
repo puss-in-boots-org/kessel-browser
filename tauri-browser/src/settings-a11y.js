@@ -11,6 +11,9 @@ const { invoke } = window.__TAURI__.core;
 const SIZES = [["13", "Smaller"], ["0", "Normal"], ["18", "Large"], ["20", "Larger"], ["24", "Largest"], ["28", "Huge"]];
 const MIN_SIZES = [["0", "No smallest size"], ["10", "10 px"], ["12", "12 px"], ["14", "14 px"], ["16", "16 px"], ["18", "18 px"]];
 const FILTERS = [["", "None"], ["contrast", "More contrast"], ["grayscale", "Grayscale"], ["invert", "Invert colours"], ["dark", "Dark (invert the page)"], ["sepia", "Sepia"], ["dim", "Dimmer"]];
+const CUE_SIZES = [["", "Normal"], ["125", "Large"], ["150", "Larger"], ["200", "Huge"]];
+const CUE_COLORS = [["", "The site's"], ["white", "White"], ["yellow", "Yellow"], ["green", "Green"], ["cyan", "Cyan"], ["black", "Black"]];
+const CUE_BACKGROUNDS = [["", "The site's"], ["solid", "Solid black"], ["white", "White"], ["none", "None"]];
 const FONTS = ["Segoe UI", "Arial", "Verdana", "Tahoma", "Calibri", "Georgia", "Times New Roman", "Cambria", "Atkinson Hyperlegible", "OpenDyslexic", "Comic Sans MS", "Consolas", "Courier New", "Cascadia Mono"];
 
 const a11y = () => currentSettings()?.features?.a11y || {};
@@ -53,6 +56,13 @@ export async function a11yPanel(settings, { el, settingRow, switchHtml }) {
     </div>
 
     <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Subtitles</span></div>
+      ${settingRow({ title: "Size", desc: "A video's captions, on every site that has them (turn them on in the media controls or the player)", controlHtml: selectHtml("cue-size", CUE_SIZES, 150) })}
+      ${settingRow({ title: "Text colour", controlHtml: selectHtml("cue-color", CUE_COLORS, 150) })}
+      ${settingRow({ title: "Background", controlHtml: selectHtml("cue-background", CUE_BACKGROUNDS, 150) })}
+    </div>
+
+    <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Colours</span></div>
       ${settingRow({ title: "Colour filter for every site", desc: "More contrast, grayscale, inverted... Each site can have its own: Settings -> Page tools", controlHtml: selectHtml("a11y-filter", FILTERS, 200) })}
     </div>
@@ -70,6 +80,16 @@ export async function a11yPanel(settings, { el, settingRow, switchHtml }) {
     const save = debounce(() => saveA11y({ fonts: { ...(a11y().fonts || {}), [key]: input.value.trim() } }), 400);
     input.addEventListener("input", save);
     input.addEventListener("change", save);
+  }
+  for (const key of ["size", "color", "background"]) {
+    const select = $(`cue-${key}`);
+    select.value = String(a.captions?.[key] ?? "");
+    select.addEventListener("change", () => {
+      const captions = { ...(a11y().captions || {}) };
+      if (select.value) captions[key] = key === "size" ? Number(select.value) : select.value;
+      else delete captions[key];
+      saveA11y({ captions });
+    });
   }
   const switches = [["a11y-motion", "reduce_motion"], ["a11y-focus", "focus_rings"], ["a11y-caret", "caret_browsing"]];
   for (const [id, key] of switches) {

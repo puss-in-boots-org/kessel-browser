@@ -104,4 +104,21 @@ export const tests = [
       await page.waitFor(`getComputedStyle(document.body).fontSize === '20px'`, { message: "the open page's text at 20 px" });
     },
   },
+  {
+    name: "subtitles: their size, colour and background from Settings reach the open pages",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch();
+      const { page } = await open(k, `${site.origin}/video/Captions`);
+      const cue = `(document.querySelector('style[data-kessel="tweaks"]')?.textContent || '').split('\\n').find((l) => l.startsWith('::cue')) || null`;
+      assert.equal(await page.evaluate(cue), null, "the site's own captions to begin with");
+      await k.invoke("open_singleton_tab", { route: "kessel://settings/accessibility" });
+      const settings = await k.page((t) => t.url.includes("settings.html"));
+      await settings.waitFor(`!!document.getElementById('cue-size')`, { message: "the Subtitles card" });
+      for (const [id, value] of [["cue-size", "150"], ["cue-color", "yellow"], ["cue-background", "none"]]) {
+        await settings.evaluate(`(() => { const s = document.getElementById('${id}'); s.value = '${value}'; s.dispatchEvent(new Event('change')); })()`);
+      }
+      await waitFor(async () => (await k.invoke("get_settings")).features.a11y?.captions?.background === "none", { message: "saved" });
+      await page.waitFor(`${cue} === '::cue{font-size:150%!important;color:#ffeb3b!important;background-color:transparent!important;}'`, { message: "the page's captions follow" });
+    },
+  },
 ];

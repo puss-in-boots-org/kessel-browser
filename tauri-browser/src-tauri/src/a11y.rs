@@ -98,7 +98,35 @@ pub(crate) fn page_script_options(features: &serde_json::Value) -> serde_json::V
         "min_font": a11y.get("min_font").and_then(|v| v.as_u64()).filter(|s| (6..=32).contains(s)).unwrap_or(0),
         "focus_rings": a11y.get("focus_rings").and_then(|v| v.as_bool()).unwrap_or(false),
         "still": a11y.get("reduce_motion").and_then(|v| v.as_bool()).unwrap_or(false),
+        "captions": captions(&a11y),
     })
+}
+
+// Settings -> Accessibility -> Subtitles: how a video's captions look, as
+// CSS for the page's ::cue rule -- only from the choices offered, never
+// whatever the settings file says. Null when they're the engine's own.
+fn captions(a11y: &serde_json::Value) -> serde_json::Value {
+    let c = a11y.get("captions").cloned().unwrap_or_default();
+    let pick = |key: &str| c.get(key).and_then(|v| v.as_str()).unwrap_or("");
+    let size = c.get("size").and_then(|v| v.as_u64()).filter(|s| [125, 150, 200].contains(s));
+    let color = match pick("color") {
+        "yellow" => Some("#ffeb3b"),
+        "black" => Some("#000000"),
+        "green" => Some("#69f0ae"),
+        "cyan" => Some("#18ffff"),
+        "white" => Some("#ffffff"),
+        _ => None,
+    };
+    let background = match pick("background") {
+        "solid" => Some("#000000"),
+        "white" => Some("rgba(255,255,255,0.85)"),
+        "none" => Some("transparent"),
+        _ => None,
+    };
+    if size.is_none() && color.is_none() && background.is_none() {
+        return serde_json::Value::Null;
+    }
+    serde_json::json!({ "size": size, "color": color, "background": background })
 }
 
 // The engine switch for caret browsing (profile::browser_args).
@@ -140,5 +168,14 @@ mod tests {
         assert_eq!(odd[1].1["fontFamilies"]["fixed"], "Consolas");
         assert_eq!(engine_flags(&serde_json::json!({ "a11y": { "caret_browsing": true } })), " --enable-caret-browsing");
         assert_eq!(engine_flags(&serde_json::json!({})), "");
+    }
+
+    #[test]
+    fn caption_choices_only() {
+        assert_eq!(page_script_options(&serde_json::json!({}))["captions"], serde_json::Value::Null);
+        let picked = page_script_options(&serde_json::json!({ "a11y": { "captions": { "size": 150, "color": "yellow", "background": "none" } } }));
+        assert_eq!(picked["captions"], serde_json::json!({ "size": 150, "color": "#ffeb3b", "background": "transparent" }));
+        let odd = page_script_options(&serde_json::json!({ "a11y": { "captions": { "size": 9999, "color": "red;}body{display:none", "background": "x" } } }));
+        assert_eq!(odd["captions"], serde_json::Value::Null, "nothing that isn't offered");
     }
 }
