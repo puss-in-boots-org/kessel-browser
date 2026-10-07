@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**87% overall** -- 725 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 43 partly done (🟡), 98 to do (⏳), 111 skipped (⏭️), of 1045.
+**87% overall** -- 726 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 43 partly done (🟡), 97 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -76,7 +76,7 @@ branch, one small commit per feature or group of features.
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
-| [36. Performance](#36-performance) | 14 |  |  | 3 |  | `████████░░` 82% |
+| [36. Performance](#36-performance) | 15 |  |  | 2 |  | `█████████░` 88% |
 | [37. Cache](#37-cache) | 9 |  | 1 |  |  | `██████████` 95% |
 | [38. Developer / experimental controls](#38-developer--experimental-controls) | 8 | 4 |  | 1 |  | `█████████░` 92% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
@@ -946,7 +946,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 36.01 | Memory saver | ✅ | Sleeping tabs and "Save memory in background tabs" (2.39, 2.44); Settings -> Performance |
 | 36.02 | Sleeping tabs | 🟢 | |
-| 36.03 | Energy saver | ⏳ | |
+| 36.03 | Energy saver | ✅ | Settings -> Performance -> Energy saver (on battery by default, or always): background tabs pause after a minute and sleep after 15, Kessel's own animations stop; a leaf in the toolbar says it's on |
 | 36.04 | CPU throttling | ✅ | Background tabs are paused after a while (2.41) |
 | 36.05 | Background-tab throttling | ✅ | See 2.44 |
 | 36.06 | Hardware acceleration | ✅ | See 35.01 |

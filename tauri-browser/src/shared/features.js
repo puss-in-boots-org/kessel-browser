@@ -16,6 +16,7 @@ export const FEATURES = [
     ["Hover cards", "Rest the mouse on a tab: title, preview, memory. Settings -> Tabs to turn parts off."],
     ["Keep tabs when closing", "Settings -> Tabs -> Keep tabs when Kessel closes."],
     ["Sleeping / paused tabs", "Automatic for tabs you haven't used; tune in Settings -> Performance. Tab menu -> Put to sleep."],
+    ["Energy saver", "On battery (or always: Settings -> Performance): background tabs pause after a minute and sleep after 15, and Kessel's own animations stop. A leaf in the toolbar says it's on."],
     ["Move tabs between windows", "Drag a tab onto another window, or out of the strip for a new window; or tab menu -> Move."],
   ]],
   ["Windows", [

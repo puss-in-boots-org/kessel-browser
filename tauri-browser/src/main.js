@@ -639,6 +639,7 @@ function paintStaticIcons() {
   iconFor("shields-btn", icon("shieldCheck", 16));
   iconFor("menu-btn", icon("dotsV", 18));
   iconFor("media-btn", icon("music", 17));
+  iconFor("energy-btn", icon("leaf", 16));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -2742,11 +2743,26 @@ function neverSleeps(tab) {
   });
 }
 
+// Energy saver (energy.rs): on battery (or always), tabs pause and sleep
+// sooner and Kessel's own animations stop; a leaf in the toolbar says so.
+let energySaver = false;
+
+function applyEnergySaver(active) {
+  energySaver = !!active;
+  document.documentElement.classList.toggle("k-energy", energySaver);
+  document.getElementById("energy-btn").hidden = !energySaver;
+  if (energySaver) lifecycleTick();
+}
+
 function lifecycleTick() {
   const settings = currentSettings() || {};
   const now = Date.now();
-  const sleepAfter = (settings.discard_tabs_after_minutes ?? 0) * 60 * 1000;
-  const freezeAfter = (settings.freeze_tabs_after_minutes ?? 0) * 60 * 1000;
+  let sleepAfter = (settings.discard_tabs_after_minutes ?? 0) * 60 * 1000;
+  let freezeAfter = (settings.freeze_tabs_after_minutes ?? 0) * 60 * 1000;
+  if (energySaver) {
+    sleepAfter = Math.min(sleepAfter || Infinity, 15 * 60 * 1000);
+    freezeAfter = Math.min(freezeAfter || Infinity, 60 * 1000);
+  }
   for (const tab of tabs) {
     if (tab.discarded || tab.id <= 0 || tab.id === activeTabId || neverSleeps(tab)) continue;
     const idle = now - (tab.lastActiveAt ?? now);
@@ -5153,6 +5169,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
   window.addEventListener("kessel-settings", updateTranslateButton);
+  document.getElementById("energy-btn").addEventListener("click", () => openSingleton("kessel://settings/performance"));
+  invoke("energy_saver_status").then((s) => applyEnergySaver(s.active)).catch(() => {});
   document.getElementById("window-name").addEventListener("click", editWindowName);
   invoke("get_windows")
     .then((list) => {
@@ -5457,6 +5475,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderTabs();
     updateAddressBarForActiveTab();
   });
+
+  await listen("energy-saver", (event) => applyEnergySaver(event.payload.active));
 
   await listen("window-named", (event) => {
     windowName = event.payload.name ?? null;

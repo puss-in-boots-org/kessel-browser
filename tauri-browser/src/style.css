@@ -217,6 +217,11 @@ html, body { overflow: hidden; user-select: none; }
 }
 #private-badge[hidden] { display: none; }
 
+/* Energy saver (energy.rs): nothing of Kessel's own keeps moving. */
+html.k-energy *, html.k-energy *::before, html.k-energy *::after { animation: none !important; transition: none !important; }
+#energy-btn { color: #2fbf71; }
+#energy-btn[hidden] { display: none; }
+
 /* A toolbar button you hid (Settings -> Appearance -> Toolbar buttons),
    whatever the button would otherwise do about showing itself. */
 .k-off { display: none !important; }

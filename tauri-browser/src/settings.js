@@ -811,6 +811,10 @@ function performancePanel(settings) {
     <p class="sub">Kessel gives each tab its own real webview. A tab in the background is always slowed down, like in any browser; these save more for the tabs you haven't looked at in a while.</p>
 
     <div class="setting-card">
+      ${settingRow({ title: "Energy saver", desc: "Background tabs pause after a minute and sleep after 15, and Kessel's own animations stop -- a leaf in the toolbar says it's on", controlHtml: `<select class="field" id="energy-saver" style="width:170px"><option value="battery">When on battery</option><option value="always">Always</option><option value="off">Off</option></select>` })}
+    </div>
+
+    <div class="setting-card">
       ${settingRow({
         title: "Pause background tabs",
         desc: "After this long in the background a tab's page is paused: its scripts stop until you come back (it doesn't reload). Tabs playing sound keep going.",
@@ -853,6 +857,14 @@ function performancePanel(settings) {
   slider.addEventListener("input", () => (label.textContent = describe(slider.value)));
   slider.addEventListener("change", () => saveSettings({ discard_tabs_after_minutes: parseInt(slider.value, 10) }));
 
+  const energy = p.querySelector("#energy-saver");
+  energy.value = settings.features?.energy_saver || "battery";
+  energy.addEventListener("change", () => {
+    const features = { ...(currentSettings()?.features || {}) };
+    if (energy.value === "battery") delete features.energy_saver;
+    else features.energy_saver = energy.value;
+    saveSettings({ features });
+  });
   const freeze = p.querySelector("#freeze-minutes");
   freeze.value = String(settings.freeze_tabs_after_minutes ?? 5);
   freeze.addEventListener("change", () => saveSettings({ freeze_tabs_after_minutes: parseInt(freeze.value, 10) }));
