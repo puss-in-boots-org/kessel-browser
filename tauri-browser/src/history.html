@@ -144,6 +144,7 @@
     <button class="nav-item" data-view="sites"></button>
     <button class="nav-item" data-view="searches"></button>
     <button class="nav-item" data-view="closed"></button>
+    <button class="nav-item" data-view="sessions"></button>
     <div class="side-foot">
       <button class="btn sm" id="clear-data-btn">Clear browsing data…</button>
       <div class="keep" id="keep-note"></div>
@@ -170,6 +171,11 @@
         <button class="btn ghost sm" id="select-all-btn">Select all shown</button>
         <button class="btn danger sm" id="delete-selected-btn">Delete</button>
         <button class="btn ghost sm" id="cancel-selection-btn">Cancel</button>
+      </div>
+      <div class="bar" id="sessions-bar" hidden>
+        <span class="grow">Keep the open windows' tabs under a name, to open them again whenever you like.</span>
+        <input class="field" id="session-name" placeholder="Name (optional)" maxlength="80" spellcheck="false" style="width:200px" />
+        <button class="btn sm" id="save-session-btn">Save open windows</button>
       </div>
       <div class="bar" id="site-bar" hidden>
         <span class="grow" id="site-bar-text"></span>

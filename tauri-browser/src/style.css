@@ -217,6 +217,35 @@ html, body { overflow: hidden; user-select: none; }
 }
 #private-badge[hidden] { display: none; }
 
+/* The window's own name ("Name window…"); a click renames it. */
+#window-name {
+  align-self: center;
+  flex-shrink: 0;
+  max-width: 160px;
+  margin: 0 4px 6px 2px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#window-name[hidden] { display: none; }
+#window-name.editing { padding: 1px 4px; cursor: text; }
+#window-name-input {
+  width: 140px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
 #tabs {
   display: flex;
   gap: var(--k-tab-gap, 3px);

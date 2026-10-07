@@ -4,6 +4,7 @@ import { toast, formatRelativeTime, hostOf, escapeHtml, keycapsHtml, keyLabel, c
 import { FEATURES } from "./shared/features.js";
 import { permissionLines } from "./shared/extension-info.js";
 import { buildStyleSection } from "./appearance.js";
+import { DENSITIES } from "./shared/styles.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
 import { a11yPanel } from "./settings-a11y.js";
@@ -64,6 +65,7 @@ function appearancePanel(settings) {
     <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Every style</span></div>
       ${settingRow({ title: "Interface size", desc: "Scale text and controls across the app", controlHtml: `<input type="range" id="font-scale" min="0.85" max="1.3" step="0.05" /><span class="mono faint" id="font-scale-value"></span>` })}
+      ${settingRow({ title: "Density", desc: "Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger", controlHtml: `<select class="field" id="ui-density" style="width:140px">${Object.entries(DENSITIES).map(([id, d]) => `<option value="${id}">${d.label}</option>`).join("")}</select>` })}
       ${settingRow({ title: "Reduce motion", desc: "Turn off non-essential animation", controlHtml: switchHtml("reduce-motion", settings.reduce_motion) })}
       ${settingRow({ title: "Bookmarks bar", desc: "Show bookmarks under the address bar", controlHtml: switchHtml("bookmarks-bar-toggle", settings.bookmarks_bar) })}
       ${settingRow({ title: "Home button", desc: "A button next to reload that opens your home page", controlHtml: switchHtml("home-button-toggle", settings.show_home_button !== false) })}
@@ -99,6 +101,14 @@ function appearancePanel(settings) {
     fontScaleValue.textContent = `${Math.round(fontScale.value * 100)}%`;
   });
   fontScale.addEventListener("change", () => saveSettings({ font_scale: parseFloat(fontScale.value) }));
+  const density = p.querySelector("#ui-density");
+  density.value = DENSITIES[settings.features?.ui_density] ? settings.features.ui_density : "normal";
+  density.addEventListener("change", () => {
+    const features = { ...(currentSettings()?.features || {}) };
+    if (density.value === "normal") delete features.ui_density;
+    else features.ui_density = density.value;
+    saveSettings({ features });
+  });
 
   wireSwitch(p, "reduce-motion", "reduce_motion");
   wireSwitch(p, "bookmarks-bar-toggle", "bookmarks_bar");

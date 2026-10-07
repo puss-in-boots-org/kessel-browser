@@ -88,6 +88,10 @@ pub const COMMANDS: &[CommandDef] = &[
     // same way the title bar's X does, whatever has the focus.
     reserved(cmd("close-window", "Close window", "Windows", &["Ctrl+Shift+W", "Alt+F4"])),
     cmd("reopen-closed-window", "Reopen closed window", "Windows", &[]),
+    cmd("name-window", "Name window…", "Windows", &[]),
+    cmd("save-session", "Save all windows as a session", "Windows", &[]),
+    cmd("save-window-session", "Save this window as a session", "Windows", &[]),
+    cmd("saved-sessions", "Saved sessions", "Windows", &[]),
     reserved(cmd("fullscreen", "Full screen", "Windows", &["F11"])),
     // Navigation
     repeating(cmd("back", "Back", "Navigation", &["Alt+Left", "BrowserBack"])),

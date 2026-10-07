@@ -12,16 +12,23 @@ use super::*;
 // Remembered for "reopen closed window" (Ctrl+Shift+T / the menu).
 const CLOSED_WINDOWS_KEPT: usize = 10;
 
-fn window_title(private: bool) -> String {
+// "Kessel", "Kessel – Work" (a profile), "Kessel (Private)" -- after the
+// window's own name, if you gave it one: "Taxes – Kessel".
+fn window_title(private: bool, name: Option<&str>) -> String {
     let base = match &profile::get().name {
         Some(name) => format!("Kessel \u{2013} {}", name),
         None => "Kessel".to_string(),
     };
-    if private {
-        format!("{} (Private)", base)
-    } else {
-        base
+    let base = if private { format!("{} (Private)", base) } else { base };
+    match name {
+        Some(name) => format!("{} \u{2013} {}", name, base),
+        None => base,
     }
+}
+
+fn clean_window_name(name: &str) -> Option<String> {
+    let name: String = name.trim().chars().filter(|c| !c.is_control()).take(60).collect();
+    (!name.is_empty()).then_some(name)
 }
 
 // A new window cascades a little down and right of the one you're using.
@@ -59,12 +66,14 @@ fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value,
     let number = state.next_window.fetch_add(1, Ordering::SeqCst);
     let label = window_label(number);
     let (width, height) = (1280.0, 820.0);
+    // A saved window comes back with its name.
+    let name = init.pointer("/session/name").and_then(|v| v.as_str()).and_then(clean_window_name);
 
     // Frameless: the toolbar draws its own glass title bar (drag region +
     // minimize/maximize/close in index.html) so the native Windows caption
     // doesn't sit on top of the Liquid Glass chrome.
     let mut builder = tauri::window::WindowBuilder::new(app, &label)
-        .title(window_title(private))
+        .title(window_title(private, name.as_deref()))
         .inner_size(width, height)
         .min_inner_size(680.0, 420.0)
         .decorations(false)
@@ -114,6 +123,7 @@ fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value,
         label: label.clone(),
         window: window.clone(),
         private,
+        name,
         order: Vec::new(),
         active: None,
         insets: DEFAULT_INSETS,
@@ -227,7 +237,7 @@ fn closed(app: &tauri::AppHandle, label: &str) {
     if !window.private {
         if let Some(session) = window.snapshot.as_deref().and_then(session_from_snapshot) {
             let mut closed = state.closed_windows.lock().unwrap();
-            closed.push(ClosedWindow { tabs: session.tabs, active: session.active, groups: session.groups, closed_at: now_unix(), closed_at_ms: millis_since_start() });
+            closed.push(ClosedWindow { tabs: session.tabs, active: session.active, groups: session.groups, name: window.name.clone(), closed_at: now_unix(), closed_at_ms: millis_since_start() });
             if closed.len() > CLOSED_WINDOWS_KEPT {
                 closed.remove(0);
             }
@@ -272,17 +282,18 @@ pub(crate) async fn close_window(app: tauri::AppHandle, webview: Webview) -> Res
 #[tauri::command]
 pub(crate) fn get_windows(webview: Webview, state: tauri::State<BrowserState>) -> Vec<serde_json::Value> {
     let current = state.window_of(&webview);
-    let windows: Vec<(String, bool, Option<u32>, usize)> =
-        state.windows.lock().unwrap().iter().map(|w| (w.label.clone(), w.private, w.active, w.order.len())).collect();
+    let windows: Vec<(String, bool, Option<u32>, usize, Option<String>)> =
+        state.windows.lock().unwrap().iter().map(|w| (w.label.clone(), w.private, w.active, w.order.len(), w.name.clone())).collect();
     windows
         .into_iter()
-        .map(|(label, private, active, tabs)| {
+        .map(|(label, private, active, tabs, name)| {
             let title = active.and_then(|id| state.tab_meta.lock().unwrap().get(&id).and_then(|m| m.title.clone()));
             serde_json::json!({
                 "label": label,
                 "private": private,
                 "tabs": tabs,
                 "title": title,
+                "name": name,
                 "current": current.as_deref() == Some(label.as_str()),
             })
         })
@@ -440,8 +451,37 @@ pub(crate) async fn reopen_closed_window(app: tauri::AppHandle, index: Option<us
             }
         };
         let Some(closed) = closed else { return Ok(None) };
-        let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups, ..Default::default() };
+        let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups, name: closed.name, ..Default::default() };
         create(&app2, false, serde_json::json!({ "session": session })).map(Some)
+    })
+    .await
+    .and_then(|r| r)
+}
+
+// "Name window…": the caller's window is called `name` (none: just Kessel
+// again) -- on the taskbar, in Alt+Tab, in lists of windows, and when it
+// comes back with the session. Returns the name it got.
+#[tauri::command]
+pub(crate) async fn set_window_name(app: tauri::AppHandle, webview: Webview, name: Option<String>) -> Result<Option<String>, String> {
+    require_internal_page(&webview)?;
+    let app2 = app.clone();
+    on_main(&app, move || {
+        let state = app2.state::<BrowserState>();
+        let win = state.window_of(&webview).ok_or("that window is closed")?;
+        let name = name.as_deref().and_then(clean_window_name);
+        let (window, private) = state
+            .win(&win, |w| {
+                w.name = name.clone();
+                (w.window.clone(), w.private)
+            })
+            .ok_or("that window is closed")?;
+        let _ = window.set_title(&window_title(private, name.as_deref()));
+        let changed = state.sessions.lock().unwrap().iter_mut().find(|(w, _)| w == &win).map(|(_, s)| s.name = name.clone()).is_some();
+        if changed {
+            write_session(&state);
+        }
+        emit_to_window(&app2, &win, "window-named", serde_json::json!({ "name": name }));
+        Ok(name)
     })
     .await
     .and_then(|r| r)

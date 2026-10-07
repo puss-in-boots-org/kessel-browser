@@ -729,6 +729,14 @@ export function resolveStyle(settings, forStyle = null) {
 
 // --- Building the CSS ---------------------------------------------------------------
 
+// How much bigger the chrome is at each density, and a menu item's height.
+export const DENSITIES = {
+  compact: { label: "Compact", scale: 0.84, menuItem: 26 },
+  normal: { label: "Normal", scale: 1, menuItem: 30 },
+  touch: { label: "Touch", scale: 1.25, menuItem: 40 },
+};
+const DENSITY_KEYS = ["tabHeight", "tabBarPad", "navHeight", "buttonSize", "addressHeight", "bookmarksHeight", "railWidth", "railIcon", "railGap"];
+
 const EASINGS = {
   smooth: "cubic-bezier(0.16, 1, 0.3, 1)",
   snappy: "cubic-bezier(0.2, 0.9, 0.1, 1)",
@@ -810,7 +818,12 @@ function grainImage(amount, mode) {
 // applyLook, and cached so the next page load paints it before settings
 // arrive from Rust.
 export function buildLook(r, settings) {
-  const v = r.values;
+  // Settings -> Appearance -> Density: whatever the style, its tab strip,
+  // toolbar, bookmarks bar, rail and menus a size smaller, or bigger to
+  // touch.
+  const density = DENSITIES[settings?.features?.ui_density] ? settings.features.ui_density : "normal";
+  const scale = DENSITIES[density].scale;
+  const v = scale === 1 ? r.values : { ...r.values, ...Object.fromEntries(DENSITY_KEYS.map((key) => [key, Math.round(r.values[key] * scale)])) };
   const px = (n) => `${Math.round(n * 100) / 100}px`;
   const vars = {};
   const attrs = {};
@@ -908,6 +921,8 @@ export function buildLook(r, settings) {
 
   // Toolbar
   vars["--k-tabbar-pad"] = px(v.tabBarPad);
+  attrs["data-k-density"] = density;
+  vars["--k-menu-item-h"] = px(DENSITIES[density].menuItem);
   vars["--k-nav-h"] = px(v.navHeight);
   vars["--k-btn"] = px(v.buttonSize);
   attrs["data-k-buttons"] = glass ? "glass" : v.toolbarButtons;

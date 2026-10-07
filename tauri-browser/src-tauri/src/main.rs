@@ -22,6 +22,7 @@ mod media;
 mod page;
 mod privacy;
 mod profile;
+mod saved_sessions;
 mod security;
 mod shields;
 mod sidebar;
@@ -208,6 +209,9 @@ pub(crate) struct BrowserWindow {
     // forgotten when the last private window closes, and nothing they do is
     // kept -- no history, no session restore, no recently closed tabs.
     pub(crate) private: bool,
+    // The name you gave it ("Name window…"): its title on the taskbar, and
+    // in lists of windows. Saved with the session.
+    name: Option<String>,
     // Live tab ids in the strip's order (tab cycling follows it).
     order: Vec<u32>,
     active: Option<u32>,
@@ -312,6 +316,7 @@ pub(crate) struct ClosedWindow {
     tabs: Vec<SessionTab>,
     active: usize,
     groups: Vec<serde_json::Value>,
+    name: Option<String>,
     // Unix time (shown in lists), and ms since start (for "what closed last").
     closed_at: u64,
     closed_at_ms: u64,
@@ -3896,7 +3901,7 @@ async fn reopen_closed_tab(app: tauri::AppHandle, webview: Webview) -> Result<se
         if window_at.is_some() && window_at >= tab_at {
             let closed = state.closed_windows.lock().unwrap().pop();
             if let Some(closed) = closed {
-                let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups, ..Default::default() };
+                let session = WindowSession { tabs: closed.tabs, active: closed.active, groups: closed.groups, name: closed.name, ..Default::default() };
                 let win = browser_windows::create(&app2, false, serde_json::json!({ "session": session }))?;
                 return Ok(serde_json::json!({ "window": win }));
             }
@@ -5079,6 +5084,9 @@ pub(crate) struct WindowSession {
     // The workspace the window was showing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     workspace: Option<String>,
+    // The window's own name, if you gave it one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -5178,9 +5186,10 @@ fn save_window_session(webview: Webview, state: tauri::State<BrowserState>, tabs
     if state.is_private(&win) {
         return;
     }
+    let name = state.win(&win, |w| w.name.clone()).flatten();
     {
         let mut sessions = state.sessions.lock().unwrap();
-        let session = WindowSession { tabs, active, groups: groups.unwrap_or_default(), workspace };
+        let session = WindowSession { tabs, active, groups: groups.unwrap_or_default(), workspace, name };
         match sessions.iter_mut().find(|(w, _)| w == &win) {
             Some((_, s)) => *s = session,
             None => sessions.push((win, session)),
@@ -5393,6 +5402,12 @@ fn main() {
             browser_windows::send_tab_to_window,
             browser_windows::get_closed_windows,
             browser_windows::reopen_closed_window,
+            browser_windows::set_window_name,
+            saved_sessions::save_session,
+            saved_sessions::list_saved_sessions,
+            saved_sessions::open_saved_session,
+            saved_sessions::rename_saved_session,
+            saved_sessions::delete_saved_session,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,
@@ -5593,10 +5608,17 @@ fn main() {
             // each window's toolbar once it has loaded (see take_window_init),
             // to avoid a startup race between webview-creation calls.
             let state = app.state::<BrowserState>();
-            let saved = if restore { read_session(&state) } else { Vec::new() };
+            let mut saved = if restore { read_session(&state) } else { Vec::new() };
             if !restore && startup.unclean {
                 // Closed unexpectedly: offered, not forced.
                 crash::offer_restore(read_session(&state));
+            }
+            if saved.is_empty() {
+                // Settings -> Search & Startup: a saved session to start with.
+                let startup_session = state.store.settings.lock().unwrap().features.get("startup_session").and_then(|v| v.as_str()).map(str::to_string);
+                if let Some(id) = startup_session {
+                    saved = saved_sessions::windows_of(&state, &id);
+                }
             }
             if saved.is_empty() {
                 // Settings -> Search & Startup: pages to start with.

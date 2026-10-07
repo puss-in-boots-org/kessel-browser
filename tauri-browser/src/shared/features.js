@@ -24,6 +24,9 @@ export const FEATURES = [
     ["Close window", "Ctrl+Shift+W or Alt+F4. Reopen with Ctrl+Shift+T."],
     ["Full screen", "F11."],
     ["Pop-out window", "Drag a tab below the toolbar, or tab menu -> Pop out."],
+    ["Compact or touch", "Settings -> Appearance -> Density: Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger. Any style."],
+    ["Name a window", "Palette -> Name window…: the name shows in its tab bar and on the taskbar, and comes back with the session. Click it to rename."],
+    ["Saved sessions", "Palette -> Save all windows (or this window) as a session, or History -> Saved sessions. Open one again whenever you like -- or every time Kessel starts (Settings -> Search & Startup)."],
   ]],
   ["Address bar", [
     ["Go / search", "Ctrl+L, F6 or Alt+D, then type. Alt+Enter: new tab; Ctrl+Enter adds www. and .com."],
