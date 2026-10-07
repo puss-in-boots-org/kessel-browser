@@ -26,8 +26,106 @@ pub const KINDS: &[(&str, &str, &str)] = &[
     ("autoplay", "play sound on its own", "allow"),
 ];
 
+// Site settings the engine never asks about -- Kessel keeps them itself
+// (main.rs, bridge.rs, page-tools.js): allow or block, nothing to ask. Kept
+// with the permissions above, in the same place.
+pub const CONTENT: &[(&str, &str, &str)] = &[
+    ("javascript", "JavaScript", "allow"),
+    ("images", "Images", "allow"),
+    ("popups", "Pop-ups (windows a page opens without a click)", "block"),
+    ("redirects", "Sending you to another site on its own", "allow"),
+    ("sound", "Sound", "allow"),
+    ("third_party", "Content from other sites", "allow"),
+    ("fullscreen", "Full screen", "allow"),
+];
+
 pub fn default_for(kind: &str) -> &'static str {
-    KINDS.iter().find(|k| k.0 == kind).map(|k| k.2).unwrap_or("ask")
+    KINDS.iter().chain(CONTENT.iter()).find(|k| k.0 == kind).map(|k| k.2).unwrap_or("ask")
+}
+
+// Whether `site` may do content setting `kind` ("ask" can't be: the default).
+pub fn content_allowed(features: &serde_json::Value, site: &str, kind: &str) -> bool {
+    match decision(features, site, kind).as_str() {
+        "allow" => true,
+        "block" => false,
+        _ => default_for(kind) == "allow",
+    }
+}
+
+// Why a request from a page on `page_host` is refused by your site settings,
+// if it is: no images on the site, or nothing from other sites.
+pub fn content_blocked(features: &serde_json::Value, page_host: &str, request_url: &str, image: bool) -> Option<&'static str> {
+    let site = page_host.strip_prefix("www.").unwrap_or(page_host).to_ascii_lowercase();
+    if image && !content_allowed(features, &site, "images") {
+        return Some("Images are blocked for this site");
+    }
+    if !content_allowed(features, &site, "third_party") {
+        let host = crate::page::host_of(request_url);
+        if !host.is_empty() && crate::privacy::site_of_host(&host) != crate::privacy::site_of_host(page_host) {
+            return Some("Content from other sites is blocked for this site");
+        }
+    }
+    None
+}
+
+// Whether any site blocks images or other sites' content -- the requests
+// only need watching then.
+pub fn request_rules(features: &serde_json::Value) -> bool {
+    let blocks = |v: &serde_json::Value| ["images", "third_party"].iter().any(|k| v.get(*k).and_then(|x| x.as_str()) == Some("block"));
+    features.get("permission_defaults").is_some_and(blocks) || features.get("site_permissions").and_then(|s| s.as_object()).is_some_and(|all| all.values().any(blocks))
+}
+
+// A site's content settings as they apply (`own`: set for the site, else
+// the default), for the site info popup.
+#[tauri::command]
+pub fn site_settings(app: tauri::AppHandle, webview: Webview, url: String) -> Result<serde_json::Value, String> {
+    crate::require_internal_page(&webview)?;
+    let site = site_of(&url);
+    let features = app.state::<BrowserState>().store.settings.lock().unwrap().features.clone();
+    let own = features.get("site_permissions").and_then(|p| p.get(&site)).cloned().unwrap_or_default();
+    let content: Vec<serde_json::Value> = CONTENT
+        .iter()
+        .map(|(kind, label, _)| serde_json::json!({ "kind": kind, "label": label, "allowed": content_allowed(&features, &site, kind), "own": own.get(*kind).is_some() }))
+        .collect();
+    Ok(serde_json::json!({ "site": site, "content": content }))
+}
+
+// Sets content setting `kind` for the site of `url` -- "allow", "block", or
+// "default" to forget it -- and tells the open pages (full screen, pop-ups,
+// images and other sites' content change at once; JavaScript and sound on
+// the next load).
+#[tauri::command]
+pub fn set_site_setting(app: tauri::AppHandle, webview: Webview, url: String, kind: String, value: String) -> Result<(), String> {
+    crate::require_internal_page(&webview)?;
+    if !CONTENT.iter().any(|k| k.0 == kind) || !matches!(value.as_str(), "allow" | "block" | "default") {
+        return Err("no such site setting".into());
+    }
+    let site = site_of(&url);
+    if site.is_empty() {
+        return Err("not a website".into());
+    }
+    let state = app.state::<BrowserState>();
+    let watched_before = crate::wants_requests(&state.store.settings.lock().unwrap());
+    if value == "default" {
+        let settings = {
+            let mut s = state.store.settings.lock().unwrap();
+            if let Some(own) = s.features.get_mut("site_permissions").and_then(|p| p.get_mut(&site)).and_then(|p| p.as_object_mut()) {
+                own.remove(&kind);
+            }
+            s.clone()
+        };
+        state.store.save_settings();
+        let _ = app.emit("settings-changed", &settings);
+    } else {
+        remember(&app, &site, &kind, &value);
+    }
+    let watched = crate::wants_requests(&state.store.settings.lock().unwrap());
+    if watched != watched_before {
+        let app2 = app.clone();
+        crate::later(&app, move || crate::apply_request_filters(&app2, watched));
+    }
+    crate::tools::broadcast_tweaks(&app);
+    Ok(())
 }
 
 // "example.com" for https://www.example.com:8080/x.

@@ -56,6 +56,33 @@ async function render() {
   return info;
 }
 
+// What this site's pages may do (permissions.rs CONTENT): a switch each;
+// bold = set for this site, the rest follow Settings -> Site permissions.
+async function renderSiteSettings() {
+  const box = $("site-settings");
+  const data = await invoke("site_settings", { url: init.url }).catch(() => null);
+  if (!data || !/^https?:/.test(init.url)) {
+    box.previousElementSibling.hidden = box.hidden = true;
+    return;
+  }
+  box.replaceChildren();
+  for (const s of data.content) {
+    const row = document.createElement("label");
+    row.className = s.own ? "own" : "";
+    row.dataset.kind = s.kind;
+    row.innerHTML = `<span></span><input type="checkbox" />`;
+    row.querySelector("span").textContent = s.label;
+    const box2 = row.querySelector("input");
+    box2.checked = s.allowed;
+    box2.addEventListener("change", async () => {
+      await invoke("set_site_setting", { url: init.url, kind: s.kind, value: box2.checked ? "allow" : "block" }).catch(() => {});
+      if (s.kind === "javascript" || s.kind === "sound") $("settings-note").textContent = "Reload the page to see it";
+      renderSiteSettings();
+    });
+    box.appendChild(row);
+  }
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
   watchCustomWallpaper(currentSettings);
@@ -85,6 +112,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       info = await render().catch(() => info);
     });
   }
+  renderSiteSettings();
   window.addEventListener("blur", () => setTimeout(() => !document.hasFocus() && close(), 150));
   document.addEventListener("keydown", (e) => e.key === "Escape" && close());
 });

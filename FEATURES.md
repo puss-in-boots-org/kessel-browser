@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**64% overall** -- 523 done (✅ 🟢 🌐), 57 built and waiting for their first run on Windows or a phone (🧪), 54 partly done (🟡), 318 to do (⏳), 93 skipped (⏭️), of 1045.
+**66% overall** -- 538 done (✅ 🟢 🌐), 51 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 295 to do (⏳), 106 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -53,8 +53,8 @@ branch, one small commit per feature or group of features.
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
 | [12. DNS & networking](#12-dns--networking) | 11 | 2 |  | 10 |  | `██████░░░░` 57% |
-| [13. Website permissions](#13-website-permissions) | 4 | 6 |  | 10 |  | `█████░░░░░` 50% |
-| [14. Site-specific settings](#14-site-specific-settings) | 5 | 4 |  | 13 |  | `████░░░░░░` 41% |
+| [13. Website permissions](#13-website-permissions) | 9 | 3 | 1 |  | 7 | `██████████` 96% |
+| [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
 | [17. Reading & research](#17-reading--research) | 11 | 5 | 1 | 5 |  | `████████░░` 75% |
@@ -530,52 +530,52 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 13.01 | Camera permission | ✅ | Settings -> Site permissions: Kessel's own prompt, answers kept per site |
-| 13.02 | Microphone permission | 🧪 | Settings -> Site permissions |
+| 13.02 | Microphone permission | ✅ | Settings -> Site permissions: Kessel's own prompt, answers kept per site |
 | 13.03 | Location permission | ✅ | Settings -> Site permissions |
 | 13.04 | Notifications permission | ✅ | Settings -> Site permissions |
 | 13.05 | Clipboard permission | 🧪 | Settings -> Site permissions |
-| 13.06 | Fullscreen permission | ⏳ | |
+| 13.06 | Fullscreen permission | ✅ | Site settings (the lock, or Settings -> Site permissions): full screen allowed or blocked per site |
 | 13.07 | Motion sensor permission | 🧪 | Settings -> Site permissions (allowed unless you change it) |
-| 13.08 | Bluetooth permission | ⏳ | |
-| 13.09 | USB permission | ⏳ | |
-| 13.10 | Serial-device permission | ⏳ | |
-| 13.11 | HID-device permission | ⏳ | |
-| 13.12 | MIDI permission | 🧪 | Settings -> Site permissions |
-| 13.13 | Payment permission | ⏳ | |
-| 13.14 | Autoplay permission | 🧪 | Settings -> Site permissions -> Playing sound on its own |
-| 13.15 | Pop-up permission | ⏳ | |
+| 13.08 | Bluetooth permission | ⏭️ | WebView2 gives apps no device picker: a site's Bluetooth request can't complete |
+| 13.09 | USB permission | ⏭️ | WebView2 gives apps no device picker: a site's USB request waits forever |
+| 13.10 | Serial-device permission | ⏭️ | WebView2 gives apps no device picker: a site's serial-port request waits forever |
+| 13.11 | HID-device permission | ⏭️ | WebView2 gives apps no device picker: a site's HID request waits forever |
+| 13.12 | MIDI permission | ✅ | Settings -> Site permissions: Kessel's own prompt |
+| 13.13 | Payment permission | ⏭️ | The Payment Request API isn't in WebView2 |
+| 13.14 | Autoplay permission | ✅ | Site permissions -> Playing sound on its own: Block stops a site's sound starting before you've done anything there; otherwise the engine's usual rule |
+| 13.15 | Pop-up permission | ✅ | Site settings -> Pop-ups: blocked ones show a chip in the address bar (open it, or allow the site); allowed sites' open as tabs |
 | 13.16 | Downloads permission | ✅ | Settings -> Site permissions -> Several downloads at once |
-| 13.17 | Background activity permission | ⏳ | |
-| 13.18 | VR/AR permission | ⏳ | |
-| 13.19 | Local-network permission | ⏳ | |
+| 13.17 | Background activity permission | 🟡 | Settings -> Performance: sites that never sleep keep running in the background; the rest are paused and put to sleep |
+| 13.18 | VR/AR permission | ⏭️ | WebXR reports no headset in WebView2 |
+| 13.19 | Local-network permission | ⏭️ | WebView2 offers apps no local-network prompt |
 | 13.20 | File-system permission | 🧪 | Settings -> Site permissions -> Editing files on your computer |
 
 ### 14. Site-specific settings
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 14.01 | JavaScript | ⏳ | |
+| 14.01 | JavaScript | ✅ | Site settings: JavaScript on or off per site (from the next load) |
 | 14.02 | Cookies | 🟢 | Settings -> Cookies & site data: allow, block or clear on exit, per site |
-| 14.03 | Pop-ups | ⏳ | |
-| 14.04 | Redirects | ⏳ | |
+| 14.03 | Pop-ups | ✅ | See 13.15 |
+| 14.04 | Redirects | ✅ | Site settings: a page sending you to another site on its own (no click) is stopped, with a chip to go anyway |
 | 14.05 | Camera | ✅ | Settings -> Site permissions, per site |
-| 14.06 | Microphone | 🧪 | Settings -> Site permissions, per site |
+| 14.06 | Microphone | ✅ | Settings -> Site permissions, per site |
 | 14.07 | Location | ✅ | Settings -> Site permissions, per site |
 | 14.08 | Notifications | ✅ | Settings -> Site permissions, per site |
 | 14.09 | Clipboard | 🧪 | Settings -> Site permissions, per site |
 | 14.10 | Downloads | ✅ | Settings -> Site permissions, per site |
-| 14.11 | Autoplay | 🧪 | Settings -> Site permissions, per site |
-| 14.12 | MIDI | 🧪 | Settings -> Site permissions, per site |
-| 14.13 | Bluetooth | ⏳ | |
-| 14.14 | USB | ⏳ | |
-| 14.15 | Serial | ⏳ | |
-| 14.16 | HID | ⏳ | |
-| 14.17 | VR | ⏳ | |
-| 14.18 | Fullscreen | ⏳ | |
-| 14.19 | Images | ⏳ | |
-| 14.20 | Sound | ⏳ | |
-| 14.21 | Background sync | ⏳ | |
-| 14.22 | Third-party content | ⏳ | |
+| 14.11 | Autoplay | ✅ | See 13.14 |
+| 14.12 | MIDI | ✅ | Settings -> Site permissions, per site |
+| 14.13 | Bluetooth | ⏭️ | See 13.08 |
+| 14.14 | USB | ⏭️ | See 13.09 |
+| 14.15 | Serial | ⏭️ | See 13.10 |
+| 14.16 | HID | ⏭️ | See 13.11 |
+| 14.17 | VR | ⏭️ | See 13.18 |
+| 14.18 | Fullscreen | ✅ | Site settings: full screen allowed or blocked per site |
+| 14.19 | Images | ✅ | Site settings: no images for a site |
+| 14.20 | Sound | ✅ | Site settings: sound off mutes the site's tabs (and they unmute when they leave it) |
+| 14.21 | Background sync | ⏭️ | The engine's own: WebView2 gives apps no per-site control |
+| 14.22 | Third-party content | ✅ | Site settings: nothing from other sites (scripts, frames, images) on a site |
 
 ### 15. Extensions / add-ons
 

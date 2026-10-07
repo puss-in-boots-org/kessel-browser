@@ -91,8 +91,57 @@
       else check();
     }
 
-    BRIDGE.request('site-tweaks').then(apply);
-    BRIDGE.on('tweaks-changed', function () { BRIDGE.request('site-tweaks').then(apply); });
+    // --- Your site settings (permissions.rs) the page itself keeps ---
+    // Full screen turned off for the site: a request for it is turned down
+    // (a player in another site's frame: main.rs page_fullscreen).
+    var fullscreenAllowed = true;
+    ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen'].forEach(function (name) {
+      var original = Element.prototype[name];
+      if (!original) return;
+      Element.prototype[name] = function () {
+        if (fullscreenAllowed) return original.apply(this, arguments);
+        return name === 'requestFullscreen' ? Promise.reject(new TypeError('Full screen is turned off for this site')) : undefined;
+      };
+    });
+    // Sound playing on its own turned off for the site: a video or sound
+    // can't start before you've done anything on the page -- play() is
+    // turned down, and one starting by itself (autoplay) is paused.
+    var autoplayAllowed = true;
+    var interacted = function () { return !!(navigator.userActivation && navigator.userActivation.hasBeenActive); };
+    var nativePlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      if (!autoplayAllowed && !interacted()) return Promise.reject(new DOMException('Sound playing on its own is turned off for this site', 'NotAllowedError'));
+      return nativePlay.apply(this, arguments);
+    };
+    document.addEventListener('play', function (e) {
+      if (!autoplayAllowed && !interacted() && e.target && e.target.pause) e.target.pause();
+    }, true);
+    function siteSettings(t) {
+      fullscreenAllowed = !t || t.fullscreen !== false;
+      autoplayAllowed = !t || t.autoplay !== false;
+      if (!fullscreenAllowed && document.fullscreenElement) document.exitFullscreen();
+    }
+    // Pop-ups: a window.open without a click is one the engine's pop-up
+    // blocker stops anyway -- Kessel hears of it instead, and opens it as a
+    // tab if you allow the site's pop-ups, or says one was blocked.
+    if (window.top === window) {
+      var nativeOpen = window.open;
+      window.open = function (url) {
+        var activation = navigator.userActivation;
+        if (!activation || activation.isActive) return nativeOpen.apply(this, arguments);
+        var to = '';
+        try { to = String(new URL(url, location.href)); } catch (e) {}
+        if (/^https?:/.test(to)) BRIDGE.send('popup', { url: to });
+        return null;
+      };
+    }
+
+    function tweaksArrived(t) {
+      apply(t);
+      siteSettings(t);
+    }
+    BRIDGE.request('site-tweaks').then(tweaksArrived);
+    BRIDGE.on('tweaks-changed', function () { BRIDGE.request('site-tweaks').then(tweaksArrived); });
 
     // --- Mouse gestures: hold the right button and draw ---
     var trail = null;

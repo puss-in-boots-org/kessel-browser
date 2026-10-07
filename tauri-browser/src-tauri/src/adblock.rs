@@ -279,7 +279,7 @@ pub fn build_frame_script(token: &str) -> String {
 // (before the page's own scripts run), after the frame script above:
 //  1. Shields element hiding (if adblock_enabled), driven by the filter
 //     lists -- see shields.rs.
-//  2. Popup blocker: window.open() only works within ~800ms of a real click.
+//  2. (Pop-ups: the engine's blocker, and page-tools.js for the chip.)
 //  3. Password autofill chip.
 //  4. Side panel resize hand-off: while the side panel's own drag handle is
 //     being dragged wider than the panel itself, this tab picks up the same
@@ -393,16 +393,9 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
     }});
   }}
 
-  // --- Popup blocker ---
-  var lastUserGesture = 0;
-  document.addEventListener('click', function() {{ lastUserGesture = Date.now(); }}, true);
-  var nativeOpen = window.open;
-  window.open = function() {{
-    if (Date.now() - lastUserGesture < 800) {{
-      return nativeOpen.apply(window, arguments);
-    }}
-    return null;
-  }};
+  // (Pop-ups: the engine's own blocker stops window.open without a click --
+  // keys and touch count as one too -- and page-tools.js tells Kessel, for
+  // the "Pop-up blocked" chip and sites you allow pop-ups.)
 
   // --- Password autofill: offer to fill a detected login form ---
   // Only ever checks when a password field actually exists on the page,

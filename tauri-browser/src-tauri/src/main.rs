@@ -398,6 +398,23 @@ struct PageState {
     // started -- which must not end the new one's loading, nor give its
     // history entry the old page's title.
     navigation: u64,
+    // The address the tab is going to (its own document's request isn't
+    // another site's content, whatever it was on before).
+    pending_url: String,
+    // Kessel itself sent the tab where it's going (the address bar, a
+    // bookmark, a warning page's "go on"...) -- never a page's redirect.
+    kessel_nav: bool,
+    // Kessel muted the tab because its site's sound is off (see
+    // permissions::CONTENT), so it's unmuted on leaving the site.
+    auto_muted: bool,
+    // The page the tab was on before this one (guard_navigation runs ahead
+    // of the NavigationStarting handler and starts the new page's state).
+    previous_url: String,
+}
+
+// Kessel is about to send tab `id` somewhere: not the page's own doing.
+pub(crate) fn kessel_navigates(state: &BrowserState, id: u32) {
+    state.pages.lock().unwrap().entry(id).or_default().kessel_nav = true;
 }
 
 struct HistoryWait {
@@ -1953,6 +1970,31 @@ fn open_new_window(
 
 // Opens a new tab in window `win` (signed in as `account`), switches to it
 // and tells the window's toolbar.
+// A page tried to open a window without a click -- page-tools.js saw the
+// window.open, which the engine's pop-up blocker stops: opened as a tab
+// after all if you allow its site pop-ups, otherwise the address bar says
+// one was blocked (with a way to open it, or allow the site).
+pub(crate) fn popup_attempt(app: &tauri::AppHandle, id: u32, page_url: &str, target: &str) {
+    let Ok(parsed) = tauri::Url::parse(target) else { return };
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return;
+    }
+    let state = app.state::<BrowserState>();
+    let site = permissions::site_of(page_url);
+    let allowed = permissions::content_allowed(&state.store.settings.lock().unwrap().features, &site, "popups");
+    let Some(win) = state.tab_window(id) else { return };
+    if allowed {
+        let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
+        let (app2, url) = (app.clone(), target.to_string());
+        // Not inside WebView2's message event: creating a tab there deadlocks.
+        later(app, move || {
+            let _ = open_tab_in_front(&app2, &win, Some(url), account);
+        });
+    } else {
+        emit_to_window(app, &win, "popup-blocked", serde_json::json!({ "id": id, "site": site, "url": target, "page": page_url }));
+    }
+}
+
 fn open_tab_in_front(app: &tauri::AppHandle, win: &str, url: Option<String>, account: Option<String>) -> Result<u32, String> {
     let state = app.state::<BrowserState>();
     let url = url.unwrap_or_else(|| state.store.settings.lock().unwrap().homepage.clone());
@@ -2081,9 +2123,15 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     // once there is one (page_title_changed).
     let mut pages = st.pages.lock().unwrap();
     let page = pages.entry(id).or_default();
+    let old = std::mem::take(page);
     *page = PageState {
         url: nav_url.to_string(),
         history: (!private).then(|| HistoryWait { url: nav_url.to_string(), same_document: false, stale_title: String::new() }),
+        // For the NavigationStarting handler (which runs after this): where
+        // the tab was, whether Kessel sent it, whether Kessel muted it.
+        previous_url: old.url,
+        kessel_nav: old.kessel_nav,
+        auto_muted: old.auto_muted,
         ..Default::default()
     };
     true
@@ -2166,12 +2214,21 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
     let app_start = app.clone();
     let controller = platform.controller();
     core.add_NavigationStarting(
-        &webview2_com::NavigationStartingEventHandler::create(Box::new(move |_, args| {
+        &webview2_com::NavigationStartingEventHandler::create(Box::new(move |sender, args| {
             let Some(args) = args else { return Ok(()) };
             let mut cancelled = windows::core::BOOL::default();
             args.Cancel(&mut cancelled)?;
             if cancelled.as_bool() {
-                return Ok(()); // Shields rewrote it (see guard_navigation)
+                // Shields rewrote it (see guard_navigation): Kessel sends the
+                // tab to the new address, which counts as whatever this one
+                // was -- a click, a server's redirect, Kessel's own.
+                let (mut user, mut redirected) = (windows::core::BOOL::default(), windows::core::BOOL::default());
+                args.IsUserInitiated(&mut user)?;
+                args.IsRedirected(&mut redirected)?;
+                if user.as_bool() || redirected.as_bool() {
+                    kessel_navigates(&app_start.state::<BrowserState>(), id);
+                }
+                return Ok(());
             }
             let mut uri = windows::core::PWSTR::null();
             args.Uri(&mut uri)?;
@@ -2202,11 +2259,64 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
                     return Ok(());
                 }
             }
+            // Your site settings (permissions::CONTENT) for where the tab is
+            // going: a page sending you to another site on its own -- no
+            // click, not a server's redirect, not back/forward or reload,
+            // not Kessel -- is stopped on a site you said so; JavaScript on
+            // or off; the sound off on a site you muted.
+            let target = tauri::Url::parse(&uri).ok().filter(|u| matches!(u.scheme(), "http" | "https"));
+            let features = st.store.settings.lock().unwrap().features.clone();
+            let (kessel_nav, from) = {
+                let mut pages = st.pages.lock().unwrap();
+                let page = pages.entry(id).or_default();
+                // guard_navigation has usually started the new page's state
+                // already (and kept where the tab was).
+                let from = if page.url == uri { page.previous_url.clone() } else { page.url.clone() };
+                (std::mem::take(&mut page.kessel_nav), from)
+            };
+            if let (Some(target), Some(from_url)) = (&target, tauri::Url::parse(&from).ok().filter(|u| matches!(u.scheme(), "http" | "https"))) {
+                let (mut user, mut redirected) = (windows::core::BOOL::default(), windows::core::BOOL::default());
+                args.IsUserInitiated(&mut user)?;
+                args.IsRedirected(&mut redirected)?;
+                let new_document = args
+                    .cast::<ICoreWebView2NavigationStartingEventArgs3>()
+                    .ok()
+                    .map(|a| {
+                        let mut kind = COREWEBVIEW2_NAVIGATION_KIND::default();
+                        let _ = a.NavigationKind(&mut kind);
+                        kind == COREWEBVIEW2_NAVIGATION_KIND_NEW_DOCUMENT
+                    })
+                    .unwrap_or(true);
+                let other_site = privacy::site_of_host(from_url.host_str().unwrap_or("")) != privacy::site_of_host(target.host_str().unwrap_or(""));
+                if !user.as_bool() && !redirected.as_bool() && !kessel_nav && new_document && other_site && !permissions::content_allowed(&features, &permissions::site_of(&from), "redirects") {
+                    args.SetCancel(true)?;
+                    emit_to_tab_window(&app_start, id, "redirect-blocked", serde_json::json!({ "id": id, "page": from, "url": uri }));
+                    return Ok(());
+                }
+            }
+            if let Some(core) = &sender {
+                let site = permissions::site_of(&uri);
+                core.Settings()?.SetIsScriptEnabled(target.is_none() || permissions::content_allowed(&features, &site, "javascript"))?;
+                if let Ok(core8) = core.cast::<ICoreWebView2_8>() {
+                    let mute = target.is_some() && !permissions::content_allowed(&features, &site, "sound");
+                    let changed = {
+                        let mut pages = st.pages.lock().unwrap();
+                        let page = pages.entry(id).or_default();
+                        let changed = page.auto_muted != mute;
+                        page.auto_muted = mute;
+                        changed
+                    };
+                    if changed {
+                        core8.SetIsMuted(mute)?;
+                    }
+                }
+            }
             {
                 let mut pages = st.pages.lock().unwrap();
                 let page = pages.entry(id).or_default();
                 page.loading = true;
                 page.navigation = navigation;
+                page.pending_url = uri.clone();
             }
             emit_to_tab_window(&app_start, id, "tab-load-started", serde_json::json!({ "id": id, "url": uri }));
             if tauri::Url::parse(&uri).map(|u| !is_internal_nav(&u)).unwrap_or(false) {
@@ -2562,7 +2672,7 @@ fn page_webviews(app: &tauri::AppHandle) -> Vec<Webview> {
 // Whether pages' requests need to come past Kessel at all: for Shields, or
 // to change their headers (privacy.rs).
 fn wants_requests(settings: &Settings) -> bool {
-    settings.adblock_enabled || privacy::request_plan(settings).is_some()
+    settings.adblock_enabled || privacy::request_plan(settings).is_some() || permissions::request_rules(&settings.features)
 }
 
 // The time zone protection: pages' own frames run in UTC (the engine's
@@ -2720,6 +2830,22 @@ unsafe fn install_shields_hooks(
                 return Ok(());
             }
             let st = app_req.state::<BrowserState>();
+            // Your site settings (permissions::CONTENT): no images on the
+            // site, or nothing from other sites -- Shields or not, and never
+            // the tab's own document (the page may still be the last one).
+            let own_document = context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
+                && st.pages.lock().unwrap().get(&id).is_some_and(|p| p.pending_url.is_empty() || p.pending_url == uri);
+            if !own_document {
+                let blocked = {
+                    let settings = st.store.settings.lock().unwrap();
+                    permissions::content_blocked(&settings.features, page_url.host_str().unwrap_or(""), &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
+                };
+                if let Some(reason) = blocked {
+                    let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from(reason), &HSTRING::new())?;
+                    args.SetResponse(&response)?;
+                    return Ok(());
+                }
+            }
             if !shields_up_for(&st, page_url.host_str().unwrap_or("")) {
                 return Ok(());
             }
@@ -3901,6 +4027,8 @@ async fn navigate(app: tauri::AppHandle, id: u32, url: String, http_fallback: Op
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
+        // You sent it there -- never a page's own redirect.
+        kessel_navigates(&state, id);
         let tabs = state.tabs.lock().unwrap();
         let webview = tabs.get(&id).ok_or_else(|| "tab not found".to_string())?;
         // One of Kessel's own pages: it's served from the app's own origin,
@@ -4607,6 +4735,19 @@ fn set_window_fullscreen(app: &tauri::AppHandle, state: &BrowserState, win: &str
 // the toolbar hides its chrome so the page gets the whole screen.
 fn page_fullscreen(app: &tauri::AppHandle, id: u32, on: bool) {
     let state = app.state::<BrowserState>();
+    // Full screen turned off for the tab's site (permissions::CONTENT): the
+    // page script turns down the page's own requests; one from another
+    // site's frame (an embedded player) is ended here, and the window comes
+    // back when the page reports it left.
+    if on {
+        let url = state.pages.lock().unwrap().get(&id).map(|p| p.url.clone()).unwrap_or_default();
+        let allowed = permissions::content_allowed(&state.store.settings.lock().unwrap().features, &permissions::site_of(&url), "fullscreen");
+        let tab = state.tabs.lock().unwrap().get(&id).cloned();
+        if let (false, Some(tab)) = (allowed || url.is_empty(), tab) {
+            let _ = tab.eval("document.exitFullscreen && document.fullscreenElement && document.exitFullscreen()");
+            return;
+        }
+    }
     let popout = state.popouts.lock().unwrap().get(&id).map(|p| p.window.clone());
     if let Some(window) = popout {
         let _ = window.set_fullscreen(on);
@@ -5134,6 +5275,8 @@ fn main() {
             downloads::download_control,
             downloads::show_download,
             permissions::resolve_permission,
+            permissions::site_settings,
+            permissions::set_site_setting,
             tools::highlights_all,
             tools::highlight_delete,
             tools::shot_image,

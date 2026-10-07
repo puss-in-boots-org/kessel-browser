@@ -212,6 +212,12 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::tools::highlight_change(app, id, url, message.kind.as_str(), d);
             None
         }
+        // A window the page opened without a click, which the engine's
+        // pop-up blocker stopped (page-tools.js): see main.rs popup_attempt.
+        "popup" if top_frame => {
+            crate::popup_attempt(app, id, url, d.get("url")?.as_str()?);
+            None
+        }
         // A login just sent (page-tools.js): offer to save it (passwords.rs).
         "login" if top_frame => {
             crate::passwords::on_login(app, id, url, d.get("username").and_then(|v| v.as_str()).unwrap_or(""), d.get("password")?.as_str()?);

@@ -97,6 +97,19 @@ export async function startServer(host = "127.0.0.2") {
     } else if (parts[0] === "amp") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
+    } else if (parts[0] === "img") {
+      // A 1x1 PNG (any name), any site may show it.
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
+      res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+    } else if (parts[0] === "content") {
+      // Its own image (#own), another site's (#other, from ?other=<origin>),
+      // and a script that marks the page (data-js) when JavaScript runs.
+      const name = decodeURIComponent(parts[1] || "content");
+      const other = url.searchParams.get("other") || origin;
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head>
+<body><h1>${name}</h1><img id="own" src="/img/own.png" width="10" height="10"><img id="other" src="${other}/img/other.png" width="10" height="10">
+<script>document.documentElement.dataset.js = "ran";</script></body></html>`);
     } else if (parts[0] === "login") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Sign in</title></head><body>
