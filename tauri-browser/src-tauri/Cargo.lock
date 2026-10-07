@@ -2336,6 +2336,7 @@ dependencies = [
  "ureq",
  "webview2-com",
  "windows",
+ "windows-future",
 ]
 
 [[package]]

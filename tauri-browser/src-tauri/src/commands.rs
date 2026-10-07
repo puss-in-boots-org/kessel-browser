@@ -133,6 +133,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("gpu", "Graphics and media diagnostics", "Kessel", &[]),
     cmd("diagnostics", "Diagnostics: system, storage, crash reports", "Kessel", &[]),
     cmd("restart-safe-mode", "Restart in safe mode", "Kessel", &[]),
+    cmd("lock-browser", "Lock Kessel", "Kessel", &[]),
     cmd("command-palette", "Command palette", "Kessel", &["F2"]),
     // Page tools (tools.rs, src/shared/page-tools.js)
     cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),
@@ -255,6 +256,10 @@ fn handle(app: &tauri::AppHandle, source: &Source, command: &'static CommandDef,
 
 // Runs command `id` as if its keys were pressed in `source`.
 pub fn run(app: &tauri::AppHandle, id: &str, source: &Source) {
+    // Locked (browser_lock.rs): no shortcut does anything.
+    if crate::browser_lock::is_locked() {
+        return;
+    }
     let state = app.state::<crate::BrowserState>();
     if let Source::Popout(popout) = source {
         if crate::popout_command(app, id, *popout) {

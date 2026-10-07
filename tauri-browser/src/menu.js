@@ -41,6 +41,7 @@ const LAYOUT = [
   ["clear-browsing-data", "broom"],
   "-",
   ["settings", "settings"],
+  ["lock-browser", "lock"],
   ["help", "help"],
   ["exit", "power"],
 ];

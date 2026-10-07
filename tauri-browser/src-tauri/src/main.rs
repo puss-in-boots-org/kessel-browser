@@ -5,6 +5,7 @@ mod accounts;
 mod adblock;
 mod bookmarks;
 mod bridge;
+mod browser_lock;
 mod browsing_data;
 mod browser_windows;
 mod commands;
@@ -5480,7 +5481,14 @@ fn main() {
             tasks::task_manager,
             tasks::end_process,
             tasks::task_action,
-            tasks::system_info
+            tasks::system_info,
+            browser_lock::lock_status,
+            browser_lock::set_browser_lock,
+            browser_lock::lock_browser,
+            browser_lock::unlock_browser,
+            browser_lock::hello_available,
+            browser_lock::unlock_with_hello,
+            browser_lock::test_set_idle
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -5534,6 +5542,8 @@ fn main() {
             start_shields(app.handle());
             security::start(app.handle());
             privacy::start(app.handle());
+            // Locked on start (if set), and after the PC is left alone.
+            browser_lock::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());
             extensions::schedule_updates(app.handle());
 

@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**71% overall** -- 588 done (✅ 🟢 🌐), 51 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 252 to do (⏳), 106 skipped (⏭️), of 1045.
+**72% overall** -- 594 done (✅ 🟢 🌐), 54 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 243 to do (⏳), 106 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -97,7 +97,7 @@ branch, one small commit per feature or group of features.
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
 | [56. Account system](#56-account-system) |  |  |  | 2 | 12 | `░░░░░░░░░░` 0% |
-| [57. Browser lock](#57-browser-lock) | 1 |  |  | 9 |  | `█░░░░░░░░░` 10% |
+| [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
 | [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
@@ -1330,16 +1330,16 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 57.01 | PIN lock | ⏳ | |
-| 57.02 | Password lock | ⏳ | |
-| 57.03 | Windows Hello | ⏳ | |
-| 57.04 | Fingerprint | ⏳ | |
-| 57.05 | Face unlock | ⏳ | |
-| 57.06 | Lock private tabs | ⏳ | |
-| 57.07 | Lock profiles | ⏳ | |
+| 57.01 | PIN lock | ✅ | Settings -> Security -> Lock Kessel: a PIN (4 to 12 digits). Locked, every window shows the lock screen; the pages are hidden from the engine (no keys reach them) and shortcuts do nothing; five wrong tries, then a wait |
+| 57.02 | Password lock | ✅ | As 57.01, with a password instead (Argon2id, like the password vault) |
+| 57.03 | Windows Hello | 🧪 | Settings -> Security -> Also unlock with Windows Hello: the lock screen's Use Windows Hello (face, fingerprint or Windows PIN); built, but trying it takes a person at the PC |
+| 57.04 | Fingerprint | 🧪 | Through Windows Hello (57.03) |
+| 57.05 | Face unlock | 🧪 | Through Windows Hello (57.03) |
+| 57.06 | Lock private tabs | ✅ | Settings -> Security -> What it locks: Private windows only |
+| 57.07 | Lock profiles | ✅ | Each profile (kessel.exe --profile) has its own lock |
 | 57.08 | Lock password manager | 🟢 | Vault auto-lock |
-| 57.09 | Lock browser on startup | ⏳ | |
-| 57.10 | Automatic lock after inactivity | ⏳ | |
+| 57.09 | Lock browser on startup | ✅ | Settings -> Security: Lock when Kessel starts |
+| 57.10 | Automatic lock after inactivity | ✅ | Settings -> Security: Lock when the PC is left alone for 1 minute to 1 hour |
 
 ### 58. Search / history intelligence
 

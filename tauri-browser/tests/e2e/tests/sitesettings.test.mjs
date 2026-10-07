@@ -91,7 +91,14 @@ export const tests = [
     async run({ launch, site, assert, waitFor, sleep }) {
       const k = await launch();
       const url = `${site.origin}/page/Popups`;
-      const { page } = await open(k, url);
+      // A page you haven't touched: now and then the engine starts one as if
+      // you had (navigator.userActivation), and its pop-ups count as clicked.
+      let page = null;
+      for (let i = 0; i < 4; i++) {
+        page = (await open(k, i ? `${url}?fresh=${i}` : url)).page;
+        if (!(await page.evaluate(`navigator.userActivation.hasBeenActive`))) break;
+      }
+      assert.equal(await page.evaluate(`navigator.userActivation.hasBeenActive`), false, "a page you haven't touched");
       const toolbar = await k.toolbar();
       const before = (await k.tabs()).length;
       await page.evaluate(`setTimeout(() => window.open('/page/Unwanted'), 10)`);
