@@ -320,7 +320,7 @@ async function privacyPanel(settings) {
 
     <div class="setting-card">
       ${settingRow({ title: "Shields", desc: "Block ads, trackers and fingerprinting on every site. Turn them off for one site from the shield in the address bar.", controlHtml: switchHtml("adblock-toggle", settings.adblock_enabled) })}
-      ${settingRow({ title: "Blocked this session", desc: `<span id="rule-count"></span>`, controlHtml: `<span class="mono muted">${blockedCount}</span>` })}
+      ${settingRow({ title: "Blocked this session", desc: `<span id="rule-count"></span>`, controlHtml: `<span class="mono muted">${blockedCount}</span><button class="btn sm" id="privacy-dashboard-btn">${icon("shieldCheck", 13)}<span>Privacy dashboard</span></button>` })}
     </div>
 
     <div class="setting-card">
@@ -356,6 +356,7 @@ async function privacyPanel(settings) {
   </div>`);
 
   p.querySelector("#clear-data-btn").addEventListener("click", () => openClearDataDialog());
+  p.querySelector("#privacy-dashboard-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://privacy" }).catch((err) => toast(String(err))));
   const historyDays = p.querySelector("#history-days");
   historyDays.value = String(settings.history_days ?? 90);
   if (!historyDays.value) historyDays.value = "90";

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" data-page="privacy">
+<head>
+  <meta charset="UTF-8" />
+  <title>Privacy dashboard</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    /* kessel://privacy (privacy.js): what Shields did, day by day and on
+       which sites; your protections; what sites may use; how your saved
+       passwords are; and what Kessel connects to by itself. */
+    body { height: 100vh; overflow-y: auto; margin: 0; }
+    .content { max-width: 900px; margin: 0 auto; padding: 30px 40px 120px; }
+    header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    header h1 { font-size: 21px; margin: 0; flex: 1; display: flex; align-items: center; gap: 10px; }
+    header h1 svg { color: var(--accent); }
+    .sub { color: var(--text-faint); font-size: 12.5px; margin: 0 0 18px; line-height: 1.5; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin: 28px 0 8px; display: flex; align-items: center; gap: 8px; }
+    h2 .grow { flex: 1; }
+    .ranges { display: flex; gap: 6px; }
+    .ranges .chip { cursor: pointer; border: 1px solid var(--border); }
+    .ranges .chip.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .tile .n { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .tile .l { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .chart { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding: 14px 16px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-top: 12px; }
+    .chart .bar { flex: 1; min-width: 2px; border-radius: 3px 3px 0 0; background: var(--accent); opacity: 0.85; }
+    .chart .bar.zero { background: var(--border); opacity: 1; height: 2px !important; }
+    .chart-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-faint); padding: 4px 16px 0; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .row { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 9px 14px; font-size: 12.5px; border-top: 1px solid var(--border); }
+    .row:first-child { border-top: none; }
+    .row small { display: block; color: var(--text-faint); font-size: 11px; margin-top: 2px; }
+    .row .n { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+    .state { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .state.ok { color: #2fbf71; background: color-mix(in srgb, #2fbf71 14%, transparent); }
+    .state.warn { color: #e9a23b; background: color-mix(in srgb, #e9a23b 14%, transparent); }
+    .state.off { color: var(--text-faint); background: var(--surface-hover); }
+    .empty { padding: 14px; color: var(--text-faint); font-size: 12.5px; }
+    .meter { height: 6px; border-radius: 3px; background: var(--surface-hover); overflow: hidden; width: 120px; }
+    .meter span { display: block; height: 100%; background: var(--accent); }
+    @media (max-width: 640px) { .content { padding: 20px 16px 80px; } .tiles { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <h1 id="title"></h1>
+      <div class="ranges" id="ranges">
+        <span class="chip" data-days="1">Today</span>
+        <span class="chip active" data-days="7">7 days</span>
+        <span class="chip" data-days="30">30 days</span>
+        <span class="chip" data-days="90">90 days</span>
+      </div>
+    </header>
+    <p class="sub" id="since"></p>
+
+    <div class="tiles">
+      <div class="tile"><div class="n" id="n-blocked">0</div><div class="l">ads and trackers blocked</div></div>
+      <div class="tile"><div class="n" id="n-upgraded">0</div><div class="l">connections made secure (HTTPS)</div></div>
+      <div class="tile"><div class="n" id="n-stripped">0</div><div class="l">addresses cleaned of tracking</div></div>
+    </div>
+    <div class="chart" id="chart" hidden></div>
+    <div class="chart-axis" id="chart-axis" hidden><span></span><span></span></div>
+
+    <h2>Where Shields blocked the most</h2>
+    <div class="card" id="sites"></div>
+
+    <h2>Your protections</h2>
+    <div class="card" id="protections"></div>
+
+    <h2>What sites may use</h2>
+    <div class="card" id="permissions"></div>
+
+    <h2>Your saved passwords</h2>
+    <div class="card" id="passwords"></div>
+
+    <h2>What Kessel connects to by itself</h2>
+    <div class="card" id="connections"></div>
+
+    <h2><span class="grow"></span><button class="btn sm ghost" id="reset">Start counting again</button></h2>
+  </div>
+  <script type="module" src="privacy.js"></script>
+</body>
+</html>

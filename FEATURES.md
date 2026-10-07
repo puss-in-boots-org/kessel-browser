@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**83% overall** -- 681 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 137 to do (⏳), 109 skipped (⏭️), of 1045.
+**83% overall** -- 684 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 134 to do (⏳), 109 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -96,13 +96,13 @@ branch, one small commit per feature or group of features.
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
-| [56. Account system](#56-account-system) |  |  |  | 2 | 12 | `░░░░░░░░░░` 0% |
+| [56. Account system](#56-account-system) | 1 |  |  | 1 | 12 | `█████░░░░░` 50% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 8 |  |  | 5 |  | `██████░░░░` 62% |
 | [59. Offline functionality](#59-offline-functionality) | 7 |  |  | 3 |  | `███████░░░` 70% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 12 | 1 | 2 | 9 | 8 | `██████░░░░` 58% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 14 | 1 | 2 | 7 | 8 | `███████░░░` 67% |
 | [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
@@ -1324,7 +1324,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 56.11 | Remote logout | ⏭️ | Needs an online account or server: left out |
 | 56.12 | Device removal | ⏭️ | Needs an online account or server: left out |
 | 56.13 | Account recovery | ⏭️ | Needs an online account or server: left out |
-| 56.14 | Privacy dashboard | ⏳ | |
+| 56.14 | Privacy dashboard | ✅ | kessel://privacy (command palette -> Privacy dashboard, or Settings -> Privacy): what Shields blocked and cleaned day by day and per site, your protections, what sites may use, how your passwords are |
 
 ### 57. Browser lock
 
@@ -1445,8 +1445,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.26 | Command palette | ✅ | F2: every command, searchable, recent ones first |
 | 62.27 | Keyboard-first UI | 🟢 | The command palette (F2), every shortcut yours to change, links opened from the keyboard, F6 / Shift+F6 |
 | 62.28 | Power-user settings | 🟢 | Engine switches, command chains, mouse gestures, your own shortcuts, your own CSS per site |
-| 62.29 | Browser telemetry dashboard | ⏳ | |
-| 62.30 | Privacy dashboard | ⏳ | |
+| 62.29 | Browser telemetry dashboard | ✅ | Kessel sends no telemetry; the privacy dashboard lists every connection it makes by itself -- filter lists, dangerous-site lists, suggestions, answers, extension updates, feeds -- and whether each is on |
+| 62.30 | Privacy dashboard | ✅ | The privacy dashboard (56.14) |
 | 62.31 | Permission dashboard | 🟢 | Settings -> Site permissions: every site's answers in one place |
 | 62.32 | Site resource dashboard | 🟡 | The task manager: memory and CPU of each page's process |
 

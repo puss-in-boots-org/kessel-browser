@@ -21,6 +21,7 @@ mod lifecycle;
 mod media;
 mod page;
 mod privacy;
+mod privacy_stats;
 mod profile;
 mod saved_sessions;
 mod security;
@@ -143,6 +144,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("reader", "reader.html"),
     ("shot", "shot.html"),
     ("feeds", "feeds.html"),
+    // What Shields did, your protections, what Kessel connects to by itself.
+    ("privacy", "privacy.html"),
 ];
 
 // The pages Kessel starts with when it isn't bringing back your last
@@ -2085,6 +2088,7 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
         let (blocked, list_rewrite) = if shields_on { shields.check_document(nav_url.as_str()) } else { (false, None) };
         if blocked && !security.proceeds(&host) {
             st.store.blocked_count.fetch_add(1, Ordering::SeqCst);
+            privacy_stats::note_blocked(&host, 1);
             let _ = app.emit("adblock-count-changed", st.store.blocked_count.load(Ordering::SeqCst));
             security::show_warning(app, id, label, "blocked", nav_url.as_str(), "");
             return false;
@@ -2103,6 +2107,7 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
             }
             shields.rewrites.lock().unwrap().insert(label.to_string(), rw.url.clone());
             shields.reset_tab(id, &host);
+            privacy_stats::note_rewrite(rw.upgraded, rw.stripped);
             if let Some(stats) = shields.bump(id, |s| {
                 s.https_upgrades += rw.upgraded as u32;
                 s.params_stripped += rw.stripped as u32;
@@ -2898,7 +2903,13 @@ unsafe fn install_shields_hooks(
                 };
                 args.SetResponse(&response)?;
                 st.store.blocked_count.fetch_add(1, Ordering::Relaxed);
-                if let Some(stats) = shields.bump(id, |s| s.blocked += 1) {
+                let mut site = String::new();
+                let due = shields.bump(id, |s| {
+                    s.blocked += 1;
+                    site.clone_from(&s.host);
+                });
+                privacy_stats::note_blocked(&site, 1);
+                if let Some(stats) = due {
                     emit_shields_stats(&app_req, id, &stats);
                     emit_to_all_windows(&app_req, "adblock-count-changed", st.store.blocked_count.load(Ordering::Relaxed));
                 }
@@ -5415,6 +5426,8 @@ fn main() {
             watch::set_watch_interval,
             watch::seen_watched_page,
             watch::check_watched_now,
+            privacy_stats::privacy_stats,
+            privacy_stats::reset_privacy_stats,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,
@@ -5607,6 +5620,8 @@ fn main() {
             privacy::start(app.handle());
             // Watched pages, checked when they're due.
             watch::start(app.handle());
+            // What Shields did, for the privacy dashboard.
+            privacy_stats::start(app.handle());
             // Locked on start (if set), and after the PC is left alone.
             browser_lock::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());
