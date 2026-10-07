@@ -6,6 +6,7 @@ import { permissionLines } from "./shared/extension-info.js";
 import { buildStyleSection } from "./appearance.js";
 import { extensionsPanel, sidebarPanel } from "./settings-extensions.js";
 import { privacyExtras, cookiesPanel, securityPanel, focusCookies } from "./settings-privacy.js";
+import { a11yPanel } from "./settings-a11y.js";
 import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard, permissionsPanel, downloadsExtras } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -13,6 +14,7 @@ const { listen } = window.__TAURI__.event;
 
 const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "palette" },
+  { id: "accessibility", label: "Accessibility", icon: "eye" },
   { id: "search", label: "Search & Startup", icon: "search" },
   { id: "tabs", label: "Tabs", icon: "tabs" },
   { id: "sidebar", label: "Side panel", icon: "sidebar" },
@@ -1315,6 +1317,7 @@ function featuresPanel() {
 async function buildPanel(id, settings) {
   switch (id) {
     case "appearance": return appearancePanel(settings);
+    case "accessibility": return await a11yPanel(settings, { el, settingRow, switchHtml });
     case "search": return searchPanel(settings);
     case "tabs": return await tabsPanel(settings);
     case "sidebar": return await sidebarPanel(settings, { el, settingRow, switchHtml, wireSwitch });

@@ -209,6 +209,13 @@ label.label {
 }
 
 /* --- Toast --- */
+/* Where the keyboard is, in Kessel's own pages (only for keyboard use:
+   :focus-visible). :where keeps it easy for a component to style its own. */
+:where(button, a, select, summary, [tabindex], [role="switch"], [role="button"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 #toast-stack {
   position: fixed;
   left: 50%;

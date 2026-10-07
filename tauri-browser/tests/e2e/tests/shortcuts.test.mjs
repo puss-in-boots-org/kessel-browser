@@ -135,6 +135,9 @@ export const tests = [
         );
       }
       assert(true, "all three");
+      // Shift+F6: back to the page.
+      await k.press("Shift+F6");
+      await page.waitFor(`document.hasFocus()`, { message: "Shift+F6: the page has the keyboard" });
     },
   },
   {

@@ -98,6 +98,8 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("home", "Home page", "Navigation", &["Alt+Home", "BrowserHome"]),
     // Address bar
     cmd("focus-address-bar", "Go to the address bar", "Address bar", &["F6", "Ctrl+L", "Alt+D"]),
+    cmd("focus-page", "Go to the page", "Address bar", &["Shift+F6"]),
+    cmd("caret-browsing", "Caret browsing (on or off)", "Page", &["F7"]),
     cmd("focus-search", "Search from the address bar", "Address bar", &["Ctrl+E", "Ctrl+K", "BrowserSearch"]),
     // Page
     cmd("find", "Find in page", "Page", &["Ctrl+F"]),

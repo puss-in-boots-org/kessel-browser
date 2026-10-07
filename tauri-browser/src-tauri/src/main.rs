@@ -1,6 +1,7 @@
 // Prevents an additional console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod a11y;
 mod accounts;
 mod adblock;
 mod bookmarks;
@@ -2164,6 +2165,8 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
 // without loading a new document, so on_navigation never sees them.
 
 fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
+    // Your text size, fonts and less motion (a11y.rs).
+    a11y::apply_to(app, webview);
     #[cfg(windows)]
     {
         let app2 = app.clone();
@@ -4413,6 +4416,7 @@ fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<
     let _ = app.emit("settings-changed", &settings);
     if before.features != settings.features {
         tools::broadcast_tweaks(&app);
+        a11y::settings_changed(&app, &before.features, &settings.features);
     }
     if wants_requests(&before) != wants_requests(&settings) {
         let (app2, on) = (app.clone(), wants_requests(&settings));
@@ -5207,6 +5211,8 @@ fn engine_args(settings: &Settings) -> String {
     }
     // Off in the engine by default.
     args.push_str(" --enable-blink-features=AudioVideoTracks");
+    // Caret browsing (F7, a11y.rs).
+    args.push_str(a11y::engine_flags(&settings.features));
     if crash::safe_mode().is_some() {
         // Safe mode (crash.rs): no graphics card, none of your own switches.
         let mut features = settings.features.clone();
@@ -5488,7 +5494,8 @@ fn main() {
             browser_lock::unlock_browser,
             browser_lock::hello_available,
             browser_lock::unlock_with_hello,
-            browser_lock::test_set_idle
+            browser_lock::test_set_idle,
+            a11y::caret_browsing_running
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,

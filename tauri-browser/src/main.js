@@ -2872,6 +2872,17 @@ async function runCommand(id, ctx = {}) {
     case "home": return openInActiveTab(currentSettings()?.homepage || "kessel://newtab");
     case "focus-address-bar": return focusAddressBar(false);
     case "focus-search": return focusAddressBar(true);
+    // Shift+F6: the keyboard back to the page.
+    case "focus-page": return activeTabId > 0 && invoke("focus_tab", { id: activeTabId }).catch(() => {});
+    // F7 (Settings -> Accessibility): the engine's own caret browsing, which
+    // starts with the engine -- so after a restart.
+    case "caret-browsing": {
+      const features = currentSettings()?.features || {};
+      const on = !features.a11y?.caret_browsing;
+      await saveSettings({ features: { ...features, a11y: { ...(features.a11y || {}), caret_browsing: on } } });
+      const running = await invoke("caret_browsing_running").catch(() => !on);
+      return toast(on === running ? `Caret browsing ${on ? "on" : "off"}` : `Caret browsing ${on ? "on" : "off"} once Kessel restarts (Settings -> Accessibility: Restart now)`, { duration: 5000 });
+    }
     case "find":
     case "find-next":
     case "find-prev":
