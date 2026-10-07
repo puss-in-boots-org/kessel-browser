@@ -4298,14 +4298,21 @@ async fn query_history(
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<Vec<history::Visit>, String> {
-    Ok(state.store.history.query(
+    // Settings -> History -> "Remember what pages say": their words too.
+    let in_text = history_page_text_on(&state.store.settings.lock().unwrap().features);
+    Ok(state.store.history.query_in(
         text.as_deref().unwrap_or(""),
+        in_text,
         from,
         to,
         site.as_deref(),
         limit.unwrap_or(200),
         offset.unwrap_or(0),
     ))
+}
+
+pub(crate) fn history_page_text_on(features: &serde_json::Value) -> bool {
+    features.get("history_page_text").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 #[tauri::command]
@@ -4463,6 +4470,10 @@ fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<
     if before.features != settings.features {
         tools::broadcast_tweaks(&app);
         a11y::settings_changed(&app, &before.features, &settings.features);
+        // "Remember what pages say" turned off: what they said goes.
+        if history_page_text_on(&before.features) && !history_page_text_on(&settings.features) {
+            state.store.history.clear_page_text();
+        }
     }
     if wants_requests(&before) != wants_requests(&settings) {
         let (app2, on) = (app.clone(), wants_requests(&settings));

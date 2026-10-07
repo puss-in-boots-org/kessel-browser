@@ -980,6 +980,7 @@ async function historyPanel() {
     <div class="setting-card">
       ${settingRow({ title: "All history", desc: "Search it, delete pages or whole sites (Ctrl+H)", controlHtml: `<button class="btn primary sm" id="open-history-btn">${icon("history", 13)} Open history</button>` })}
       ${settingRow({ title: "Export history", desc: "Every visit Kessel keeps, as a CSV file (time, title, address) -- for a spreadsheet, or another browser", controlHtml: `<button class="btn sm" id="export-history-btn">${icon("save", 13)} Export…</button>` })}
+      ${settingRow({ title: "Remember what pages say", desc: "So History finds a page by any words on it, not just its title. Kept on this computer and deleted with the page's history; never from a private window. Turning it off forgets it all.", controlHtml: switchHtml("history-page-text", currentSettings()?.features?.history_page_text === true) })}
     </div>
 
     <div class="setting-card" id="recently-closed-card" style="display:none">
@@ -993,6 +994,16 @@ async function historyPanel() {
     </div>
   </div>`);
   p.querySelector("#open-history-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://history" }));
+  const pageText = p.querySelector("#history-page-text");
+  pageText.addEventListener("click", async () => {
+    const on = !pageText.classList.contains("on");
+    const features = { ...(currentSettings()?.features || {}) };
+    if (on) features.history_page_text = true;
+    else delete features.history_page_text;
+    await saveSettings({ features });
+    pageText.classList.toggle("on", on);
+    pageText.setAttribute("aria-checked", String(on));
+  });
   p.querySelector("#export-history-btn").addEventListener("click", async () => {
     const path = await invoke("export_history", { path: null }).catch((err) => {
       toast(String(err));

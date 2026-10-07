@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**83% overall** -- 684 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 134 to do (⏳), 109 skipped (⏭️), of 1045.
+**83% overall** -- 685 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 133 to do (⏳), 109 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -98,7 +98,7 @@ branch, one small commit per feature or group of features.
 | [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
 | [56. Account system](#56-account-system) | 1 |  |  | 1 | 12 | `█████░░░░░` 50% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
-| [58. Search / history intelligence](#58-search--history-intelligence) | 8 |  |  | 5 |  | `██████░░░░` 62% |
+| [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
 | [59. Offline functionality](#59-offline-functionality) | 7 |  |  | 3 |  | `███████░░░` 70% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
@@ -1348,7 +1348,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 58.01 | Semantic history search | ⏳ | |
 | 58.02 | Search by title | ✅ | History: search by title (tested) |
 | 58.03 | Search by URL | ✅ | History: search by a piece of the address (tested) |
-| 58.04 | Search by text content | ⏳ | |
+| 58.04 | Search by text content | ✅ | Settings -> History -> Remember what pages say (off by default): History finds a page by any words on it, with them shown around; kept on this computer, gone with the page's history, never from private windows |
 | 58.05 | Search by date | ✅ | History: today, yesterday, the last 7 or 30 days, or a day you pick (tested) |
 | 58.06 | Search by domain | ✅ | History: by site (tested) |
 | 58.07 | Search by tab | 🟢 | Tab search (Ctrl+Shift+A): open, sleeping and closed tabs (tested) |

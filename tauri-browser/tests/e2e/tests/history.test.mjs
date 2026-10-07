@@ -62,4 +62,27 @@ export const tests = [
       assert.equal(after.entries.slice(after.current + 1).length, 2, "Two and Three ahead, for Forward");
     },
   },
+  {
+    name: "remember what pages say: History finds a page by words on it, and forgets them when turned off",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch({ settings: { features: { history_page_text: true } } });
+      const url = `${site.origin}/changing/Recipe`;
+      await fetch(`${url}?set=${encodeURIComponent("Lentil soup with smoked paprika and a squeeze of lemon")}`);
+      const [tab] = await k.tabs();
+      await k.invoke("navigate", { id: tab.id, url });
+      const found = await waitFor(async () => (await k.invoke("query_history", { text: "smoked paprika" })).find((v) => v.url === url), { message: "found by its words", timeout: 15000 });
+      assert(found.snippet.includes("smoked paprika"), `with them around it: ${found.snippet}`);
+
+      // The history page shows where.
+      await k.invoke("open_singleton_tab", { route: "kessel://history?q=paprika" });
+      const history = await k.page((t) => t.url.includes("history.html"));
+      await history.waitFor(`[...document.querySelectorAll('.visit .said')].some((s) => s.textContent.includes('smoked paprika'))`, { message: "the words on the history page" });
+
+      // Turned off: forgotten.
+      const settings = await k.invoke("get_settings");
+      await k.invoke("update_settings", { settings: { ...settings, features: { ...settings.features, history_page_text: false } } });
+      assert.equal((await k.invoke("query_history", { text: "paprika" })).length, 0, "not found by its words any more");
+      assert((await k.invoke("query_history", { text: "Recipe" })).some((v) => v.url === url), "the visit itself is still there");
+    },
+  },
 ];

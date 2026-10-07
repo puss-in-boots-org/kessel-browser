@@ -99,7 +99,7 @@ export const FEATURES = [
     ["Export passwords", "Passwords -> settings -> Export: a CSV file other browsers import, after you type your master password."],
   ]],
   ["Your data", [
-    ["History", "Ctrl+H. Search, by site, delete days or sites."],
+    ["History", "Ctrl+H. Search, by site, delete days or sites -- and by the words on pages, once Settings -> History lets it remember them."],
     ["Downloads", "Ctrl+J, or the rail's download button."],
     ["Read offline", "Put a page on the reading list while it's open: a whole copy is kept, and opens when you're offline."],
     ["Passwords", "Ctrl+Shift+L or the rail's key. Autofill offers saved logins."],
