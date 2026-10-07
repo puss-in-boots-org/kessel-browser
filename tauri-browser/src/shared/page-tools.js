@@ -37,14 +37,60 @@
       // One rule per selector: one the engine can't read can't void the others.
       for (var i = 0; i < zapped.length; i++) css += zapped[i] + '{display:none!important}\n';
       if (FILTERS[tweaks.filter]) css += FILTERS[tweaks.filter] + '\n';
+      // Settings -> Accessibility (a11y.rs): where the keyboard is, always
+      // clear; animations and transitions cut short.
+      var a11y = tweaks.a11y || {};
+      if (a11y.focus_rings) css += ':focus-visible{outline:3px solid #1a73e8!important;outline-offset:2px!important;box-shadow:0 0 0 5px rgba(255,255,255,.9)!important}\n';
+      if (a11y.still) css += '*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:1ms!important;transition-delay:0s!important;scroll-behavior:auto!important}\n';
       if (tweaks.css) css += tweaks.css + '\n';
       style.textContent = css;
+      minimumFont(+a11y.min_font || 0);
       if (reloadTimer) clearTimeout(reloadTimer);
       reloadTimer = null;
       var every = +tweaks.reload || 0;
       if (every >= 5) reloadTimer = later(function () { location.reload(); }, every * 1000);
       if (tweaks.deamp) deAmp();
       if (tweaks.wayback) offerWayback();
+    }
+
+    // Settings -> Accessibility: no text smaller than `size` px -- an element
+    // whose own text is smaller gets that size (once each; new ones as
+    // they come).
+    var minSize = 0, minObserver = null, minDone = new WeakMap();
+    function minimumFont(size) {
+      minSize = size;
+      if (!size) {
+        if (minObserver) minObserver.disconnect();
+        minObserver = null;
+        return;
+      }
+      function fix(root) {
+        if (!root || root.nodeType !== 1) return;
+        var all = [root].concat(Array.prototype.slice.call(root.querySelectorAll('*')));
+        for (var i = 0; i < all.length; i++) {
+          var el = all[i];
+          if (minDone.get(el) === minSize) continue;
+          minDone.set(el, minSize);
+          var text = false;
+          for (var n = el.firstChild; n; n = n.nextSibling) if (n.nodeType === 3 && n.nodeValue.trim()) { text = true; break; }
+          if (!text) continue;
+          var px = parseFloat(getComputedStyle(el).fontSize);
+          if (px && px < minSize) el.style.setProperty('font-size', minSize + 'px', 'important');
+        }
+      }
+      function start() {
+        fix(document.body);
+        if (minObserver) return;
+        minObserver = new MutationObserver(function (records) {
+          for (var r = 0; r < records.length; r++) {
+            var added = records[r].addedNodes;
+            for (var j = 0; j < added.length; j++) fix(added[j].nodeType === 3 ? added[j].parentElement : added[j]);
+          }
+        });
+        minObserver.observe(document.documentElement, { childList: true, subtree: true });
+      }
+      if (document.body) start();
+      else document.addEventListener('DOMContentLoaded', start);
     }
 
     // A page that's gone (404, 410): offer the Wayback Machine's copy.

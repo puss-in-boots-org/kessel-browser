@@ -52,6 +52,9 @@ pub fn site_tweaks_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
         // Sound playing on its own: WebView2 never asks about it (the
         // engine's own rule decides), so "block" is kept by the page script.
         "autoplay": crate::permissions::decision(&f, &crate::permissions::site_of(url), "autoplay") != "block",
+        // Settings -> Accessibility (a11y.rs): smallest font, focus outlines,
+        // animations stopped.
+        "a11y": crate::a11y::page_script_options(&f),
     })
 }
 

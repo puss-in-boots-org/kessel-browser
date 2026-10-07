@@ -112,6 +112,7 @@ export const FEATURES = [
     ["Task manager", "Shift+Esc: every process with its memory and CPU -- each page's with its tabs, the graphics card's, the network's -- and the tabs asleep. End a process, put a tab to sleep, wake one."],
     ["Diagnostics", "Palette -> Diagnostics (kessel://diagnostics): Windows, the processor, memory, network, how much room your data takes, crash reports and which web features work; Copy report."],
     ["When something crashes", "A crashed page offers Reload; one in the background loads again when you come back. If the engine goes, Kessel starts again with your tabs; if Kessel itself closed unexpectedly, a chip offers your tabs back."],
+    ["Accessibility", "Settings -> Accessibility: bigger text (only the text), a smallest font size, your fonts, less motion, a bold keyboard outline, caret browsing (F7), colour filters. Shift+F6 takes the keyboard back to the page."],
     ["Lock Kessel", "Settings -> Security -> Lock Kessel: a PIN or password (or Windows Hello) before your tabs show again. Lock from the menu, when Kessel starts, or after the PC's left alone; private windows only if you like."],
     ["Safe mode", "Palette -> Restart in safe mode (or kessel.exe --safe-mode): no extensions, no graphics card. Kessel starts that way by itself if it failed to start twice in a row."],
   ]],

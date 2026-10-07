@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**72% overall** -- 594 done (✅ 🟢 🌐), 54 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 243 to do (⏳), 106 skipped (⏭️), of 1045.
+**73% overall** -- 603 done (✅ 🟢 🌐), 56 built and waiting for their first run on Windows or a phone (🧪), 47 partly done (🟡), 233 to do (⏳), 106 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -62,7 +62,7 @@ branch, one small commit per feature or group of features.
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
-| [22. Accessibility](#22-accessibility) | 5 |  | 1 | 10 |  | `███░░░░░░░` 34% |
+| [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
 | [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
 | [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
 | [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
@@ -728,19 +728,19 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 22.01 | Page zoom | ✅ | The engine's real zoom, remembered per site; Settings -> Appearance: default zoom and each site's zoom |
-| 22.02 | Text-only zoom | ⏳ | |
-| 22.03 | Minimum font size | ⏳ | |
-| 22.04 | Custom fonts | ⏳ | |
-| 22.05 | High-contrast compatibility | ⏳ | |
-| 22.06 | Reduced-motion support | 🟡 | Kessel's own UI only |
-| 22.07 | Screen-reader support | ⏳ | |
-| 22.08 | Keyboard navigation | ⏳ | |
-| 22.09 | Caret browsing | ⏳ | |
-| 22.10 | Focus indicators | ⏳ | |
+| 22.02 | Text-only zoom | ✅ | Settings -> Accessibility -> Text size: the engine's own font size for each page -- the text grows, the layout and pictures don't; open pages follow at once |
+| 22.03 | Minimum font size | ✅ | Settings -> Accessibility -> Smallest font size: text a page makes smaller is shown at that size, new text too |
+| 22.04 | Custom fonts | ✅ | Settings -> Accessibility: your standard, sans-serif, serif and fixed-width fonts, for pages that don't choose their own |
+| 22.05 | High-contrast compatibility | 🧪 | The engine follows Windows' contrast themes (forced colours) in pages and Kessel's own windows; untried with a contrast theme on. Also: the More contrast colour filter (22.14) |
+| 22.06 | Reduced-motion support | ✅ | Settings -> Accessibility -> Less motion: pages hear prefers-reduced-motion and their animations and transitions stop; Kessel's own UI follows Windows' Animation effects |
+| 22.07 | Screen-reader support | ✅ | The engine hands pages and Kessel's windows to screen readers (UI Automation); every button of Kessel's toolbar has a name to say (tested) |
+| 22.08 | Keyboard navigation | ✅ | F6: the address bar; Shift+F6: the page; Alt+F / F10: the menu; F2: every command; Tab through Kessel's controls; every shortcut in Settings -> Keyboard & Mouse |
+| 22.09 | Caret browsing | 🧪 | F7 or Settings -> Accessibility (after a restart): the engine's own caret browsing -- it reaches the engine (tested); moving the caret takes real keys to try |
+| 22.10 | Focus indicators | ✅ | Kessel's own pages outline whatever has the keyboard; Settings -> Accessibility -> Always show where the keyboard is: a bold outline on every page |
 | 22.11 | Text-to-speech | ✅ | Right-click selected text -> Read aloud; Reader view -> Read aloud |
 | 22.12 | Caption support | ✅ | Media controls -> captions (20.07) |
-| 22.13 | Accessibility tree | ⏳ | |
-| 22.14 | Color/contrast assistance | ⏳ | |
+| 22.13 | Accessibility tree | 🌐 | The engine's: F12 -> Elements -> Accessibility; pages have their tree (tested) |
+| 22.14 | Color/contrast assistance | ✅ | Colour filters for every site or one: more contrast, grayscale, invert, dark, sepia, dimmer -- Settings -> Accessibility or Page tools |
 | 22.15 | Keyboard shortcuts | ✅ | See the shortcut table above; the full list is in Help (F1) |
 | 22.16 | Custom shortcut configuration | ✅ | Settings -> Keyboard & Mouse: press the keys you want; conflicts are shown; reset one or all |
 
