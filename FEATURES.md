@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**83% overall** -- 685 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 133 to do (⏳), 109 skipped (⏭️), of 1045.
+**84% overall** -- 693 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 51 partly done (🟡), 122 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -71,13 +71,13 @@ branch, one small commit per feature or group of features.
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
 | [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
-| [31. Progressive Web Apps](#31-progressive-web-apps) |  |  |  | 15 |  | `░░░░░░░░░░` 0% |
-| [32. Notifications](#32-notifications) | 2 | 1 |  | 7 |  | `███░░░░░░░` 30% |
+| [31. Progressive Web Apps](#31-progressive-web-apps) | 2 |  |  | 12 | 1 | `█░░░░░░░░░` 14% |
+| [32. Notifications](#32-notifications) | 2 | 1 |  | 6 | 1 | `███░░░░░░░` 33% |
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
-| [36. Performance](#36-performance) | 12 |  |  | 5 |  | `███████░░░` 71% |
-| [37. Cache](#37-cache) | 6 |  | 1 | 3 |  | `███████░░░` 65% |
+| [36. Performance](#36-performance) | 14 |  |  | 3 |  | `████████░░` 82% |
+| [37. Cache](#37-cache) | 9 |  | 1 |  |  | `██████████` 95% |
 | [38. Developer / experimental controls](#38-developer--experimental-controls) | 4 | 4 | 1 | 4 |  | `███████░░░` 65% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
 | [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
@@ -99,7 +99,7 @@ branch, one small commit per feature or group of features.
 | [56. Account system](#56-account-system) | 1 |  |  | 1 | 12 | `█████░░░░░` 50% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
-| [59. Offline functionality](#59-offline-functionality) | 7 |  |  | 3 |  | `███████░░░` 70% |
+| [59. Offline functionality](#59-offline-functionality) | 8 |  | 1 | 1 |  | `█████████░` 85% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
 | [62. "Crazy advanced" features](#62-crazy-advanced-features) | 14 | 1 | 2 | 7 | 8 | `███████░░░` 67% |
@@ -872,9 +872,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 31.02 | PWA manifest | ⏳ | |
 | 31.03 | App icon | ⏳ | |
 | 31.04 | Standalone mode | ⏳ | |
-| 31.05 | Offline functionality | ⏳ | |
-| 31.06 | Push notifications | ⏳ | |
-| 31.07 | Background sync | ⏳ | |
+| 31.05 | Offline functionality | 🌐 | A site's service worker keeps it working offline (37.09, tested) |
+| 31.06 | Push notifications | ⏭️ | WebView2 has no push service: a push subscription never gets an answer (tested) |
+| 31.07 | Background sync | 🌐 | Background sync: a site's service worker syncs once it's online (tested) |
 | 31.08 | Periodic background tasks | ⏳ | |
 | 31.09 | App shortcuts | ⏳ | |
 | 31.10 | Badges | ⏳ | |
@@ -893,7 +893,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 32.03 | Notification blocking | 🧪 | Site permissions -> Notifications: Block, for every site or one |
 | 32.04 | Per-site notification permissions | ✅ | Settings -> Site permissions -> Notifications, per site |
 | 32.05 | Notification history | ⏳ | |
-| 32.06 | Push notifications | ⏳ | |
+| 32.06 | Push notifications | ⏭️ | WebView2 has no push service (31.06) |
 | 32.07 | Notification sounds | ⏳ | |
 | 32.08 | Notification actions | ⏳ | |
 | 32.09 | Notification grouping | ⏳ | |
@@ -951,8 +951,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 36.05 | Background-tab throttling | ✅ | See 2.44 |
 | 36.06 | Hardware acceleration | ✅ | See 35.01 |
 | 36.07 | Cache optimization | ⏳ | |
-| 36.08 | Prefetching | ⏳ | |
-| 36.09 | Pre-rendering | ⏳ | |
+| 36.08 | Prefetching | 🌐 | <link rel=prefetch>: the engine fetches the page ahead (tested) |
+| 36.09 | Pre-rendering | 🌐 | Speculation rules: a page a site asks to prerender is fetched ahead, and following the link needs no new request (tested) |
 | 36.10 | DNS caching | 🌐 | The engine's (Chromium's) network stack |
 | 36.11 | Connection reuse | 🌐 | The engine's network stack |
 | 36.12 | HTTP/2 multiplexing | 🌐 | The engine's network stack |
@@ -969,13 +969,13 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 37.01 | HTTP cache | 🌐 | |
 | 37.02 | Memory cache | 🌐 | |
 | 37.03 | Disk cache | 🌐 | |
-| 37.04 | Cache inspection | ⏳ | |
+| 37.04 | Cache inspection | 🌐 | DevTools (F12) -> Application: cache storage, service workers and site storage; Network shows what came from the cache |
 | 37.05 | Cache clearing | ✅ | Clear browsing data -> Cached images and files, for a time range |
 | 37.06 | Per-site cache deletion | 🟡 | The lock -> site data: a site's storage, service-worker caches and cookies go; the engine's HTTP cache only clears whole (Clear browsing data) |
 | 37.07 | Full cache deletion | ✅ | Clear browsing data -> All time |
 | 37.08 | Cache-control handling | 🌐 | Ctrl+F5 skips it |
-| 37.09 | Offline cache | ⏳ | |
-| 37.10 | Service-worker cache | ⏳ | |
+| 37.09 | Offline cache | 🌐 | A site's service worker keeps pages in its cache; they open with the site gone (tested) |
+| 37.10 | Service-worker cache | 🌐 | The Cache API in pages and service workers (tested) |
 
 ### 38. Developer / experimental controls
 
@@ -1365,9 +1365,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 59.01 | Offline page cache | ✅ | As 17.04: the reading list keeps whole copies of pages |
 | 59.02 | Offline reading | ✅ | Offline, the reading list opens its saved copy; the can't-be-reached page offers it (tested) |
-| 59.03 | Offline PWAs | ⏳ | |
+| 59.03 | Offline PWAs | 🟡 | Sites with a service worker work offline (37.09); installing them as apps is still to do (31.01) |
 | 59.04 | Service workers | 🌐 | Service workers answer their pages' requests (tested, 60.04) |
-| 59.05 | Background synchronization | ⏳ | |
+| 59.05 | Background synchronization | 🌐 | A site's service worker gets its background sync once it's online (tested) |
 | 59.06 | Cached resources | 🌐 | The engine's HTTP cache and service-worker caches |
 | 59.07 | Offline error page | ✅ | A site that can't be reached gets Kessel's page: why, Try again, the saved copy if there's one (tested) |
 | 59.08 | Offline downloads | ⏳ | |

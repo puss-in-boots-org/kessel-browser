@@ -77,12 +77,18 @@ function toneWav(seconds = 10, rate = 8000) {
 // The text of each /changing/<name> page.
 const changing = new Map();
 
+// Every request any test server answered, with how the browser said it
+// would use it (the Sec-Purpose header: prefetch, prerender).
+export const seen = [];
+
 export async function startServer(host = "127.0.0.2", wantedPort = 0) {
   // Big enough for the tests' deliberately huge addresses.
   const server = http.createServer({ maxHeaderSize: 1024 * 1024 }, async (req, res) => {
     const origin = `http://${req.headers.host}`;
     const url = new URL(req.url, origin);
     const parts = url.pathname.split("/").filter(Boolean);
+    seen.push({ origin, path: url.pathname, purpose: req.headers["sec-purpose"] || "" });
+    if (seen.length > 2000) seen.splice(0, 1000);
     if (parts[0] === "script") {
       // A tiny script (any name), for tests that load one from another site.
       res.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
@@ -125,6 +131,22 @@ export async function startServer(host = "127.0.0.2", wantedPort = 0) {
       // A small filter list of your own: no pictures from 127.0.0.3.
       res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
       res.end("! Title: Kessel test list\n||127.0.0.3^$image\n");
+    } else if (parts[0] === "sw-cache.js") {
+      // A service worker that keeps /page/Offline in its cache on install
+      // and answers from the cache when the network can't.
+      res.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store" });
+      res.end(`self.addEventListener('install', (e) => e.waitUntil(caches.open('kessel').then((c) => c.addAll(['/page/Offline'])).then(() => self.skipWaiting())));
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
+self.addEventListener('sync', (e) => e.waitUntil(caches.open('kessel').then((c) => c.put('/synced', new Response(e.tag)))));`);
+    } else if (parts[0] === "speculate") {
+      // A page that asks for the next pages early: one prefetched (<link
+      // rel=prefetch>), one prerendered (speculation rules).
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Speculate</title>
+<link rel="prefetch" href="/page/Prefetched">
+<script type="speculationrules">{"prerender":[{"source":"list","urls":["/page/Prerendered"]}]}</script>
+</head><body><a href="/page/Prerendered">Next</a></body></html>`);
     } else if (parts[0] === "sw.js") {
       // A service worker that answers its own scope's /sw-hello.
       res.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store" });
