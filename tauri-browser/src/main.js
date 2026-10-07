@@ -93,8 +93,10 @@ window.__kesselTest = {
       attention: !!t.attention,
       memory: t.memory ?? null,
       cpu: t.cpu ?? null,
+      hung: !!t.hung,
     })),
   groups: () => [...tabGroups.values()],
+  notices: () => notices,
   // Lifecycle: pretend tab `id` was last looked at `minutes` ago, then run
   // the check that freezes / puts tabs to sleep.
   age: (id, minutes) => {
@@ -2340,6 +2342,7 @@ function updateAddressBarForActiveTab(force = false) {
   updateAccountButton();
   updateZoomIndicator();
   updateBlockedButton();
+  updateHangButton();
   updateExtensionButtons();
 }
 
@@ -2695,7 +2698,10 @@ async function discardTab(tab) {
   tab.frozen = false;
   tab.memory = null;
   tab.cpu = null;
+  tab.hung = false;
   renderTabs();
+  // (The task manager lists the tabs asleep.)
+  persistSession();
 }
 
 // --- A background tab's life -----------------------------------------------------
@@ -2764,7 +2770,7 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks", "kessel://tasks", "kessel://diagnostics"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });
@@ -2852,8 +2858,12 @@ async function runCommand(id, ctx = {}) {
     case "print":
     case "save-page":
     case "devtools":
-    case "task-manager":
       return act(id);
+    // Kessel's own (tasks.rs); the engine's is still there.
+    case "task-manager": return openSingleton("kessel://tasks");
+    case "engine-task-manager": return act("task-manager");
+    case "diagnostics": return openSingleton("kessel://diagnostics");
+    case "restart-safe-mode": return invoke("restart_in_mode", { safe: true }).catch((err) => toast(String(err)));
     case "home": return openInActiveTab(currentSettings()?.homepage || "kessel://newtab");
     case "focus-address-bar": return focusAddressBar(false);
     case "focus-search": return focusAddressBar(true);
@@ -3117,7 +3127,8 @@ function warnedUrl(url) {
 }
 
 function siteState(url) {
-  if (warnedUrl(url) !== null) return "danger";
+  // A crashed page (crash.rs) warns about nothing.
+  if (warnedUrl(url) !== null) return /[?&]kind=crashed(&|$)/.test(url) ? "none" : "danger";
   if (/^https:/i.test(url)) return "secure";
   if (/^http:/i.test(url)) {
     let host = "";
@@ -3272,6 +3283,161 @@ function noteBlocked(kind, payload) {
   if (tab.id === activeTabId) updateBlockedButton();
 }
 
+// --- Crashes and hangs (crash.rs) -----------------------------------------------
+// A page that stopped responding gets a chip by the address bar: wait, or
+// close the page (its process ends; the tab then says so, with Reload).
+// Kessel asks the page every couple of seconds, and the chip goes once it
+// answers again.
+
+function updateHangButton() {
+  const btn = document.getElementById("hang-btn");
+  if (!btn) return;
+  const tab = findTab(activeTabId);
+  btn.hidden = !tab?.hung;
+  if (btn.hidden) return;
+  btn.innerHTML = `${icon("warning", 12)}<span>Not responding</span>`;
+  btn.title = `${hostOf(tab.url)} isn't responding`;
+}
+
+function watchHungTab(tab) {
+  clearInterval(tab.hangTimer);
+  tab.hangTimer = setInterval(async () => {
+    if (!tab.hung || !findTab(tab.id)) return clearInterval(tab.hangTimer);
+    if (await invoke("page_responding", { id: tab.id }).catch(() => false)) {
+      tab.hung = false;
+      clearInterval(tab.hangTimer);
+      if (tab.id === activeTabId) updateHangButton();
+    }
+  }, 2000);
+}
+
+function hangMenu() {
+  const tab = findTab(activeTabId);
+  if (!tab?.hung) return;
+  const rect = document.getElementById("hang-btn").getBoundingClientRect();
+  showContextMenu(
+    [
+      { header: `${hostOf(tab.url)} isn't responding` },
+      {
+        label: "Wait",
+        iconName: "clock",
+        action: () => {
+          tab.hung = false;
+          clearInterval(tab.hangTimer);
+          updateHangButton();
+        },
+      },
+      {
+        label: "Close the page",
+        iconName: "close",
+        action: () => {
+          tab.hung = false;
+          clearInterval(tab.hangTimer);
+          updateHangButton();
+          return invoke("end_tab_process", { id: tab.id }).catch((err) => toast(String(err)));
+        },
+      },
+    ],
+    rect.left,
+    rect.bottom + 4,
+  );
+}
+
+// A tab's page is gone: the one you're on loads again (Kessel's own pages,
+// or every page of an account whose engine went); one in the background
+// sleeps until you come back to it.
+async function tabCrashed({ id, reload, engine, handled }) {
+  const tab = findTab(id);
+  if (!tab) return;
+  tab.hung = false;
+  clearInterval(tab.hangTimer);
+  if (tab.id === activeTabId) updateHangButton();
+  // (Rust shows the crashed page itself.)
+  if (handled) return;
+  if (!reload) {
+    await discardTab(tab);
+    return;
+  }
+  if (engine) {
+    // Its webview went with the engine: a new one.
+    await invoke("close_tab", { id: tab.id, url: null }).catch(() => {});
+    tab.discarded = true;
+    await activateTab(tab.id);
+  } else {
+    await invoke("navigate", { id: tab.id, url: tab.url }).catch(() => {});
+  }
+}
+
+// Kessel-wide notices: safe mode, tabs to bring back after a crash, a
+// graphics card that keeps failing. A chip by the menu button for each.
+let notices = [];
+
+function renderNotices() {
+  const btn = document.getElementById("notice-btn");
+  if (!btn) return;
+  const first = notices[0];
+  btn.hidden = !first;
+  if (!first) return;
+  const label = { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
+  btn.innerHTML = `${icon(first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
+  btn.querySelector("span").textContent = notices.length > 1 ? `${label} +${notices.length - 1}` : label;
+  btn.dataset.notice = first.id;
+}
+
+function noticeItems(n) {
+  const dismiss = { label: "Dismiss", iconName: "close", action: () => invoke("dismiss_notice", { id: n.id }).catch(() => {}) };
+  switch (n.id) {
+    case "safe-mode":
+      return [
+        { header: `Safe mode, because ${n.detail}: extensions are off, the graphics card isn't used, and your own engine switches are left out.` },
+        { label: "Restart normally", iconName: "power", action: () => invoke("restart_in_mode", { safe: false }).catch((err) => toast(String(err))) },
+        { label: "Crash reports", iconName: "activity", action: () => openSingleton("kessel://diagnostics/crashes") },
+        dismiss,
+      ];
+    case "restore":
+      return [
+        { header: `Kessel closed unexpectedly. Bring back the ${n.detail} tab${n.detail === 1 ? "" : "s"} you had open?` },
+        { label: "Restore tabs", iconName: "refresh", action: () => invoke("restore_previous_session").catch((err) => toast(String(err))) },
+        dismiss,
+      ];
+    case "gpu":
+      return [
+        { header: `The graphics card's process stopped ${n.detail} times in a few minutes. Pages drawn without it are slower, but don't flicker or go blank.` },
+        {
+          label: "Stop using the graphics card, and restart",
+          iconName: "gpu",
+          action: async () => {
+            await saveSettings({ hardware_acceleration: false }).catch(() => {});
+            await invoke("restart_kessel").catch((err) => toast(String(err)));
+          },
+        },
+        dismiss,
+      ];
+    default:
+      return [dismiss];
+  }
+}
+
+function noticeMenu() {
+  if (!notices.length) return;
+  const rect = document.getElementById("notice-btn").getBoundingClientRect();
+  const items = [];
+  notices.forEach((n, i) => {
+    if (i) items.push("-");
+    items.push(...noticeItems(n));
+  });
+  showContextMenu(items, rect.left, rect.bottom + 4);
+}
+
+// The task manager (kessel://tasks) acting on one of this window's tabs.
+async function taskAction({ id, action }) {
+  const tab = findTab(id);
+  if (!tab) return;
+  if (action === "show") return activateTab(id);
+  if (action === "sleep") return tab.id === activeTabId ? toast("The tab you're on can't sleep") : discardTab(tab);
+  if (action === "close") return closeTabs([tab]);
+}
+
 function updateZoomIndicator() {
   const btn = document.getElementById("zoom-btn");
   if (!btn) return;
@@ -3291,7 +3457,8 @@ function persistSession() {
     // Settings/Passwords are excluded on purpose: restoring one as a plain
     // tab would bypass the singleton dedup the next time it's reopened.
     const keepable = (t) => t.url && (/^(https?|file):/.test(t.url) || t.url.startsWith("kessel://")) && !SINGLETON_ROUTES.has(internalPageKey(t.url));
-    const entry = (t, workspace, current, group) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group, workspace: workspace || null, current });
+    // (`id` and `asleep` are for the task manager, and aren't saved.)
+    const entry = (t, workspace, current, group) => ({ url: t.url, account: t.account ?? null, title: t.userTitled ? t.title : null, pinned: !!t.pinned, group, workspace: workspace || null, current, id: t.id, asleep: !!t.discarded && (workspace || null) === (currentWorkspace || null), label: t.title || "" });
     const kept = tabs.filter(keepable);
     const saved = kept.map((t) => entry(t, currentWorkspace, t.id === activeTabId, groupOf(t)?.id ?? null));
     const active = Math.max(0, kept.findIndex((t) => t.id === activeTabId));
@@ -4630,6 +4797,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
   document.getElementById("blocked-btn").addEventListener("click", blockedMenu);
+  document.getElementById("hang-btn").addEventListener("click", hangMenu);
+  document.getElementById("notice-btn").addEventListener("click", noticeMenu);
   document.getElementById("media-btn").addEventListener("click", toggleMediaPopup);
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
@@ -4747,6 +4916,23 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   await listen("popup-blocked", (event) => noteBlocked("popup", event.payload || {}));
   await listen("redirect-blocked", (event) => noteBlocked("redirect", event.payload || {}));
+
+  // Crashes, hangs and Kessel-wide notices (crash.rs), the task manager.
+  await listen("tab-crashed", (event) => tabCrashed(event.payload || {}));
+  await listen("tab-unresponsive", (event) => {
+    const tab = findTab(event.payload?.id);
+    if (!tab || tab.hung) return;
+    tab.hung = true;
+    watchHungTab(tab);
+    if (tab.id === activeTabId) updateHangButton();
+  });
+  await listen("kessel-notices", (event) => {
+    notices = event.payload || [];
+    renderNotices();
+  });
+  notices = await invoke("kessel_notices").catch(() => []);
+  renderNotices();
+  await listen("task-action", (event) => taskAction(event.payload || {}));
 
   await listen("tab-navigated", (event) => {
     // Rust only emits this for genuine external http(s) navigation --

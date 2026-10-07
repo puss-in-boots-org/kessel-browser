@@ -107,5 +107,9 @@ export const FEATURES = [
     ["Look", "Settings -> Appearance: theme, Liquid Glass, wallpaper, bookmarks bar."],
     ["Help", "F1: shortcuts and tips."],
     ["Hardware acceleration", "Settings -> Performance: on or off, and which graphics card. kessel://gpu shows what the graphics card does and which video formats play."],
+    ["Task manager", "Shift+Esc: every process with its memory and CPU -- each page's with its tabs, the graphics card's, the network's -- and the tabs asleep. End a process, put a tab to sleep, wake one."],
+    ["Diagnostics", "Palette -> Diagnostics (kessel://diagnostics): Windows, the processor, memory, network, how much room your data takes, crash reports and which web features work; Copy report."],
+    ["When something crashes", "A crashed page offers Reload; one in the background loads again when you come back. If the engine goes, Kessel starts again with your tabs; if Kessel itself closed unexpectedly, a chip offers your tabs back."],
+    ["Safe mode", "Palette -> Restart in safe mode (or kessel.exe --safe-mode): no extensions, no graphics card. Kessel starts that way by itself if it failed to start twice in a row."],
   ]],
 ];

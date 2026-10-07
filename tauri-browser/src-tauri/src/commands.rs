@@ -128,8 +128,11 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("passwords", "Passwords", "Kessel", &["Ctrl+Shift+L"]),
     cmd("side-panel", "Close the side panel", "Kessel", &["Ctrl+B"]),
     cmd("task-manager", "Task manager", "Kessel", &["Shift+Escape"]),
+    cmd("engine-task-manager", "The engine's own task manager", "Kessel", &[]),
     cmd("media-controls", "Media controls", "Kessel", &[]),
     cmd("gpu", "Graphics and media diagnostics", "Kessel", &[]),
+    cmd("diagnostics", "Diagnostics: system, storage, crash reports", "Kessel", &[]),
+    cmd("restart-safe-mode", "Restart in safe mode", "Kessel", &[]),
     cmd("command-palette", "Command palette", "Kessel", &["F2"]),
     // Page tools (tools.rs, src/shared/page-tools.js)
     cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),

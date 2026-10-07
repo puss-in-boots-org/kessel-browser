@@ -54,6 +54,8 @@ export const INTERNAL_TITLES = {
   "kessel://history": "History",
   "kessel://help": "Help",
   "kessel://gpu": "Graphics & media",
+  "kessel://tasks": "Task manager",
+  "kessel://diagnostics": "Diagnostics",
   "kessel://reader": "Reader view",
   "kessel://shot": "Screenshot",
   "kessel://feeds": "Feeds",

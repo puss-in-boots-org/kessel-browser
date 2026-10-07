@@ -120,6 +120,7 @@ pub fn webview(label: impl Into<String>, url: tauri::WebviewUrl) -> tauri::Webvi
         .additional_browser_args(browser_args())
         .data_directory(get().local_dir.clone())
         // Extensions run in every page (extensions.rs); WebView2 needs every
-        // webview sharing a data folder to agree on this.
-        .browser_extensions_enabled(true)
+        // webview sharing a data folder to agree on this. Not in safe mode
+        // (crash.rs).
+        .browser_extensions_enabled(crate::crash::safe_mode().is_none())
 }

@@ -59,6 +59,14 @@ const KINDS = {
     more: `${detail} Unless you know why this happens -- a device on your own network, say -- don't go on.`,
     proceed: `Go on to ${host} (unsafe)`,
   },
+  // The page's process stopped (crash.rs); `detail` says how.
+  crashed: {
+    danger: false,
+    title: /closed it|ended/.test(detail) ? "This page was closed" : "This page crashed",
+    what: `${detail || "Its process stopped unexpectedly"}. Reload to open ${host || "it"} again -- anything you'd typed but not sent there is gone.`,
+    more: "Kessel keeps a note of every crash: kessel://diagnostics lists them.",
+    proceed: "See the crash reports",
+  },
 };
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -80,6 +88,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   const proceed = document.getElementById("proceed");
   proceed.textContent = k.proceed;
+  if (kind === "crashed") {
+    // Nothing to warn about: Reload is the way on.
+    document.getElementById("symbol").innerHTML = icon("refresh", 28);
+    back.textContent = "Reload";
+    back.replaceWith(back.cloneNode(true));
+    document.getElementById("back").addEventListener("click", () => location.replace(url));
+    proceed.classList.remove("danger");
+    proceed.addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://diagnostics/crashes" }));
+    return;
+  }
   proceed.addEventListener("click", async () => {
     await invoke("warning_proceed", { kind, url });
     // In this page's place: Back then skips the warning.

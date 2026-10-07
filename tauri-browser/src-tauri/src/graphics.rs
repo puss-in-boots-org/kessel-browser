@@ -60,11 +60,14 @@ pub fn graphics_info(state: tauri::State<crate::BrowserState>) -> serde_json::Va
     } else {
         settings.gpu_preference.as_str()
     };
+    let safe_mode = crate::crash::safe_mode();
     serde_json::json!({
         "hardware_acceleration": accelerated,
         "gpu_preference": running,
         "on_battery": on_battery(),
-        "restart_needed": accelerated != settings.hardware_acceleration || (accelerated && wanted_gpu != running),
+        // Safe mode turns the graphics card off whatever the settings say.
+        "safe_mode": safe_mode,
+        "restart_needed": safe_mode.is_none() && (accelerated != settings.hardware_acceleration || (accelerated && wanted_gpu != running)),
         "engine_args": args,
         "engine": tauri::webview_version().unwrap_or_default(),
         "os": std::env::consts::OS,

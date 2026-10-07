@@ -8,6 +8,7 @@ mod bridge;
 mod browsing_data;
 mod browser_windows;
 mod commands;
+mod crash;
 mod dialogs;
 mod extensions;
 mod graphics;
@@ -25,6 +26,7 @@ mod sidebar;
 mod split;
 mod store;
 mod suggest;
+mod tasks;
 mod tabdrag;
 mod tools;
 mod passwords;
@@ -131,6 +133,9 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     // Shown instead of a dangerous or broken page (security.rs).
     ("warning", "warning.html"),
     ("gpu", "gpu.html"),
+    // The task manager and kessel://diagnostics (tasks.rs, crash.rs).
+    ("tasks", "tasks.html"),
+    ("diagnostics", "diagnostics.html"),
     ("reader", "reader.html"),
     ("shot", "shot.html"),
     ("feeds", "feeds.html"),
@@ -415,6 +420,16 @@ struct PageState {
 // Kessel is about to send tab `id` somewhere: not the page's own doing.
 pub(crate) fn kessel_navigates(state: &BrowserState, id: u32) {
     state.pages.lock().unwrap().entry(id).or_default().kessel_nav = true;
+}
+
+// The address tab `id` is on (kessel://... for Kessel's own pages).
+pub(crate) fn page_url(state: &BrowserState, id: u32) -> String {
+    state.pages.lock().unwrap().get(&id).map(|p| p.url.clone()).unwrap_or_default()
+}
+
+// The title tab `id` shows.
+pub(crate) fn page_title(state: &BrowserState, id: u32) -> String {
+    state.pages.lock().unwrap().get(&id).map(|p| p.title.clone()).unwrap_or_default()
 }
 
 struct HistoryWait {
@@ -1307,6 +1322,7 @@ fn toolbar_window(webview: &Webview) -> Option<String> {
 fn toolbar_heartbeat(webview: Webview, state: tauri::State<BrowserState>) {
     if let Some(win) = toolbar_window(&webview) {
         state.win(&win, |w| w.heartbeat = millis_since_start());
+        crash::started();
     }
 }
 
@@ -2182,6 +2198,9 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
 
     let core = platform.controller().CoreWebView2()?;
     let mut token = 0i64;
+
+    // Its process crashing, hanging, or the engine going (crash.rs).
+    crash::watch(app, &core, id)?;
 
     let app_title = app.clone();
     core.add_DocumentTitleChanged(
@@ -3570,6 +3589,7 @@ async fn close_popup(app: tauri::AppHandle, webview: Webview) -> Result<(), Stri
 #[tauri::command]
 fn restart_kessel(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
     require_internal_page(&webview)?;
+    crash::clean_exit();
     app.restart();
 }
 
@@ -4998,6 +5018,14 @@ pub(crate) struct SessionTab {
     workspace: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     current: bool,
+    // For the task manager (tasks.rs), never saved: the toolbar's id for the
+    // tab, and whether it's asleep.
+    #[serde(default, skip_serializing)]
+    id: i64,
+    #[serde(default, skip_serializing)]
+    asleep: bool,
+    #[serde(default, skip_serializing)]
+    label: String,
 }
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -5021,7 +5049,10 @@ struct SessionFile {
 
 fn read_session(state: &BrowserState) -> Vec<WindowSession> {
     let path = state.data_dir.join("session.json");
-    let Ok(text) = fs::read_to_string(path) else { return Vec::new() };
+    let readable = |t: &str| {
+        serde_json::from_str::<SessionFile>(t).is_ok() || serde_json::from_str::<Vec<SessionTab>>(t).is_ok() || serde_json::from_str::<Vec<String>>(t).is_ok()
+    };
+    let Some(text) = store::read_text_recovering(&path, readable) else { return Vec::new() };
     if let Ok(file) = serde_json::from_str::<SessionFile>(&text) {
         return file.windows;
     }
@@ -5040,7 +5071,7 @@ fn write_session(state: &BrowserState) {
     let windows: Vec<WindowSession> = state.sessions.lock().unwrap().iter().map(|(_, s)| s.clone()).filter(|s| !s.tabs.is_empty()).collect();
     let path = state.data_dir.join("session.json");
     if let Ok(s) = serde_json::to_string(&SessionFile { windows }) {
-        let _ = fs::write(path, s);
+        let _ = store::write_atomic(&path, &s);
     }
 }
 
@@ -5171,8 +5202,18 @@ fn engine_args(settings: &Settings) -> String {
     }
     // Off in the engine by default.
     args.push_str(" --enable-blink-features=AudioVideoTracks");
-    args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
-    args.push_str(&proxy_args(&settings.features));
+    if crash::safe_mode().is_some() {
+        // Safe mode (crash.rs): no graphics card, none of your own switches.
+        let mut features = settings.features.clone();
+        if let Some(f) = features.as_object_mut() {
+            f.remove("engine_flags");
+        }
+        args.push_str(&graphics::engine_flags(&Settings { hardware_acceleration: false, ..settings.clone() }, false));
+        args.push_str(&proxy_args(&features));
+    } else {
+        args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
+        args.push_str(&proxy_args(&settings.features));
+    }
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
@@ -5419,7 +5460,20 @@ fn main() {
             security::security_status,
             security::warning_proceed,
             security::view_certificate,
-            security::resolve_download
+            security::resolve_download,
+            crash::kessel_notices,
+            crash::dismiss_notice,
+            crash::restore_previous_session,
+            crash::restart_in_mode,
+            crash::page_responding,
+            crash::end_tab_process,
+            crash::test_page_unresponsive,
+            crash::crash_reports,
+            crash::clear_crash_reports,
+            tasks::task_manager,
+            tasks::end_process,
+            tasks::task_action,
+            tasks::system_info
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -5427,9 +5481,13 @@ fn main() {
             // before the first webview exists.
             let profile = profile::init(app);
             let data_dir = profile.data_dir.clone();
+            let _ = fs::create_dir_all(&data_dir);
+            // How the last run ended, and safe mode -- before anything that
+            // could crash again.
+            let startup = crash::start(&data_dir);
             let store = Store::load(data_dir.clone());
             profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
-            let restore = store.settings.lock().unwrap().restore_tabs;
+            let restore = store.settings.lock().unwrap().restore_tabs || crash::restore_asked();
             commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);
             app.manage(page::ZoomLevels::load(&data_dir));
             app.manage(tools::ReaderPages::default());
@@ -5478,6 +5536,10 @@ fn main() {
             // to avoid a startup race between webview-creation calls.
             let state = app.state::<BrowserState>();
             let saved = if restore { read_session(&state) } else { Vec::new() };
+            if !restore && startup.unclean {
+                // Closed unexpectedly: offered, not forced.
+                crash::offer_restore(read_session(&state));
+            }
             if saved.is_empty() {
                 // Settings -> Search & Startup: pages to start with.
                 let pages = startup_pages(&state.store.settings.lock().unwrap().features);
@@ -5502,6 +5564,8 @@ fn main() {
                 if privacy::CLEARING.load(Ordering::SeqCst) {
                     api.prevent_exit();
                 }
+            } else if let tauri::RunEvent::Exit = event {
+                crash::clean_exit();
             }
         });
 }
