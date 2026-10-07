@@ -3697,14 +3697,18 @@ async fn new_tab(app: tauri::AppHandle, webview: Webview, url: Option<String>, a
 }
 
 // Opens a URL in a new tab WITHOUT switching to it -- in the same window and
-// account as the tab asking for it.
+// account as the tab asking for it (or as tab `of_tab`: the toolbar opening
+// a page's link).
 #[tauri::command]
-async fn open_background_tab(app: tauri::AppHandle, webview: Webview, url: String) -> Result<u32, String> {
+async fn open_background_tab(app: tauri::AppHandle, webview: Webview, url: String, of_tab: Option<u32>) -> Result<u32, String> {
     let app2 = app.clone();
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
         let win = state.window_of(&webview).ok_or("that window is closed")?;
-        let account = account_of_label(&state, webview.label());
+        let account = match of_tab {
+            Some(tab) => state.tab_accounts.lock().unwrap().get(&tab).cloned(),
+            None => account_of_label(&state, webview.label()),
+        };
         let id = create_tab_internal(&app2, &state, &win, Some(url.clone()), account)?;
         let account = state.tab_accounts.lock().unwrap().get(&id).cloned();
         let payload = serde_json::json!({ "id": id, "url": url, "account": account });
@@ -5436,6 +5440,9 @@ fn main() {
             sidebar::tell_toolbar,
             sidebar::set_side_panel_kind,
             sidebar::tell_side_panel,
+            sidebar::copy_text,
+            sidebar::set_page_speaking,
+            sidebar::test_page_menu,
             bookmarks::bookmark_tree,
             bookmarks::save_bookmark,
             bookmarks::delete_bookmarks,

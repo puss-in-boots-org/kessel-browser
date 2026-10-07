@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**69% overall** -- 573 done (✅ 🟢 🌐), 53 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 265 to do (⏳), 106 skipped (⏭️), of 1045.
+**71% overall** -- 588 done (✅ 🟢 🌐), 51 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 252 to do (⏳), 106 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -57,12 +57,12 @@ branch, one small commit per feature or group of features.
 | [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 12 |  | 1 | 3 |  | `████████░░` 78% |
-| [17. Reading & research](#17-reading--research) | 11 | 5 | 1 | 5 |  | `████████░░` 75% |
-| [18. Translation](#18-translation) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [17. Reading & research](#17-reading--research) | 14 | 4 | 1 | 3 |  | `████████░░` 84% |
+| [18. Translation](#18-translation) | 3 |  |  | 7 |  | `███░░░░░░░` 30% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
-| [22. Accessibility](#22-accessibility) | 4 | 1 | 1 | 10 |  | `███░░░░░░░` 34% |
+| [22. Accessibility](#22-accessibility) | 5 |  | 1 | 10 |  | `███░░░░░░░` 34% |
 | [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
 | [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
 | [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
@@ -87,7 +87,7 @@ branch, one small commit per feature or group of features.
 | [44. Desktop-specific features](#44-desktop-specific-features) | 7 |  | 1 | 5 |  | `██████░░░░` 58% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 26 |  |  | 2 |  | `█████████░` 93% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
-| [47. Context menus](#47-context-menus) | 2 |  |  | 8 |  | `██░░░░░░░░` 20% |
+| [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
@@ -629,11 +629,11 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
 | 17.04 | Offline pages | ⏳ | |
 | 17.05 | Reading progress | 🧪 | Progress bar and minutes to read in reader view |
-| 17.06 | Page translation | ⏳ | |
-| 17.07 | Dictionary | ⏳ | |
+| 17.06 | Page translation | ✅ | Right-click the page -> Translate this page (Google Translate) |
+| 17.07 | Dictionary | ✅ | Right-click a word -> Define (Wiktionary, else your search engine); in the address bar: define word (1.17) |
 | 17.08 | Spell checker | ⏳ | |
 | 17.09 | Grammar checking | ⏳ | |
-| 17.10 | Text-to-speech | 🧪 | Reader view -> Read aloud: your voice and speed |
+| 17.10 | Text-to-speech | ✅ | Right-click selected text -> Read aloud (and Stop); Reader view -> Read aloud with your voice and speed |
 | 17.11 | Page narration | 🧪 | Reader view reads the article paragraph by paragraph, highlighting each |
 | 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |
 | 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
@@ -652,10 +652,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 18.01 | Automatic language detection | ⏳ | |
-| 18.02 | Full-page translation | ⏳ | |
-| 18.03 | Selected-text translation | ⏳ | |
+| 18.02 | Full-page translation | ✅ | Right-click the page -> Translate this page: Google Translate's copy of it, in a new tab |
+| 18.03 | Selected-text translation | ✅ | Right-click selected text -> Translate: Google, Microsoft Translator or DeepL, in a new tab |
 | 18.04 | Translation popup | ⏳ | |
-| 18.05 | Translation language preferences | ⏳ | |
+| 18.05 | Translation language preferences | ✅ | Settings -> Page tools: translate into Kessel's language or one you pick, and with which service |
 | 18.06 | Automatic translation | ⏳ | |
 | 18.07 | Never translate this language | ⏳ | |
 | 18.08 | Never translate this site | ⏳ | |
@@ -737,7 +737,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 22.08 | Keyboard navigation | ⏳ | |
 | 22.09 | Caret browsing | ⏳ | |
 | 22.10 | Focus indicators | ⏳ | |
-| 22.11 | Text-to-speech | 🧪 | Reader view -> Read aloud |
+| 22.11 | Text-to-speech | ✅ | Right-click selected text -> Read aloud; Reader view -> Read aloud |
 | 22.12 | Caption support | ✅ | Media controls -> captions (20.07) |
 | 22.13 | Accessibility tree | ⏳ | |
 | 22.14 | Color/contrast assistance | ⏳ | |
@@ -1154,14 +1154,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 47.01 | Page: back, forward, reload | 🌐 | The engine's page menu |
 | 47.02 | Page: save, print | 🌐 | The engine's page menu: Save as, Print |
-| 47.03 | Page: translate, screenshot | ⏳ | |
-| 47.04 | Link: open in new tab / new window / private window | ⏳ | |
-| 47.05 | Link: copy link, copy link text | ⏳ | |
-| 47.06 | Link: download linked file, search link | ⏳ | |
-| 47.07 | Text: copy, search | ⏳ | |
-| 47.08 | Text: translate, define, speak, share | ⏳ | |
-| 47.09 | Image: open, save, copy, copy address | ⏳ | |
-| 47.10 | Image: search image | ⏳ | |
+| 47.03 | Page: translate, screenshot | ✅ | The page's right-click menu: Translate this page (Google Translate, into your language or the one you pick in Settings -> Page tools), Take a screenshot |
+| 47.04 | Link: open in new tab / new window / private window | ✅ | Right-click a link: Open link in new tab (in front or behind, like Ctrl+click), in new window, in private window -- in place of the engine's own new-window item |
+| 47.05 | Link: copy link, copy link text | ✅ | Right-click a link: Copy link (the engine's), Copy link text (Kessel's) |
+| 47.06 | Link: download linked file, search link | ✅ | Right-click a link: Save link as (the engine's: a download), Search the web for its text |
+| 47.07 | Text: copy, search | ✅ | Right-click selected text: Copy (the engine's), Search the web for it |
+| 47.08 | Text: translate, define, speak, share | ✅ | Right-click selected text: Translate (Google, Microsoft or DeepL), Define (Wiktionary, else your search engine), Read aloud / Stop reading aloud (the reader view's voice), Share (Windows' Share window) |
+| 47.09 | Image: open, save, copy, copy address | ✅ | Right-click an image: Open image in new tab (Kessel's), Save image as, Copy image, Copy image link (the engine's) |
+| 47.10 | Image: search image | ✅ | Right-click an image: Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
 
 ### 48. AI features
 

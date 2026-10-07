@@ -62,6 +62,8 @@ export const FEATURES = [
     ["Pause everything", "Palette -> Pause everything: every video stops and every tab goes quiet; again to carry on."],
     ["Peek at a link", "Right-click a link -> Peek at link: a small window over the page; “Back to tabs” keeps it."],
     ["Search for selected text or an image", "Right-click -> Search the web for… (Google Lens, Bing, Yandex or TinEye for images: Settings -> Page tools)."],
+    ["Right-click menu", "On a link: open it in a new tab, window or private window, copy its text. On an image: open it in a new tab. On text: translate, define, read aloud, share. On the page: translate it, take a screenshot. Which ones: Settings -> Page tools."],
+    ["Translate", "Right-click selected text or the page -> Translate. Into which language, and with Google, Microsoft or DeepL: Settings -> Page tools."],
     ["Command chains", "Settings -> Page tools -> Command chains: several commands in one go, from the palette or a mouse gesture."],
     ["Missing pages", "A page that's gone (404) offers its Wayback Machine copy; the palette's “Open in the Wayback Machine” works on any page."],
     ["Close forgotten tabs", "Settings -> Tabs: tabs you haven't looked at in days close by themselves."],

@@ -258,6 +258,10 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
       ${settingRow({ title: "Search the web for selected text", desc: "With your default search engine, in a new tab", controlHtml: switchHtml("menu-search", f.page_menu?.search !== false) })}
       ${settingRow({ title: "Search the web for an image", controlHtml: switchHtml("menu-image", f.page_menu?.image_search !== false) })}
       ${settingRow({ title: "Search images with", controlHtml: selectHtml("image-search", [["google", "Google Lens"], ["bing", "Bing Visual Search"], ["yandex", "Yandex Images"], ["tineye", "TinEye"]], 190) })}
+      ${settingRow({ title: "Translate", desc: "Selected text, or the whole page (with Google), in a new tab", controlHtml: switchHtml("menu-translate", f.page_menu?.translate !== false) })}
+      ${settingRow({ title: "Translate text with", controlHtml: selectHtml("translate-service", [["google", "Google Translate"], ["bing", "Microsoft Translator"], ["deepl", "DeepL"]], 190) })}
+      ${settingRow({ title: "Translate into", desc: "Kessel's language unless you pick one", controlHtml: selectHtml("translate-to", [["", "Kessel's language"], ["en", "English"], ["hu", "Hungarian"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["pt", "Portuguese"], ["nl", "Dutch"], ["pl", "Polish"], ["cs", "Czech"], ["sk", "Slovak"], ["ro", "Romanian"], ["uk", "Ukrainian"], ["ru", "Russian"], ["tr", "Turkish"], ["ja", "Japanese"], ["ko", "Korean"], ["zh-CN", "Chinese (Simplified)"], ["zh-TW", "Chinese (Traditional)"]], 190) })}
+      ${settingRow({ title: "Define a selected word", desc: "From Wiktionary; your search engine if it has no entry", controlHtml: switchHtml("menu-define", f.page_menu?.define !== false) })}
     </div>
 
     <div class="setting-card">
@@ -368,7 +372,7 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   }
 
   // Right-click menu
-  for (const [id, key] of [["menu-peek", "peek"], ["menu-search", "search"], ["menu-image", "image_search"], ["menu-highlight", "highlight"]]) {
+  for (const [id, key] of [["menu-peek", "peek"], ["menu-search", "search"], ["menu-image", "image_search"], ["menu-highlight", "highlight"], ["menu-translate", "translate"], ["menu-define", "define"]]) {
     const btn = p.querySelector(`#${id}`);
     btn.addEventListener("click", async () => {
       const on = !btn.classList.contains("on");
@@ -379,6 +383,11 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   const imageSearch = p.querySelector("#image-search");
   imageSearch.value = f.image_search || "google";
   imageSearch.addEventListener("change", () => saveFeature("image_search", imageSearch.value));
+  for (const [id, key, fallback] of [["translate-service", "translate_service", "google"], ["translate-to", "translate_to", ""]]) {
+    const sel = p.querySelector(`#${id}`);
+    sel.value = f[key] || fallback;
+    sel.addEventListener("change", () => saveFeature(key, sel.value));
+  }
 
   // Reading and pages
   const filter = p.querySelector("#page-filter");
