@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**78% overall** -- 648 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 52 partly done (🟡), 179 to do (⏳), 108 skipped (⏭️), of 1045.
+**79% overall** -- 658 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 52 partly done (🟡), 169 to do (⏳), 108 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -45,7 +45,7 @@ branch, one small commit per feature or group of features.
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
-| [5. History](#5-history) | 14 |  |  | 1 | 1 | `█████████░` 93% |
+| [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 17 | 2 | 1 | 2 |  | `█████████░` 89% |
 | [7. Passwords & identity](#7-passwords--identity) | 17 |  |  | 18 | 2 | `█████░░░░░` 49% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
@@ -57,7 +57,7 @@ branch, one small commit per feature or group of features.
 | [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 15 |  | 1 |  |  | `██████████` 97% |
-| [17. Reading & research](#17-reading--research) | 14 | 4 | 1 | 3 |  | `████████░░` 84% |
+| [17. Reading & research](#17-reading--research) | 15 | 4 | 1 | 2 |  | `█████████░` 89% |
 | [18. Translation](#18-translation) | 3 |  |  | 7 |  | `███░░░░░░░` 30% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
@@ -98,8 +98,8 @@ branch, one small commit per feature or group of features.
 | [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
 | [56. Account system](#56-account-system) |  |  |  | 2 | 12 | `░░░░░░░░░░` 0% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
-| [58. Search / history intelligence](#58-search--history-intelligence) | 7 |  |  | 6 |  | `█████░░░░░` 54% |
-| [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
+| [58. Search / history intelligence](#58-search--history-intelligence) | 8 |  |  | 5 |  | `██████░░░░` 62% |
+| [59. Offline functionality](#59-offline-functionality) | 7 |  |  | 3 |  | `███████░░░` 70% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
 | [62. "Crazy advanced" features](#62-crazy-advanced-features) | 10 | 1 | 2 | 11 | 8 | `█████░░░░░` 50% |
@@ -298,7 +298,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 5.02 | History search | ✅ | Every word must appear in the title or address |
 | 5.03 | History by date | ✅ | Grouped by day; Today, Yesterday, last 7 / 30 days, or any single day |
 | 5.04 | History by website | ✅ | History -> By site: visits per site; show or delete a whole site |
-| 5.05 | History by tab/window | ⏳ | |
+| 5.05 | History by tab/window | ✅ | Right-click Back or Forward: the tab's own history, nearest first; picking a page goes straight there (tested) |
 | 5.06 | Delete individual entries | ✅ | A page's menu, or tick several and Delete |
 | 5.07 | Delete time ranges | ✅ | Clear browsing data (last hour ... all time); or a day's pages in History |
 | 5.08 | Clear all browsing history | ✅ | Clear browsing data -> All time |
@@ -627,7 +627,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.01 | Reader mode | ✅ | F9: the article on its own (reader.html), strictly rebuilt so nothing of the site runs |
 | 17.02 | Reading list | ✅ | Side panel -> Reading list: unread/read, add the page you're on, or right-click a link: Add link to reading list |
 | 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
-| 17.04 | Offline pages | ⏳ | |
+| 17.04 | Offline pages | ✅ | A page put on the reading list while it's open is kept whole (the engine's web archive, MHTML) to read offline |
 | 17.05 | Reading progress | 🧪 | Progress bar and minutes to read in reader view |
 | 17.06 | Page translation | ✅ | Right-click the page -> Translate this page (Google Translate) |
 | 17.07 | Dictionary | ✅ | Right-click a word -> Define (Wiktionary, else your search engine); in the address bar: define word (1.17) |
@@ -1282,7 +1282,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 54.02 | Automatic recovery | ✅ | A crashed tab in the background sleeps and loads again when you come back; Kessel's own pages reload; the engine going restarts Kessel with your tabs |
 | 54.03 | Session restoration | ✅ | After the engine crashes, Kessel starts again with your tabs; after Kessel closed unexpectedly, a chip offers them back (when it doesn't restore them anyway) |
 | 54.04 | Crash reports | ✅ | crashes.json, in kessel://diagnostics: what stopped, on which page, why, the exit code and the module the engine blames; Kessel's own panics too |
-| 54.05 | Error pages | ✅ | A crashed page shows Kessel's page with Reload, and why: crashed, out of memory, ended |
+| 54.05 | Error pages | ✅ | A crashed page, or one that can't be reached, shows Kessel's page with Reload / Try again, and why |
 | 54.06 | Safe mode | ✅ | kessel.exe --safe-mode, the palette's Restart in safe mode, or by itself after two starts in a row that never finished: no extensions, no graphics card, no engine switches; a chip says so and restarts normally |
 | 54.07 | Extension-disable recovery | ✅ | Safe mode runs no extension (they stay installed and on); after Kessel failed to start twice it starts that way by itself |
 | 54.08 | GPU crash recovery | ✅ | The engine starts a new graphics process by itself; after three crashes in ten minutes Kessel offers to stop using the graphics card (and restart) |
@@ -1357,22 +1357,22 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 58.10 | Search screenshots | ⏳ | |
 | 58.11 | Search downloaded files | 🟢 | Downloads page: search and sort (tested) |
 | 58.12 | Search bookmarks | 🟢 | Bookmark manager: search, #tag for a tag (tested) |
-| 58.13 | Search reading list | ⏳ | |
+| 58.13 | Search reading list | 🟢 | Side panel -> Search: open tabs, bookmarks, the reading list, notes and history |
 
 ### 59. Offline functionality
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 59.01 | Offline page cache | ⏳ | |
-| 59.02 | Offline reading | ⏳ | |
+| 59.01 | Offline page cache | ✅ | As 17.04: the reading list keeps whole copies of pages |
+| 59.02 | Offline reading | ✅ | Offline, the reading list opens its saved copy; the can't-be-reached page offers it (tested) |
 | 59.03 | Offline PWAs | ⏳ | |
-| 59.04 | Service workers | ⏳ | |
+| 59.04 | Service workers | 🌐 | Service workers answer their pages' requests (tested, 60.04) |
 | 59.05 | Background synchronization | ⏳ | |
-| 59.06 | Cached resources | ⏳ | |
-| 59.07 | Offline error page | ⏳ | |
+| 59.06 | Cached resources | 🌐 | The engine's HTTP cache and service-worker caches |
+| 59.07 | Offline error page | ✅ | A site that can't be reached gets Kessel's page: why, Try again, the saved copy if there's one (tested) |
 | 59.08 | Offline downloads | ⏳ | |
-| 59.09 | Network recovery | ⏳ | |
-| 59.10 | Automatic retry | ⏳ | |
+| 59.09 | Network recovery | ✅ | Back online, the can't-be-reached page loads the site by itself (tested) |
+| 59.10 | Automatic retry | ✅ | A site that's down is tried again every 30 seconds while its page is open |
 
 ### 60. Web standards compatibility
 

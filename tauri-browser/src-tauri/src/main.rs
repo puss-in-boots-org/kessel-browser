@@ -2915,7 +2915,20 @@ unsafe fn install_shields_hooks(
             if !success.as_bool() && status == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED {
                 return Ok(());
             }
-            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else { return Ok(()) };
+            let Some(original) = shields.https_pending.lock().unwrap().remove(&label_nav) else {
+                // Not an https try of Kessel's: a page that can't be reached
+                // gets Kessel's page, which tries again (security.rs).
+                if !success.as_bool() {
+                    if let Some(reason) = security::unreachable_text(status) {
+                        if let Ok(url) = webview_source(&sender) {
+                            if url.starts_with("http://") || url.starts_with("https://") {
+                                security::show_warning(&app_nav, id, &label_nav, "offline", &url, reason);
+                            }
+                        }
+                    }
+                }
+                return Ok(());
+            };
             if success.as_bool() {
                 return Ok(());
             }
@@ -5319,6 +5332,8 @@ fn main() {
             commands::record_shortcut,
             commands::test_press,
             page::page_action,
+            page::tab_history,
+            page::go_to_history_entry,
             page::get_zoom_levels,
             page::remove_zoom_level,
             focus_webview,
@@ -5459,6 +5474,8 @@ fn main() {
             sidebar::set_side_panel_kind,
             sidebar::tell_side_panel,
             sidebar::copy_text,
+            sidebar::reading_offline_copy,
+            sidebar::open_offline_copy,
             sidebar::set_page_speaking,
             sidebar::test_page_menu,
             bookmarks::bookmark_tree,

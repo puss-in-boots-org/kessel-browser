@@ -59,6 +59,15 @@ const KINDS = {
     more: `${detail} Unless you know why this happens -- a device on your own network, say -- don't go on.`,
     proceed: `Go on to ${host} (unsafe)`,
   },
+  // The site couldn't be reached (main.rs, security.rs unreachable_text):
+  // tried again by itself once the PC is back online.
+  offline: {
+    danger: false,
+    title: navigator.onLine ? "This page can't be reached" : "You're offline",
+    what: `${detail || "The site couldn't be reached"}. Kessel tries ${host || "it"} again by itself as soon as the PC is back online.`,
+    more: "Check the network cable or Wi-Fi, and Settings -> Network for a proxy. kessel://diagnostics shows the connection.",
+    proceed: "Open diagnostics",
+  },
   // The page's process stopped (crash.rs); `detail` says how.
   crashed: {
     danger: false,
@@ -88,14 +97,32 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
   const proceed = document.getElementById("proceed");
   proceed.textContent = k.proceed;
-  if (kind === "crashed") {
-    // Nothing to warn about: Reload is the way on.
-    document.getElementById("symbol").innerHTML = icon("refresh", 28);
-    back.textContent = "Reload";
+  if (kind === "crashed" || kind === "offline") {
+    // Nothing to warn about: Reload (Try again) is the way on.
+    const offline = kind === "offline";
+    document.getElementById("symbol").innerHTML = icon(offline ? "globe" : "refresh", 28);
+    back.textContent = offline ? "Try again" : "Reload";
     back.replaceWith(back.cloneNode(true));
-    document.getElementById("back").addEventListener("click", () => location.replace(url));
+    const retry = () => location.replace(url);
+    document.getElementById("back").addEventListener("click", retry);
     proceed.classList.remove("danger");
-    proceed.addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://diagnostics/crashes" }));
+    proceed.addEventListener("click", () => invoke("open_singleton_tab", { route: offline ? "kessel://diagnostics/network" : "kessel://diagnostics/crashes" }));
+    if (offline) {
+      // Back online: straight there. Online all along (the site's down): a
+      // quiet try every half a minute.
+      window.addEventListener("online", retry);
+      setInterval(() => navigator.onLine && document.visibilityState === "visible" && retry(), 30000);
+      // On your reading list with a copy kept: read that meanwhile.
+      invoke("reading_offline_copy", { url }).then((copy) => {
+        if (!copy) return;
+        const read = document.createElement("button");
+        read.className = "btn";
+        read.id = "saved-copy";
+        read.textContent = "Read the copy you saved";
+        read.addEventListener("click", () => invoke("open_offline_copy", { url }).catch(() => {}));
+        document.querySelector(".actions").appendChild(read);
+      }, () => {});
+    }
     return;
   }
   proceed.addEventListener("click", async () => {

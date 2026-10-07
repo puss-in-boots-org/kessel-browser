@@ -74,7 +74,7 @@ function toneWav(seconds = 10, rate = 8000) {
   return buf;
 }
 
-export async function startServer(host = "127.0.0.2") {
+export async function startServer(host = "127.0.0.2", wantedPort = 0) {
   // Big enough for the tests' deliberately huge addresses.
   const server = http.createServer({ maxHeaderSize: 1024 * 1024 }, async (req, res) => {
     const origin = `http://${req.headers.host}`;
@@ -229,7 +229,7 @@ async function startMedia() {
       res.end("not found");
     }
   });
-  await new Promise((resolve) => server.listen(0, host, resolve));
+  await new Promise((resolve) => server.listen(wantedPort, host, resolve));
   const { port } = server.address();
   // close() drops connections still open too: a browser can keep one going
   // (a request it never finished), and server.close() alone waits for it --

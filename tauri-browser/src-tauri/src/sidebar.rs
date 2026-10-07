@@ -18,6 +18,8 @@ pub(crate) struct ReadingItem {
     pub title: String,
     pub added: u64,
     pub read: bool,
+    // A copy of the page is kept to read offline (see keep_offline_copy).
+    pub offline: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -99,9 +101,84 @@ pub(crate) fn add_to_reading_list(app: tauri::AppHandle, webview: Webview, sideb
         let mut list = sidebar.reading.lock().unwrap();
         list.retain(|i| i.url != url);
         let title = if title.trim().is_empty() { url.clone() } else { title.trim().to_string() };
-        list.insert(0, ReadingItem { url, title, added: now_unix(), read: false });
+        list.insert(0, ReadingItem { url: url.clone(), title, added: now_unix(), read: false, offline: offline_file(&app, &url).exists() });
     }
+    // Open in a tab right now: kept to read offline too.
+    let app2 = app.clone();
+    later(&app, move || keep_offline_copy(&app2, url));
     Ok(sidebar.reading_changed(&app))
+}
+
+// --- Offline copies -------------------------------------------------------------
+//
+// A page put on the reading list while it's open is kept whole -- the
+// engine's own web archive (MHTML, Page.captureSnapshot) -- to read without
+// the internet: the reading list opens it while the PC is offline, and the
+// "can't be reached" page offers it.
+
+fn offline_file(app: &tauri::AppHandle, url: &str) -> PathBuf {
+    // (FNV-1a of the address: a file name per page.)
+    let hash = url.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+    app.state::<BrowserState>().data_dir.join("offline").join(format!("{:016x}.mhtml", hash))
+}
+
+fn keep_offline_copy(app: &tauri::AppHandle, url: String) {
+    let state = app.state::<BrowserState>();
+    let tab = {
+        let tabs = state.tabs.lock().unwrap();
+        tabs.iter().find(|(id, _)| crate::page_url(&state, **id) == url).map(|(_, w)| w.clone())
+    };
+    let Some(tab) = tab else { return };
+    #[cfg(windows)]
+    {
+        let app = app.clone();
+        let _ = tab.with_webview(move |platform| unsafe {
+            use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
+            use windows::core::HSTRING;
+            let Ok(core) = platform.controller().CoreWebView2() else { return };
+            let done = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, json| {
+                let data = result.ok().and_then(|_| serde_json::from_str::<serde_json::Value>(&json).ok()).and_then(|v| v["data"].as_str().map(str::to_string));
+                let Some(data) = data else { return Ok(()) };
+                let file = offline_file(&app, &url);
+                let saved = file.parent().map(|dir| fs::create_dir_all(dir).is_ok()).unwrap_or(false) && fs::write(&file, data).is_ok();
+                if saved {
+                    let sidebar = app.state::<Sidebar>();
+                    if let Some(item) = sidebar.reading.lock().unwrap().iter_mut().find(|i| i.url == url) {
+                        item.offline = true;
+                    }
+                    sidebar.reading_changed(&app);
+                }
+                Ok(())
+            }));
+            let _ = core.CallDevToolsProtocolMethod(&HSTRING::from("Page.captureSnapshot"), &HSTRING::from(r#"{"format":"mhtml"}"#), &done);
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = tab;
+}
+
+// The can't-be-reached page's "Read the copy you saved": its own tab goes
+// to the copy (a page can't send itself to a file on this PC).
+#[tauri::command]
+pub(crate) fn open_offline_copy(app: tauri::AppHandle, webview: Webview, url: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let file = offline_file(&app, &url);
+    let target = tauri::Url::from_file_path(&file).map_err(|_| "no copy kept")?;
+    if !file.exists() {
+        return Err("no copy kept".into());
+    }
+    if let Some(id) = webview.label().strip_prefix("content-").and_then(|id| id.parse::<u32>().ok()) {
+        crate::kessel_navigates(&app.state::<BrowserState>(), id);
+    }
+    webview.navigate(target).map_err(|e| e.to_string())
+}
+
+// The kept copy of page `url`, as an address to open (None: there's none).
+#[tauri::command]
+pub(crate) fn reading_offline_copy(app: tauri::AppHandle, webview: Webview, url: String) -> Result<Option<String>, String> {
+    require_internal_page(&webview)?;
+    let file = offline_file(&app, &url);
+    Ok(file.exists().then(|| tauri::Url::from_file_path(&file).map(|u| u.to_string()).unwrap_or_default()).filter(|u| !u.is_empty()))
 }
 
 #[tauri::command]
@@ -117,6 +194,7 @@ pub(crate) fn set_reading_read(app: tauri::AppHandle, webview: Webview, sidebar:
 pub(crate) fn remove_from_reading_list(app: tauri::AppHandle, webview: Webview, sidebar: tauri::State<Sidebar>, url: String) -> Result<Vec<ReadingItem>, String> {
     require_internal_page(&webview)?;
     sidebar.reading.lock().unwrap().retain(|i| i.url != url);
+    let _ = fs::remove_file(offline_file(&app, &url));
     Ok(sidebar.reading_changed(&app))
 }
 

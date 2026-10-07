@@ -3144,7 +3144,7 @@ function warnedUrl(url) {
 
 function siteState(url) {
   // A crashed page (crash.rs) warns about nothing.
-  if (warnedUrl(url) !== null) return /[?&]kind=crashed(&|$)/.test(url) ? "none" : "danger";
+  if (warnedUrl(url) !== null) return /[?&]kind=(crashed|offline)(&|$)/.test(url) ? "none" : "danger";
   if (/^https:/i.test(url)) return "secure";
   if (/^http:/i.test(url)) {
     let host = "";
@@ -3961,6 +3961,33 @@ async function onPageMenu({ action, value, page, title, tab }) {
       await runCommand("screenshot-visible", { page: tab });
       break;
   }
+}
+
+// The tab's own history, from Back (`forward` false) or Forward: up to 15
+// pages, nearest first; picking one goes straight there.
+async function historyMenu(forward, e) {
+  e.preventDefault();
+  const tab = findTab(activeTabId);
+  if (!tab || tab.id <= 0) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const history = await invoke("tab_history", { id: tab.id }).catch(() => null);
+  if (!history) return;
+  const pages = forward ? history.entries.slice(history.current + 1) : history.entries.slice(0, history.current).reverse();
+  if (!pages.length) return;
+  showContextMenu(
+    [
+      ...pages.slice(0, 15).map((page) => ({
+        label: page.title || internalTitle(page.url) || page.url,
+        iconName: "history",
+        action: () => invoke("go_to_history_entry", { id: tab.id, entry: page.id }).catch((err) => toast(String(err))),
+      })),
+      "-",
+      { label: "Show full history", iconName: "history", action: () => openSingleton("kessel://history") },
+    ],
+    rect.left,
+    rect.bottom + 4,
+    { dropdown: true, width: 320 }
+  );
 }
 
 // Translating (the page menu): with the service picked in Settings -> Page
@@ -4884,6 +4911,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("new-tab-btn").addEventListener("click", () => createTab());
   document.getElementById("back-btn").addEventListener("click", () => runCommand("back"));
+  // Right-click Back or Forward: where the tab has been (or can go on to).
+  document.getElementById("back-btn").addEventListener("contextmenu", (e) => historyMenu(false, e));
+  document.getElementById("forward-btn").addEventListener("contextmenu", (e) => historyMenu(true, e));
   document.getElementById("forward-btn").addEventListener("click", () => runCommand("forward"));
   // Reload, or stop while the page is still loading (like Chrome's button).
   document.getElementById("reload-btn").addEventListener("click", () => runCommand(findTab(activeTabId)?.loading ? "stop" : "reload"));

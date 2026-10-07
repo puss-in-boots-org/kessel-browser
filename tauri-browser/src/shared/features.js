@@ -36,7 +36,8 @@ export const FEATURES = [
     ["Bookmark manager", "Ctrl+Shift+O: folders inside folders, drag to move, sort, search (#tag for a tag), cards with page previews, HTML import / export, duplicates, broken links, daily backups."],
   ]],
   ["Pages", [
-    ["Back / forward / reload", "Alt+Left / Alt+Right, F5 or Ctrl+R; Ctrl+F5 ignores the cache; Esc stops."],
+    ["Back / forward / reload", "Alt+Left / Alt+Right, F5 or Ctrl+R; Ctrl+F5 ignores the cache; Esc stops. Right-click Back or Forward for the tab's own history."],
+    ["When a site can't be reached", "Kessel's page says why, tries again by itself once you're back online, and offers the copy your reading list kept."],
     ["Zoom", "Ctrl+Plus / Ctrl+Minus / Ctrl+0, or Ctrl+mouse wheel. Remembered per site."],
     ["Find in page", "Ctrl+F (starts with selected text), F3 / Shift+F3 for next / previous."],
     ["Print / save / source", "Ctrl+P, Ctrl+S, Ctrl+U."],
@@ -95,6 +96,7 @@ export const FEATURES = [
   ["Your data", [
     ["History", "Ctrl+H. Search, by site, delete days or sites."],
     ["Downloads", "Ctrl+J, or the rail's download button."],
+    ["Read offline", "Put a page on the reading list while it's open: a whole copy is kept, and opens when you're offline."],
     ["Passwords", "Ctrl+Shift+L or the rail's key. Autofill offers saved logins."],
     ["Clear browsing data", "Ctrl+Shift+Delete."],
     ["Accounts", "The person button in the address bar: be signed in as several people at once."],

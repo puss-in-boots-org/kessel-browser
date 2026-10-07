@@ -324,6 +324,24 @@ pub(crate) fn warning_proceed(app: tauri::AppHandle, webview: Webview, kind: Str
     Ok(())
 }
 
+// Why a page couldn't be reached, in words: the network failures that get
+// Kessel's own page (kind "offline", which tries again by itself once the
+// PC is back online). None: not one of those.
+#[cfg(windows)]
+pub(crate) fn unreachable_text(status: webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_WEB_ERROR_STATUS) -> Option<&'static str> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::*;
+    Some(match status {
+        COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED => "There's no site at that address -- or this PC isn't online",
+        COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT => "The site didn't let Kessel connect",
+        COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE => "The site couldn't be reached",
+        COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT => "The site took too long to answer",
+        COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED => "This PC isn't online",
+        COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET | COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED => "The connection broke off",
+        COREWEBVIEW2_WEB_ERROR_STATUS_ERROR_HTTP_INVALID_SERVER_RESPONSE => "The site's answer wasn't a web page",
+        _ => return None,
+    })
+}
+
 // --- Certificates ------------------------------------------------------------
 
 #[cfg(windows)]

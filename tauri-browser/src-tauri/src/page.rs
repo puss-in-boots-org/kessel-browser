@@ -11,6 +11,64 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{Manager, Webview};
 
+// Runs the DevTools protocol's `method` on page `id` and returns its answer.
+pub(crate) async fn devtools(app: &tauri::AppHandle, id: u32, method: &'static str, params: serde_json::Value) -> Result<serde_json::Value, String> {
+    let page = {
+        let state = app.state::<BrowserState>();
+        webview(app, &state, id).ok_or("that page is gone")?
+    };
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+    #[cfg(windows)]
+    page.with_webview(move |platform| unsafe {
+        use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
+        use windows::core::HSTRING;
+        let answer = tx.clone();
+        let done = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, json| {
+            let _ = answer.send(result.map(|_| json).map_err(|e| e.message()));
+            Ok(())
+        }));
+        let called = platform.controller().CoreWebView2().and_then(|core| core.CallDevToolsProtocolMethod(&HSTRING::from(method), &HSTRING::from(params.to_string()), &done));
+        if let Err(e) = called {
+            let _ = tx.send(Err(e.message()));
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    #[cfg(not(windows))]
+    let _ = (page, tx, params, method);
+    let json = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(std::time::Duration::from_secs(5)))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|_| "the page didn't answer".to_string())??;
+    serde_json::from_str(&json).map_err(|e| e.to_string())
+}
+
+// The tab's own history (right-click Back or Forward): { current, entries:
+// [{ id, url, title }] }, Kessel's own pages by their kessel:// address.
+#[tauri::command]
+pub async fn tab_history(app: tauri::AppHandle, webview: Webview, id: u32) -> Result<serde_json::Value, String> {
+    crate::require_internal_page(&webview)?;
+    let history = devtools(&app, id, "Page.getNavigationHistory", serde_json::json!({})).await?;
+    let entries: Vec<serde_json::Value> = history["entries"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .map(|e| {
+                    let url = e["url"].as_str().unwrap_or("");
+                    let shown = tauri::Url::parse(url).map(|u| crate::logical_tab_url(&u)).unwrap_or_else(|_| url.to_string());
+                    serde_json::json!({ "id": e["id"], "url": shown, "title": e["title"] })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(serde_json::json!({ "current": history["currentIndex"], "entries": entries }))
+}
+
+#[tauri::command]
+pub async fn go_to_history_entry(app: tauri::AppHandle, webview: Webview, id: u32, entry: i64) -> Result<(), String> {
+    crate::require_internal_page(&webview)?;
+    devtools(&app, id, "Page.navigateToHistoryEntry", serde_json::json!({ "entryId": entry })).await.map(|_| ())
+}
+
 // Chrome's zoom steps.
 pub const ZOOM_LEVELS: &[f64] = &[0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 5.0];
 
