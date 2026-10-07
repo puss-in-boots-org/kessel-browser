@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**79% overall** -- 658 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 52 partly done (🟡), 169 to do (⏳), 108 skipped (⏭️), of 1045.
+**80% overall** -- 665 done (✅ 🟢 🌐), 58 built and waiting for their first run on Windows or a phone (🧪), 53 partly done (🟡), 161 to do (⏳), 108 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -46,7 +46,7 @@ branch, one small commit per feature or group of features.
 | [3. Windows](#3-windows) | 5 |  | 4 | 6 |  | `█████░░░░░` 47% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
-| [6. Downloads](#6-downloads) | 17 | 2 | 1 | 2 |  | `█████████░` 89% |
+| [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
 | [7. Passwords & identity](#7-passwords--identity) | 17 |  |  | 18 | 2 | `█████░░░░░` 49% |
 | [8. Profiles](#8-profiles) | 6 |  | 6 | 4 |  | `██████░░░░` 56% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
@@ -58,13 +58,13 @@ branch, one small commit per feature or group of features.
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 15 |  | 1 |  |  | `██████████` 97% |
 | [17. Reading & research](#17-reading--research) | 15 | 4 | 1 | 2 |  | `█████████░` 89% |
-| [18. Translation](#18-translation) | 3 |  |  | 7 |  | `███░░░░░░░` 30% |
+| [18. Translation](#18-translation) | 7 |  | 1 | 2 |  | `████████░░` 75% |
 | [19. PDF](#19-pdf) | 11 |  |  | 7 |  | `██████░░░░` 61% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  |  |  | 8 |  | `░░░░░░░░░░` 0% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
 | [23. Appearance](#23-appearance) | 12 |  |  | 4 |  | `████████░░` 75% |
-| [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
+| [24. Search engines](#24-search-engines) | 6 |  |  | 3 |  | `███████░░░` 67% |
 | [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
 | [26. Session management](#26-session-management) | 5 |  | 4 | 1 | 1 | `███████░░░` 70% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
@@ -90,7 +90,7 @@ branch, one small commit per feature or group of features.
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
-| [50. Media & entertainment extras](#50-media--entertainment-extras) |  |  |  | 8 | 3 | `░░░░░░░░░░` 0% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) | 1 |  |  | 7 | 3 | `█░░░░░░░░░` 13% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
@@ -335,7 +335,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 6.18 | Download history | 🟢 | |
 | 6.19 | Download sorting | ✅ | Downloads list: newest, oldest, by name or by site |
 | 6.20 | Download search | ✅ | Downloads list: search by name or address |
-| 6.21 | Automatic download organization | ⏳ | |
+| 6.21 | Automatic download organization | ✅ | Settings -> Downloads: sort downloads into Pictures, Videos, Music, Documents, Archives, Programs folders |
 | 6.22 | Per-site download permissions | ✅ | Site permissions -> Several downloads at once, per site |
 
 ### 7. Passwords & identity
@@ -651,14 +651,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 18.01 | Automatic language detection | ⏳ | |
+| 18.01 | Automatic language detection | 🟡 | Kessel reads the language the page declares (its lang or Content-Language), not the text itself |
 | 18.02 | Full-page translation | ✅ | Right-click the page -> Translate this page: Google Translate's copy of it, in a new tab |
 | 18.03 | Selected-text translation | ✅ | Right-click selected text -> Translate: Google, Microsoft Translator or DeepL, in a new tab |
-| 18.04 | Translation popup | ⏳ | |
+| 18.04 | Translation popup | ✅ | A Translate chip in the address bar on a page in another language: translate it, Always, Never for the language or the site |
 | 18.05 | Translation language preferences | ✅ | Settings -> Page tools: translate into Kessel's language or one you pick, and with which service |
-| 18.06 | Automatic translation | ⏳ | |
-| 18.07 | Never translate this language | ⏳ | |
-| 18.08 | Never translate this site | ⏳ | |
+| 18.06 | Automatic translation | ✅ | Always translate <language> from the chip: its pages go to the translator by themselves; removable in Settings -> Page tools |
+| 18.07 | Never translate this language | ✅ | Never translate <language> from the chip; Settings -> Page tools lists them, each removable |
+| 18.08 | Never translate this site | ✅ | Never translate <site> from the chip; Settings -> Page tools lists them, each removable |
 | 18.09 | Offline translation | ⏳ | |
 | 18.10 | Privacy-preserving translation | ⏳ | |
 
@@ -775,7 +775,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 24.04 | Search shortcuts (g cats, yt ..., wiki ...) | ✅ | Type a keyword and a space: yt cats, w Budapest, !gh kessel; keywords are yours to change |
 | 24.05 | Search suggestions | 🟢 | As you type in the address bar (Settings -> Search & Startup); never from a private window |
 | 24.06 | Search history | ⏳ | |
-| 24.07 | Private search | ⏳ | |
+| 24.07 | Private search | ✅ | Settings -> Search & Startup -> In private windows: a search engine of its own there |
 | 24.08 | Search engine per profile | ⏳ | |
 | 24.09 | Search engine per window | ⏳ | |
 
@@ -1216,7 +1216,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 50.07 | Chromecast-style casting | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.08 | AirPlay-style integration | ⏭️ | WebView2 has no casting (Edge's cast needs Google's cast service): left out |
 | 50.09 | Subtitle customization | ⏳ | |
-| 50.10 | Theater mode | ⏳ | |
+| 50.10 | Theater mode | ✅ | Command palette -> Theater mode: the video fills the tab on black; Esc puts it back |
 | 50.11 | Fullscreen mode | ⏳ | |
 
 ### 51. Privacy-focused advanced features

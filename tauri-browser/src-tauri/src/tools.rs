@@ -152,7 +152,7 @@ pub fn broadcast_tweaks(app: &tauri::AppHandle) {
 #[tauri::command]
 pub fn page_tool(app: tauri::AppHandle, webview: Webview, id: u32, tool: String) -> Result<(), String> {
     crate::require_internal_page(&webview)?;
-    if !matches!(tool.as_str(), "zap-start" | "link-hints" | "shot-area-start" | "pause-media" | "highlight") {
+    if !matches!(tool.as_str(), "zap-start" | "link-hints" | "shot-area-start" | "pause-media" | "highlight" | "theater") {
         return Err("no such tool".into());
     }
     let state = app.state::<BrowserState>();

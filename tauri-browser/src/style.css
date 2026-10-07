@@ -469,6 +469,10 @@ html.tab-settling #tabs > * { transition: none !important; }
 }
 #blocked-btn[hidden] { display: none; }
 #blocked-btn:hover { color: var(--text); }
+/* The page is in another language than yours (main.js translateMenu). */
+#translate-btn { flex-shrink: 0; display: flex; align-items: center; gap: 5px; border: none; border-radius: 9px; padding: 2px 8px 2px 6px; font-size: 11px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); cursor: pointer; white-space: nowrap; }
+#translate-btn[hidden] { display: none; }
+#translate-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
 /* A page that stopped responding, and Kessel-wide notices (crash.rs). */
 #hang-btn,

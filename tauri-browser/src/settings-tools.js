@@ -38,6 +38,18 @@ export function searchExtras(panel, { el, settingRow }) {
   };
   fillEngines();
 
+  // A different engine in private windows (main.js searchSettings).
+  const privateRow = el(settingRow({ title: "In private windows", desc: "Search with another engine there, if you like", controlHtml: `<select class="field" id="private-engine" style="width:180px"></select>` }));
+  select.closest(".setting-row").after(privateRow);
+  const privateSelect = privateRow.querySelector("#private-engine");
+  const fillPrivate = () => {
+    const s = currentSettings() || {};
+    privateSelect.innerHTML = `<option value="">The same engine</option>` + allEngines(s).map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join("");
+    privateSelect.value = s.features?.private_search_engine || "";
+  };
+  fillPrivate();
+  privateSelect.addEventListener("change", () => saveFeature("private_search_engine", privateSelect.value || undefined));
+
   const card = el(`<div class="setting-card" id="engines-card">
     <div class="k-card-title"><span class="k-label">Search engines and keywords</span></div>
     <p style="margin:2px 18px 8px;font-size:12px;line-height:1.5;color:var(--text-faint)">Type a keyword and a space before your search -- <span class="mono">yt cats</span> -- to search with that engine. In an engine's address, <span class="mono">%s</span> is what you searched for.</p>
@@ -258,9 +270,10 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
       ${settingRow({ title: "Search the web for selected text", desc: "With your default search engine, in a new tab", controlHtml: switchHtml("menu-search", f.page_menu?.search !== false) })}
       ${settingRow({ title: "Search the web for an image", controlHtml: switchHtml("menu-image", f.page_menu?.image_search !== false) })}
       ${settingRow({ title: "Search images with", controlHtml: selectHtml("image-search", [["google", "Google Lens"], ["bing", "Bing Visual Search"], ["yandex", "Yandex Images"], ["tineye", "TinEye"]], 190) })}
-      ${settingRow({ title: "Translate", desc: "Selected text, or the whole page (with Google), in a new tab", controlHtml: switchHtml("menu-translate", f.page_menu?.translate !== false) })}
+      ${settingRow({ title: "Translate", desc: "Selected text, or the whole page (with Google), in a new tab -- and a Translate chip in the address bar on pages in another language", controlHtml: switchHtml("menu-translate", f.page_menu?.translate !== false) })}
       ${settingRow({ title: "Translate text with", controlHtml: selectHtml("translate-service", [["google", "Google Translate"], ["bing", "Microsoft Translator"], ["deepl", "DeepL"]], 190) })}
       ${settingRow({ title: "Translate into", desc: "Kessel's language unless you pick one", controlHtml: selectHtml("translate-to", [["", "Kessel's language"], ["en", "English"], ["hu", "Hungarian"], ["de", "German"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["pt", "Portuguese"], ["nl", "Dutch"], ["pl", "Polish"], ["cs", "Czech"], ["sk", "Slovak"], ["ro", "Romanian"], ["uk", "Ukrainian"], ["ru", "Russian"], ["tr", "Turkish"], ["ja", "Japanese"], ["ko", "Korean"], ["zh-CN", "Chinese (Simplified)"], ["zh-TW", "Chinese (Traditional)"]], 190) })}
+      <div id="translate-lists"></div>
       ${settingRow({ title: "Define a selected word", desc: "From Wiktionary; your search engine if it has no entry", controlHtml: switchHtml("menu-define", f.page_menu?.define !== false) })}
     </div>
 
@@ -388,6 +401,37 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
     sel.value = f[key] || fallback;
     sel.addEventListener("change", () => saveFeature(key, sel.value));
   }
+  // What the Translate chip's Always and Never picked, each one removable.
+  const translateLists = p.querySelector("#translate-lists");
+  const languageName = (code) => {
+    try {
+      return new Intl.DisplayNames(["en"], { type: "language" }).of(code) || code;
+    } catch {
+      return code;
+    }
+  };
+  const renderTranslateLists = () => {
+    translateLists.innerHTML = "";
+    for (const [key, title, name] of [["translate_always_langs", "Always translated", languageName], ["translate_never_langs", "Never translated", languageName], ["translate_never_sites", "Never translated on these sites", (host) => host]]) {
+      const list = features()[key] || [];
+      if (!list.length) continue;
+      const row = el(settingRow({ title, desc: "From the Translate chip", controlHtml: `<div class="chips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;max-width:340px"></div>` }));
+      row.dataset.list = key;
+      for (const item of list) {
+        const chip = el(`<span class="btn sm" style="cursor:default"><span></span> <span class="x" style="cursor:pointer;opacity:.6" title="Remove">✕</span></span>`);
+        chip.querySelector("span").textContent = name(item);
+        chip.dataset.item = item;
+        chip.querySelector(".x").addEventListener("click", async () => {
+          const rest = (features()[key] || []).filter((v) => v !== item);
+          await saveFeature(key, rest.length ? rest : undefined);
+          renderTranslateLists();
+        });
+        row.querySelector(".chips").appendChild(chip);
+      }
+      translateLists.appendChild(row);
+    }
+  };
+  renderTranslateLists();
 
   // Reading and pages
   const filter = p.querySelector("#page-filter");
@@ -801,7 +845,14 @@ export function downloadsExtras(panel, { el, settingRow, switchHtml }) {
   const card = el(`<div class="setting-card">
     ${settingRow({ title: "Save downloads to", desc: "Empty: your Downloads folder", controlHtml: `<input class="field mono" id="dl-dir" style="width:260px" spellcheck="false" placeholder="C:\\Users\\you\\Downloads" />` })}
     ${settingRow({ title: "Ask where to save each file", desc: "A Save As window for every download", controlHtml: switchHtml("dl-ask", f.download_ask === true) })}
+    ${settingRow({ title: "Sort downloads into folders by kind", desc: "Pictures, Videos, Music, Documents, Archives, Programs and Other, inside the downloads folder", controlHtml: switchHtml("dl-sort", f.download_sort === true) })}
   </div>`);
+  const sort = card.querySelector("#dl-sort");
+  sort.addEventListener("click", async () => {
+    const on = !sort.classList.contains("on");
+    await saveFeature("download_sort", on);
+    sort.classList.toggle("on", on);
+  });
   const dir = card.querySelector("#dl-dir");
   dir.value = f.download_dir || "";
   dir.addEventListener("change", () => saveFeature("download_dir", dir.value.trim() || undefined));

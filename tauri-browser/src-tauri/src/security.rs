@@ -296,6 +296,7 @@ pub(crate) fn security_status(app: tauri::AppHandle) -> serde_json::Value {
 // `kind` "phishing" | "malware" | "badware" | "blocked" | "https" | "cert",
 // `detail` what's wrong in words.
 pub(crate) fn show_warning(app: &tauri::AppHandle, id: u32, label: &str, kind: &str, url: &str, detail: &str) {
+    WARNED.lock().unwrap().insert(id, std::time::Instant::now());
     let query: String = tauri::Url::parse_with_params("x:/", &[("kind", kind), ("url", url), ("detail", detail)]).map(|u| u.query().unwrap_or("").to_string()).unwrap_or_default();
     let (app2, label) = (app.clone(), label.to_string());
     // Not from inside the navigation being replaced (see later).
@@ -322,6 +323,17 @@ pub(crate) fn warning_proceed(app: tauri::AppHandle, webview: Webview, kind: Str
         _ => security.proceed.lock().unwrap().insert(host),
     };
     Ok(())
+}
+
+// Tabs that were just given a warning page, and when: the navigation it
+// stood in for then reports failing too (a certificate refused, say), which
+// is no reason for the can't-be-reached page.
+static WARNED: std::sync::Mutex<std::collections::BTreeMap<u32, std::time::Instant>> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+pub(crate) fn warned_lately(id: u32) -> bool {
+    let mut warned = WARNED.lock().unwrap();
+    warned.retain(|_, at| at.elapsed() < std::time::Duration::from_secs(5));
+    warned.contains_key(&id)
 }
 
 // Why a page couldn't be reached, in words: the network failures that get

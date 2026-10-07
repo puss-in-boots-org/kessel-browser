@@ -265,7 +265,9 @@ export const tests = [
         await waitFor(async () => (await k.tabs()).some((t) => t.url === `${other.origin}/page/results?q=glass%20light`), { message: "a search tab" });
         await setFeatures(k, { image_search: "bing" });
         await pick("search-image", `${site.origin}/pic.png`);
-        await waitFor(async () => (await k.tabs()).some((t) => t.url.includes("bing.com") && t.url.includes(encodeURIComponent(`${site.origin}/pic.png`))), { message: "an image search tab" });
+        // (The address itself, or Kessel's page saying it can't be reached.)
+        const opened = (t) => [t.url, decodeURIComponent(t.url)].some((u) => u.includes("bing.com") && u.includes(encodeURIComponent(`${site.origin}/pic.png`)));
+        await waitFor(async () => (await k.tabs()).some(opened), { message: "an image search tab" });
       } finally {
         await other.close();
       }

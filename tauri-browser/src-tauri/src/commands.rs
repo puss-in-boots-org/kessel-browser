@@ -136,6 +136,7 @@ pub const COMMANDS: &[CommandDef] = &[
     cmd("diagnostics", "Diagnostics: system, storage, crash reports", "Kessel", &[]),
     cmd("restart-safe-mode", "Restart in safe mode", "Kessel", &[]),
     cmd("lock-browser", "Lock Kessel", "Kessel", &[]),
+    cmd("theater-mode", "Theater mode: the video fills the tab", "Page tools", &[]),
     cmd("command-palette", "Command palette", "Kessel", &["F2"]),
     // Page tools (tools.rs, src/shared/page-tools.js)
     cmd("screenshot-visible", "Screenshot of what's on screen", "Page tools", &["Ctrl+Shift+S"]),

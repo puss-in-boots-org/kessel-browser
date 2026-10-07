@@ -97,6 +97,16 @@ export async function startServer(host = "127.0.0.2", wantedPort = 0) {
     } else if (parts[0] === "amp") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html amp><head><meta charset="utf-8"><title>AMP copy</title><link rel="canonical" href="${origin}/article/${parts[1] || "Article"}"></head><body>amp</body></html>`);
+    } else if (parts[0] === "lang") {
+      // A page in language parts[1] (it says so: <html lang>).
+      const name = decodeURIComponent(parts[2] || "Page");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html lang="${encodeURIComponent(parts[1] || "en")}"><head><meta charset="utf-8"><title>${name}</title></head><body><h1>${name}</h1><p>Text in another language.</p></body></html>`);
+    } else if (parts[0] === "video") {
+      // A video in the page (nothing to play: the tests make no sound).
+      const name = decodeURIComponent(parts[1] || "Video");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${name}</title></head><body><h1>${name}</h1><video id="v" width="320" height="180" style="background:#333"></video><p>Below the video.</p></body></html>`);
     } else if (parts[0] === "filters.txt") {
       // A small filter list of your own: no pictures from 127.0.0.3.
       res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
