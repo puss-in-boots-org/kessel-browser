@@ -50,8 +50,7 @@ pub struct Accounts {
 impl Accounts {
     pub fn load(settings_dir: &Path, data_root: PathBuf) -> Self {
         let file = settings_dir.join("accounts.json");
-        let mut saved: Saved = fs::read_to_string(&file)
-            .ok()
+        let mut saved: Saved = crate::store::read_text_recovering(&file, |t| serde_json::from_str::<Saved>(t).is_ok())
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
         // Nothing has any folder open this early -- finish old deletions.
@@ -66,7 +65,7 @@ impl Accounts {
 
     fn save(&self) {
         if let Ok(s) = serde_json::to_string_pretty(&*self.saved.lock().unwrap()) {
-            let _ = fs::write(&self.file, s);
+            let _ = crate::store::write_atomic(&self.file, &s);
         }
     }
 

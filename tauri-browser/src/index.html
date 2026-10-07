@@ -89,6 +89,8 @@
           <!-- A pop-up or a redirect your site settings stopped on this
                page: open it anyway, or allow the site. -->
           <button id="blocked-btn" hidden></button>
+          <!-- The page stopped responding (crash.rs): wait, or close it. -->
+          <button id="hang-btn" hidden></button>
           <button id="engine-btn" title="Search engine"></button>
           <button id="shields-btn" title="Shields"><span id="shields-count" hidden></span></button>
           <button id="share-btn" title="Share this page: copy the link, QR code, send it" hidden></button>
@@ -107,6 +109,9 @@
           <!-- Shown once a tab in this window has played sound: what's
                playing, with its controls (media.html). -->
           <button id="media-btn" title="Media controls" hidden></button>
+          <!-- Kessel-wide news (crash.rs): safe mode, tabs to bring back
+               after a crash, a graphics card that keeps failing. -->
+          <button id="notice-btn" hidden></button>
           <button id="menu-btn" title="Kessel menu (Alt+F)"></button>
         </div>
       </div>

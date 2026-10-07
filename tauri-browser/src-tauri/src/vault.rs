@@ -18,7 +18,6 @@ use hmac::{Hmac, Mac};
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -219,15 +218,16 @@ impl Vault {
         }
     }
 
+    // A damaged file falls back on its backup (store.rs) -- a vault that
+    // reads as "not set up" would invite you to make a new, empty one.
     fn read_file(&self) -> Option<VaultFile> {
-        fs::read_to_string(&self.path)
-            .ok()
+        crate::store::read_text_recovering(&self.path, |t| serde_json::from_str::<VaultFile>(t).is_ok())
             .and_then(|s| serde_json::from_str(&s).ok())
     }
 
     fn write_file(&self, file: &VaultFile) {
         if let Ok(s) = serde_json::to_string_pretty(file) {
-            let _ = fs::write(&self.path, s);
+            let _ = crate::store::write_atomic(&self.path, &s);
         }
     }
 

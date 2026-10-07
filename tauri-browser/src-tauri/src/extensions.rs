@@ -803,7 +803,8 @@ fn save_loaded(app: &tauri::AppHandle, all: &HashMap<String, HashMap<String, Str
 // profile is brought in line with the list. (A private page is in the main
 // profile's private mode: nothing to do.)
 pub(crate) fn page_opened(app: &tauri::AppHandle, webview: &Webview, private: bool, account: Option<&str>) {
-    if private {
+    // (Safe mode runs no extensions: the engine's left as it is.)
+    if private || crate::crash::safe_mode().is_some() {
         return;
     }
     let key = profile_key(account);

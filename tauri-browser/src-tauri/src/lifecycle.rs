@@ -327,7 +327,7 @@ static CPU_SEEN: Mutex<Option<HashMap<u32, (u64, Instant)>>> = Mutex::new(None);
 // (private memory in bytes -- what the process has committed, like Chrome's
 // "memory footprint" -- and CPU % since it was last asked about).
 #[cfg(windows)]
-fn process_usage(pid: u32) -> Option<(u64, Option<f64>)> {
+pub(crate) fn process_usage(pid: u32) -> Option<(u64, Option<f64>)> {
     use windows::Win32::Foundation::{CloseHandle, FILETIME};
     use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX2};
     use windows::Win32::System::Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};

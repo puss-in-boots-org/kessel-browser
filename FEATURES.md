@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**66% overall** -- 538 done (✅ 🟢 🌐), 51 built and waiting for their first run on Windows or a phone (🧪), 55 partly done (🟡), 295 to do (⏳), 106 skipped (⏭️), of 1045.
+**69% overall** -- 573 done (✅ 🟢 🌐), 53 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 265 to do (⏳), 106 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -52,7 +52,7 @@ branch, one small commit per feature or group of features.
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
-| [12. DNS & networking](#12-dns--networking) | 11 | 2 |  | 10 |  | `██████░░░░` 57% |
+| [12. DNS & networking](#12-dns--networking) | 12 | 2 | 1 | 8 |  | `██████░░░░` 63% |
 | [13. Website permissions](#13-website-permissions) | 9 | 3 | 1 |  | 7 | `██████████` 96% |
 | [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
@@ -66,7 +66,7 @@ branch, one small commit per feature or group of features.
 | [23. Appearance](#23-appearance) | 11 |  |  | 5 |  | `███████░░░` 69% |
 | [24. Search engines](#24-search-engines) | 5 |  |  | 4 |  | `██████░░░░` 56% |
 | [25. Startup behavior](#25-startup-behavior) | 5 |  | 1 | 3 |  | `██████░░░░` 61% |
-| [26. Session management](#26-session-management) | 2 |  | 6 | 2 | 1 | `█████░░░░░` 50% |
+| [26. Session management](#26-session-management) | 4 |  | 4 | 2 | 1 | `██████░░░░` 60% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
@@ -78,9 +78,9 @@ branch, one small commit per feature or group of features.
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 12 |  |  | 5 |  | `███████░░░` 71% |
 | [37. Cache](#37-cache) | 6 |  |  | 4 |  | `██████░░░░` 60% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) | 1 | 4 | 1 | 7 |  | `████░░░░░░` 42% |
-| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 4 | 1 | 3 | 8 |  | `████░░░░░░` 41% |
-| [40. Built-in task management](#40-built-in-task-management) |  |  |  | 9 |  | `░░░░░░░░░░` 0% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) | 4 | 4 | 1 | 4 |  | `███████░░░` 65% |
+| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
+| [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
 | [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
 | [42. Sharing](#42-sharing) |  |  |  | 6 | 3 | `░░░░░░░░░░` 0% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
@@ -94,14 +94,14 @@ branch, one small commit per feature or group of features.
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) |  |  |  | 1 | 8 | `░░░░░░░░░░` 0% |
-| [54. Crash handling](#54-crash-handling) |  |  | 3 | 6 |  | `██░░░░░░░░` 17% |
+| [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 1 |  | 6 | 6 | 1 | `███░░░░░░░` 31% |
 | [56. Account system](#56-account-system) |  |  |  | 2 | 12 | `░░░░░░░░░░` 0% |
 | [57. Browser lock](#57-browser-lock) | 1 |  |  | 9 |  | `█░░░░░░░░░` 10% |
 | [58. Search / history intelligence](#58-search--history-intelligence) |  |  |  | 13 |  | `░░░░░░░░░░` 0% |
 | [59. Offline functionality](#59-offline-functionality) |  |  |  | 10 |  | `░░░░░░░░░░` 0% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) |  |  |  | 12 |  | `░░░░░░░░░░` 0% |
-| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 5 |  | 1 | 10 | 1 | `███░░░░░░░` 34% |
+| [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 7 |  | 1 | 8 | 1 | `█████░░░░░` 47% |
 | [62. "Crazy advanced" features](#62-crazy-advanced-features) | 3 | 1 | 1 | 19 | 8 | `██░░░░░░░░` 19% |
 | [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
 
@@ -521,9 +521,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 12.18 | System proxy | 🌐 | |
 | 12.19 | Per-profile proxy | ⏳ | |
 | 12.20 | Per-site proxy | ⏳ | |
-| 12.21 | Connection diagnostics | ⏳ | |
+| 12.21 | Connection diagnostics | 🟡 | kessel://diagnostics -> Network: online, the engine's speed estimate, the proxy |
 | 12.22 | Network error reporting | ⏳ | |
-| 12.23 | Offline detection | ⏳ | |
+| 12.23 | Offline detection | 🌐 | navigator.onLine and the engine's offline page; kessel://diagnostics shows it |
 
 ### 13. Website permissions
 
@@ -799,8 +799,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 26.01 | Save session | ✅ | Each window's tabs are saved as they change (3.10) |
 | 26.02 | Restore session | 🟡 | Last session on launch |
-| 26.03 | Automatic session recovery | 🟡 | With "Keep tabs when Kessel closes" on, tabs come back after a crash too: they're saved as they change |
-| 26.04 | Crash recovery | 🟡 | Toolbar watchdog |
+| 26.03 | Automatic session recovery | ✅ | Tabs are saved as they change; after a crash they come back by themselves (Keep tabs when Kessel closes, or the engine crashing) or are offered (54.03) |
+| 26.04 | Crash recovery | ✅ | The toolbar watchdog, crashed pages and the engine itself (section 54) |
 | 26.05 | Session snapshots | ⏳ | |
 | 26.06 | Save window | 🟡 | A window's tabs are saved with the session and when it closes |
 | 26.07 | Restore window | 🟡 | Reopen closed window |
@@ -959,7 +959,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 36.13 | HTTP/3/QUIC | 🌐 | The engine's network stack |
 | 36.14 | Image optimization | ⏳ | |
 | 36.15 | Lazy loading | 🌐 | loading="lazy" images and frames |
-| 36.16 | Process management | 🌐 | The engine's processes; Shift+Esc shows them (39.16) |
+| 36.16 | Process management | ✅ | kessel://tasks: every process; end one (40.05) |
 | 36.17 | Site isolation | 🌐 | The engine's site isolation |
 
 ### 37. Cache
@@ -990,10 +990,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 38.07 | Networking flags | 🧪 | Any networking switch in Settings -> Network -> Engine switches |
 | 38.08 | JavaScript flags | 🧪 | --js-flags in Settings -> Network -> Engine switches |
 | 38.09 | Developer mode | ⏳ | |
-| 38.10 | Internal diagnostics | ⏳ | |
+| 38.10 | Internal diagnostics | ✅ | kessel://diagnostics, kessel://gpu and kessel://tasks |
 | 38.11 | Browser logs | ⏳ | |
-| 38.12 | Crash logs | ⏳ | |
-| 38.13 | Performance diagnostics | ⏳ | |
+| 38.12 | Crash logs | ✅ | crashes.json, in kessel://diagnostics (54.04) |
+| 38.13 | Performance diagnostics | ✅ | kessel://tasks (CPU and memory per process, every 2 s) and DevTools' Performance panel (F12) |
 
 ### 39. Browser information & diagnostics
 
@@ -1001,34 +1001,34 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 39.01 | Browser version | 🟢 | Settings -> About |
 | 39.02 | Engine version | ✅ | Help and Settings -> About show the WebView2 version |
-| 39.03 | OS information | 🟡 | kessel://gpu: Windows and the architecture; not the Windows version yet |
+| 39.03 | OS information | ✅ | kessel://diagnostics: Windows' name, version (25H2...) and build, and the architecture |
 | 39.04 | GPU information | 🧪 | kessel://gpu: the renderer, WebGL and WebGPU adapters |
-| 39.05 | CPU information | 🟡 | kessel://gpu: the number of processor threads |
-| 39.06 | Memory information | ⏳ | |
+| 39.05 | CPU information | ✅ | kessel://diagnostics: the processor's name and its threads |
+| 39.06 | Memory information | ✅ | kessel://diagnostics: the PC's memory and how much is free; kessel://tasks: each process's |
 | 39.07 | Installed codecs | ✅ | kessel://gpu: video and audio formats, hardware decoding, DRM |
-| 39.08 | Supported APIs | ⏳ | |
-| 39.09 | Network information | ⏳ | |
-| 39.10 | Connection status | ⏳ | |
-| 39.11 | Crash reports | ⏳ | |
-| 39.12 | Diagnostics page | 🟡 | kessel://gpu covers graphics and media |
-| 39.13 | Certificate information | ⏳ | |
-| 39.14 | Storage usage | ⏳ | |
-| 39.15 | Site permissions | ⏳ | |
-| 39.16 | Process manager | ✅ | Shift+Esc: the engine's task manager (end a stuck page's process) |
+| 39.08 | Supported APIs | ✅ | kessel://diagnostics -> Web features: 37 tried in the engine itself, with what WebView2 only half-supports (no device chooser, no push service) |
+| 39.09 | Network information | ✅ | kessel://diagnostics -> Network: online or not, the engine's speed estimate, the proxy in use |
+| 39.10 | Connection status | ✅ | kessel://diagnostics: online / offline, updated as it changes |
+| 39.11 | Crash reports | ✅ | kessel://diagnostics -> Crash reports: every crash of a page, the engine, Kessel itself or a damaged data file (54.04) |
+| 39.12 | Diagnostics page | ✅ | kessel://diagnostics (palette: Diagnostics): Kessel, this PC, network, storage, crash reports, web features; Copy report. kessel://gpu for graphics and media |
+| 39.13 | Certificate information | 🟢 | The lock -> Certificate: Windows' certificate viewer for the site |
+| 39.14 | Storage usage | ✅ | kessel://diagnostics -> Storage: the room Kessel's own data and sites' data (cookies, cache, site storage) take, per account |
+| 39.15 | Site permissions | 🟢 | Settings -> Site permissions, and the lock's Site settings (sections 13, 14) |
+| 39.16 | Process manager | ✅ | Shift+Esc: Kessel's task manager (kessel://tasks); the engine's own is a button away |
 
 ### 40. Built-in task management
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 40.01 | Tab CPU usage | ⏳ | |
-| 40.02 | Tab RAM usage | ⏳ | |
-| 40.03 | Extension CPU usage | ⏳ | |
-| 40.04 | Extension RAM usage | ⏳ | |
-| 40.05 | Process termination | ⏳ | |
-| 40.06 | Suspended-tab management | ⏳ | |
-| 40.07 | GPU process information | ⏳ | |
-| 40.08 | Network process information | ⏳ | |
-| 40.09 | Browser process information | ⏳ | |
+| 40.01 | Tab CPU usage | ✅ | kessel://tasks: each page's process with its tabs, CPU and memory (hover cards show a tab's too) |
+| 40.02 | Tab RAM usage | ✅ | kessel://tasks: each page's process with its tabs, CPU and memory |
+| 40.03 | Extension CPU usage | 🧪 | kessel://tasks: extensions' processes (named when one of its pages is open); not yet checked with an extension's background page |
+| 40.04 | Extension RAM usage | 🧪 | As 40.03 |
+| 40.05 | Process termination | ✅ | kessel://tasks -> End process (not the engine's main one); the pages in it show they crashed, with Reload |
+| 40.06 | Suspended-tab management | ✅ | kessel://tasks: the tabs asleep, to wake or close; any tab to sleep from there |
+| 40.07 | GPU process information | ✅ | kessel://tasks: the graphics process, its memory and CPU; End process |
+| 40.08 | Network process information | ✅ | kessel://tasks: the network service and the engine's other helpers, named by their job |
+| 40.09 | Browser process information | ✅ | kessel://tasks: Kessel itself and the engine's main process (each account's own) |
 
 ### 41. Screenshots & capture
 
@@ -1278,15 +1278,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 54.01 | Crash detection | 🟡 | Toolbar only |
-| 54.02 | Automatic recovery | 🟡 | Toolbar only |
-| 54.03 | Session restoration | 🟡 | As 26.03 |
-| 54.04 | Crash reports | ⏳ | |
-| 54.05 | Error pages | ⏳ | |
-| 54.06 | Safe mode | ⏳ | |
-| 54.07 | Extension-disable recovery | ⏳ | |
-| 54.08 | GPU crash recovery | ⏳ | |
-| 54.09 | Corrupted-profile recovery | ⏳ | |
+| 54.01 | Crash detection | ✅ | Every tab watches its processes (crash.rs): crashed, ended, out of memory, not responding, the graphics process, helpers, the engine itself |
+| 54.02 | Automatic recovery | ✅ | A crashed tab in the background sleeps and loads again when you come back; Kessel's own pages reload; the engine going restarts Kessel with your tabs |
+| 54.03 | Session restoration | ✅ | After the engine crashes, Kessel starts again with your tabs; after Kessel closed unexpectedly, a chip offers them back (when it doesn't restore them anyway) |
+| 54.04 | Crash reports | ✅ | crashes.json, in kessel://diagnostics: what stopped, on which page, why, the exit code and the module the engine blames; Kessel's own panics too |
+| 54.05 | Error pages | ✅ | A crashed page shows Kessel's page with Reload, and why: crashed, out of memory, ended |
+| 54.06 | Safe mode | ✅ | kessel.exe --safe-mode, the palette's Restart in safe mode, or by itself after two starts in a row that never finished: no extensions, no graphics card, no engine switches; a chip says so and restarts normally |
+| 54.07 | Extension-disable recovery | ✅ | Safe mode runs no extension (they stay installed and on); after Kessel failed to start twice it starts that way by itself |
+| 54.08 | GPU crash recovery | ✅ | The engine starts a new graphics process by itself; after three crashes in ten minutes Kessel offers to stop using the graphics card (and restart) |
+| 54.09 | Corrupted-profile recovery | ✅ | Kessel's files (settings, session, accounts, passwords...) are written whole, keeping the last as a backup; a damaged one is set aside and its backup used |
 
 ### 55. Browser settings
 
@@ -1395,7 +1395,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 61.01 | Browser, renderer, GPU, network and storage processes | ⏳ | |
+| 61.01 | Browser, renderer, GPU, network and storage processes | 🌐 | WebView2's processes; kessel://tasks lists them by job |
 | 61.02 | JavaScript engine, JIT, WebAssembly engine | ⏳ | |
 | 61.03 | Rendering engine: HTML/CSS parsers, DOM, layout, paint, compositor, GPU backend | ⏳ | |
 | 61.04 | Networking stack, DNS resolver, certificate verifier, HTTP cache, cookie store | ⏳ | |
@@ -1408,7 +1408,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 61.11 | History database | 🟢 | |
 | 61.12 | Bookmark database | 🟢 | |
 | 61.13 | DevTools | 🌐 | F12: the engine's DevTools (section 29) |
-| 61.14 | Crash reporter | ⏳ | |
+| 61.14 | Crash reporter | ✅ | crash.rs: crashes.json and kessel://diagnostics; nothing is sent anywhere |
 | 61.15 | Update system | ⏳ | |
 | 61.16 | Sandbox, site-isolation system, IPC system | ⏳ | |
 | 61.17 | Accessibility layer | ⏳ | |

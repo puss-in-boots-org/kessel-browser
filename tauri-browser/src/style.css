@@ -470,6 +470,29 @@ html.tab-settling #tabs > * { transition: none !important; }
 #blocked-btn[hidden] { display: none; }
 #blocked-btn:hover { color: var(--text); }
 
+/* A page that stopped responding, and Kessel-wide notices (crash.rs). */
+#hang-btn,
+#notice-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 9px;
+  padding: 2px 8px 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+#notice-btn { height: 26px; margin-right: 4px; align-self: center; }
+#hang-btn[hidden],
+#notice-btn[hidden] { display: none; }
+#hang-btn:hover,
+#notice-btn:hover { background: color-mix(in srgb, var(--warning) 24%, transparent); }
+
 /* Ctrl+K / Ctrl+E: what you type is searched for. */
 #url-input.search-mode { font-weight: 500; }
 

@@ -11,16 +11,69 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 
 fn read_json_or_default<T: for<'a> Deserialize<'a> + Default>(path: &Path) -> T {
-    fs::read_to_string(path)
-        .ok()
+    read_text_recovering(path, |t| serde_json::from_str::<T>(t).is_ok())
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
 fn write_json<T: Serialize>(path: &Path, value: &T) {
     if let Ok(s) = serde_json::to_string_pretty(value) {
-        let _ = fs::write(path, s);
+        let _ = write_atomic(path, &s);
     }
+}
+
+// --- Damaged files ----------------------------------------------------------
+//
+// A file is written whole to a temporary file first, then moved over the
+// old one, which is kept as <name>.bak: a crash or a power cut halfway
+// through can't leave half a file. And a file that's damaged anyway (a disk
+// error, a hand edit gone wrong) is set aside as <name>.corrupt and its
+// backup used instead -- not quietly replaced by an empty one the next time
+// Kessel saves. Either way it goes in the crash log (crash.rs).
+
+fn with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".");
+    name.push(suffix);
+    name.into()
+}
+
+static TMP_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+pub(crate) fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    let n = TMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = with_suffix(path, &format!("{}-{}.tmp", std::process::id(), n));
+    fs::write(&tmp, text)?;
+    if path.exists() {
+        let _ = fs::copy(path, with_suffix(path, "bak"));
+    }
+    fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
+}
+
+// `path`'s text if `valid` says it's whole; else its backup's (which also
+// goes back in its place). None: no file (or nothing usable).
+pub(crate) fn read_text_recovering(path: &Path, valid: impl Fn(&str) -> bool) -> Option<String> {
+    let text = match fs::read(path) {
+        Ok(bytes) => String::from_utf8(bytes).ok(),
+        // Not there: a new profile, or you deleted it to start over.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(_) => None,
+    };
+    if let Some(text) = text.filter(|t| valid(t)) {
+        return Some(text);
+    }
+    let _ = fs::copy(path, with_suffix(path, "corrupt"));
+    let backup = with_suffix(path, "bak");
+    let restored = fs::read_to_string(&backup).ok().filter(|t| valid(t));
+    if restored.is_some() {
+        let _ = fs::copy(&backup, path);
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let outcome = if restored.is_some() { "It was damaged; Kessel used its backup" } else { "It was damaged and had no usable backup; Kessel started it afresh" };
+    crate::crash::record("file", &name, "", outcome, 0, "");
+    restored
 }
 
 // --- Bookmarks -------------------------------------------------------------
@@ -502,4 +555,30 @@ pub fn now_unix() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn damaged_files_fall_back_on_their_backup() {
+        let dir = std::env::temp_dir().join(format!("kessel-store-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("x.json");
+        let valid = |t: &str| serde_json::from_str::<serde_json::Value>(t).is_ok();
+        write_atomic(&file, r#"{"a":1}"#).unwrap();
+        write_atomic(&file, r#"{"a":2}"#).unwrap();
+        assert_eq!(fs::read_to_string(with_suffix(&file, "bak")).unwrap(), r#"{"a":1}"#, "the one before is the backup");
+        assert_eq!(read_text_recovering(&file, valid).as_deref(), Some(r#"{"a":2}"#));
+        // Cut off halfway.
+        fs::write(&file, r#"{"a":"#).unwrap();
+        assert_eq!(read_text_recovering(&file, valid).as_deref(), Some(r#"{"a":1}"#), "the backup instead");
+        assert_eq!(fs::read_to_string(&file).unwrap(), r#"{"a":1}"#, "and back in its place");
+        assert_eq!(fs::read_to_string(with_suffix(&file, "corrupt")).unwrap(), r#"{"a":"#, "the damaged one kept aside");
+        // Gone (deleted to start over): nothing, not the backup.
+        fs::remove_file(&file).unwrap();
+        assert!(read_text_recovering(&file, valid).is_none());
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }
