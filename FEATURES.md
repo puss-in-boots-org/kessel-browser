@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**87% overall** -- 726 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 43 partly done (🟡), 97 to do (⏳), 111 skipped (⏭️), of 1045.
+**88% overall** -- 727 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 43 partly done (🟡), 88 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -47,7 +47,7 @@ branch, one small commit per feature or group of features.
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
-| [7. Passwords & identity](#7-passwords--identity) | 24 |  | 1 | 10 | 2 | `███████░░░` 70% |
+| [7. Passwords & identity](#7-passwords--identity) | 25 | 8 | 1 | 1 | 2 | `██████████` 96% |
 | [8. Profiles](#8-profiles) | 16 |  |  |  |  | `██████████` 100% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
@@ -358,16 +358,16 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.14 | Compromised-password detection | ✅ | Have I Been Pwned range check, only when you ask: just 5 characters of each password's SHA-1 hash leave the computer |
 | 7.15 | Password notes | 🟢 | |
 | 7.16 | Password organization | ⏳ | |
-| 7.17 | Passkeys | ⏳ | |
-| 7.18 | Passkey creation | ⏳ | |
-| 7.19 | Passkey login | ⏳ | |
-| 7.20 | Passkey storage | ⏳ | |
+| 7.17 | Passkeys | 🧪 | Passkeys through the engine's WebAuthn and Windows Hello; a first run on screen will confirm the Hello prompts |
+| 7.18 | Passkey creation | 🧪 | A site makes a passkey: Windows Hello asks (7.17) |
+| 7.19 | Passkey login | 🧪 | Signing in with a passkey: Windows Hello asks (7.17) |
+| 7.20 | Passkey storage | 🧪 | Passkeys are kept by Windows Hello, not in Kessel's files |
 | 7.21 | Passkey synchronization | ⏭️ | Needs an online account or server: left out |
-| 7.22 | Hardware-security-key authentication | ⏳ | |
-| 7.23 | Biometric authentication | ⏳ | |
-| 7.24 | WebAuthn | ⏳ | |
-| 7.25 | FIDO2 | ⏳ | |
-| 7.26 | Security-key support | ⏳ | |
+| 7.22 | Hardware-security-key authentication | 🧪 | Security keys (USB, NFC) through the engine's WebAuthn and Windows |
+| 7.23 | Biometric authentication | 🧪 | Windows Hello: unlocks the browser lock (Settings -> Security) and passkeys -- its prompts wait for a run on screen |
+| 7.24 | WebAuthn | 🌐 | The engine's WebAuthn, with Windows Hello as its authenticator (the API tested in standards.test) |
+| 7.25 | FIDO2 | 🧪 | FIDO2, through the engine's WebAuthn and Windows (7.22) |
+| 7.26 | Security-key support | 🧪 | See 7.22 |
 | 7.27 | Username autofill | ✅ | With the password (7.03) |
 | 7.28 | Password autofill | ✅ | See 7.03 |
 | 7.29 | Name autofill | ✅ | Settings -> Addresses & cards: a name (whole, first or last) filled in from Kessel's own list under the field -- the page never sees the list |
