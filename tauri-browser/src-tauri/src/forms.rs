@@ -208,10 +208,12 @@ fn dpapi(_data: &[u8], _protect: bool) -> Result<Vec<u8>, String> {
 
 // --- Pages ------------------------------------------------------------------------
 
-// What a page may fill: never Kessel's own pages, only web pages.
-fn page_ok(url: &str) -> bool {
+// What a page may fill: never Kessel's own pages (served over http from
+// the app's own origin -- the new tab page's "Search or enter address" is
+// no address field), only web pages.
+fn page_ok(app: &tauri::AppHandle, url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
-    lower.starts_with("https://") || lower.starts_with("http://")
+    (lower.starts_with("https://") || lower.starts_with("http://")) && !tauri::Url::parse(url).is_ok_and(|u| crate::is_app_origin(app, &u))
 }
 
 // Secure enough for a card: https, or a page from this very computer
@@ -231,7 +233,7 @@ fn secure(url: &str) -> bool {
 // The suggestions under a field of `kind` ("address" or "card"): what to
 // show, never the data itself.
 pub(crate) fn suggest(app: &tauri::AppHandle, url: &str, kind: &str) -> serde_json::Value {
-    if !enabled(app) || !page_ok(url) {
+    if !enabled(app) || !page_ok(app, url) {
         return serde_json::json!([]);
     }
     let state = app.state::<BrowserState>();
@@ -414,7 +416,7 @@ static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1)
 pub(crate) fn on_sent(app: &tauri::AppHandle, id: u32, url: &str, d: &serde_json::Value) {
     let state = app.state::<BrowserState>();
     let offer_on = state.store.settings.lock().unwrap().features.get("form_offer").and_then(|v| v.as_bool()).unwrap_or(true);
-    if !enabled(app) || !offer_on || !page_ok(url) || state.private_tabs.lock().unwrap().contains(&id) {
+    if !enabled(app) || !offer_on || !page_ok(app, url) || state.private_tabs.lock().unwrap().contains(&id) {
         return;
     }
     let s = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
