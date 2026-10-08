@@ -835,6 +835,7 @@ function performancePanel(settings) {
 
     <div class="setting-card">
       ${settingRow({ title: "Use hardware acceleration", desc: "The graphics card draws pages, plays video and runs 3D and games -- smoother, and easier on the battery. Turn it off if pages flicker or show black boxes. Applies the next time Kessel starts.", controlHtml: switchHtml("hw-accel", settings.hardware_acceleration !== false) })}
+      ${settingRow({ title: "Sound when Kessel's window is shared", desc: "Discord, OBS and other apps that share Kessel's window hear its pages too (the engine plays sound from its main process). Applies the next time Kessel starts.", controlHtml: switchHtml("share-audio", settings.features?.share_audio !== false) })}
       ${settingRow({ title: "Graphics card", desc: "For a PC with two, like most gaming laptops. Automatic uses the power-saving one when Kessel starts on battery. Applies the next time Kessel starts.", controlHtml: `<select class="field" id="gpu-preference" style="width:170px"><option value="auto">Automatic</option><option value="power">Power-saving</option><option value="performance">High-performance</option></select>` })}
       ${settingRow({ title: "Graphics and media", desc: "What the graphics card does for Kessel, and which video and audio formats play", controlHtml: `<button class="btn sm" id="open-gpu-btn">${icon("gpu", 13)} Open</button>` })}
     </div>
@@ -873,6 +874,17 @@ function performancePanel(settings) {
   maxAwake.addEventListener("change", () => saveSettings({ max_awake_tabs: parseInt(maxAwake.value, 10) }));
   wireSwitch(p, "reduce-memory", "reduce_background_memory", { defaultOn: true });
   wireSwitch(p, "hw-accel", "hardware_acceleration", { defaultOn: true });
+  const shareAudio = p.querySelector("#share-audio");
+  shareAudio.addEventListener("click", async () => {
+    const on = !shareAudio.classList.contains("on");
+    const features = { ...(currentSettings()?.features || {}) };
+    if (on) delete features.share_audio;
+    else features.share_audio = false;
+    await saveSettings({ features });
+    shareAudio.classList.toggle("on", on);
+    shareAudio.setAttribute("aria-checked", String(on));
+    toast("Applies the next time Kessel starts");
+  });
   const gpu = p.querySelector("#gpu-preference");
   gpu.value = settings.gpu_preference || "auto";
   gpu.disabled = settings.hardware_acceleration === false;

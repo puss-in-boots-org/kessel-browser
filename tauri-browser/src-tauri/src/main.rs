@@ -5272,6 +5272,12 @@ fn proxy_args(features: &serde_json::Value) -> String {
     out
 }
 
+// Settings -> Performance -> "Sound when Kessel's window is shared" (on
+// unless you turned it off).
+fn share_audio(features: &serde_json::Value) -> bool {
+    features.get("share_audio").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
 fn engine_args(settings: &Settings) -> String {
     let mut args = if settings.smartscreen { String::from("--disable-features=msWebOOUI,msPdfOOUI") } else { String::from(profile::DEFAULT_ENGINE_ARGS) };
     if settings.block_third_party_cookies {
@@ -5279,6 +5285,13 @@ fn engine_args(settings: &Settings) -> String {
     }
     // Off in the engine by default.
     args.push_str(" --enable-blink-features=AudioVideoTracks");
+    // Apps that share Kessel's window -- Discord, OBS -- take its sound from
+    // its process and the processes it started; the engine's audio service
+    // plays it a level further down, where they don't hear it. So it runs
+    // in the engine's main process instead (Settings -> Performance).
+    if share_audio(&settings.features) {
+        args.push_str(" --disable-features=AudioServiceOutOfProcess");
+    }
     // Caret browsing (F7, a11y.rs).
     args.push_str(a11y::engine_flags(&settings.features));
     if crash::safe_mode().is_some() {
@@ -5712,6 +5725,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sound_for_window_sharing() {
+        let on = engine_args(&Settings::default());
+        assert!(on.contains("AudioServiceOutOfProcess"), "on by default: {on}");
+        assert_eq!(on.matches("--disable-features=").count(), 1, "in the one list: {on}");
+        let off = engine_args(&Settings { features: serde_json::json!({ "share_audio": false }), ..Settings::default() });
+        assert!(!off.contains("AudioServiceOutOfProcess"), "off when you say so");
+    }
 
     #[test]
     fn proxy_and_engine_switches() {
