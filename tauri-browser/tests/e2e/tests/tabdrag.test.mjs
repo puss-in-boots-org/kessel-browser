@@ -48,11 +48,27 @@ export const tests = [
       await toolbar.evaluate(`window.__kesselTest.activateTab(${(await k.tabs())[1].id})`);
       const from = await tabCenter(toolbar, 2);
       const size = await toolbar.evaluate(`[innerWidth, innerHeight]`);
-      await dragInToolbar(toolbar, from, [size[0] - 30, size[1] / 2], { steps: 16, hold: 150 });
+      await dragInToolbar(toolbar, from, [size[0] - 30, size[1] / 2], { steps: 16, hold: 650 });
       await waitFor(() => toolbar.evaluate(`!document.getElementById('split-divider').hidden`), { message: "split view's divider" });
       assert.equal((await k.tabs()).map((t) => t.title).join(), "A,B,C", "the pair sits side by side in the strip");
       await toolbar.evaluate(`window.__TAURI__.core.invoke('unsplit')`);
       await waitFor(() => toolbar.evaluate(`document.getElementById('split-divider').hidden`), { message: "split view ended" });
+    },
+  },
+  {
+    // (Split view only when it's held there: carried past an edge, no.)
+    name: "a tab only passing the page's edge doesn't open beside the one you're on",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch();
+      const toolbar = await threeTabs(k, site, waitFor);
+      await toolbar.evaluate(`window.__kesselTest.activateTab(${(await k.tabs())[1].id})`);
+      const from = await tabCenter(toolbar, 2);
+      const size = await toolbar.evaluate(`[innerWidth, innerHeight]`);
+      await dragInToolbar(toolbar, from, [size[0] - 30, size[1] / 2], { steps: 16, hold: 120 });
+      await new Promise((r) => setTimeout(r, 700));
+      assert(await toolbar.evaluate(`document.getElementById('split-divider').hidden && document.getElementById('split-hint').hidden`), "no split view, nor its hint");
+      assert.equal((await k.windows()).length, 1, "still one window");
+      await waitFor(async () => (await k.tabs()).map((t) => t.title).join() === "A,B,C", { message: "the tabs as they were" });
     },
   },
   {
