@@ -163,6 +163,7 @@ fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value,
             let width = state.store.settings.lock().unwrap().side_panel_width;
             place_side_panel(&state, &label2, width);
         }
+        WindowEvent::Moved(_) => parent_moved(&window2),
         WindowEvent::Focused(true) => {
             *app2.state::<BrowserState>().focused_window.lock().unwrap() = Some(label2.clone());
             // The keyboard focus back to the page (or wherever it was).
@@ -173,6 +174,24 @@ fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value,
         _ => {}
     });
     Ok(label)
+}
+
+// Window `window` moved (or a tab moved into it): its pages are told where
+// they are on screen now. Without it a page goes on believing it's where
+// its window was when it was made -- or, moved in from another window, where
+// that one was -- and what it places by screen position lands off to the
+// side: the autofill list, a <select>'s list, the page's own
+// screenX/screenY. (wry does this only for a window's single webview, not
+// for child webviews like these.)
+pub(crate) fn parent_moved(window: &Window) {
+    #[cfg(windows)]
+    for webview in window.webviews() {
+        let _ = webview.with_webview(|platform| unsafe {
+            let _ = platform.controller().NotifyParentWindowPositionChanged();
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = window;
 }
 
 // A toolbar snapshot (see pushToolbarSnapshot in main.js) as a session.
@@ -334,6 +353,7 @@ pub(crate) fn move_tab(app: &tauri::AppHandle, state: &BrowserState, id: u32, ta
         }
     });
     raise_resize_borders(&target_window);
+    parent_moved(&target_window);
     emit_to_window(app, &from, "tab-moved-out", serde_json::json!({ "id": id }));
     tab_info(state, id).ok_or_else(|| "tab not found".into())
 }

@@ -33,6 +33,27 @@ const values = (page, ids) => page.evaluate(`Object.fromEntries(${JSON.stringify
 
 export const tests = [
   {
+    // (Kessel's pages come from its own http origin: no web page.)
+    name: "no address list on Kessel's own pages: the new tab page's search box is no address field",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch();
+      await k.invoke("autofill_save_address", { address: { name: "Jane Doe", street: "1 Main St", city: "Budapest", postal_code: "1011", country: "Hungary" } });
+      const page = await k.page((t) => t.url.includes("newtab"));
+      await page.waitFor(`!!document.getElementById('omnibox')`);
+      await page.session.send("Emulation.setFocusEmulationEnabled", { enabled: true });
+      // (Away from it and back: the field gets the focus anew.)
+      await page.evaluate(`document.getElementById('omnibox').blur()`);
+      await page.click(...(await center(page, "#omnibox")));
+      // (It would show at once -- and, taking the focus, close again.)
+      for (let i = 0; i < 12; i++) {
+        assert(!(await k.targets()).some((t) => t.url.includes("forms.html")), "no list");
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      await page.session.send("Input.insertText", { text: "b" });
+      await waitFor(() => page.evaluate(`document.activeElement?.id === 'omnibox' && document.getElementById('omnibox').value === 'b'`), { message: "still typing in the search box" });
+    },
+  },
+  {
     name: "addresses and cards: Kessel's own list under the field, the page sees nothing till you pick; picking fills the form",
     async run({ launch, site, assert, waitFor }) {
       const k = await launch();

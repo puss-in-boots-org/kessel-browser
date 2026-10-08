@@ -3609,7 +3609,7 @@ async fn suggest_popup(app: tauri::AppHandle, webview: Webview, show: bool, x: f
                 let init = format!("window.__KESSEL_POPUP__ = {{ toolbar: {} }};", serde_json::to_string(&toolbar_label(&win)).unwrap_or_default());
                 window
                     .add_child(
-                        profile::webview(&label, WebviewUrl::App("suggest.html".into())).initialization_script(&init),
+                        profile::webview(&label, WebviewUrl::App("suggest.html".into())).initialization_script(&init).focused(false),
                         LogicalPosition::new(x, y),
                         LogicalSize::new(width, height),
                     )
