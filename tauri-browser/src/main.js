@@ -77,9 +77,14 @@ function findTab(id) {
 // searches with the engine Settings -> Search & Startup picked for those.
 function searchSettings() {
   const s = currentSettings();
-  const own = WIN.private && s?.features?.private_search_engine;
+  const own = windowEngine || (WIN.private && s?.features?.private_search_engine);
   return own ? { ...s, search_engine: own } : s;
 }
+
+// The engine this window searches with, if you picked one "for this window
+// only" (the engine menu) -- for as long as the window is open.
+let windowEngine = null;
+let windowEngineOnly = false;
 
 // A read-only view of the tab strip for the end-to-end tests (tests/e2e).
 window.__kesselTest = {
@@ -5055,12 +5060,25 @@ async function pollTabResources() {
 // The address bar's engine button: which engine searches, as a dropdown
 // under it (a popup, so the page doesn't cover it).
 function toggleEngineMenu() {
-  const current = currentSettings()?.search_engine || "google";
+  const current = searchSettings()?.search_engine || "google";
   const rect = document.getElementById("engine-btn").getBoundingClientRect();
+  const pickEngine = (id) => {
+    if (windowEngineOnly) windowEngine = id;
+    else saveSettings({ search_engine: id });
+  };
   const items = [
-    { header: "Search with" },
-    ...allEngines(currentSettings()).map((engine) => ({ label: engine.name, keys: engine.keyword || undefined, checked: engine.id === current, action: () => saveSettings({ search_engine: engine.id }) })),
+    { header: windowEngineOnly ? "Search in this window with" : "Search with" },
+    ...allEngines(currentSettings()).map((engine) => ({ label: engine.name, keys: engine.keyword || undefined, checked: engine.id === current, action: () => pickEngine(engine.id) })),
     "-",
+    {
+      label: "For this window only",
+      checked: windowEngineOnly,
+      action: () => {
+        windowEngineOnly = !windowEngineOnly;
+        // Back to everywhere's engine.
+        if (!windowEngineOnly) windowEngine = null;
+      },
+    },
     { label: "Manage search engines", iconName: "settings", action: () => openSingleton("kessel://settings/search") },
   ];
   showContextMenu(items, rect.left, rect.bottom + 6, { dropdown: true, width: 230 });

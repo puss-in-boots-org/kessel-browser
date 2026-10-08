@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**88% overall** -- 727 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 43 partly done (🟡), 88 to do (⏳), 111 skipped (⏭️), of 1045.
+**89% overall** -- 731 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 79 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -64,7 +64,7 @@ branch, one small commit per feature or group of features.
 | [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
 | [23. Appearance](#23-appearance) | 16 |  |  |  |  | `██████████` 100% |
-| [24. Search engines](#24-search-engines) | 8 |  |  | 1 |  | `█████████░` 89% |
+| [24. Search engines](#24-search-engines) | 9 |  |  |  |  | `██████████` 100% |
 | [25. Startup behavior](#25-startup-behavior) | 8 |  | 1 |  |  | `█████████░` 94% |
 | [26. Session management](#26-session-management) | 9 |  | 1 |  | 1 | `██████████` 95% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
@@ -91,19 +91,19 @@ branch, one small commit per feature or group of features.
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
-| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 7 |  |  | 4 | 3 | `██████░░░░` 64% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 8 |  |  | 3 | 3 | `███████░░░` 73% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
-| [56. Account system](#56-account-system) | 1 |  |  | 1 | 12 | `█████░░░░░` 50% |
+| [56. Account system](#56-account-system) | 1 |  | 1 |  | 12 | `████████░░` 75% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
 | [59. Offline functionality](#59-offline-functionality) | 8 |  | 1 | 1 |  | `█████████░` 85% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 14 | 1 | 2 | 7 | 8 | `███████░░░` 67% |
-| [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 16 | 1 | 5 | 2 | 8 | `████████░░` 81% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 2 | 1 |  | `█████████░` 90% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -777,7 +777,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 24.06 | Search history | ✅ | History -> Searches: what you searched, on which engine (5.12) |
 | 24.07 | Private search | ✅ | Settings -> Search & Startup -> In private windows: a search engine of its own there |
 | 24.08 | Search engine per profile | ✅ | Each profile keeps its own default and own search engines (8.14) |
-| 24.09 | Search engine per window | ⏳ | |
+| 24.09 | Search engine per window | ✅ | The address bar's engine menu -> For this window only: that window searches with its own engine while it's open |
 
 ### 25. Startup behavior
 
@@ -1230,7 +1230,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 51.05 | Ad blocking | 🟢 | |
 | 51.06 | Cookie isolation | 🟢 | Accounts |
 | 51.07 | Container tabs | 🟢 | Accounts |
-| 51.08 | Temporary identities | ⏳ | |
+| 51.08 | Temporary identities | ✅ | A private window is a fresh identity -- no cookies, nothing kept, forgotten when it closes; accounts keep separate ones side by side |
 | 51.09 | Temporary email integration | ⏭️ | Needs an online account or server: left out |
 | 51.10 | VPN integration | ⏭️ | Needs an online account or server: left out |
 | 51.11 | Proxy integration | ⏳ | |
@@ -1320,7 +1320,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 56.07 | Session management | ⏭️ | Needs an online account or server: left out |
 | 56.08 | Sync | ⏭️ | Needs an online account or server: left out |
 | 56.09 | Cloud backup | ⏭️ | Needs an online account or server: left out |
-| 56.10 | Encrypted browser data | ⏳ | |
+| 56.10 | Encrypted browser data | 🟡 | Passwords (behind your master password) and cards (for your Windows account) are encrypted; history, bookmarks and settings aren't |
 | 56.11 | Remote logout | ⏭️ | Needs an online account or server: left out |
 | 56.12 | Device removal | ⏭️ | Needs an online account or server: left out |
 | 56.13 | Account recovery | ⏭️ | Needs an online account or server: left out |
@@ -1436,12 +1436,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.17 | Shared sessions | ⏭️ | Needs an online account or server: left out |
 | 62.18 | Cloud browser profiles | ⏭️ | Needs an online account or server: left out |
 | 62.19 | Encrypted browser backup | ⏳ | |
-| 62.20 | Temporary browser identities | ⏳ | |
+| 62.20 | Temporary browser identities | ✅ | See 51.08 |
 | 62.21 | Website-specific containers | 🟡 | Accounts per tab |
-| 62.22 | Per-site browser personalities | ⏳ | |
-| 62.23 | Built-in automation | ⏳ | |
-| 62.24 | Browser macros | ⏳ | |
-| 62.25 | Workflow automation | ⏳ | |
+| 62.22 | Per-site browser personalities | 🟡 | Per site: zoom, colour filter, own CSS, hidden elements, permissions, content settings, cookie rule, never translate -- not a separate identity per site |
+| 62.23 | Built-in automation | 🟡 | Command chains, mouse gestures, auto-reload and watched pages; no scripting of pages |
+| 62.24 | Browser macros | ✅ | Command chains (Settings -> Page tools): several commands in one go, from the command palette or a mouse gesture |
+| 62.25 | Workflow automation | 🟡 | See 62.23 |
 | 62.26 | Command palette | ✅ | F2: every command, searchable, recent ones first |
 | 62.27 | Keyboard-first UI | 🟢 | The command palette (F2), every shortcut yours to change, links opened from the keyboard, F6 / Shift+F6 |
 | 62.28 | Power-user settings | 🟢 | Engine switches, command chains, mouse gestures, your own shortcuts, your own CSS per site |
@@ -1474,6 +1474,6 @@ Only ones that work on this PC, without an account or a server.
 | 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | 🟡 | The engine already shows the link under the mouse; no clock yet |
 | 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | ✅ | Command palette -> Open a link with the keyboard |
 | 63.17 | Paste and go / paste and search (Chrome, Firefox) | 🧪 | Command palette -> Paste and go |
-| 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | ⏳ | |
+| 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | 🟡 | Tab groups fold into their label, like a stack; no folders inside folders |
 | 63.19 | Command chains: several commands under one shortcut (Vivaldi) | ✅ | Settings -> Page tools -> Command chains; from the palette or a gesture |
 | 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | 🧪 | Sites' own search engines are offered in Settings -> Search & Startup |
