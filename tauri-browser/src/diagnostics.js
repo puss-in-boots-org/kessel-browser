@@ -31,7 +31,7 @@ function duration(seconds) {
 const row = (label, value, detail = "", level = "") => ({ label, value: String(value ?? ""), detail, level });
 
 function rowHtml(r) {
-  const badge = r.level ? `<span class="badge ${r.level}">${r.level === "ok" ? "✓" : r.level === "warn" ? "!" : "—"}</span>` : "<span></span>";
+  const badge = r.level ? `<span class="state ${r.level}">${r.level === "ok" ? "✓" : r.level === "warn" ? "!" : "—"}</span>` : "<span></span>";
   return `<div class="row"><div class="label">${escapeHtml(r.label)}</div><div class="value">${escapeHtml(r.value)}${r.detail ? `<small>${escapeHtml(r.detail)}</small>` : ""}</div>${badge}</div>`;
 }
 

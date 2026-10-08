@@ -25,6 +25,7 @@ const PATHS = {
   unlock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.4-2"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M10.5 12.5 20 3"/><path d="M16 7l2.5 2.5"/><path d="M13 10l2 2"/>',
   card: '<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18"/><path d="M7 15h4"/>',
+  leaf: '<path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15"/><path d="M5 19 13 11"/>',
   user: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.8-3.6 3.8-5.6 7.5-5.6s6.7 2 7.5 5.6"/>',
   userPlus: '<circle cx="10" cy="8.5" r="3.6"/><path d="M3.5 20c.7-3.5 3.3-5.5 6.5-5.5 1.3 0 2.5.3 3.5.9"/><path d="M18 14v6"/><path d="M15 17h6"/>',
   edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',

@@ -12,6 +12,8 @@ mod browser_windows;
 mod commands;
 mod crash;
 mod dialogs;
+mod energy;
+mod experiments;
 mod extensions;
 mod forms;
 mod graphics;
@@ -4472,6 +4474,8 @@ fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<
     if before.features != settings.features {
         tools::broadcast_tweaks(&app);
         a11y::settings_changed(&app, &before.features, &settings.features);
+        // Energy saver's mode may have changed.
+        energy::check(&app);
         // "Remember what pages say" turned off: what they said goes.
         if history_page_text_on(&before.features) && !history_page_text_on(&settings.features) {
             state.store.history.clear_page_text();
@@ -5288,11 +5292,14 @@ fn engine_args(settings: &Settings) -> String {
     } else {
         args.push_str(&graphics::engine_flags(settings, graphics::on_battery()));
         args.push_str(&proxy_args(&settings.features));
+        // Settings -> Network -> Experiments (not in safe mode either).
+        args.push_str(&experiments::args(&settings.features));
     }
     if let Some(port) = profile::remote_debugging_port() {
         args.push_str(&format!(" --remote-debugging-port={}", port));
     }
-    args
+    // (One of each feature list: the engine would keep only the last.)
+    experiments::merge_feature_lists(&args)
 }
 
 fn main() {
@@ -5452,6 +5459,8 @@ fn main() {
             forms::autofill_delete_card,
             forms::autofill_offer_answer,
             forms::forms_pick,
+            energy::energy_saver_status,
+            energy::test_set_battery,
             get_active_tab_url,
             focus_main_window,
             toggle_side_panel,
@@ -5646,6 +5655,8 @@ fn main() {
             watch::start(app.handle());
             // What Shields did, for the privacy dashboard.
             privacy_stats::start(app.handle());
+            // Energy saver: on battery, or always.
+            energy::start(app.handle());
             // Locked on start (if set), and after the PC is left alone.
             browser_lock::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());

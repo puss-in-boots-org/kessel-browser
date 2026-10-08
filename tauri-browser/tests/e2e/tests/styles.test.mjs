@@ -157,4 +157,27 @@ export const tests = [
       assert.equal(saved(k).features?.ui_density, undefined, "nothing kept for Normal");
     },
   },
+  {
+    name: "toolbar buttons: the ones you hide go, the ones you move move",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch();
+      const toolbar = await k.toolbar();
+      const shown = (id) => toolbar.evaluate(`getComputedStyle(document.getElementById('${id}')).display !== 'none'`);
+      const left = (id) => toolbar.evaluate(`document.getElementById('${id}').getBoundingClientRect().left`);
+      assert(await shown("forward-btn"), "Forward to begin with");
+      assert((await left("account-btn")) > (await left("star-btn")), "Accounts after the star to begin with");
+      await k.invoke("open_singleton_tab", { route: "kessel://settings/appearance" });
+      const settings = await k.page((t) => t.url.includes("settings.html"));
+      await settings.waitFor(`!!document.querySelector('#toolbar-card [data-button="account-btn"]')`, { message: "the Toolbar buttons card" });
+
+      await settings.evaluate(`document.getElementById('tb-forward-btn').click()`);
+      await waitFor(async () => !(await shown("forward-btn")), { message: "Forward hidden" });
+      await settings.evaluate(`document.querySelector('#toolbar-card [data-button="account-btn"] [data-up]').click()`);
+      await waitFor(async () => (await left("account-btn")) < (await left("star-btn")), { message: "Accounts moved before the star" });
+      assert.deepEqual(saved(k).features?.toolbar?.hidden, ["forward-btn"], "saved");
+
+      await settings.evaluate(`document.getElementById('tb-forward-btn').click()`);
+      await waitFor(async () => await shown("forward-btn"), { message: "Forward back" });
+    },
+  },
 ];

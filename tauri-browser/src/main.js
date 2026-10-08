@@ -77,9 +77,14 @@ function findTab(id) {
 // searches with the engine Settings -> Search & Startup picked for those.
 function searchSettings() {
   const s = currentSettings();
-  const own = WIN.private && s?.features?.private_search_engine;
+  const own = windowEngine || (WIN.private && s?.features?.private_search_engine);
   return own ? { ...s, search_engine: own } : s;
 }
+
+// The engine this window searches with, if you picked one "for this window
+// only" (the engine menu) -- for as long as the window is open.
+let windowEngine = null;
+let windowEngineOnly = false;
 
 // A read-only view of the tab strip for the end-to-end tests (tests/e2e).
 window.__kesselTest = {
@@ -639,6 +644,7 @@ function paintStaticIcons() {
   iconFor("shields-btn", icon("shieldCheck", 16));
   iconFor("menu-btn", icon("dotsV", 18));
   iconFor("media-btn", icon("music", 17));
+  iconFor("energy-btn", icon("leaf", 16));
   iconFor("win-min", icon("winMin", 14));
   iconFor("win-max", icon("winMax", 13));
   iconFor("win-close", icon("close", 14));
@@ -2742,11 +2748,26 @@ function neverSleeps(tab) {
   });
 }
 
+// Energy saver (energy.rs): on battery (or always), tabs pause and sleep
+// sooner and Kessel's own animations stop; a leaf in the toolbar says so.
+let energySaver = false;
+
+function applyEnergySaver(active) {
+  energySaver = !!active;
+  document.documentElement.classList.toggle("k-energy", energySaver);
+  document.getElementById("energy-btn").hidden = !energySaver;
+  if (energySaver) lifecycleTick();
+}
+
 function lifecycleTick() {
   const settings = currentSettings() || {};
   const now = Date.now();
-  const sleepAfter = (settings.discard_tabs_after_minutes ?? 0) * 60 * 1000;
-  const freezeAfter = (settings.freeze_tabs_after_minutes ?? 0) * 60 * 1000;
+  let sleepAfter = (settings.discard_tabs_after_minutes ?? 0) * 60 * 1000;
+  let freezeAfter = (settings.freeze_tabs_after_minutes ?? 0) * 60 * 1000;
+  if (energySaver) {
+    sleepAfter = Math.min(sleepAfter || Infinity, 15 * 60 * 1000);
+    freezeAfter = Math.min(freezeAfter || Infinity, 60 * 1000);
+  }
   for (const tab of tabs) {
     if (tab.discarded || tab.id <= 0 || tab.id === activeTabId || neverSleeps(tab)) continue;
     const idle = now - (tab.lastActiveAt ?? now);
@@ -3142,7 +3163,28 @@ let omnibox = null;
 // Settings that change the toolbar itself.
 function applyToolbarSettings() {
   document.getElementById("home-btn").hidden = currentSettings()?.show_home_button === false;
+  // Settings -> Appearance -> Toolbar buttons: which show, in what order
+  // (each group in its own place).
+  const toolbar = currentSettings()?.features?.toolbar || {};
+  const hidden = new Set(toolbar.hidden || []);
+  for (const [group, ids] of Object.entries(TOOLBAR_GROUPS)) {
+    const order = [...(toolbar.order?.[group] || []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(toolbar.order?.[group] || []).includes(id))];
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.style.order = String(order.indexOf(id) + 1);
+      el.classList.toggle("k-off", TOOLBAR_HIDEABLE.includes(id) && hidden.has(id));
+    }
+  }
 }
+
+// The toolbar's buttons that can be moved (within their group), and those
+// that can be hidden. Settings -> Appearance shows the same lists.
+const TOOLBAR_GROUPS = {
+  nav: ["back-btn", "forward-btn", "reload-btn", "home-btn"],
+  address: ["engine-btn", "shields-btn", "share-btn", "ext-btn", "star-btn", "account-btn"],
+};
+const TOOLBAR_HIDEABLE = ["forward-btn", "reload-btn", "engine-btn", "shields-btn", "share-btn", "ext-btn", "star-btn", "account-btn"];
 
 // --- The window's name ("Name window…") ---------------------------------------
 //
@@ -5018,12 +5060,25 @@ async function pollTabResources() {
 // The address bar's engine button: which engine searches, as a dropdown
 // under it (a popup, so the page doesn't cover it).
 function toggleEngineMenu() {
-  const current = currentSettings()?.search_engine || "google";
+  const current = searchSettings()?.search_engine || "google";
   const rect = document.getElementById("engine-btn").getBoundingClientRect();
+  const pickEngine = (id) => {
+    if (windowEngineOnly) windowEngine = id;
+    else saveSettings({ search_engine: id });
+  };
   const items = [
-    { header: "Search with" },
-    ...allEngines(currentSettings()).map((engine) => ({ label: engine.name, keys: engine.keyword || undefined, checked: engine.id === current, action: () => saveSettings({ search_engine: engine.id }) })),
+    { header: windowEngineOnly ? "Search in this window with" : "Search with" },
+    ...allEngines(currentSettings()).map((engine) => ({ label: engine.name, keys: engine.keyword || undefined, checked: engine.id === current, action: () => pickEngine(engine.id) })),
     "-",
+    {
+      label: "For this window only",
+      checked: windowEngineOnly,
+      action: () => {
+        windowEngineOnly = !windowEngineOnly;
+        // Back to everywhere's engine.
+        if (!windowEngineOnly) windowEngine = null;
+      },
+    },
     { label: "Manage search engines", iconName: "settings", action: () => openSingleton("kessel://settings/search") },
   ];
   showContextMenu(items, rect.left, rect.bottom + 6, { dropdown: true, width: 230 });
@@ -5132,6 +5187,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   applyToolbarSettings();
   window.addEventListener("kessel-settings", applyToolbarSettings);
   window.addEventListener("kessel-settings", updateTranslateButton);
+  document.getElementById("energy-btn").addEventListener("click", () => openSingleton("kessel://settings/performance"));
+  invoke("energy_saver_status").then((s) => applyEnergySaver(s.active)).catch(() => {});
   document.getElementById("window-name").addEventListener("click", editWindowName);
   invoke("get_windows")
     .then((list) => {
@@ -5436,6 +5493,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderTabs();
     updateAddressBarForActiveTab();
   });
+
+  await listen("energy-saver", (event) => applyEnergySaver(event.payload.active));
 
   await listen("window-named", (event) => {
     windowName = event.payload.name ?? null;

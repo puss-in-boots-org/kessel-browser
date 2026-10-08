@@ -69,6 +69,41 @@ export const tests = [
     },
   },
   {
+    name: "a search engine for one window only, from the address bar's engine menu",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch({ settings: { shields_https_upgrade: false, search_engine: "bing" } });
+      const toolbar = await k.toolbar("win-1");
+      // (A click within 400 ms of a menu closing only closes it.)
+      const pick = async (label) => {
+        await new Promise((r) => setTimeout(r, 500));
+        await toolbar.clickSelector("#engine-btn");
+        const menu = await k.page((t) => t.url.includes("/context.html"));
+        await menu.waitFor(`document.querySelectorAll('.item').length > 0`);
+        const box = await menu.evaluate(`(() => { const el = [...document.querySelectorAll('.item')].find((i) => i.querySelector('.label').textContent === ${JSON.stringify(label)}); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+        await menu.click(box.x, box.y);
+      };
+      const search = async (tb, label) => {
+        await waitFor(async () => (await k.tabs(label)).some((t) => t.active && t.url === "kessel://newtab"), { message: "the window's new tab" });
+        await tb.evaluate(`(() => { const i = document.getElementById('url-input'); i.focus(); i.select(); })()`);
+        await tb.session.send("Input.insertText", { text: "kessel window" });
+        await tb.waitFor(`document.getElementById('url-input').value === 'kessel window'`, { message: "typed" });
+        await tb.key("Enter");
+      };
+      const went = (t, start) => [t.url, decodeURIComponent(t.url)].some((u) => u.startsWith(start) || u.includes(`url=${start}`));
+
+      await pick("For this window only");
+      await pick("DuckDuckGo");
+      await search(toolbar, "win-1");
+      await waitFor(async () => (await k.tabs("win-1")).some((t) => went(t, "https://duckduckgo.com/?q=kessel")), { message: "DuckDuckGo in this window" });
+      assert.equal((await k.invoke("get_settings")).search_engine, "bing", "everywhere else's engine unchanged");
+
+      await k.invoke("new_window", { private: false });
+      await waitFor(async () => (await k.windows()).length === 2, { message: "another window" });
+      await search(await k.toolbar("win-2"), "win-2");
+      await waitFor(async () => (await k.tabs("win-2")).some((t) => went(t, "https://www.bing.com/search?q=kessel")), { message: "Bing in the other window" });
+    },
+  },
+  {
     name: "downloads sorted into folders by kind",
     async run({ launch, site, waitFor }) {
       const folder = mkdtempSync(path.join(tmpdir(), "kessel-sorted-"));

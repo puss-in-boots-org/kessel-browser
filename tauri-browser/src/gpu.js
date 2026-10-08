@@ -276,7 +276,7 @@ function valueHtml(value, detail) {
 }
 
 function rowHtml([label, [value, level], detail]) {
-  const badge = level ? `<span class="badge ${level}">${level === "ok" ? "✓" : level === "warn" ? "!" : "—"}</span>` : "<span></span>";
+  const badge = level ? `<span class="state ${level}">${level === "ok" ? "✓" : level === "warn" ? "!" : "—"}</span>` : "<span></span>";
   return `<div class="row"><div class="label">${escapeHtml(label)}</div><div class="value">${valueHtml(value, detail)}</div>${badge}</div>`;
 }
 
@@ -285,7 +285,7 @@ function sectionHtml(section) {
 }
 
 function mark(ok, text = ok ? "Yes" : "No") {
-  return `<span class="badge ${ok ? "ok" : "off"}">${escapeHtml(text)}</span>`;
+  return `<span class="state ${ok ? "ok" : "off"}">${escapeHtml(text)}</span>`;
 }
 
 function formatsHtml(video, audio, drm) {

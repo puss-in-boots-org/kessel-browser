@@ -143,4 +143,37 @@ export const tests = [
       assert(shown.includes("Vertical tabs") && shown.length <= 4, `searching narrows it (${shown.join(", ")})`);
     },
   },
+  {
+    name: "energy saver: on battery a leaf shows, background tabs pause after a minute and Kessel's animations stop",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch({ settings: { freeze_tabs_after_minutes: 0, discard_tabs_after_minutes: 0 } });
+      await k.invoke("test_set_battery", { on: false });
+      const [a] = await openTabs(k, site, waitFor, ["A", "B"]);
+      const toolbar = await k.toolbar();
+      const tab = async (id) => (await k.tabs()).find((t) => t.id === id);
+      const leaf = () => toolbar.evaluate(`!document.getElementById('energy-btn').hidden && document.documentElement.classList.contains('k-energy')`);
+
+      // Plugged in, pausing off: A stays as it is.
+      await toolbar.evaluate(`window.__kesselTest.age(${a.id}, 2)`);
+      await toolbar.evaluate(`window.__kesselTest.tick()`);
+      await new Promise((r) => setTimeout(r, 700));
+      assert(!(await tab(a.id)).frozen, "not paused while plugged in");
+      assert(!(await leaf()), "no leaf");
+
+      // On battery: the leaf, and A (2 minutes in the background) paused.
+      await k.invoke("test_set_battery", { on: true });
+      await waitFor(leaf, { message: "the leaf" });
+      await toolbar.evaluate(`window.__kesselTest.age(${a.id}, 2)`);
+      await toolbar.evaluate(`window.__kesselTest.tick()`);
+      await waitFor(async () => (await tab(a.id)).frozen, { message: "A paused after a minute" });
+      assert.equal(await toolbar.evaluate(`getComputedStyle(document.getElementById('progress-fill')).transitionDuration`), "0s", "no animations in Kessel's own UI");
+
+      // Plugged in again: gone. "Always": on whatever the plug says.
+      await k.invoke("test_set_battery", { on: false });
+      await waitFor(async () => !(await leaf()), { message: "the leaf gone" });
+      const settings = await k.invoke("get_settings");
+      await k.invoke("update_settings", { settings: { ...settings, features: { ...settings.features, energy_saver: "always" } } });
+      await waitFor(leaf, { message: "on, always" });
+    },
+  },
 ];

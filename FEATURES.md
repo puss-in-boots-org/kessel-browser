@@ -36,18 +36,18 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**86% overall** -- 714 done (✅ 🟢 🌐), 68 built and waiting for their first run on Windows or a phone (🧪), 45 partly done (🟡), 107 to do (⏳), 111 skipped (⏭️), of 1045.
+**89% overall** -- 731 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 79 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
 | [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
-| [3. Windows](#3-windows) | 8 | 2 | 3 | 2 |  | `████████░░` 77% |
+| [3. Windows](#3-windows) | 11 | 2 | 2 |  |  | `█████████░` 93% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
 | [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
-| [7. Passwords & identity](#7-passwords--identity) | 24 |  | 1 | 10 | 2 | `███████░░░` 70% |
+| [7. Passwords & identity](#7-passwords--identity) | 25 | 8 | 1 | 1 | 2 | `██████████` 96% |
 | [8. Profiles](#8-profiles) | 16 |  |  |  |  | `██████████` 100% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
@@ -63,8 +63,8 @@ branch, one small commit per feature or group of features.
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
-| [23. Appearance](#23-appearance) | 14 |  |  | 2 |  | `█████████░` 88% |
-| [24. Search engines](#24-search-engines) | 8 |  |  | 1 |  | `█████████░` 89% |
+| [23. Appearance](#23-appearance) | 16 |  |  |  |  | `██████████` 100% |
+| [24. Search engines](#24-search-engines) | 9 |  |  |  |  | `██████████` 100% |
 | [25. Startup behavior](#25-startup-behavior) | 8 |  | 1 |  |  | `█████████░` 94% |
 | [26. Session management](#26-session-management) | 9 |  | 1 |  | 1 | `██████████` 95% |
 | [27. Browser workspaces](#27-browser-workspaces) | 5 |  | 1 |  | 1 | `█████████░` 92% |
@@ -76,9 +76,9 @@ branch, one small commit per feature or group of features.
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
-| [36. Performance](#36-performance) | 14 |  |  | 3 |  | `████████░░` 82% |
+| [36. Performance](#36-performance) | 15 |  |  | 2 |  | `█████████░` 88% |
 | [37. Cache](#37-cache) | 9 |  | 1 |  |  | `██████████` 95% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) | 4 | 4 | 1 | 4 |  | `███████░░░` 65% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) | 8 | 4 |  | 1 |  | `█████████░` 92% |
 | [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
 | [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
 | [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
@@ -86,24 +86,24 @@ branch, one small commit per feature or group of features.
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 27 | 1 |  |  |  | `██████████` 100% |
-| [46. Mouse / trackpad](#46-mouse--trackpad) | 8 |  |  | 4 |  | `███████░░░` 67% |
+| [46. Mouse / trackpad](#46-mouse--trackpad) | 9 |  |  | 3 |  | `████████░░` 75% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
-| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 6 |  |  | 5 | 3 | `█████░░░░░` 55% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 8 |  |  | 3 | 3 | `███████░░░` 73% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
-| [56. Account system](#56-account-system) | 1 |  |  | 1 | 12 | `█████░░░░░` 50% |
+| [56. Account system](#56-account-system) | 1 |  | 1 |  | 12 | `████████░░` 75% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
 | [59. Offline functionality](#59-offline-functionality) | 8 |  | 1 | 1 |  | `█████████░` 85% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 14 | 1 | 2 | 7 | 8 | `███████░░░` 67% |
-| [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 1 | 2 |  | `█████████░` 88% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 16 | 1 | 5 | 2 | 8 | `████████░░` 81% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 2 | 1 |  | `█████████░` 90% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -262,9 +262,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 3.10 | Window session saving | ✅ | Each window's tabs are saved as they change |
 | 3.11 | Window organization | 🟡 | Name windows, move tabs between them, save them as sessions |
 | 3.12 | Window naming | ✅ | Command palette -> Name window…: the name shows in its tab bar and is its title on the taskbar; it comes back with the session |
-| 3.13 | Split-screen browser windows | ⏳ | |
-| 3.14 | Side-by-side page viewing | 🟡 | The side panel shows a second page beside the tab |
-| 3.15 | Window-specific tab groups | ⏳ | |
+| 3.13 | Split-screen browser windows | ✅ | Split view: two tabs side by side in one window -- tab menu -> Open side by side with this tab, or drag a tab to the page's edge; swap sides, a divider to resize, exit |
+| 3.14 | Side-by-side page viewing | ✅ | Split view (3.13), and the side panel's page beside the tab |
+| 3.15 | Window-specific tab groups | ✅ | Each window has its own tab groups, saved and restored with it |
 
 ### 4. Bookmarks
 
@@ -358,16 +358,16 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.14 | Compromised-password detection | ✅ | Have I Been Pwned range check, only when you ask: just 5 characters of each password's SHA-1 hash leave the computer |
 | 7.15 | Password notes | 🟢 | |
 | 7.16 | Password organization | ⏳ | |
-| 7.17 | Passkeys | ⏳ | |
-| 7.18 | Passkey creation | ⏳ | |
-| 7.19 | Passkey login | ⏳ | |
-| 7.20 | Passkey storage | ⏳ | |
+| 7.17 | Passkeys | 🧪 | Passkeys through the engine's WebAuthn and Windows Hello; a first run on screen will confirm the Hello prompts |
+| 7.18 | Passkey creation | 🧪 | A site makes a passkey: Windows Hello asks (7.17) |
+| 7.19 | Passkey login | 🧪 | Signing in with a passkey: Windows Hello asks (7.17) |
+| 7.20 | Passkey storage | 🧪 | Passkeys are kept by Windows Hello, not in Kessel's files |
 | 7.21 | Passkey synchronization | ⏭️ | Needs an online account or server: left out |
-| 7.22 | Hardware-security-key authentication | ⏳ | |
-| 7.23 | Biometric authentication | ⏳ | |
-| 7.24 | WebAuthn | ⏳ | |
-| 7.25 | FIDO2 | ⏳ | |
-| 7.26 | Security-key support | ⏳ | |
+| 7.22 | Hardware-security-key authentication | 🧪 | Security keys (USB, NFC) through the engine's WebAuthn and Windows |
+| 7.23 | Biometric authentication | 🧪 | Windows Hello: unlocks the browser lock (Settings -> Security) and passkeys -- its prompts wait for a run on screen |
+| 7.24 | WebAuthn | 🌐 | The engine's WebAuthn, with Windows Hello as its authenticator (the API tested in standards.test) |
+| 7.25 | FIDO2 | 🧪 | FIDO2, through the engine's WebAuthn and Windows (7.22) |
+| 7.26 | Security-key support | 🧪 | See 7.22 |
 | 7.27 | Username autofill | ✅ | With the password (7.03) |
 | 7.28 | Password autofill | ✅ | See 7.03 |
 | 7.29 | Name autofill | ✅ | Settings -> Addresses & cards: a name (whole, first or last) filled in from Kessel's own list under the field -- the page never sees the list |
@@ -755,8 +755,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 23.05 | Custom background | 🟢 | Wallpapers |
 | 23.06 | Custom new-tab wallpaper | 🟢 | |
 | 23.07 | Custom accent color | 🟢 | |
-| 23.08 | Custom toolbar | ⏳ | |
-| 23.09 | Toolbar button rearrangement | ⏳ | |
+| 23.08 | Custom toolbar | ✅ | Settings -> Appearance -> Toolbar buttons: hide Forward, Reload, the search engine, Shields, Share, Extensions, the star or Accounts |
+| 23.09 | Toolbar button rearrangement | ✅ | Settings -> Appearance -> Toolbar buttons: move each left or right, beside the address bar and in it |
 | 23.10 | Compact mode | ✅ | Settings -> Appearance -> Density: Compact -- smaller tab strip, toolbar, bookmarks bar, rail and menus, in any style |
 | 23.11 | Normal mode | 🟢 | |
 | 23.12 | Touch mode | ✅ | Settings -> Appearance -> Density: Touch -- tabs, buttons and menu items big enough for a finger |
@@ -777,7 +777,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 24.06 | Search history | ✅ | History -> Searches: what you searched, on which engine (5.12) |
 | 24.07 | Private search | ✅ | Settings -> Search & Startup -> In private windows: a search engine of its own there |
 | 24.08 | Search engine per profile | ✅ | Each profile keeps its own default and own search engines (8.14) |
-| 24.09 | Search engine per window | ⏳ | |
+| 24.09 | Search engine per window | ✅ | The address bar's engine menu -> For this window only: that window searches with its own engine while it's open |
 
 ### 25. Startup behavior
 
@@ -946,7 +946,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 36.01 | Memory saver | ✅ | Sleeping tabs and "Save memory in background tabs" (2.39, 2.44); Settings -> Performance |
 | 36.02 | Sleeping tabs | 🟢 | |
-| 36.03 | Energy saver | ⏳ | |
+| 36.03 | Energy saver | ✅ | Settings -> Performance -> Energy saver (on battery by default, or always): background tabs pause after a minute and sleep after 15, Kessel's own animations stop; a leaf in the toolbar says it's on |
 | 36.04 | CPU throttling | ✅ | Background tabs are paused after a while (2.41) |
 | 36.05 | Background-tab throttling | ✅ | See 2.44 |
 | 36.06 | Hardware acceleration | ✅ | See 35.01 |
@@ -981,15 +981,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 38.01 | Experimental features | 🟡 | Settings -> Network -> Engine switches (your own Chromium switches) |
+| 38.01 | Experimental features | ✅ | Settings -> Network -> Experiments (38.03), and engine switches of your own (38.02) |
 | 38.02 | Feature flags | ✅ | Settings -> Network -> Engine switches: --enable-features / --disable-features |
-| 38.03 | Browser experiments | ⏳ | |
-| 38.04 | Experimental APIs | ⏳ | |
+| 38.03 | Browser experiments | ✅ | Settings -> Network -> Experiments: experimental web features, faster (parallel) downloads, dark pages everywhere, no smooth scrolling, no HTTP/3 -- after a restart |
+| 38.04 | Experimental APIs | ✅ | Settings -> Network -> Experiments -> Experimental web features: the engine's web platform features not yet turned on |
 | 38.05 | Rendering flags | 🧪 | Any rendering switch in Settings -> Network -> Engine switches |
 | 38.06 | GPU flags | 🧪 | Any GPU switch in Settings -> Network -> Engine switches |
 | 38.07 | Networking flags | 🧪 | Any networking switch in Settings -> Network -> Engine switches |
 | 38.08 | JavaScript flags | 🧪 | --js-flags in Settings -> Network -> Engine switches |
-| 38.09 | Developer mode | ⏳ | |
+| 38.09 | Developer mode | ✅ | Settings -> Extensions -> Developer mode: load an unpacked extension, reload it, pack it |
 | 38.10 | Internal diagnostics | ✅ | kessel://diagnostics, kessel://gpu and kessel://tasks |
 | 38.11 | Browser logs | ⏳ | |
 | 38.12 | Crash logs | ✅ | crashes.json, in kessel://diagnostics (54.04) |
@@ -1138,7 +1138,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 46.01 | Middle-click new tab | ✅ | Behind the current tab by default (Settings -> Keyboard & Mouse) |
 | 46.02 | Middle-click close tab | 🟢 | |
 | 46.03 | Ctrl-click links | ✅ | Ctrl+click: new tab; Ctrl+Shift+click: behind; Shift+click: new window |
-| 46.04 | Drag links | ⏳ | |
+| 46.04 | Drag links | ✅ | A link (or text, searched for) dragged onto the tab strip: between tabs it opens there, onto a tab it goes into that tab |
 | 46.05 | Drag tabs | 🟢 | |
 | 46.06 | Mouse gestures | ✅ | Right button + draw; every gesture and its command is yours to change (Settings -> Page tools) |
 | 46.07 | Trackpad gestures | ⏳ | |
@@ -1230,12 +1230,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 51.05 | Ad blocking | 🟢 | |
 | 51.06 | Cookie isolation | 🟢 | Accounts |
 | 51.07 | Container tabs | 🟢 | Accounts |
-| 51.08 | Temporary identities | ⏳ | |
+| 51.08 | Temporary identities | ✅ | A private window is a fresh identity -- no cookies, nothing kept, forgotten when it closes; accounts keep separate ones side by side |
 | 51.09 | Temporary email integration | ⏭️ | Needs an online account or server: left out |
 | 51.10 | VPN integration | ⏭️ | Needs an online account or server: left out |
 | 51.11 | Proxy integration | ⏳ | |
 | 51.12 | Encrypted DNS | ⏳ | |
-| 51.13 | Anti-bounce tracking | ⏳ | |
+| 51.13 | Anti-bounce tracking | ✅ | See 10.20: click-tracking redirect pages skipped |
 | 51.14 | URL tracking-parameter removal | 🟢 | |
 
 ### 52. Import / export
@@ -1320,7 +1320,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 56.07 | Session management | ⏭️ | Needs an online account or server: left out |
 | 56.08 | Sync | ⏭️ | Needs an online account or server: left out |
 | 56.09 | Cloud backup | ⏭️ | Needs an online account or server: left out |
-| 56.10 | Encrypted browser data | ⏳ | |
+| 56.10 | Encrypted browser data | 🟡 | Passwords (behind your master password) and cards (for your Windows account) are encrypted; history, bookmarks and settings aren't |
 | 56.11 | Remote logout | ⏭️ | Needs an online account or server: left out |
 | 56.12 | Device removal | ⏭️ | Needs an online account or server: left out |
 | 56.13 | Account recovery | ⏭️ | Needs an online account or server: left out |
@@ -1436,12 +1436,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.17 | Shared sessions | ⏭️ | Needs an online account or server: left out |
 | 62.18 | Cloud browser profiles | ⏭️ | Needs an online account or server: left out |
 | 62.19 | Encrypted browser backup | ⏳ | |
-| 62.20 | Temporary browser identities | ⏳ | |
+| 62.20 | Temporary browser identities | ✅ | See 51.08 |
 | 62.21 | Website-specific containers | 🟡 | Accounts per tab |
-| 62.22 | Per-site browser personalities | ⏳ | |
-| 62.23 | Built-in automation | ⏳ | |
-| 62.24 | Browser macros | ⏳ | |
-| 62.25 | Workflow automation | ⏳ | |
+| 62.22 | Per-site browser personalities | 🟡 | Per site: zoom, colour filter, own CSS, hidden elements, permissions, content settings, cookie rule, never translate -- not a separate identity per site |
+| 62.23 | Built-in automation | 🟡 | Command chains, mouse gestures, auto-reload and watched pages; no scripting of pages |
+| 62.24 | Browser macros | ✅ | Command chains (Settings -> Page tools): several commands in one go, from the command palette or a mouse gesture |
+| 62.25 | Workflow automation | 🟡 | See 62.23 |
 | 62.26 | Command palette | ✅ | F2: every command, searchable, recent ones first |
 | 62.27 | Keyboard-first UI | 🟢 | The command palette (F2), every shortcut yours to change, links opened from the keyboard, F6 / Shift+F6 |
 | 62.28 | Power-user settings | 🟢 | Engine switches, command chains, mouse gestures, your own shortcuts, your own CSS per site |
@@ -1474,6 +1474,6 @@ Only ones that work on this PC, without an account or a server.
 | 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | 🟡 | The engine already shows the link under the mouse; no clock yet |
 | 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | ✅ | Command palette -> Open a link with the keyboard |
 | 63.17 | Paste and go / paste and search (Chrome, Firefox) | 🧪 | Command palette -> Paste and go |
-| 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | ⏳ | |
+| 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | 🟡 | Tab groups fold into their label, like a stack; no folders inside folders |
 | 63.19 | Command chains: several commands under one shortcut (Vivaldi) | ✅ | Settings -> Page tools -> Command chains; from the palette or a gesture |
 | 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | 🧪 | Sites' own search engines are offered in Settings -> Search & Startup |
