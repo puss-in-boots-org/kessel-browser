@@ -88,6 +88,8 @@ let windowEngineOnly = false;
 
 // A read-only view of the tab strip for the end-to-end tests (tests/e2e).
 window.__kesselTest = {
+  // A tab drag under way: where it's headed.
+  drag: () => drag && { splitSide: drag.splitSide, dwell: !!drag.dwell, detaching: !!drag.detaching },
   tabs: () =>
     tabs.map((t) => ({
       id: t.id,
@@ -904,12 +906,14 @@ function tabElement(tab, account, group, lastInGroup) {
     el.innerHTML = `<span class="tab-favicon"></span><span class="tab-title"></span>`;
     wireHoverCard(el);
     tabEls.set(tab.id, el);
-    if (tab.justCreated) {
-      el.classList.add("tab-enter");
-      el.addEventListener("animationend", () => el.classList.remove("tab-enter"), { once: true });
+    if (tab.justCreated || tab.magnet) {
+      const enter = tab.magnet ? "tab-magnet" : "tab-enter";
+      el.classList.add(enter);
+      el.addEventListener("animationend", () => el.classList.remove(enter), { once: true });
     }
   }
   tab.justCreated = false;
+  delete tab.magnet;
   const c = el.classList;
   c.toggle("active", tab.id === activeTabId);
   c.toggle("selected", selectedTabs.has(tab.id));
@@ -1067,6 +1071,9 @@ function wireTabStrip() {
 
 const DRAG_THRESHOLD = 5;
 const DETACH_DISTANCE = 44;
+// Held this long (ms), within this many pixels, at a page edge: split view.
+const SPLIT_DWELL_MS = 450;
+const SPLIT_DWELL_SLACK = 18;
 let press = null; // a press that isn't a drag (yet)
 let drag = null;
 let suppressClickUntil = 0;
@@ -1326,18 +1333,36 @@ function previewGroupJoin(d) {
 // tab across to an edge -- pulled far down or out of the window, it goes
 // at once.
 function leaveStrip(d, x, y) {
-  const side = splitSideAt(d, x, y);
-  if (side !== d.splitSide) setSplitSide(d, side);
-  if (side) {
-    d.outSince = 0;
-    return true;
-  }
   const b = d.barRect;
   const outOfWindow = x < -DETACH_DISTANCE || y < -DETACH_DISTANCE || x > innerWidth + DETACH_DISTANCE || y > innerHeight + DETACH_DISTANCE;
   const past = d.vertical ? x - b.right : y - b.bottom;
+  const now = performance.now();
+  // Split view only on purpose: held still at a page edge for a moment.
+  // Passing an edge on the way out of the window doesn't.
+  const edge = outOfWindow ? null : splitSideAt(d, x, y);
+  if (!edge) {
+    d.dwell = null;
+    if (d.splitSide) setSplitSide(d, null);
+  } else if (d.splitSide !== edge && (!d.dwell || d.dwell.side !== edge || Math.hypot(x - d.dwell.x, y - d.dwell.y) > SPLIT_DWELL_SLACK)) {
+    if (d.splitSide) setSplitSide(d, null);
+    d.dwell = { side: edge, x, y, since: now };
+  }
+  if (d.dwell && !d.splitSide) {
+    if (now - d.dwell.since >= SPLIT_DWELL_MS) setSplitSide(d, edge);
+    else if (!d.frame) d.frame = requestAnimationFrame(applyDrag); // looks again while it's held
+  }
+  if (d.splitSide) {
+    d.outSince = 0;
+    return true;
+  }
   if (!outOfWindow && past <= DETACH_DISTANCE) {
     d.outSince = 0;
     return false;
+  }
+  if (d.dwell) {
+    // Maybe being held there: not out yet (out of the window, it would be).
+    d.outSince = now;
+    return true;
   }
   // Heading sideways (toward an edge, for split view) keeps it in the
   // window; heading down, or stopping, lets it go.
@@ -1346,7 +1371,6 @@ function leaveStrip(d, x, y) {
   d.lastX = x;
   d.lastY = y;
   d.sideways = (d.sideways ?? 0) * 0.6 + (Math.abs(dx) - Math.abs(dy)) * 0.4;
-  const now = performance.now();
   if (!d.outSince || (d.sideways > 1 && !d.vertical)) d.outSince = now;
   if (outOfWindow || past > Math.max(220, (innerHeight - b.bottom) * 0.45) || now - d.outSince > 260) {
     detachDrag(d);
@@ -1372,7 +1396,7 @@ function splitSideAt(d, x, y) {
   const left = reportedInsets.left;
   const top = reportedInsets.top;
   if (y < top + 24 || y > innerHeight || x < left || x > innerWidth) return null;
-  const zone = Math.max(90, (innerWidth - left) * 0.16);
+  const zone = Math.max(60, (innerWidth - left) * 0.08);
   if (x > innerWidth - zone) return "right";
   if (!d.vertical && x < left + zone) return "left";
   return null;
@@ -1582,8 +1606,9 @@ async function detachDrag(d) {
 
 // Tabs moved into this window from another (a window dropped on the strip),
 // put in before `beforeTab`: {tabs: [{info} | {sleep}], pinned, tabGroups,
-// groups, active}.
-function insertMovedTabs(got, beforeTab) {
+// groups, active}. `magnet`: they snap into the strip (a dragged window let
+// go over it).
+function insertMovedTabs(got, beforeTab, { magnet = false } = {}) {
   const pinnedIds = new Set(got.pinned || []);
   const groupOfId = new Map(Object.entries(got.tabGroups || {}).map(([id, g]) => [Number(id), g]));
   for (const g of got.groups || []) if (g?.id && !tabGroups.has(g.id)) tabGroups.set(g.id, { ...g });
@@ -1610,6 +1635,7 @@ function insertMovedTabs(got, beforeTab) {
     }
   }
   if (!incoming.length) return;
+  if (magnet) for (const t of incoming) t.magnet = true;
   let at = beforeTab ? tabs.indexOf(beforeTab) : -1;
   if (at < 0) at = tabs.length;
   tabs.splice(at, 0, ...incoming);
@@ -5534,7 +5560,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     hideDropGap();
     try {
       const got = await invoke("absorb_window", { source: event.payload.source });
-      insertMovedTabs(got, before);
+      insertMovedTabs(got, before, { magnet: true });
       playSound("attach");
     } catch (err) {
       toast(String(err));

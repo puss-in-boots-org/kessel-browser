@@ -1,12 +1,14 @@
 // Dragging tabs between windows -- and in from other browsers.
 //
 // A tab (or group, or several picked tabs) pulled out of a tab strip leaves
-// in a window of its own, placed so the tab stays under the pointer, and
-// that window then follows the pointer through Windows' own window-move
-// loop (so it snaps like any window). Dragging a window's only tabs drags
-// the window itself. Let go over another Kessel window's tab strip, the
-// dragged window's tabs join that window there: while it's over one, that
-// strip opens a gap where they'll land ("tab-drag-over").
+// in a window of its own -- a smaller copy of the one it left, its page
+// shown at once at the new size -- placed so the tab stays under the
+// pointer, and that window then follows the pointer through Windows' own
+// window-move loop (so it snaps like any window). Dragging a window's only
+// tabs drags the window itself. Let go over another Kessel window's tab
+// strip (or just under it), the dragged window is pulled the rest of the way
+// in, like a magnet, and its tabs join that window there: while it's near
+// one, that strip opens a gap where they'll land ("tab-drag-over").
 //
 // Another browser's window -- a Chrome tab dragged out of Chrome is one --
 // held over a Kessel tab strip and let go comes in too: its tabs' addresses
@@ -44,6 +46,16 @@ impl Target {
     fn contains(&self, x: i32, y: i32) -> bool {
         // A little slack above and below: the strip is short.
         x >= self.strip[0] && x < self.strip[2] && y >= self.strip[1] - 10 && y < self.strip[3] + 14
+    }
+
+    // Close enough under the strip for it to pull a window in (a magnet).
+    fn attracts(&self, x: i32, y: i32) -> bool {
+        self.contains(x, y) || (x >= self.strip[0] && x < self.strip[2] && y >= self.strip[3] && y < self.strip[3] + (MAGNET_REACH * self.scale) as i32)
+    }
+
+    // The middle of the strip's height: where a pulled-in tab ends up.
+    fn middle(&self) -> i32 {
+        (self.strip[1] + self.strip[3]) / 2
     }
 
     // Screen point -> this toolbar's logical coordinates.
@@ -194,6 +206,17 @@ pub(crate) fn place_under_pointer(window: &Window, grab: (f64, f64)) {
     }
 }
 
+// The client size (logical) of a window tabs are pulled out into, from the
+// one they left: a smaller copy of it -- the page scaled to fit, so you see
+// that it came loose -- never under the smallest a window may be.
+fn detached_size(source: (f64, f64)) -> (f64, f64) {
+    ((source.0 * 0.72).round().max(680.0), (source.1 * 0.72).round().max(420.0))
+}
+
+// Let go this close under a strip (physical pixels at scale 1), a dragged
+// window is still pulled into it.
+const MAGNET_REACH: f64 = 64.0;
+
 // --- A Kessel window being dragged ------------------------------------------------
 
 // Window `win` follows the pointer until the mouse button is let go; over
@@ -224,7 +247,7 @@ fn follow_drag(app: tauri::AppHandle, win: String, hwnd: isize, targets: Vec<Tar
         if (x, y) != last {
             last = (x, y);
             let top = win32::top_window_at(x, y, hwnd);
-            let hit = targets.iter().position(|t| Some(t.hwnd) == top && t.contains(x, y));
+            let hit = targets.iter().position(|t| Some(t.hwnd) == top && t.attracts(x, y));
             if hit != over {
                 if let Some(i) = over {
                     emit_to_window(&app, &targets[i].label, "tab-drag-leave", ());
@@ -232,7 +255,8 @@ fn follow_drag(app: tauri::AppHandle, win: String, hwnd: isize, targets: Vec<Tar
                 over = hit;
             }
             if let Some(i) = hit {
-                emit_to_window(&app, &targets[i].label, "tab-drag-over", targets[i].local(x, y));
+                // (Under the strip: its gap opens where the tab would go.)
+                emit_to_window(&app, &targets[i].label, "tab-drag-over", targets[i].local(x, y.min(targets[i].strip[3] - 1)));
             }
         }
         if !down || started.elapsed() > Duration::from_secs(300) {
@@ -240,10 +264,40 @@ fn follow_drag(app: tauri::AppHandle, win: String, hwnd: isize, targets: Vec<Tar
         }
     }
     if let Some(i) = over {
-        let mut payload = targets[i].local(last.0, last.1);
+        let target = &targets[i];
+        snap_into(&app, &win, (last.0, last.1), (last.0, target.middle()));
+        let mut payload = target.local(last.0, target.middle());
         payload["source"] = serde_json::Value::String(win);
-        emit_to_window(&app, &targets[i].label, "absorb-window", payload);
+        emit_to_window(&app, &target.label, "absorb-window", payload);
     }
+}
+
+// Let go over (or just under) a strip: the window is pulled the rest of the
+// way in, like a magnet -- slowly at first, then faster -- so the tab you
+// hold lands in the strip from `from` to `to` (screen points), and it goes.
+#[cfg(windows)]
+fn snap_into(app: &tauri::AppHandle, win: &str, from: (i32, i32), to: (i32, i32)) {
+    let Some(window) = app.state::<BrowserState>().window_handle(win) else { return };
+    let Ok(start) = window.outer_position() else { return };
+    let (dx, dy) = ((to.0 - from.0) as f64, (to.1 - from.1) as f64);
+    let steps = magnet_path(dx.hypot(dy));
+    for t in &steps {
+        let p = tauri::PhysicalPosition::new(start.x + (dx * t).round() as i32, start.y + (dy * t).round() as i32);
+        let _ = window.set_position(p);
+        std::thread::sleep(Duration::from_millis(8));
+    }
+}
+
+// The share of the way covered at each 8 ms step of a magnet's pull over
+// `distance` pixels: eased in (it speeds up as it nears), a little longer
+// the further it has to go; ends at 1.
+fn magnet_path(distance: f64) -> Vec<f64> {
+    if distance < 1.0 {
+        return Vec::new();
+    }
+    let ms = (90.0 + distance * 0.9).min(190.0);
+    let n = (ms / 8.0).ceil() as usize;
+    (1..=n).map(|i| (i as f64 / n as f64).powi(3)).collect()
 }
 
 // Tabs pulled out of the caller's strip: they move (pages and all) into a
@@ -267,8 +321,20 @@ pub(crate) async fn detach_tabs(
     on_main(&app, move || {
         let state = app2.state::<BrowserState>();
         let from = state.window_of(&webview).ok_or("that window is closed")?;
-        let win = browser_windows::create_under_pointer(&app2, state.is_private(&from), serde_json::Value::Null, (grab_x, grab_y))?;
+        let source = state.window_handle(&from).ok_or("that window is closed")?;
+        let scale = source.scale_factor().unwrap_or(1.0);
+        let size = source.inner_size().map(|s| (s.width as f64 / scale, s.height as f64 / scale)).unwrap_or((1280.0, 820.0));
+        let size = detached_size(size);
+        let grab = (grab_x.min(size.0 - 24.0).max(0.0), grab_y);
+        let win = browser_windows::create_under_pointer(&app2, state.is_private(&from), serde_json::Value::Null, grab, size)?;
         let adopt: Vec<serde_json::Value> = ids.iter().filter_map(|&id| browser_windows::move_tab(&app2, &state, id, &win).ok()).collect();
+        // The page shows at once, laid out for its new window -- not only
+        // once that window's toolbar has started.
+        if let Some(&first) = ids.iter().find(|&&id| state.tab_window(id).as_deref() == Some(win.as_str())) {
+            let insets = state.insets(&from);
+            state.win(&win, |w| w.insets = insets);
+            let _ = switch_tab_internal(&state, first);
+        }
         let init = serde_json::json!({ "adopt": adopt, "sleeping": sleeping, "pinned": pinned, "tabGroups": tab_groups.unwrap_or_default(), "groups": groups.unwrap_or_default() });
         state.win(&win, |w| w.init = Some(init));
         start_drag(&app2, &win)?;
@@ -1029,4 +1095,25 @@ pub(crate) fn watch_other_browsers(app: &tauri::AppHandle) {
     foreign::watch(app);
     #[cfg(not(windows))]
     let _ = app;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pulled_out_window_is_a_smaller_copy() {
+        assert_eq!(detached_size((1920.0, 1040.0)), (1382.0, 749.0));
+        assert_eq!(detached_size((800.0, 500.0)), (680.0, 420.0), "never under a window's smallest");
+    }
+
+    #[test]
+    fn a_magnet_pulls_slowly_then_fast() {
+        assert!(magnet_path(0.4).is_empty(), "already there");
+        let path = magnet_path(60.0);
+        assert_eq!(*path.last().unwrap(), 1.0);
+        let steps: Vec<f64> = path.windows(2).map(|w| w[1] - w[0]).collect();
+        assert!(steps.windows(2).all(|s| s[1] > s[0]), "each step longer than the last");
+        assert!(magnet_path(400.0).len() <= 24, "under 200 ms however far");
+    }
 }

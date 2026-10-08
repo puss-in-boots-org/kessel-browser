@@ -187,6 +187,18 @@ html, body { overflow: hidden; user-select: none; }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .tab-enter { animation: var(--k-tab-anim, tabEnter) var(--k-tab-anim-dur, 0.16s) var(--ease); }
+/* A dragged window let go over the strip: its tabs are pulled in like a
+   magnet -- up from below, a touch past, and settle. */
+@keyframes tabMagnet {
+  0% { opacity: 0.5; transform: translateY(18px) scale(0.86); }
+  55% { opacity: 1; transform: translateY(-3px) scale(1.04); }
+  78% { transform: translateY(1px) scale(0.99); }
+  100% { transform: none; }
+}
+.tab-magnet { animation: tabMagnet 0.34s cubic-bezier(0.3, 0.7, 0.4, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .tab-magnet { animation: none; }
+}
 
 #tab-bar {
   height: calc(var(--k-tab-h, 33px) + var(--k-tabbar-pad, 7px));

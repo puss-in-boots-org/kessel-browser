@@ -49,23 +49,24 @@ pub(crate) fn create(app: &tauri::AppHandle, private: bool, init: serde_json::Va
 // The same, with the window's top-left corner at `position` (screen
 // coordinates) -- where a tab dragged out of the strip was dropped.
 pub(crate) fn create_at(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>) -> Result<String, String> {
-    create_placed(app, private, init, position, None)
+    create_placed(app, private, init, position, None, None)
 }
 
 // A window for tabs being dragged out of another: `grab` is the point of its
 // client area (logical) that goes under the mouse pointer, so the dragged
-// tab stays exactly where it was on screen. Shown once it's there.
-pub(crate) fn create_under_pointer(app: &tauri::AppHandle, private: bool, init: serde_json::Value, grab: (f64, f64)) -> Result<String, String> {
-    create_placed(app, private, init, None, Some(grab))
+// tab stays exactly where it was on screen. Shown once it's there. `size`:
+// its client size (logical).
+pub(crate) fn create_under_pointer(app: &tauri::AppHandle, private: bool, init: serde_json::Value, grab: (f64, f64), size: (f64, f64)) -> Result<String, String> {
+    create_placed(app, private, init, None, Some(grab), Some(size))
 }
 
-fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>, grab: Option<(f64, f64)>) -> Result<String, String> {
+fn create_placed(app: &tauri::AppHandle, private: bool, init: serde_json::Value, position: Option<(f64, f64)>, grab: Option<(f64, f64)>, size: Option<(f64, f64)>) -> Result<String, String> {
     let state = app.state::<BrowserState>();
     // Automatic private sessions: every window is a private one.
     let private = private || state.store.settings.lock().unwrap().always_private;
     let number = state.next_window.fetch_add(1, Ordering::SeqCst);
     let label = window_label(number);
-    let (width, height) = (1280.0, 820.0);
+    let (width, height) = size.unwrap_or((1280.0, 820.0));
     // A saved window comes back with its name.
     let name = init.pointer("/session/name").and_then(|v| v.as_str()).and_then(clean_window_name);
 
