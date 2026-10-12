@@ -241,6 +241,11 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::apps::on_page_info(app, id, url, d);
             None
         }
+        // Its badge (navigator.setAppBadge): -1 a dot, 0 none.
+        "badge" if top_frame => {
+            crate::apps::badge(app, id, d.get("count")?.as_i64()?.clamp(-1, 99_999));
+            None
+        }
         "opensearch" if top_frame => {
             crate::tools::offer_engine(app, url, d.get("name")?.as_str()?, d.get("url")?.as_str()?);
             None
@@ -291,6 +296,8 @@ fn request(app: &tauri::AppHandle, id: u32, url: &str, name: &str, d: &serde_jso
     let result = match name {
         "cosmetics" => serde_json::to_value(crate::cosmetics_for(app, url)).ok()?,
         "site-tweaks" => crate::tools::site_tweaks_for(app, url),
+        // The files an app's window was opened with (its launchQueue).
+        "launch-files" => crate::apps::take_files(id),
         "highlights" => crate::tools::highlights_for(app, url),
         "hidden-selectors" => {
             let list = |key: &str| -> Vec<String> {

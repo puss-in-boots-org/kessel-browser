@@ -922,6 +922,10 @@ function tabElement(tab, account, group, lastInGroup) {
   c.toggle("discarded", !!tab.discarded);
   c.toggle("frozen", !!tab.frozen);
   c.toggle("attention", !!tab.attention);
+  // Its badge (navigator.setAppBadge, apps.rs): a count, or a dot.
+  c.toggle("has-badge", !!tab.badge);
+  const fav = el.querySelector(".tab-favicon");
+  if (fav) fav.dataset.badge = tab.badge > 0 ? (tab.badge > 99 ? "99+" : String(tab.badge)) : "";
   c.toggle("heavy", isHeavy(tab));
   c.toggle("grouped", !!account);
   c.toggle("in-group", !!group);
@@ -5307,6 +5311,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("vpn-changed", refreshVpn);
   await listen("settings-changed", refreshVpn);
   refreshVpn();
+  // A page's badge (apps.rs): on its tab.
+  await listen("tab-badge", (event) => {
+    const tab = findTab(event.payload.id);
+    if (!tab || tab.badge === event.payload.count) return;
+    tab.badge = event.payload.count;
+    renderTabs();
+  });
   // What a tab's page offers as an app, or that it was installed.
   await listen("app-offer", (event) => {
     const { id, offer, installed } = event.payload;

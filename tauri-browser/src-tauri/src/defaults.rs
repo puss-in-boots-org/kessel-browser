@@ -13,7 +13,7 @@ const FILE_KINDS: [&str; 5] = [".htm", ".html", ".pdf", ".svg", ".xhtml"];
 
 // Where the keys go: your registry's Software key -- or, in a test run, a
 // key of the test's own under it.
-fn root() -> String {
+pub(crate) fn root() -> String {
     if profile::remote_debugging_port().is_some() {
         format!("Software\\KesselTest\\{}", std::process::id())
     } else {
@@ -52,8 +52,33 @@ pub(crate) fn entries(root: &str, exe: &str, profile_args: &str) -> Vec<(String,
     out
 }
 
+// Removes key `key` (and all under it) -- or, with `value`, just that value.
 #[cfg(windows)]
-fn write(key: &str, name: &str, text: &str) -> Result<(), String> {
+pub(crate) fn remove(key: &str, value: Option<&str>) {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Registry::{RegDeleteKeyValueW, RegDeleteTreeW, HKEY_CURRENT_USER};
+    unsafe {
+        let _ = match value {
+            Some(v) => RegDeleteKeyValueW(HKEY_CURRENT_USER, &HSTRING::from(key), &HSTRING::from(v)),
+            None => RegDeleteTreeW(HKEY_CURRENT_USER, &HSTRING::from(key)),
+        };
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn remove(_key: &str, _value: Option<&str>) {}
+
+// Windows hears that what opens which files and links changed.
+pub(crate) fn associations_changed() {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
+        SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None);
+    }
+}
+
+#[cfg(windows)]
+pub(crate) fn write(key: &str, name: &str, text: &str) -> Result<(), String> {
     use windows::core::{HSTRING, PCWSTR};
     use windows::Win32::System::Registry::{RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ};
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
@@ -63,7 +88,7 @@ fn write(key: &str, name: &str, text: &str) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-fn write(_key: &str, _name: &str, _text: &str) -> Result<(), String> {
+pub(crate) fn write(_key: &str, _name: &str, _text: &str) -> Result<(), String> {
     Err("Only on Windows".into())
 }
 

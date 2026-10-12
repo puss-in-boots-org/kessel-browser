@@ -2092,6 +2092,16 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
     if pdf::intercept(app, id, label, nav_url) {
         return false;
     }
+    // A link an installed app handles (web+thing:…): in its window.
+    if !matches!(nav_url.scheme(), "http" | "https" | "file" | "about" | "data" | "blob") {
+        if let Some(target) = apps::protocol_target(app, nav_url.as_str()) {
+            let app2 = app.clone();
+            later(app, move || {
+                let _ = instance::open_app_window(&app2, &target);
+            });
+            return false;
+        }
+    }
     let st = app.state::<BrowserState>();
     let shields = app.state::<shields::Shields>();
     let security = app.state::<security::Security>();
@@ -2867,6 +2877,8 @@ unsafe fn install_shields_hooks(
     permissions::install_hooks(app, &core, id)?;
     // Sites' notifications, shown by Kessel (notifications.rs).
     notifications::install_hooks(app, &core, id);
+    // Links an installed app handles (apps.rs).
+    apps::install_hooks(app, &core);
 
     let app_req = app.clone();
     let label_req = label.clone();
@@ -5660,6 +5672,7 @@ fn main() {
             net::surfshark_disconnect,
             net::surfshark_locations,
             pdf::pdf_bytes,
+            apps::app_badges,
             notifications::notify_fit,
             notifications::notify_ready,
             notifications::notify_clicked,
@@ -5679,7 +5692,7 @@ fn main() {
             // Kessel is open on this profile already: what this start asked
             // for (a link, an app) goes to it, and this one goes -- unless
             // it's Kessel starting itself again (instance.rs).
-            let request = instance::request_from_args(&std::env::args().skip(1).collect::<Vec<_>>());
+            let mut request = instance::request_from_args(&std::env::args().skip(1).collect::<Vec<_>>());
             if !crash::relaunched() && instance::hand_off(&data_dir, &request) {
                 std::process::exit(0);
             }
@@ -5748,9 +5761,15 @@ fn main() {
             // each window's toolbar once it has loaded (see take_window_init),
             // to avoid a startup race between webview-creation calls.
             let state = app.state::<BrowserState>();
-            // An installed app's shortcut: its window alone (apps.rs).
-            if let Some(url) = &request.app {
-                instance::open_app_window(app.handle(), url)?;
+            // An installed app's shortcut (with the files it was opened
+            // with), or only links and addresses that are installed apps':
+            // their windows alone (apps.rs).
+            let only_apps = request.app.is_none() && !(request.links.is_empty() && request.urls.is_empty()) && instance::to_apps(app.handle(), &mut request) && request.urls.is_empty();
+            if request.app.is_some() || only_apps {
+                if let Some(url) = &request.app {
+                    let id = instance::open_app_window(app.handle(), url)?;
+                    apps::give_files(id, request.files.iter().map(PathBuf::from).collect());
+                }
                 instance::listen(app.handle(), &data_dir);
                 let app_for_watchdog = app.handle().clone();
                 std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));

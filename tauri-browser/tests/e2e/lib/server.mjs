@@ -231,11 +231,27 @@ self.addEventListener('fetch', (e) => { if (new URL(e.request.url).pathname === 
       // start page and its icon.
       if (parts[1] === "manifest.json") {
         res.writeHead(200, { "Content-Type": "application/manifest+json", "Cache-Control": "no-store" });
-        res.end(JSON.stringify({ name: "Test Web App", short_name: "TestApp", start_url: "/webapp/start?from=app", display: "standalone", theme_color: "#3355aa", icons: [{ src: "/img/app-icon.png", sizes: "192x192", type: "image/png" }] }));
+        res.end(
+          JSON.stringify({
+            name: "Test Web App",
+            short_name: "TestApp",
+            start_url: "/webapp/start?from=app",
+            scope: "/webapp/",
+            display: "standalone",
+            theme_color: "#3355aa",
+            icons: [{ src: "/img/app-icon.png", sizes: "192x192", type: "image/png" }],
+            shortcuts: [{ name: "New note", url: "/webapp/new" }, { name: "Elsewhere", url: "https://elsewhere.example/" }],
+            file_handlers: [{ action: "/webapp/open", accept: { "text/plain": [".kesseltxt"] } }],
+            protocol_handlers: [{ protocol: "web+kesseltest", url: "/webapp/handle?l=%s" }, { protocol: "javascript", url: "/webapp/handle?l=%s" }],
+          })
+        );
       } else {
-        const title = parts[1] === "start" ? "Web App Start" : "Web App";
+        // open: the files it was opened with (launchQueue) in its title;
+        // handle: the link it was given.
+        const title = parts[1] === "start" ? "Web App Start" : parts[1] === "handle" ? `Handled ${url.searchParams.get("l")}` : parts[1] === "open" ? "Web App Open" : "Web App";
+        const script = parts[1] === "open" ? `<script>window.launchQueue && launchQueue.setConsumer(async (p) => { const f = await p.files[0].getFile(); document.title = "Opened " + f.name + ": " + (await f.text()); });</script>` : "";
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-        res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><link rel="manifest" href="/webapp/manifest.json"><meta name="theme-color" content="#3355aa"></head><body><h1>${title}</h1></body></html>`);
+        res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${title.replace(/</g, "")}</title><link rel="manifest" href="/webapp/manifest.json"><meta name="theme-color" content="#3355aa"></head><body><h1>${title.replace(/</g, "")}</h1>${script}</body></html>`);
       }
     } else if (parts[0] === "content") {
       // Its own image (#own), another site's (#other, from ?other=<origin>),
