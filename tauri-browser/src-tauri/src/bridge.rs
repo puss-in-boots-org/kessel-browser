@@ -241,6 +241,16 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::apps::on_page_info(app, id, url, d);
             None
         }
+        // A word added to the dictionary, or ignored (proof.rs).
+        "proof-learn" if top_frame => {
+            crate::proof::learn(d.get("word")?.as_str()?, d.get("lang").and_then(|l| l.as_str()).unwrap_or(""), d.get("add").and_then(|a| a.as_bool()).unwrap_or(false));
+            None
+        }
+        // A field's text for the grammar check (answered as an event).
+        "proof-grammar" if top_frame => {
+            crate::proof::grammar(app, label, d.get("seq")?.as_u64()?, d.get("text")?.as_str()?, d.get("lang").and_then(|l| l.as_str()).unwrap_or(""));
+            None
+        }
         // Its badge (navigator.setAppBadge): -1 a dot, 0 none.
         "badge" if top_frame => {
             crate::apps::badge(app, id, d.get("count")?.as_i64()?.clamp(-1, 99_999));
@@ -298,6 +308,10 @@ fn request(app: &tauri::AppHandle, id: u32, url: &str, name: &str, d: &serde_jso
         "site-tweaks" => crate::tools::site_tweaks_for(app, url),
         // The files an app's window was opened with (its launchQueue).
         "launch-files" => crate::apps::take_files(id),
+        // Spelling (proof.rs): what's misspelled in a field's text, and
+        // suggestions for one word.
+        "proof-check" => crate::proof::check(d.get("text")?.as_str()?, d.get("lang").and_then(|l| l.as_str()).unwrap_or("")),
+        "proof-suggest" => crate::proof::suggest(d.get("word")?.as_str()?, d.get("lang").and_then(|l| l.as_str()).unwrap_or("")),
         "highlights" => crate::tools::highlights_for(app, url),
         "hidden-selectors" => {
             let list = |key: &str| -> Vec<String> {

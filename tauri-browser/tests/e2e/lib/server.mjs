@@ -274,6 +274,25 @@ self.addEventListener('fetch', (e) => { if (new URL(e.request.url).pathname === 
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Change password</title></head><body>
 <form method="post" action="/signed-in"><input id="user" name="user" autocomplete="username"><input id="old" name="old" type="password"><input id="new" name="new" type="password"><button id="go">Change</button></form></body></html>`);
+    } else if (parts[0] === "write") {
+      // Somewhere to type: a text box and an editable block.
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>Write</title></head><body style="font:16px sans-serif">
+<textarea id="box" style="width:600px;height:100px;font:16px sans-serif"></textarea>
+<div id="block" contenteditable="true" style="width:600px;min-height:60px;border:1px solid #888"></div></body></html>`);
+    } else if (parts[0] === "v2" && parts[1] === "check") {
+      // A LanguageTool server that knows one rule: "a" before a vowel.
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        const text = new URLSearchParams(body).get("text") || "";
+        const matches = [];
+        for (const m of text.matchAll(/\ba(?= [aeiou])/gi)) {
+          matches.push({ message: "Use “an” before a vowel.", offset: m.index, length: 1, replacements: [{ value: "an" }], rule: { issueType: "grammar" } });
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ matches }));
+      });
     } else if (parts[0] === "signed-in") {
       req.resume();
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });

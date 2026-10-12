@@ -270,6 +270,13 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
     <h2>Page tools</h2>
     <p class="sub">Screenshots, reader view, mouse gestures, and changes you make to sites -- your own style, a colour filter, elements you've hidden, auto-reload.</p>
 
+    <div class="setting-card" id="proofing-card">
+      <div class="k-card-title"><span class="k-label">Spelling &amp; grammar</span></div>
+      ${settingRow({ title: "Check spelling as you type", desc: "Windows' own spell checker, on this computer: misspelled words get a red line -- right-click one for suggestions", controlHtml: switchHtml("proof-spell", f.proofing?.spell !== false) })}
+      ${settingRow({ title: "Language", desc: "Automatic: the page's or the field's own. Windows checks the languages it has dictionaries for -- add more in Windows Settings -> Time &amp; language -> Language", controlHtml: selectHtml("proof-lang", [["", "Automatic"]], 210) })}
+      ${settingRow({ title: "Check grammar with LanguageTool", desc: "Sends what you type in a field to languagetool.org to be checked; what it finds gets a blue line. Off: nothing leaves this computer.", controlHtml: switchHtml("proof-grammar", f.proofing?.grammar === true) })}
+    </div>
+
     <div class="setting-card">
       <div class="k-card-title"><span class="k-label">PDFs</span></div>
       ${settingRow({ title: "Open PDFs in", desc: "Kessel's viewer: page thumbnails, highlighting, drawing, text and images, signatures, comments, presentation mode -- and Save keeps them in the PDF", controlHtml: selectHtml("pdf-viewer", [["kessel", "Kessel's PDF viewer"], ["engine", "The engine's own viewer"]], 210) })}
@@ -359,6 +366,22 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   </div>`);
 
   // Screenshots
+  // Spelling and grammar (proof.rs).
+  const proof = () => ({ ...(features().proofing || {}) });
+  for (const [id, key] of [["proof-spell", "spell"], ["proof-grammar", "grammar"]]) {
+    const sw = p.querySelector(`#${id}`);
+    sw.addEventListener("click", async () => {
+      const on = !sw.classList.contains("on");
+      await saveFeature("proofing", { ...proof(), [key]: on });
+      sw.classList.toggle("on", on);
+    });
+  }
+  const proofLang = p.querySelector("#proof-lang");
+  invoke("proof_languages").then((langs) => {
+    for (const tag of langs) proofLang.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`);
+    proofLang.value = f.proofing?.lang || "";
+  }, () => {});
+  proofLang.addEventListener("change", () => saveFeature("proofing", { ...proof(), lang: proofLang.value }));
   // PDFs (pdf.rs): Kessel's viewer, or the engine's.
   const pdfViewer = p.querySelector("#pdf-viewer");
   pdfViewer.value = f.pdf_viewer === "engine" ? "engine" : "kessel";
