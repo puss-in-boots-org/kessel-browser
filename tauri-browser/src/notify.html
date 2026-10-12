@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kessel notifications</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    /* Sites' notifications (notifications.rs): cards stacked in the corner
+       of the screen, newest at the bottom. The window is see-through; only
+       the cards show. */
+    html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; }
+    #cards { display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 6px; }
+    .card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 4px 10px;
+      padding: 11px 34px 11px 12px;
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
+      cursor: pointer;
+      animation: cardIn 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+    }
+    .card:hover { background: var(--surface-hover); }
+    .card.leaving { animation: cardOut 0.18s ease-in forwards; }
+    @keyframes cardIn { from { opacity: 0; transform: translateX(40px); } }
+    @keyframes cardOut { to { opacity: 0; transform: translateX(40px); } }
+    @media (prefers-reduced-motion: reduce) { .card, .card.leaving { animation: none; } }
+    .icon { grid-row: span 3; width: 36px; height: 36px; border-radius: 9px; object-fit: cover; background: var(--surface-2); }
+    .site { font-size: 11px; opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .site .count { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 700; }
+    .title { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .body { font-size: 12px; opacity: 0.85; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 7px;
+      background: transparent;
+      color: inherit;
+      opacity: 0.55;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .close:hover { opacity: 1; background: var(--surface-2); }
+  </style>
+</head>
+<body>
+  <div id="cards" role="log" aria-live="polite" aria-label="Notifications"></div>
+  <script type="module" src="notify.js"></script>
+</body>
+</html>

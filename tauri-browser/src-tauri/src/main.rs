@@ -26,6 +26,7 @@ mod keys;
 mod lifecycle;
 mod media;
 mod net;
+mod notifications;
 mod page;
 mod privacy;
 mod privacy_stats;
@@ -2857,6 +2858,8 @@ unsafe fn install_shields_hooks(
     }
     security::install_hooks(app, &core, id, &label)?;
     permissions::install_hooks(app, &core, id)?;
+    // Sites' notifications, shown by Kessel (notifications.rs).
+    notifications::install_hooks(app, &core, id);
 
     let app_req = app.clone();
     let label_req = label.clone();
@@ -5649,6 +5652,12 @@ fn main() {
             net::surfshark_connect,
             net::surfshark_disconnect,
             net::surfshark_locations,
+            notifications::notify_fit,
+            notifications::notify_ready,
+            notifications::notify_clicked,
+            notifications::notify_closed,
+            notifications::notification_history,
+            notifications::clear_notification_history,
             defaults::default_browser_status,
             defaults::make_default_browser
         ])

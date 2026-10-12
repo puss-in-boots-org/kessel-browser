@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**91% overall** -- 748 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 63 to do (⏳), 110 skipped (⏭️), of 1045.
+**91% overall** -- 753 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 57 to do (⏳), 110 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -72,7 +72,7 @@ branch, one small commit per feature or group of features.
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
 | [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
 | [31. Progressive Web Apps](#31-progressive-web-apps) | 7 |  | 1 | 6 | 1 | `█████░░░░░` 54% |
-| [32. Notifications](#32-notifications) | 2 | 1 |  | 6 | 1 | `███░░░░░░░` 33% |
+| [32. Notifications](#32-notifications) | 6 | 1 | 1 | 1 | 1 | `████████░░` 83% |
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
@@ -84,7 +84,7 @@ branch, one small commit per feature or group of features.
 | [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
 | [42. Sharing](#42-sharing) | 2 | 2 |  | 2 | 3 | `███████░░░` 67% |
 | [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
-| [44. Desktop-specific features](#44-desktop-specific-features) | 11 |  | 1 | 1 |  | `█████████░` 88% |
+| [44. Desktop-specific features](#44-desktop-specific-features) | 12 |  | 1 |  |  | `██████████` 96% |
 | [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 27 | 1 |  |  |  | `██████████` 100% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 9 |  |  | 3 |  | `████████░░` 75% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
@@ -888,15 +888,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 32.01 | Website notifications | ⏳ | |
+| 32.01 | Website notifications | ✅ | Kessel's own cards in the corner of the screen (notifications.rs): click one to go to its tab, the site hears clicks and closes |
 | 32.02 | Permission prompts | ✅ | Kessel's own prompt under the address bar |
 | 32.03 | Notification blocking | 🧪 | Site permissions -> Notifications: Block, for every site or one |
 | 32.04 | Per-site notification permissions | ✅ | Settings -> Site permissions -> Notifications, per site |
-| 32.05 | Notification history | ⏳ | |
+| 32.05 | Notification history | ✅ | Settings -> Site permissions -> Notifications: the last 200 (none from private windows) |
 | 32.06 | Push notifications | ⏭️ | WebView2 has no push service (31.06) |
-| 32.07 | Notification sounds | ⏳ | |
-| 32.08 | Notification actions | ⏳ | |
-| 32.09 | Notification grouping | ⏳ | |
+| 32.07 | Notification sounds | ✅ | A short chime with each one, unless the site marks it silent; Settings turns it off |
+| 32.08 | Notification actions | 🟡 | A click goes to the site; the engine doesn't pass a notification's own buttons on |
+| 32.09 | Notification grouping | ✅ | A site's notifications stack on one card with a count; the same tag replaces the earlier one |
 | 32.10 | Quiet notification prompts | ⏳ | |
 
 ### 33. Clipboard
@@ -1093,7 +1093,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 44.07 | Workspaces | 🟢 | The side panel's workspaces: their own tabs, asleep while you're away (tested) |
 | 44.08 | Profiles | 🟡 | Accounts |
 | 44.09 | Window management | 🟢 | Several windows, tabs dragged between them, pop-out windows, closed windows reopened (section 3) |
-| 44.10 | Desktop notifications | ⏳ | |
+| 44.10 | Desktop notifications | ✅ | See 32.01 |
 | 44.11 | Hardware acceleration | ✅ | See 35.01 |
 | 44.12 | Advanced downloads | 🟢 | The download manager: pause, resume, try again, search, sort, ask where to save (section 6) |
 | 44.13 | Advanced DevTools | 🌐 | Edge DevTools (F12) |
