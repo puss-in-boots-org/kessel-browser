@@ -32,6 +32,7 @@ const SECTIONS = [
   { id: "performance", label: "Performance", icon: "bolt" },
   { id: "network", label: "Network", icon: "globe" },
   { id: "pinned", label: "Pinned Sites", icon: "pin" },
+  { id: "apps", label: "Apps", icon: "grid" },
   { id: "bookmarks", label: "Bookmarks", icon: "bookmark" },
   { id: "history", label: "History", icon: "history" },
   { id: "downloads", label: "Downloads", icon: "download" },
@@ -926,6 +927,35 @@ function performancePanel(settings) {
   return p;
 }
 
+// Sites installed as apps (apps.rs): open one, or remove it (its Start menu
+// shortcut goes; what the site keeps stays, it's the same site).
+async function appsPanel() {
+  const p = el(`<div class="panel" id="panel-apps">
+    <h2>Apps</h2>
+    <p class="sub">Sites you installed as apps -- from the menu, Install as app. Each is in the Start menu under Kessel Apps and opens in a window of its own.</p>
+    <div class="setting-card"><div class="list-panel" id="apps-list"></div></div>
+  </div>`);
+  const list = p.querySelector("#apps-list");
+  async function render() {
+    const apps = await invoke("list_apps").catch(() => []);
+    list.innerHTML = apps.length ? "" : `<div class="empty">No apps yet. On a site, open the menu and pick Install as app.</div>`;
+    for (const a of apps) {
+      const row = el(`<div class="list-row app-row"><span class="lr-title"></span><span class="lr-sub"></span><button class="btn ghost sm open">Open</button><button class="btn ghost icon-only sm remove" title="Remove">${icon("trash", 13)}</button></div>`);
+      row.dataset.app = a.id;
+      row.querySelector(".lr-title").textContent = a.name;
+      row.querySelector(".lr-sub").textContent = hostOf(a.url);
+      row.querySelector(".open").addEventListener("click", () => invoke("open_app", { id: a.id }).catch((err) => alert(String(err))));
+      row.querySelector(".remove").addEventListener("click", async () => {
+        await invoke("uninstall_app", { id: a.id }).catch((err) => alert(String(err)));
+        render();
+      });
+      list.appendChild(row);
+    }
+  }
+  await render();
+  return p;
+}
+
 async function pinnedPanel() {
   const pinned = await invoke("get_pinned");
   const p = el(`<div class="panel" id="panel-pinned">
@@ -1414,6 +1444,7 @@ async function buildPanel(id, settings) {
     case "network": return networkPanel(settings, { el, settingRow, switchHtml });
     case "permissions": return permissionsPanel(settings, { el, settingRow, switchHtml });
     case "pinned": return await pinnedPanel();
+    case "apps": return await appsPanel();
     case "bookmarks": return await bookmarksPanel();
     case "history": return await historyPanel();
     case "downloads": return await downloadsPanel();

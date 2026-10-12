@@ -175,6 +175,11 @@ fn has_flag(name: &str) -> bool {
     std::env::args().skip(1).any(|a| a == name)
 }
 
+// Kessel started itself again (relaunch), rather than being started.
+pub(crate) fn relaunched() -> bool {
+    has_flag("--after")
+}
+
 // Starting with your tabs whatever Settings says (after the engine crashed).
 pub(crate) fn restore_asked() -> bool {
     has_flag("--restore-session")

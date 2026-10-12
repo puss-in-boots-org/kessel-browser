@@ -637,6 +637,7 @@ function paintStaticIcons() {
   iconFor("reload-btn", icon("reload", 17));
   iconFor("home-btn", icon("home", 17));
   iconFor("share-btn", icon("share", 15));
+  iconFor("install-app-btn", icon("grid", 14));
   iconFor("new-tab-btn", icon("plus", 16));
   iconFor("tab-search-btn", icon("chevronDown", 15));
   iconFor("tabs-scroll-left", icon("chevronLeft", 14));
@@ -2394,6 +2395,7 @@ function updateAddressBarForActiveTab(force = false) {
   updateAccountButton();
   updateZoomIndicator();
   updateBlockedButton();
+  updateInstallButton();
   updateHangButton();
   updateTranslateButton();
   updateExtensionButtons();
@@ -2980,6 +2982,7 @@ async function runCommand(id, ctx = {}) {
       return;
     }
     case "share-page": return toggleSharePopup();
+    case "install-app": return installApp();
     case "bookmark": return toggleBookmark();
     case "bookmark-all-tabs": return bookmarkAllTabs();
     case "bookmark-manager": return openBookmarkManager();
@@ -3400,6 +3403,33 @@ async function findInPage(command, page) {
 // --- Pop-ups and redirects your site settings stopped (permissions.rs) ------------
 // One chip in the address bar for the active tab: what was stopped, a way
 // to open it anyway, and a way to allow the site from now on.
+
+// --- Install as app (apps.rs) ----------------------------------------------------------
+// A site with a web app manifest: the address bar offers to install it. Any
+// web page can be, from the menu.
+
+function updateInstallButton() {
+  const btn = document.getElementById("install-app-btn");
+  const offer = findTab(activeTabId)?.appOffer;
+  btn.hidden = !(offer?.manifest && !offer.installed);
+  if (offer) btn.title = `Install ${offer.name} as an app`;
+}
+
+async function installApp() {
+  const tab = findTab(activeTabId);
+  if (!tab?.appOffer) {
+    toast(/^https?:/.test(tab?.url || "") ? "The page is still loading -- try again in a moment" : "Only websites can be installed as apps");
+    return;
+  }
+  try {
+    const app = await invoke("install_app", { id: tab.id });
+    tab.appOffer.installed = true;
+    updateInstallButton();
+    toast(`${app.name} is installed -- it's in the Start menu, under Kessel Apps`);
+  } catch (err) {
+    toast(`Couldn't install it: ${err}`);
+  }
+}
 
 function updateBlockedButton() {
   const btn = document.getElementById("blocked-btn");
@@ -5205,6 +5235,16 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("star-btn").addEventListener("click", toggleBookmark);
   document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
+  document.getElementById("install-app-btn").addEventListener("click", installApp);
+  // What a tab's page offers as an app, or that it was installed.
+  await listen("app-offer", (event) => {
+    const { id, offer, installed } = event.payload;
+    const tab = findTab(id);
+    if (!tab) return;
+    if (offer) tab.appOffer = { ...offer, installed: !!installed };
+    else if (tab.appOffer) tab.appOffer.installed = !!installed;
+    if (id === activeTabId) updateInstallButton();
+  });
   document.getElementById("blocked-btn").addEventListener("click", blockedMenu);
   document.getElementById("hang-btn").addEventListener("click", hangMenu);
   document.getElementById("translate-btn").addEventListener("click", translateMenu);
@@ -5388,6 +5428,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (tab?.blockedNotice && tab.blockedNotice.page !== url) {
       tab.blockedNotice = null;
       if (id === activeTabId) updateBlockedButton();
+    }
+    // What the last page offered as an app isn't this page's (apps.rs).
+    if (tab?.appOffer) {
+      tab.appOffer = null;
+      if (id === activeTabId) updateInstallButton();
     }
     const next = tab && keepViewSource(tab, url);
     if (tab && next !== tab.url) {

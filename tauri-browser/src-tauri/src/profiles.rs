@@ -177,7 +177,7 @@ pub(crate) async fn profile_shortcut(app: tauri::AppHandle, webview: Webview, na
     let path = folder.join(format!("{}.lnk", label));
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let (path2, label2) = (path.clone(), label.clone());
-    tauri::async_runtime::spawn_blocking(move || make_shortcut(&path2, &exe, &args, &label2)).await.map_err(|e| e.to_string())??;
+    tauri::async_runtime::spawn_blocking(move || make_shortcut(&path2, &exe, &args, &label2, None, None)).await.map_err(|e| e.to_string())??;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -199,9 +199,12 @@ fn desktop_folder() -> Option<PathBuf> {
 }
 
 #[cfg(windows)]
-fn make_shortcut(path: &Path, exe: &Path, args: &str, description: &str) -> Result<(), String> {
+// A shortcut to `exe` with `args`. `icon`: an .ico file of its own instead of
+// Kessel's; `app_id`: the taskbar button its windows go under (apps.rs).
+pub(crate) fn make_shortcut(path: &Path, exe: &Path, args: &str, description: &str, icon: Option<&Path>, app_id: Option<&str>) -> Result<(), String> {
     use windows::core::{Interface, HSTRING};
     use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
     let err = |e: windows::core::Error| e.message().to_string();
     unsafe {
@@ -210,9 +213,13 @@ fn make_shortcut(path: &Path, exe: &Path, args: &str, description: &str) -> Resu
         link.SetPath(&HSTRING::from(exe.as_os_str())).map_err(err)?;
         link.SetArguments(&HSTRING::from(args)).map_err(err)?;
         link.SetDescription(&HSTRING::from(description)).map_err(err)?;
-        link.SetIconLocation(&HSTRING::from(exe.as_os_str()), 0).map_err(err)?;
+        link.SetIconLocation(&HSTRING::from(icon.unwrap_or(exe).as_os_str()), 0).map_err(err)?;
         if let Some(dir) = exe.parent() {
             link.SetWorkingDirectory(&HSTRING::from(dir.as_os_str())).map_err(err)?;
+        }
+        if let Some(id) = app_id {
+            let store: IPropertyStore = link.cast().map_err(err)?;
+            crate::apps::win32::set_taskbar_id(&store, id).map_err(err)?;
         }
         let file: IPersistFile = link.cast().map_err(err)?;
         file.Save(&HSTRING::from(path.as_os_str()), true).map_err(err)?;
@@ -221,7 +228,7 @@ fn make_shortcut(path: &Path, exe: &Path, args: &str, description: &str) -> Resu
 }
 
 #[cfg(not(windows))]
-fn make_shortcut(_path: &Path, _exe: &Path, _args: &str, _description: &str) -> Result<(), String> {
+pub(crate) fn make_shortcut(_path: &Path, _exe: &Path, _args: &str, _description: &str, _icon: Option<&Path>, _app_id: Option<&str>) -> Result<(), String> {
     Err("Only on Windows".into())
 }
 

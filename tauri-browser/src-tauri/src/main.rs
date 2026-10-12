@@ -4,6 +4,7 @@
 mod a11y;
 mod accounts;
 mod adblock;
+mod apps;
 mod bookmarks;
 mod bridge;
 mod browser_lock;
@@ -19,6 +20,7 @@ mod forms;
 mod graphics;
 mod history;
 mod import;
+mod instance;
 mod keys;
 mod lifecycle;
 mod media;
@@ -1116,14 +1118,23 @@ fn create_popout_internal(
         (settings.adblock_enabled, settings.vault_autofill_enabled)
     };
 
+    // (A test run's are kept off every screen, like its browser windows.)
+    let offscreen = profile::get().custom && std::env::var_os("KESSEL_TEST_OFFSCREEN").is_some();
     let window = tauri::window::WindowBuilder::new(app, format!("popout-{}", id))
         .title(if title.is_empty() { "Kessel" } else { title.as_str() })
         .inner_size(POPOUT_WIDTH, POPOUT_HEIGHT)
         .min_inner_size(300.0, 220.0)
         .position(x, y)
         .decorations(false)
+        .visible(!offscreen)
+        .skip_taskbar(offscreen)
+        .focused(!offscreen)
         .build()
         .map_err(|e| e.to_string())?;
+    if offscreen {
+        let _ = window.set_position(tauri::PhysicalPosition::new(-9000 - (id % 50) as i32 * 20, 80));
+        let _ = window.show();
+    }
 
     // The bar learns which pop-out it belongs to (and whose account it's
     // signed in as) before any of its own scripts run.
@@ -1198,6 +1209,11 @@ fn create_popout_internal(
             st.popouts.lock().unwrap().remove(&id);
             st.tab_accounts.lock().unwrap().remove(&id);
             st.pages.lock().unwrap().remove(&id);
+            // The last window of all (an app started on its own): Kessel goes.
+            let alone = st.windows.lock().unwrap().is_empty() && st.popouts.lock().unwrap().is_empty();
+            if alone && !privacy::clear_on_exit(&app_for_events) {
+                app_for_events.exit(0);
+            }
         }
         _ => {}
     });
@@ -5610,7 +5626,11 @@ fn main() {
             browser_lock::hello_available,
             browser_lock::unlock_with_hello,
             browser_lock::test_set_idle,
-            a11y::caret_browsing_running
+            a11y::caret_browsing_running,
+            apps::install_app,
+            apps::list_apps,
+            apps::uninstall_app,
+            apps::open_app
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -5619,6 +5639,13 @@ fn main() {
             let profile = profile::init(app);
             let data_dir = profile.data_dir.clone();
             let _ = fs::create_dir_all(&data_dir);
+            // Kessel is open on this profile already: what this start asked
+            // for (a link, an app) goes to it, and this one goes -- unless
+            // it's Kessel starting itself again (instance.rs).
+            let request = instance::request_from_args(&std::env::args().skip(1).collect::<Vec<_>>());
+            if !crash::relaunched() && instance::hand_off(&data_dir, &request) {
+                std::process::exit(0);
+            }
             // How the last run ended, and safe mode -- before anything that
             // could crash again.
             let startup = crash::start(&data_dir);
@@ -5660,7 +5687,7 @@ fn main() {
                 sessions: Mutex::new(Vec::new()),
             };
             app.manage(state);
-            app.manage(Vault::new(data_dir));
+            app.manage(Vault::new(data_dir.clone()));
             start_shields(app.handle());
             security::start(app.handle());
             privacy::start(app.handle());
@@ -5680,6 +5707,14 @@ fn main() {
             // each window's toolbar once it has loaded (see take_window_init),
             // to avoid a startup race between webview-creation calls.
             let state = app.state::<BrowserState>();
+            // An installed app's shortcut: its window alone (apps.rs).
+            if let Some(url) = &request.app {
+                instance::open_app_window(app.handle(), url)?;
+                instance::listen(app.handle(), &data_dir);
+                let app_for_watchdog = app.handle().clone();
+                std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
+                return Ok(());
+            }
             let mut saved = if restore { read_session(&state) } else { Vec::new() };
             if !restore && startup.unclean {
                 // Closed unexpectedly: offered, not forced.
@@ -5693,15 +5728,24 @@ fn main() {
                 }
             }
             if saved.is_empty() {
-                // Settings -> Search & Startup: pages to start with.
-                let pages = startup_pages(&state.store.settings.lock().unwrap().features);
+                // Settings -> Search & Startup: pages to start with -- or
+                // the addresses Kessel was started with (a link from another
+                // program, a file).
+                let pages = if request.urls.is_empty() { startup_pages(&state.store.settings.lock().unwrap().features) } else { request.urls.clone() };
                 let init = if pages.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": pages }) };
                 browser_windows::create(app.handle(), false, init)?;
             } else {
                 for session in saved {
                     browser_windows::create(app.handle(), false, serde_json::json!({ "session": session }))?;
                 }
+                // Your tabs came back; the addresses asked for, in a window
+                // of their own.
+                if !request.urls.is_empty() {
+                    browser_windows::create(app.handle(), false, serde_json::json!({ "urls": request.urls }))?;
+                }
             }
+            // The next starts on this profile come here.
+            instance::listen(app.handle(), &data_dir);
 
             let app_for_watchdog = app.handle().clone();
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
@@ -5718,6 +5762,7 @@ fn main() {
                 }
             } else if let tauri::RunEvent::Exit = event {
                 crash::clean_exit();
+                instance::forget(&profile::get().data_dir);
             }
         });
 }

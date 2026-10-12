@@ -236,6 +236,11 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             None
         }
         // The site's own search engine (<link rel="search">).
+        // What the page offers as an app (apps.rs).
+        "app-info" if top_frame => {
+            crate::apps::on_page_info(app, id, url, d);
+            None
+        }
         "opensearch" if top_frame => {
             crate::tools::offer_engine(app, url, d.get("name")?.as_str()?, d.get("url")?.as_str()?);
             None
