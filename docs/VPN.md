@@ -25,9 +25,21 @@ How the VPN behaves:
 - **WebRTC stays inside.** Calls go through the layer, not straight out, so they can't reveal your real address.
 - **Only the browser is affected.** Other programs on the PC don't go through the VPN, which is what Opera's VPN does too.
 
-Today the servers are yours: any SOCKS5 or HTTP proxy. Many VPN services offer these, for example NordVPN, Surfshark, PIA, or a server of your own.
+The servers can be:
 
-## Options for a free network built in
+- **WireGuard** (`wg.rs`). Kessel runs WireGuard itself, with no app, driver or admin rights:
+  - `boringtun` (Cloudflare's WireGuard) carries the tunnel over UDP;
+  - `smoltcp` provides a small TCP/IP stack for the connections inside it;
+  - names are looked up through the tunnel, at the VPN's own DNS.
+
+  Two ways to add servers:
+  - **Import config files** from any provider: Proton VPN, including its free plan, Mullvad, Surfshark, and so on.
+  - **Surfshark:** paste your account's WireGuard private key once (my.surfshark.com → VPN → Manual setup → WireGuard → generate a key pair). Every location in Surfshark's public server list (142 locations in 100 countries) then becomes a server, chosen from the VPN button or Settings → Network.
+
+  Private keys are kept encrypted for your Windows account (`vpn-keys.dat`, DPAPI) and never in `settings.json`.
+- **SOCKS5 or HTTP proxies:** a VPN service's own, or a server of yours.
+
+## Options for a free network built in (A is built)
 
 Opera's VPN is free because Opera runs the servers. Kessel has no servers, so a built-in free network has to be someone else's. Each of these plugs into the same layer as one more kind of upstream, so the button, kill switch and DNS handling stay the same:
 

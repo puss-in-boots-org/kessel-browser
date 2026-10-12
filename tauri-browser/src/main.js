@@ -3448,10 +3448,18 @@ function vpnMenu(e) {
   e.preventDefault();
   if (!vpnState) return;
   const rect = document.getElementById("vpn-btn").getBoundingClientRect();
+  const item = (s) => ({ label: s.name || s.id, checked: vpnState.on && s.id === vpnState.current, action: () => setVpn(true, s.id) });
+  const own = vpnState.servers.filter((s) => s.group !== "surfshark");
+  // Surfshark: where you went lately (and where you are), the rest in Settings.
+  const byId = new Map(vpnState.servers.map((s) => [s.id, s]));
+  const recent = [...new Set([vpnState.current, ...(vpnState.recent || [])])].filter((id) => id?.startsWith("ss:") && byId.has(id)).slice(0, 6);
+  const surfshark = vpnState.surfshark
+    ? [{ header: "Surfshark" }, ...recent.map((id) => item(byId.get(id))), { label: "All Surfshark locations…", iconName: "globe", action: () => createTab("kessel://settings/network") }]
+    : [];
   showContextMenu(
     [
-      { header: "Go through" },
-      ...vpnState.servers.map((s) => ({ label: s.name || s.id, checked: vpnState.on && s.id === vpnState.current, action: () => setVpn(true, s.id) })),
+      ...(own.length ? [{ header: "Go through" }, ...own.map(item)] : []),
+      ...surfshark,
       "-",
       { label: vpnState.on ? "Turn the VPN off" : "Turn the VPN on", iconName: "shield", action: () => setVpn(!vpnState.on) },
       { label: "VPN settings", iconName: "settings", action: () => createTab("kessel://settings/network") },

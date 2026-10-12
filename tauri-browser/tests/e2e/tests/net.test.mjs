@@ -99,6 +99,26 @@ async function visit(k, waitFor, url, title, options = {}) {
 
 export const tests = [
   {
+    name: "a WireGuard config: a server of yours, its private key kept apart (not in settings); one that doesn't answer doesn't turn on",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch({ settings: { features: { network: { dns: "custom", dns_server: `${site.origin}/dns-query` } } } });
+      const key = "qGmE8hyJWRHeyqCvAwMt1qHh5WoqSGGJ5fGZQ0eVqUI=";
+      // (Nothing answers WireGuard on that port.)
+      const conf = `[Interface]\nPrivateKey = ${key}\nAddress = 10.14.0.2/16\nDNS = 162.252.172.57\n\n[Peer]\nPublicKey = l8EOWPyzt/njrb74CADY4VOhns/TbUN6KFTbytHcFQw=\nAllowedIPs = 0.0.0.0/0\nEndpoint = 127.0.0.1:9\n`;
+      const id = await k.invoke("vpn_add_wireguard", { name: "Test WG", conf });
+      const status = await k.invoke("net_status");
+      assert(status.vpn.servers.some((s) => s.id === id && s.name === "Test WG"), "listed");
+      await waitFor(() => k.readProfileFile("Data/settings.json")?.includes("Test WG"), { message: "saved" });
+      assert(!k.readProfileFile("Data/settings.json").includes(key), "no private key in settings.json");
+      assert(k.readProfileFile("Data/vpn-keys.dat") && !k.readProfileFile("Data/vpn-keys.dat").includes(key), "kept encrypted");
+      const err = await k.invoke("vpn_set", { on: true, server: id }).then(() => null, (e) => String(e));
+      assert(/didn't answer/.test(err || ""), `not turned on: ${err}`);
+      assert.equal((await k.invoke("net_status")).vpn.on, false, "the VPN stays off");
+      await k.invoke("vpn_remove_server", { id });
+      assert(!(await k.invoke("net_status")).vpn.servers.some((s) => s.id === id), "removed");
+    },
+  },
+  {
     name: "secure DNS: sites are looked up with the DNS-over-HTTPS server you chose; its cache can be cleared",
     async run({ launch, site, assert, waitFor }) {
       const port = new URL(site.origin).port;

@@ -728,6 +728,18 @@ export function networkPanel(settings, { el, settingRow, switchHtml }) {
       <p class="sub" style="padding:0 14px">Your VPN's servers (SOCKS5 or HTTP proxies -- many VPN services give you these). The VPN button in the address bar turns it on or off at once. Sites' names are looked up at the server, addresses on your own network stay direct, and if the server can't be reached pages don't load rather than going around it. Calls (WebRTC) go through it too.</p>
       <div class="list-panel" id="vpn-servers"></div>
       <div class="add-row"><input class="field" id="vpn-name" placeholder="Name" style="max-width:120px" /><input class="field mono" id="vpn-url" placeholder="socks5://user:password@vpn.example:1080" /><button class="btn sm" id="vpn-add">Add</button></div>
+      ${settingRow({ title: "WireGuard", desc: "Config files (.conf) from your VPN service -- Proton VPN's free plan has them too. Kessel runs WireGuard itself: no app or driver needed.", controlHtml: `<button class="btn sm" id="wg-import">Import WireGuard configs…</button><input type="file" id="wg-files" accept=".conf,text/plain" multiple hidden />` })}
+    </div>
+    <div class="setting-card" id="surfshark-card">
+      <div class="k-card-title"><span class="k-label">Surfshark</span></div>
+      <div id="ss-setup">
+        <p class="sub" style="padding:0 14px">Every Surfshark location, from the VPN button. Your account's WireGuard key: at my.surfshark.com open VPN → Manual setup → Desktop or mobile → WireGuard → "I don't have a key pair", generate one, and paste its <b>private</b> key here. It's kept encrypted for your Windows account.</p>
+        <div class="add-row"><input class="field mono" id="ss-key" type="password" placeholder="Private key (44 characters, ends with =)" spellcheck="false" autocomplete="off" /><button class="btn sm" id="ss-connect">Connect</button></div>
+      </div>
+      <div id="ss-ready" hidden>
+        ${settingRow({ title: "Locations", desc: "Click one to go through it. Load: how busy it is.", controlHtml: `<input class="field" id="ss-search" placeholder="Country or city" style="width:180px" /><button class="btn sm" id="ss-refresh" title="Fresh list from Surfshark">${icon("refresh", 13)}</button><button class="btn sm" id="ss-disconnect">Disconnect</button>` })}
+        <div class="list-panel" id="ss-locations" style="max-height:320px;overflow:auto"></div>
+      </div>
     </div>
     <div class="setting-card" id="net-restart-note" hidden>
       ${settingRow({ title: "Restart to apply", desc: "Kessel's own network layer goes on or off when Kessel starts; after that, changes here apply at once", controlHtml: "" })}
@@ -844,12 +856,9 @@ function wireNetworkLayer(p, el) {
       save(next).then(renderSites);
     });
   const renderVpn = () =>
-    list(p.querySelector("#vpn-servers"), net().vpn.servers || [], (s) => `${s.name}  ·  ${hidePassword(s.url)}`, (i) => {
-      const next = net();
-      next.vpn = { ...next.vpn, servers: [...(next.vpn.servers || [])] };
-      next.vpn.servers.splice(i, 1);
-      if (!next.vpn.servers.length) next.vpn.on = false;
-      save(next).then(renderVpn);
+    list(p.querySelector("#vpn-servers"), net().vpn.servers || [], (s) => `${s.name}  ·  ${s.kind === "wireguard" ? `WireGuard, ${s.endpoint}` : hidePassword(s.url)}`, (i) => {
+      const gone = (net().vpn.servers || [])[i];
+      invoke("vpn_remove_server", { id: gone.id }).then(() => setTimeout(renderVpn, 100), (err) => toast(String(err)));
     });
   renderSites();
   renderVpn();
@@ -875,6 +884,90 @@ function wireNetworkLayer(p, el) {
     p.querySelector("#vpn-name").value = p.querySelector("#vpn-url").value = "";
   });
   invoke("net_status").then((s) => (p.querySelector("#net-restart-note").hidden = s.running === s.wanted), () => {});
+
+  // WireGuard config files, each a server named after its file.
+  const files = p.querySelector("#wg-files");
+  p.querySelector("#wg-import").addEventListener("click", () => files.click());
+  files.addEventListener("change", async () => {
+    let added = 0;
+    for (const file of files.files) {
+      const name = file.name.replace(/\.conf$/i, "");
+      try {
+        await invoke("vpn_add_wireguard", { name, conf: await file.text() });
+        added++;
+      } catch (err) {
+        toast(`${file.name}: ${err}`);
+      }
+    }
+    files.value = "";
+    if (added) toast(added === 1 ? "WireGuard server added" : `${added} WireGuard servers added`);
+    setTimeout(renderVpn, 100);
+    showRestart();
+  });
+  const showRestart = () => invoke("net_status").then((s) => (p.querySelector("#net-restart-note").hidden = s.running === s.wanted), () => {});
+
+  // Surfshark: your key once, then every location.
+  const flag = (cc) => (/^[A-Z]{2}$/.test(cc || "") ? String.fromCodePoint(...[...cc].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "🌐");
+  let locations = [];
+  const renderLocations = async () => {
+    const status = await invoke("net_status").catch(() => null);
+    const current = status?.vpn.on ? status.vpn.current : null;
+    const q = p.querySelector("#ss-search").value.trim().toLowerCase();
+    const box = p.querySelector("#ss-locations");
+    box.innerHTML = "";
+    for (const l of locations.filter((x) => !q || `${x.country} ${x.location}`.toLowerCase().includes(q))) {
+      const id = `ss:${l.connectionName}`;
+      const row = el(`<div class="list-row ss-location${id === current ? " on" : ""}" role="button" tabindex="0"><span class="lr-title"></span><span class="lr-sub"></span></div>`);
+      row.dataset.id = id;
+      row.querySelector(".lr-title").textContent = `${flag(l.countryCode)}  ${l.country} · ${l.location}`;
+      row.querySelector(".lr-sub").textContent = id === current ? "Connected" : `Load ${l.load}%`;
+      row.addEventListener("click", async () => {
+        row.querySelector(".lr-sub").textContent = "Connecting…";
+        try {
+          await invoke("vpn_set", { on: true, server: id });
+          toast(`VPN on: Surfshark ${l.country} · ${l.location}`);
+        } catch (err) {
+          toast(`VPN: ${err}`);
+        }
+        renderLocations();
+      });
+      box.appendChild(row);
+    }
+  };
+  const showSurfshark = async () => {
+    const status = await invoke("net_status").catch(() => null);
+    const ready = !!status?.vpn.surfshark;
+    p.querySelector("#ss-setup").hidden = ready;
+    p.querySelector("#ss-ready").hidden = !ready;
+    if (ready) {
+      locations = await invoke("surfshark_locations").catch((err) => (toast(String(err)), []));
+      renderLocations();
+    }
+  };
+  showSurfshark();
+  p.querySelector("#ss-search").addEventListener("input", renderLocations);
+  p.querySelector("#ss-connect").addEventListener("click", async () => {
+    const key = p.querySelector("#ss-key").value.trim();
+    if (!key) return;
+    try {
+      const r = await invoke("surfshark_connect", { privateKey: key });
+      p.querySelector("#ss-key").value = "";
+      toast(r.restart ? `Surfshark's ${r.locations} locations are here -- restart Kessel once to use them` : `Surfshark's ${r.locations} locations are here`);
+      showSurfshark();
+      showRestart();
+    } catch (err) {
+      toast(String(err));
+    }
+  });
+  p.querySelector("#ss-refresh").addEventListener("click", async () => {
+    locations = await invoke("surfshark_locations", { refresh: true }).catch((err) => (toast(String(err)), locations));
+    renderLocations();
+  });
+  p.querySelector("#ss-disconnect").addEventListener("click", async () => {
+    if (!(await confirmDialog("Remove your Surfshark key from Kessel? The VPN turns off if it's going through Surfshark.", "Remove"))) return;
+    await invoke("surfshark_disconnect").catch((err) => toast(String(err)));
+    showSurfshark();
+  });
 }
 
 // --- Backup ----------------------------------------------------------------------------

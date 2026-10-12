@@ -29,6 +29,10 @@ pbkdf2 = "0.12"
 cbc = "0.1"
 des = "0.8"
 aes = "0.8"
+# The VPN's WireGuard, inside Kessel (wg.rs): the protocol, and a small
+# TCP/IP stack for the connections that go through it.
+boringtun = { version = "0.6", default-features = false }
+smoltcp = { version = "0.12", default-features = false, features = ["std", "medium-ip", "proto-ipv4", "proto-ipv6", "socket-tcp", "socket-udp"] }
 
 [[bin]]
 name = "kessel"

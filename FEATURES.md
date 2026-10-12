@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**91% overall** -- 747 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 63 to do (⏳), 110 skipped (⏭️), of 1045.
+**91% overall** -- 748 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 63 to do (⏳), 110 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -91,7 +91,7 @@ branch, one small commit per feature or group of features.
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
-| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 10 |  | 1 | 1 | 2 | `█████████░` 88% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 11 |  |  | 1 | 2 | `█████████░` 92% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
@@ -1232,7 +1232,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 51.07 | Container tabs | 🟢 | Accounts |
 | 51.08 | Temporary identities | ✅ | A private window is a fresh identity -- no cookies, nothing kept, forgotten when it closes; accounts keep separate ones side by side |
 | 51.09 | Temporary email integration | ⏭️ | Needs an online account or server: left out |
-| 51.10 | VPN integration | 🟡 | A VPN button: your (or your VPN provider's) SOCKS5/HTTP servers, on and off at once, no DNS leaks, never around it when the server is down; no free network of Kessel's own yet |
+| 51.10 | VPN integration | ✅ | A VPN button: WireGuard (Kessel runs it itself -- import any provider's configs, or every Surfshark location with your Surfshark key) or SOCKS5/HTTP servers; on and off at once, no DNS leaks, never around it when the server is down |
 | 51.11 | Proxy integration | ✅ | A proxy per site, the VPN's servers, and Settings -> Network -> Proxy |
 | 51.12 | Encrypted DNS | ✅ | See 12.05 |
 | 51.13 | Anti-bounce tracking | ✅ | See 10.20: click-tracking redirect pages skipped |
