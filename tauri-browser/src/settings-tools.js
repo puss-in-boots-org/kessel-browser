@@ -1032,6 +1032,13 @@ export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
       <div id="perm-defaults"></div>
       ${settingRow({ title: "Remember my answer", desc: "The prompt's “Remember for this site” starts ticked. Answers from private windows are never kept.", controlHtml: switchHtml("perm-remember", f.permission_remember !== false) })}
     </div>
+    <div class="setting-card" id="notifications-card">
+      <div class="k-card-title"><span class="k-label">Notifications</span></div>
+      ${settingRow({ title: "Show sites' notifications", desc: "Cards in the corner of the screen; click one to go to its tab. Off: none show (Do not disturb) -- they're still in the list below.", controlHtml: switchHtml("notif-show", f.notifications?.show !== false) })}
+      ${settingRow({ title: "Sound", desc: "A short chime with each one (not for ones the site marks silent)", controlHtml: switchHtml("notif-sound", f.notifications?.sound !== false) })}
+      ${settingRow({ title: "Recent notifications", desc: "The last 200, newest first (none from private windows)", controlHtml: `<button class="btn sm" id="notif-clear">Clear</button>` })}
+      <div class="list-panel" id="notif-history" style="max-height:260px;overflow:auto"></div>
+    </div>
     <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Site content, for every site</span></div>
       <div class="setting-row"><div class="info"><div class="desc">Never asked about -- change one site from the lock in the address bar, or below. JavaScript and sound take effect when the page loads again.</div></div></div>
@@ -1065,6 +1072,29 @@ export function permissionsPanel(settings, { el, settingRow, switchHtml }) {
     await saveFeature("permission_remember", on);
     remember.classList.toggle("on", on);
   });
+  // Notifications (notifications.rs): shown or not, a chime, the list.
+  for (const [id, key] of [["notif-show", "show"], ["notif-sound", "sound"]]) {
+    const sw = p.querySelector(`#${id}`);
+    sw.addEventListener("click", async () => {
+      const on = !sw.classList.contains("on");
+      await saveFeature("notifications", { ...(features().notifications || {}), [key]: on });
+      sw.classList.toggle("on", on);
+    });
+  }
+  const history = p.querySelector("#notif-history");
+  const showHistory = async () => {
+    const list = await invoke("notification_history").catch(() => []);
+    history.innerHTML = list.length ? "" : `<div class="empty">None yet.</div>`;
+    for (const n of list.slice(0, 100)) {
+      const row = el(`<div class="list-row"><span class="lr-title"></span><span class="lr-sub"></span></div>`);
+      row.querySelector(".lr-title").textContent = `${n.site} -- ${n.title}${n.body ? `: ${n.body}` : ""}`;
+      row.querySelector(".lr-sub").textContent = new Date(n.at * 1000).toLocaleString();
+      history.appendChild(row);
+    }
+  };
+  showHistory();
+  p.querySelector("#notif-clear").addEventListener("click", () => invoke("clear_notification_history").then(showHistory, (err) => toast(String(err))));
+  window.__TAURI__.event.listen("notifications-changed", showHistory);
   const sites = p.querySelector("#perm-sites");
   const labelOf = (kind) => [...PERMISSION_KINDS, ...CONTENT_KINDS].find((k) => k[0] === kind)?.[1] || kind;
   const render = () => {
