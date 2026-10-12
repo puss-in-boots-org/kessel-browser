@@ -46,6 +46,7 @@ mod downloads;
 mod permissions;
 mod vault;
 mod watch;
+mod wg;
 mod zip;
 
 use std::collections::{HashMap, HashSet};
@@ -5643,6 +5644,11 @@ fn main() {
             net::vpn_set,
             net::net_clear_dns,
             net::net_lookup,
+            net::vpn_add_wireguard,
+            net::vpn_remove_server,
+            net::surfshark_connect,
+            net::surfshark_disconnect,
+            net::surfshark_locations,
             defaults::default_browser_status,
             defaults::make_default_browser
         ])
@@ -5666,6 +5672,7 @@ fn main() {
             let store = Store::load(data_dir.clone());
             // Secure DNS, sites' own proxies, the VPN: Kessel's own network
             // layer, when they're set up -- the engine's proxy (net.rs).
+            wg::load(&data_dir);
             net::start(&store.settings.lock().unwrap().features);
             profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
             let restore = store.settings.lock().unwrap().restore_tabs || crash::restore_asked();

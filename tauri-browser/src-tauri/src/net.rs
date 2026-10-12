@@ -23,6 +23,8 @@ use std::sync::RwLock;
 pub(crate) enum Upstream {
     Http { host: String, port: u16, auth: Option<String> },
     Socks5 { host: String, port: u16, login: Option<(String, String)> },
+    // A WireGuard server, Kessel's own tunnel to it (wg.rs).
+    WireGuard(Box<crate::wg::WgConfig>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -137,9 +139,50 @@ fn network(features: &serde_json::Value) -> serde_json::Value {
     features.get("network").cloned().unwrap_or(serde_json::json!({}))
 }
 
-// The VPN servers you added: [{ id, name, url }].
+// The VPN servers you added: [{ id, name, url }] -- or, WireGuard ones,
+// [{ id, name, kind: "wireguard", endpoint, public_key, address, dns }]
+// (their private keys kept apart, wg.rs).
 pub(crate) fn vpn_servers(features: &serde_json::Value) -> Vec<serde_json::Value> {
     network(features).pointer("/vpn/servers").and_then(|s| s.as_array()).cloned().unwrap_or_default()
+}
+
+fn surfshark_on(features: &serde_json::Value) -> bool {
+    network(features).pointer("/vpn/surfshark").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+// Yours, then -- with your Surfshark key -- every Surfshark location
+// ("ss:<its host>").
+pub(crate) fn all_servers(features: &serde_json::Value) -> Vec<serde_json::Value> {
+    let mut out = vpn_servers(features);
+    if surfshark_on(features) && crate::wg::surfshark_ready() {
+        out.extend(crate::wg::locations().into_iter().map(|l| {
+            serde_json::json!({ "id": format!("ss:{}", l.connection_name), "name": format!("{} · {}", l.country, l.location), "group": "surfshark", "country": l.country_code, "load": l.load })
+        }));
+    }
+    out
+}
+
+// Where a server's connections go.
+fn server_upstream(server: &serde_json::Value) -> Option<Upstream> {
+    let text = |k: &str| server.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let id = text("id");
+    if id.starts_with("ss:") {
+        return crate::wg::surfshark_server(&id).map(|c| Upstream::WireGuard(Box::new(c)));
+    }
+    if text("kind") == "wireguard" {
+        use base64::Engine;
+        let decode = |k: &str| base64::engine::general_purpose::STANDARD.decode(text(k)).ok().and_then(|b| <[u8; 32]>::try_from(b).ok());
+        let dns = server.get("dns").and_then(|d| d.as_array()).into_iter().flatten().filter_map(|d| d.as_str()?.parse().ok()).collect::<Vec<_>>();
+        return Some(Upstream::WireGuard(Box::new(crate::wg::WgConfig {
+            private_key: crate::wg::private_key(&id)?,
+            peer_public: decode("public_key")?,
+            preshared: decode("preshared_key"),
+            endpoint: text("endpoint"),
+            address: text("address").parse().ok()?,
+            dns: if dns.is_empty() { vec![std::net::Ipv4Addr::new(1, 1, 1, 1)] } else { dns },
+        })));
+    }
+    parse_upstream(&text("url"))
 }
 
 // Whether anything needs the layer: then the engine starts with it.
@@ -147,7 +190,7 @@ pub(crate) fn wanted(features: &serde_json::Value) -> bool {
     let n = network(features);
     let dns = n.get("dns").and_then(|v| v.as_str()).unwrap_or("system");
     let sites = n.get("sites").and_then(|s| s.as_array()).is_some_and(|s| !s.is_empty());
-    dns != "system" || sites || !vpn_servers(features).is_empty()
+    dns != "system" || sites || !vpn_servers(features).is_empty() || surfshark_on(features)
 }
 
 pub(crate) fn config_from(features: &serde_json::Value) -> Config {
@@ -168,10 +211,8 @@ pub(crate) fn config_from(features: &serde_json::Value) -> Config {
         .collect();
     let vpn_on = n.pointer("/vpn/on").and_then(|v| v.as_bool()).unwrap_or(false);
     let current = text(n.pointer("/vpn/current"));
-    let servers = vpn_servers(features);
-    let vpn = vpn_on
-        .then(|| servers.iter().find(|s| text(s.get("id")) == current).or(servers.first()).and_then(|s| parse_upstream(&text(s.get("url")))))
-        .flatten();
+    let servers = all_servers(features);
+    let vpn = vpn_on.then(|| servers.iter().find(|s| text(s.get("id")) == current).or(servers.first()).and_then(server_upstream)).flatten();
     let proxy = features.get("proxy").cloned().unwrap_or_default();
     let default = (text(proxy.get("mode")) == "fixed").then(|| parse_upstream(&text(proxy.get("server")))).flatten();
     Config { dns, strict: n.get("dns_strict").and_then(|v| v.as_bool()).unwrap_or(false), sites, vpn, default }
@@ -221,12 +262,16 @@ pub(crate) fn apply(features: &serde_json::Value) {
         return;
     }
     let next = config_from(features);
-    let changed = {
+    let (changed, vpn_changed) = {
         let mut current = CONFIG.write().unwrap();
         let changed = current.as_ref() != Some(&next);
+        let vpn_changed = current.as_ref().map(|c| &c.vpn) != Some(&next.vpn);
         *current = Some(next);
-        changed
+        (changed, vpn_changed)
     };
+    if vpn_changed {
+        crate::wg::stop();
+    }
     if changed {
         clear_dns_cache();
         close_open();
@@ -272,7 +317,7 @@ pub(crate) fn running() -> bool {
 pub(crate) fn engine_flags(features: &serde_json::Value) -> String {
     let Some(port) = PORT.get() else { return String::new() };
     let mut out = format!(" --proxy-server=http://127.0.0.1:{port}");
-    if !vpn_servers(features).is_empty() {
+    if !vpn_servers(features).is_empty() || surfshark_on(features) {
         out.push_str(" --force-webrtc-ip-handling-policy=disable_non_proxied_udp");
     }
     out
@@ -442,6 +487,7 @@ fn fail(why: impl Into<String>) -> std::io::Error {
 // password -- without going anywhere through it yet.
 fn check(up: &Upstream) -> std::io::Result<()> {
     match up {
+        Upstream::WireGuard(cfg) => crate::wg::check(cfg),
         Upstream::Http { host, port, .. } => connect_server(host, *port).map(|_| ()).map_err(|e| fail(format!("the server {host}:{port} can't be reached ({e})"))),
         Upstream::Socks5 { host, port, login } => {
             let mut s = connect_server(host, *port).map_err(|e| fail(format!("the VPN server {host}:{port} can't be reached ({e})")))?;
@@ -477,6 +523,7 @@ fn socks_sign_in(s: &mut TcpStream, login: &Option<(String, String)>) -> std::io
 pub(crate) fn connect_via(up: &Upstream, host: &str, port: u16) -> std::io::Result<TcpStream> {
     let host = host.trim_matches(['[', ']']);
     match up {
+        Upstream::WireGuard(cfg) => crate::wg::connect(cfg, host, port),
         Upstream::Http { host: ph, port: pp, auth } => {
             let mut s = connect_server(ph, *pp).map_err(|e| fail(format!("the proxy server {ph}:{pp} can't be reached ({e})")))?;
             let target = if host.contains(':') { format!("[{host}]:{port}") } else { format!("{host}:{port}") };
@@ -715,18 +762,50 @@ pub(crate) fn net_status(app: tauri::AppHandle, webview: Webview) -> Result<serd
     require_internal_page(&webview)?;
     let f = features(&app);
     let n = network(&f);
-    let servers: Vec<serde_json::Value> = vpn_servers(&f).iter().map(|s| serde_json::json!({ "id": s.get("id"), "name": s.get("name") })).collect();
+    let servers: Vec<serde_json::Value> = all_servers(&f).iter().map(|s| serde_json::json!({ "id": s.get("id"), "name": s.get("name"), "group": s.get("group"), "country": s.get("country"), "load": s.get("load"), "kind": s.get("kind") })).collect();
     Ok(serde_json::json!({
         "running": running(),
         "wanted": wanted(&f),
-        "vpn": { "on": running() && config().vpn.is_some(), "current": n.pointer("/vpn/current"), "servers": servers },
+        "vpn": {
+            "on": running() && config().vpn.is_some(),
+            "current": n.pointer("/vpn/current"),
+            "recent": n.pointer("/vpn/recent"),
+            "surfshark": surfshark_on(&f) && crate::wg::surfshark_ready(),
+            "servers": servers,
+        },
     }))
 }
 
-fn set_vpn(app: &tauri::AppHandle, on: bool, server: Option<String>) -> Result<serde_json::Value, String> {
+// Changes features.network.vpn, saves, and says so everywhere.
+fn change_vpn(app: &tauri::AppHandle, change: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>)) {
     let state = app.state::<BrowserState>();
     let mut f = features(app);
-    let servers = vpn_servers(&f);
+    if !f.is_object() {
+        f = serde_json::json!({});
+    }
+    let obj = f.as_object_mut().unwrap();
+    let network = obj.entry("network").or_insert_with(|| serde_json::json!({}));
+    if !network.is_object() {
+        *network = serde_json::json!({});
+    }
+    let vpn = network.as_object_mut().unwrap().entry("vpn").or_insert_with(|| serde_json::json!({}));
+    if !vpn.is_object() {
+        *vpn = serde_json::json!({});
+    }
+    change(vpn.as_object_mut().unwrap());
+    let settings = {
+        let mut s = state.store.settings.lock().unwrap();
+        s.features = f.clone();
+        s.clone()
+    };
+    state.store.save_settings();
+    let _ = app.emit("settings-changed", &settings);
+    apply(&f);
+}
+
+fn set_vpn(app: &tauri::AppHandle, on: bool, server: Option<String>) -> Result<serde_json::Value, String> {
+    let f = features(app);
+    let servers = all_servers(&f);
     let id_of = |s: &serde_json::Value| s.get("id").and_then(|v| v.as_str()).map(str::to_string);
     let current = server.or_else(|| network(&f).pointer("/vpn/current").and_then(|v| v.as_str()).map(str::to_string)).filter(|id| servers.iter().any(|s| id_of(s).as_deref() == Some(id))).or_else(|| servers.first().and_then(id_of));
     let chosen = servers.iter().find(|s| id_of(s) == current).ok_or("Add a VPN server first: Settings -> Network")?;
@@ -736,35 +815,119 @@ fn set_vpn(app: &tauri::AppHandle, on: bool, server: Option<String>) -> Result<s
         }
         // Reachable, and willing to take us somewhere, before anything goes
         // its way.
-        let up = parse_upstream(chosen.get("url").and_then(|v| v.as_str()).unwrap_or("")).ok_or("That server's address isn't one Kessel can use")?;
+        let up = server_upstream(chosen).ok_or("That server isn't one Kessel can use (its key is missing?)")?;
         check(&up).map_err(|e| e.to_string())?;
     }
-    if let Some(obj) = f.as_object_mut() {
-        let network = obj.entry("network").or_insert_with(|| serde_json::json!({}));
-        if !network.is_object() {
-            *network = serde_json::json!({});
+    change_vpn(app, |v| {
+        v.insert("on".into(), serde_json::Value::Bool(on));
+        if let Some(id) = &current {
+            v.insert("current".into(), serde_json::Value::String(id.clone()));
+            // The last few you went through, for the VPN button's menu.
+            let mut recent: Vec<serde_json::Value> = v.get("recent").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+            recent.retain(|r| r.as_str() != Some(id.as_str()));
+            recent.insert(0, serde_json::Value::String(id.clone()));
+            recent.truncate(6);
+            v.insert("recent".into(), serde_json::Value::Array(recent));
         }
-        if let Some(n) = network.as_object_mut() {
-            let vpn = n.entry("vpn").or_insert_with(|| serde_json::json!({}));
-            if let Some(v) = vpn.as_object_mut() {
-                v.insert("on".into(), serde_json::Value::Bool(on));
-                if let Some(id) = &current {
-                    v.insert("current".into(), serde_json::Value::String(id.clone()));
-                }
-            }
-        }
-    }
-    let settings = {
-        let mut s = state.store.settings.lock().unwrap();
-        s.features = f.clone();
-        s.clone()
-    };
-    state.store.save_settings();
-    let _ = app.emit("settings-changed", &settings);
-    apply(&f);
+    });
     let status = serde_json::json!({ "on": on && config().vpn.is_some(), "current": current, "name": chosen.get("name") });
     let _ = app.emit("vpn-changed", status.clone());
     Ok(status)
+}
+
+// A WireGuard config file from your VPN service, as one of your servers
+// (its private key kept apart, for your Windows account).
+#[tauri::command]
+pub(crate) fn vpn_add_wireguard(app: tauri::AppHandle, webview: Webview, name: String, conf: String) -> Result<String, String> {
+    require_internal_page(&webview)?;
+    let c = crate::wg::parse_conf(&conf)?;
+    use base64::Engine;
+    let b64 = |k: &[u8; 32]| base64::engine::general_purpose::STANDARD.encode(k);
+    let id = format!("wg{:x}", rand::random::<u32>());
+    crate::wg::set_private_key(&id, Some(&b64(&c.private_key)))?;
+    let mut server = serde_json::json!({
+        "id": id, "name": name.trim(), "kind": "wireguard", "endpoint": c.endpoint, "public_key": b64(&c.peer_public),
+        "address": c.address.to_string(), "dns": c.dns.iter().map(|d| d.to_string()).collect::<Vec<_>>(),
+    });
+    if let Some(p) = &c.preshared {
+        server["preshared_key"] = serde_json::Value::String(b64(p));
+    }
+    change_vpn(&app, |v| {
+        let servers = v.entry("servers").or_insert_with(|| serde_json::json!([]));
+        if let Some(list) = servers.as_array_mut() {
+            list.push(server);
+        }
+        v.entry("current").or_insert_with(|| serde_json::Value::String(id.clone()));
+    });
+    Ok(id)
+}
+
+// One of your servers removed (Settings): its key goes too.
+#[tauri::command]
+pub(crate) fn vpn_remove_server(app: tauri::AppHandle, webview: Webview, id: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let _ = crate::wg::set_private_key(&id, None);
+    change_vpn(&app, |v| {
+        if let Some(list) = v.get_mut("servers").and_then(|s| s.as_array_mut()) {
+            list.retain(|s| s.get("id").and_then(|i| i.as_str()) != Some(id.as_str()));
+        }
+        if v.get("current").and_then(|c| c.as_str()) == Some(id.as_str()) {
+            v.insert("on".into(), serde_json::Value::Bool(false));
+            v.remove("current");
+        }
+    });
+    Ok(())
+}
+
+// Surfshark: your account's WireGuard private key (my.surfshark.com ->
+// VPN -> Manual setup -> WireGuard -> "I don't have a key pair"), and every
+// location of theirs is a server here.
+#[tauri::command]
+pub(crate) async fn surfshark_connect(app: tauri::AppHandle, webview: Webview, private_key: String) -> Result<serde_json::Value, String> {
+    require_internal_page(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use base64::Engine;
+        let ok = base64::engine::general_purpose::STANDARD.decode(private_key.trim()).is_ok_and(|b| b.len() == 32);
+        if !ok {
+            return Err("That isn't a WireGuard private key (44 characters, ending in =)".to_string());
+        }
+        let n = crate::wg::refresh_locations()?;
+        crate::wg::set_private_key(crate::wg::SURFSHARK, Some(&private_key))?;
+        change_vpn(&app, |v| {
+            v.insert("surfshark".into(), serde_json::Value::Bool(true));
+        });
+        Ok(serde_json::json!({ "locations": n, "restart": !running() }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub(crate) fn surfshark_disconnect(app: tauri::AppHandle, webview: Webview) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    let _ = crate::wg::set_private_key(crate::wg::SURFSHARK, None);
+    change_vpn(&app, |v| {
+        v.insert("surfshark".into(), serde_json::Value::Bool(false));
+        if v.get("current").and_then(|c| c.as_str()).is_some_and(|c| c.starts_with("ss:")) {
+            v.insert("on".into(), serde_json::Value::Bool(false));
+            v.remove("current");
+        }
+    });
+    Ok(())
+}
+
+// Surfshark's locations (fresh from Surfshark when asked).
+#[tauri::command]
+pub(crate) async fn surfshark_locations(webview: Webview, refresh: Option<bool>) -> Result<Vec<crate::wg::Location>, String> {
+    require_internal_page(&webview)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if refresh.unwrap_or(false) || crate::wg::locations().is_empty() {
+            crate::wg::refresh_locations()?;
+        }
+        Ok(crate::wg::locations())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // The VPN button: on or off (`server`: through that one of yours).

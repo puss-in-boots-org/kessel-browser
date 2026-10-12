@@ -183,7 +183,7 @@ fn write_cards(state: &BrowserState, list: &[Card]) -> Result<(), String> {
 // Windows' own encryption for this user's account: `protect` seals,
 // otherwise opens.
 #[cfg(windows)]
-fn dpapi(data: &[u8], protect: bool) -> Result<Vec<u8>, String> {
+pub(crate) fn dpapi(data: &[u8], protect: bool) -> Result<Vec<u8>, String> {
     use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Cryptography::{CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB};
     let input = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
@@ -202,7 +202,7 @@ fn dpapi(data: &[u8], protect: bool) -> Result<Vec<u8>, String> {
 }
 
 #[cfg(not(windows))]
-fn dpapi(_data: &[u8], _protect: bool) -> Result<Vec<u8>, String> {
+pub(crate) fn dpapi(_data: &[u8], _protect: bool) -> Result<Vec<u8>, String> {
     Err("Cards are kept only on Windows".into())
 }
 
