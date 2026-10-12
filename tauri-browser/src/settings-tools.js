@@ -271,6 +271,11 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
     <p class="sub">Screenshots, reader view, mouse gestures, and changes you make to sites -- your own style, a colour filter, elements you've hidden, auto-reload.</p>
 
     <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">PDFs</span></div>
+      ${settingRow({ title: "Open PDFs in", desc: "Kessel's viewer: page thumbnails, highlighting, drawing, text and images, signatures, comments, presentation mode -- and Save keeps them in the PDF", controlHtml: selectHtml("pdf-viewer", [["kessel", "Kessel's PDF viewer"], ["engine", "The engine's own viewer"]], 210) })}
+    </div>
+
+    <div class="setting-card">
       <div class="k-card-title"><span class="k-label">Screenshots</span></div>
       ${settingRow({ title: "When you take one", desc: "Ctrl+Shift+S for what's in view; “Screenshot of the whole page” in the command palette (F2)", controlHtml: selectHtml("shot-action", [["both", "Save and copy"], ["save", "Save it"], ["copy", "Copy it"], ["edit", "Open it in the editor"]], 190) })}
       ${settingRow({ title: "Format", controlHtml: selectHtml("shot-format", [["png", "PNG (sharp)"], ["jpeg", "JPEG (smaller)"]], 170) })}
@@ -354,6 +359,10 @@ export async function toolsPanel(settings, { el, settingRow, switchHtml }) {
   </div>`);
 
   // Screenshots
+  // PDFs (pdf.rs): Kessel's viewer, or the engine's.
+  const pdfViewer = p.querySelector("#pdf-viewer");
+  pdfViewer.value = f.pdf_viewer === "engine" ? "engine" : "kessel";
+  pdfViewer.addEventListener("change", () => saveFeature("pdf_viewer", pdfViewer.value === "engine" ? "engine" : undefined));
   const shotAction = p.querySelector("#shot-action");
   const shotFormat = p.querySelector("#shot-format");
   const shotFolder = p.querySelector("#shot-folder");

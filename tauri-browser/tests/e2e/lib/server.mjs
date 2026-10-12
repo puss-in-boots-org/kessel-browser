@@ -80,6 +80,28 @@ const changing = new Map();
 // Every request any test server answered, with how the browser said it
 // would use it (the Sec-Purpose header: prefetch, prerender).
 export const seen = [];
+
+// A valid one-page PDF with `text` on it.
+export function makePdf(text) {
+  const content = `BT /F1 24 Tf 30 60 Td (${text.replace(/[()\\]/g, "")}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let out = "%PDF-1.4\n";
+  const offsets = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
 // The names the test DNS server (/dns-query) was asked about.
 export const dnsAsked = [];
 
@@ -174,6 +196,17 @@ self.addEventListener('fetch', (e) => { if (new URL(e.request.url).pathname === 
       // A 1x1 PNG (any name), any site may show it.
       res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
       res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+    } else if (parts[0] === "doc" || parts[0] === "doc-private") {
+      // A one-page PDF saying its name; the private one only with the
+      // cookie pdfauth=1 (a PDF behind a sign-in).
+      if (parts[0] === "doc-private" && !/(^|;\s*)pdfauth=1/.test(req.headers.cookie || "")) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("signed-in users only");
+      } else {
+        const name = decodeURIComponent(parts[1] || "doc.pdf").replace(/\.pdf$/i, "");
+        res.writeHead(200, { "Content-Type": "application/pdf", "Cache-Control": "no-store" });
+        res.end(makePdf(`Hello ${name}`));
+      }
     } else if (parts[0] === "dns-query") {
       // A DNS-over-HTTPS server (RFC 8484, GET) that knows one made-up
       // domain: every name under kessel-test is this site (127.0.0.2).
