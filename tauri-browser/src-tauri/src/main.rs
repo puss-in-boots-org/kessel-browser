@@ -12,6 +12,7 @@ mod browsing_data;
 mod browser_windows;
 mod commands;
 mod crash;
+mod defaults;
 mod dialogs;
 mod energy;
 mod experiments;
@@ -24,6 +25,7 @@ mod instance;
 mod keys;
 mod lifecycle;
 mod media;
+mod net;
 mod page;
 mod privacy;
 mod privacy_stats;
@@ -4492,6 +4494,8 @@ fn update_settings(app: tauri::AppHandle, webview: Webview, state: tauri::State<
         a11y::settings_changed(&app, &before.features, &settings.features);
         // Energy saver's mode may have changed.
         energy::check(&app);
+        // Where connections go (net.rs).
+        net::apply(&settings.features);
         // "Remember what pages say" turned off: what they said goes.
         if history_page_text_on(&before.features) && !history_page_text_on(&settings.features) {
             state.store.history.clear_page_text();
@@ -5265,7 +5269,11 @@ fn proxy_args(features: &serde_json::Value) -> String {
     let get = |k: &str| proxy.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
     // Nothing that could end the switch and start another.
     let clean = |v: String| v.chars().filter(|c| !c.is_whitespace() && *c != '"').collect::<String>();
-    match get("mode").as_str() {
+    // Kessel's own network layer is the engine's proxy when it's running
+    // (net.rs): the proxy you set is where it sends the rest.
+    let mode = if net::running() { String::from("layer") } else { get("mode") };
+    out.push_str(&net::engine_flags(features));
+    match mode.as_str() {
         "direct" => out.push_str(" --no-proxy-server"),
         "fixed" if !get("server").is_empty() => {
             out.push_str(&format!(" --proxy-server={}", clean(get("server"))));
@@ -5630,7 +5638,13 @@ fn main() {
             apps::install_app,
             apps::list_apps,
             apps::uninstall_app,
-            apps::open_app
+            apps::open_app,
+            net::net_status,
+            net::vpn_set,
+            net::net_clear_dns,
+            net::net_lookup,
+            defaults::default_browser_status,
+            defaults::make_default_browser
         ])
         .setup(|app| {
             // Which profile this is decides where everything below lives,
@@ -5650,6 +5664,9 @@ fn main() {
             // could crash again.
             let startup = crash::start(&data_dir);
             let store = Store::load(data_dir.clone());
+            // Secure DNS, sites' own proxies, the VPN: Kessel's own network
+            // layer, when they're set up -- the engine's proxy (net.rs).
+            net::start(&store.settings.lock().unwrap().features);
             profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
             let restore = store.settings.lock().unwrap().restore_tabs || crash::restore_asked();
             commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);

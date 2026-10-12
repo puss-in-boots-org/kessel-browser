@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**90% overall** -- 737 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 73 to do (⏳), 111 skipped (⏭️), of 1045.
+**91% overall** -- 747 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 63 to do (⏳), 110 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -52,7 +52,7 @@ branch, one small commit per feature or group of features.
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
-| [12. DNS & networking](#12-dns--networking) | 12 | 2 | 1 | 8 |  | `██████░░░░` 63% |
+| [12. DNS & networking](#12-dns--networking) | 19 | 2 | 1 | 1 |  | `█████████░` 93% |
 | [13. Website permissions](#13-website-permissions) | 9 | 3 | 1 |  | 7 | `██████████` 96% |
 | [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
@@ -91,11 +91,11 @@ branch, one small commit per feature or group of features.
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
 | [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
-| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 8 |  |  | 3 | 3 | `███████░░░` 73% |
+| [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 10 |  | 1 | 1 | 2 | `█████████░` 88% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
-| [55. Browser settings](#55-browser-settings) | 5 |  | 6 | 2 | 1 | `██████░░░░` 62% |
+| [55. Browser settings](#55-browser-settings) | 6 |  | 6 | 1 | 1 | `███████░░░` 69% |
 | [56. Account system](#56-account-system) | 1 |  | 1 |  | 12 | `████████░░` 75% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
@@ -502,12 +502,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 12.01 | DNS resolution | 🌐 | |
-| 12.02 | DNS-over-HTTPS | ⏳ | |
-| 12.03 | DNS-over-TLS | ⏳ | |
-| 12.04 | Custom DNS | ⏳ | |
-| 12.05 | Encrypted DNS | ⏳ | |
+| 12.02 | DNS-over-HTTPS | ✅ | Settings -> Network -> Secure DNS: Cloudflare, Google, Quad9 or your own https:// server (Kessel's network layer, net.rs) |
+| 12.03 | DNS-over-TLS | ✅ | A server of your own as tls://host |
+| 12.04 | Custom DNS | ✅ | Any DNS-over-HTTPS or DNS-over-TLS server; 'Only secure DNS' never falls back to your network's |
+| 12.05 | Encrypted DNS | ✅ | DNS-over-HTTPS or DNS-over-TLS (12.02, 12.03) |
 | 12.06 | DNS cache | 🌐 | |
-| 12.07 | DNS cache clearing | ⏳ | |
+| 12.07 | DNS cache clearing | ✅ | Settings -> Network -> Secure DNS -> Clear DNS cache |
 | 12.08 | HTTP/1.1 | 🌐 | |
 | 12.09 | HTTP/2 | 🌐 | |
 | 12.10 | HTTP/3 | 🌐 | |
@@ -519,8 +519,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 12.16 | HTTP proxy | ✅ | host:port in Settings -> Network, with addresses that skip it |
 | 12.17 | PAC files | 🧪 | Settings -> Network -> A setup script (PAC) |
 | 12.18 | System proxy | 🌐 | |
-| 12.19 | Per-profile proxy | ⏳ | |
-| 12.20 | Per-site proxy | ⏳ | |
+| 12.19 | Per-profile proxy | ✅ | Each profile has its own Network settings: proxy, secure DNS, VPN |
+| 12.20 | Per-site proxy | ✅ | Settings -> Network -> Sites through a proxy: a site and its subdomains through a proxy of its own, or straight past the VPN |
 | 12.21 | Connection diagnostics | 🟡 | kessel://diagnostics -> Network: online, the engine's speed estimate, the proxy |
 | 12.22 | Network error reporting | ⏳ | |
 | 12.23 | Offline detection | 🌐 | navigator.onLine and the engine's offline page; kessel://diagnostics shows it |
@@ -1232,9 +1232,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 51.07 | Container tabs | 🟢 | Accounts |
 | 51.08 | Temporary identities | ✅ | A private window is a fresh identity -- no cookies, nothing kept, forgotten when it closes; accounts keep separate ones side by side |
 | 51.09 | Temporary email integration | ⏭️ | Needs an online account or server: left out |
-| 51.10 | VPN integration | ⏭️ | Needs an online account or server: left out |
-| 51.11 | Proxy integration | ⏳ | |
-| 51.12 | Encrypted DNS | ⏳ | |
+| 51.10 | VPN integration | 🟡 | A VPN button: your (or your VPN provider's) SOCKS5/HTTP servers, on and off at once, no DNS leaks, never around it when the server is down; no free network of Kessel's own yet |
+| 51.11 | Proxy integration | ✅ | A proxy per site, the VPN's servers, and Settings -> Network -> Proxy |
+| 51.12 | Encrypted DNS | ✅ | See 12.05 |
 | 51.13 | Anti-bounce tracking | ✅ | See 10.20: click-tracking redirect pages skipped |
 | 51.14 | URL tracking-parameter removal | 🟢 | |
 
@@ -1293,7 +1293,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 55.01 | General: startup, homepage, new tab | 🟡 | Homepage + restore tabs |
-| 55.02 | General: default browser | ⏳ | |
+| 55.02 | General: default browser | ✅ | Settings -> Search & Startup -> Default browser: Kessel registers itself and opens Windows' Default apps page at it |
 | 55.03 | General: downloads | 🟢 | Settings -> Downloads: the folder, ask where to save each file |
 | 55.04 | General: appearance | 🟢 | |
 | 55.05 | General: language | ⏳ | |

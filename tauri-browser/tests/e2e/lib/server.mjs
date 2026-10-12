@@ -80,6 +80,8 @@ const changing = new Map();
 // Every request any test server answered, with how the browser said it
 // would use it (the Sec-Purpose header: prefetch, prerender).
 export const seen = [];
+// The names the test DNS server (/dns-query) was asked about.
+export const dnsAsked = [];
 
 export async function startServer(host = "127.0.0.2", wantedPort = 0) {
   // Big enough for the tests' deliberately huge addresses.
@@ -172,6 +174,25 @@ self.addEventListener('fetch', (e) => { if (new URL(e.request.url).pathname === 
       // A 1x1 PNG (any name), any site may show it.
       res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
       res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+    } else if (parts[0] === "dns-query") {
+      // A DNS-over-HTTPS server (RFC 8484, GET) that knows one made-up
+      // domain: every name under kessel-test is this site (127.0.0.2).
+      const q = Buffer.from(url.searchParams.get("dns") || "", "base64url");
+      let pos = 12;
+      const labels = [];
+      while (pos < q.length && q[pos]) {
+        labels.push(q.subarray(pos + 1, pos + 1 + q[pos]).toString());
+        pos += 1 + q[pos];
+      }
+      const type = q.readUInt16BE(pos + 1);
+      const name = labels.join(".").toLowerCase();
+      const known = name === "kessel-test" || name.endsWith(".kessel-test");
+      const question = q.subarray(12, pos + 5);
+      const answer = known && type === 1 ? Buffer.from([0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 127, 0, 0, 2]) : Buffer.alloc(0);
+      const header = Buffer.from([q[0], q[1], 0x81, known ? 0x80 : 0x83, 0, 1, 0, answer.length ? 1 : 0, 0, 0, 0, 0]);
+      dnsAsked.push(name);
+      res.writeHead(200, { "Content-Type": "application/dns-message", "Cache-Control": "no-store" });
+      res.end(Buffer.concat([header, question, answer]));
     } else if (parts[0] === "webapp") {
       // A site that can be installed as an app: its manifest names it, its
       // start page and its icon.

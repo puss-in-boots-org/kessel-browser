@@ -30,6 +30,29 @@ const FILTERS = [["", "None"], ["dark", "Dark (invert the page)"], ["grayscale",
 // The search engines card and the startup pages card, added to the Search &
 // Startup panel; the default engine list there gets your engines too.
 export function searchExtras(panel, { el, settingRow }) {
+  // Default browser (defaults.rs): Windows has you choose it on its own page.
+  const def = el(`<div class="setting-card" id="default-browser-card">
+    ${settingRow({ title: "Default browser", desc: "Links from other programs open in Kessel", controlHtml: `<span class="k-label" id="default-browser-state"></span><button class="btn sm" id="make-default" hidden>Make Kessel the default…</button>` })}
+  </div>`);
+  const title = panel.querySelector("h2");
+  if (title?.nextElementSibling) title.nextElementSibling.after(def);
+  else panel.prepend(def);
+  const showDefault = async () => {
+    const s = await invoke("default_browser_status").catch(() => null);
+    def.querySelector("#default-browser-state").textContent = s?.default ? "Kessel is your default browser" : "";
+    def.querySelector("#make-default").hidden = !s || s.default;
+  };
+  showDefault();
+  def.querySelector("#make-default").addEventListener("click", async () => {
+    try {
+      await invoke("make_default_browser");
+      toast("In Windows' settings, choose Kessel for links and web pages");
+    } catch (err) {
+      toast(`Couldn't register Kessel: ${err}`);
+    }
+  });
+  window.addEventListener("focus", showDefault);
+
   const select = panel.querySelector("#engine-select");
   const fillEngines = () => {
     const s = currentSettings() || {};
@@ -685,6 +708,30 @@ export function networkPanel(settings, { el, settingRow, switchHtml }) {
         ${settingRow({ title: "Script address", controlHtml: `<input class="field mono" id="proxy-pac-url" style="width:260px" spellcheck="false" placeholder="http://wpad/wpad.dat" />` })}
       </div>
     </div>
+    <div class="setting-card" id="net-layer-card">
+      <div class="k-card-title"><span class="k-label">Secure DNS</span></div>
+      ${settingRow({ title: "Look up sites with", desc: "Encrypted, so your network can't see or change which sites you look up", controlHtml: selectHtml("dns-mode", [["system", "Your network's DNS"], ["cloudflare", "Cloudflare (1.1.1.1)"], ["google", "Google (8.8.8.8)"], ["quad9", "Quad9 (9.9.9.9)"], ["custom", "A server of your own"]], 220) })}
+      <div id="dns-custom">${settingRow({ title: "Server", desc: "DNS-over-HTTPS (https://…/dns-query) or DNS-over-TLS (tls://host)", controlHtml: `<input class="field mono" id="dns-server" style="width:260px" spellcheck="false" placeholder="https://dns.example/dns-query" />` })}</div>
+      <div id="dns-more">
+        ${settingRow({ title: "Only secure DNS", desc: "When it doesn't answer, pages don't load rather than asking your network's DNS", controlHtml: switchHtml("dns-strict", false) })}
+        ${settingRow({ title: "Try it", desc: "", controlHtml: `<input class="field mono" id="dns-test-host" style="width:160px" spellcheck="false" placeholder="example.com" /><button class="btn sm" id="dns-test">Look up</button><button class="btn sm" id="dns-clear">Clear DNS cache</button>` })}
+      </div>
+    </div>
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">Sites through a proxy</span></div>
+      <p class="sub" style="padding:0 14px">A site (and its subdomains) that goes through a proxy of its own -- or straight out, past the VPN. socks5://host:port, host:port, or direct.</p>
+      <div class="list-panel" id="site-proxies"></div>
+      <div class="add-row"><input class="field mono" id="sp-site" placeholder="example.com" style="max-width:160px" /><input class="field mono" id="sp-proxy" placeholder="socks5://127.0.0.1:1080" /><button class="btn sm" id="sp-add">Add</button></div>
+    </div>
+    <div class="setting-card">
+      <div class="k-card-title"><span class="k-label">VPN</span></div>
+      <p class="sub" style="padding:0 14px">Your VPN's servers (SOCKS5 or HTTP proxies -- many VPN services give you these). The VPN button in the address bar turns it on or off at once. Sites' names are looked up at the server, addresses on your own network stay direct, and if the server can't be reached pages don't load rather than going around it. Calls (WebRTC) go through it too.</p>
+      <div class="list-panel" id="vpn-servers"></div>
+      <div class="add-row"><input class="field" id="vpn-name" placeholder="Name" style="max-width:120px" /><input class="field mono" id="vpn-url" placeholder="socks5://user:password@vpn.example:1080" /><button class="btn sm" id="vpn-add">Add</button></div>
+    </div>
+    <div class="setting-card" id="net-restart-note" hidden>
+      ${settingRow({ title: "Restart to apply", desc: "Kessel's own network layer goes on or off when Kessel starts; after that, changes here apply at once", controlHtml: "" })}
+    </div>
     <div class="setting-card" id="experiments-card">
       <div class="k-card-title"><span class="k-label">Experiments</span></div>
       ${EXPERIMENTS.map(([id, title, desc]) => settingRow({ title, desc, controlHtml: switchHtml(`exp-${id}`, f.experiments?.[id] === true) })).join("")}
@@ -735,7 +782,99 @@ export function networkPanel(settings, { el, settingRow, switchHtml }) {
     });
   }
   p.querySelector("#net-restart").addEventListener("click", () => invoke("restart_kessel").catch((err) => toast(String(err))));
+  wireNetworkLayer(p, el);
   return p;
+}
+
+// Secure DNS, sites' own proxies and the VPN's servers (net.rs): saved as
+// features.network; the layer itself starts with Kessel.
+function wireNetworkLayer(p, el) {
+  const net = () => ({ dns: "system", dns_server: "", dns_strict: false, sites: [], vpn: { servers: [] }, ...(features().network || {}) });
+  const save = async (next) => {
+    await saveFeature("network", next);
+    const status = await invoke("net_status").catch(() => null);
+    p.querySelector("#net-restart-note").hidden = !status || status.running === status.wanted;
+  };
+  const n = net();
+  const mode = p.querySelector("#dns-mode");
+  const server = p.querySelector("#dns-server");
+  const strict = p.querySelector("#dns-strict");
+  mode.value = n.dns;
+  server.value = n.dns_server || "";
+  strict.classList.toggle("on", !!n.dns_strict);
+  const showDns = () => {
+    p.querySelector("#dns-custom").style.display = mode.value === "custom" ? "" : "none";
+    p.querySelector("#dns-more").style.display = mode.value === "system" ? "none" : "";
+  };
+  showDns();
+  const saveDns = () => {
+    showDns();
+    save({ ...net(), dns: mode.value, dns_server: server.value.trim(), dns_strict: strict.classList.contains("on") });
+  };
+  mode.addEventListener("change", saveDns);
+  server.addEventListener("change", saveDns);
+  strict.addEventListener("click", () => {
+    strict.classList.toggle("on");
+    saveDns();
+  });
+  p.querySelector("#dns-test").addEventListener("click", async () => {
+    const host = p.querySelector("#dns-test-host").value.trim();
+    if (!host) return;
+    const found = await invoke("net_lookup", { host }).catch((err) => toast(String(err)));
+    if (found) toast(`${host}: ${found.join(", ")}`);
+  });
+  p.querySelector("#dns-clear").addEventListener("click", () => invoke("net_clear_dns").then(() => toast("DNS cache cleared"), (err) => toast(String(err))));
+
+  // A list of { …, label } rows with a remove button each.
+  const list = (box, items, label, remove) => {
+    box.innerHTML = items.length ? "" : `<div class="empty">None yet.</div>`;
+    items.forEach((item, i) => {
+      const row = el(`<div class="list-row"><span class="lr-title"></span><button class="btn ghost icon-only sm" title="Remove">${icon("trash", 13)}</button></div>`);
+      row.querySelector(".lr-title").textContent = label(item);
+      row.querySelector("button").addEventListener("click", () => remove(i));
+      box.appendChild(row);
+    });
+  };
+  // (A password in a server's address isn't shown.)
+  const hidePassword = (url) => url.replace(/\/\/([^:@/]+):[^@/]*@/, "//$1:•••@");
+  const renderSites = () =>
+    list(p.querySelector("#site-proxies"), net().sites, (s) => `${s.site}  →  ${hidePassword(s.proxy)}`, (i) => {
+      const next = net();
+      next.sites.splice(i, 1);
+      save(next).then(renderSites);
+    });
+  const renderVpn = () =>
+    list(p.querySelector("#vpn-servers"), net().vpn.servers || [], (s) => `${s.name}  ·  ${hidePassword(s.url)}`, (i) => {
+      const next = net();
+      next.vpn = { ...next.vpn, servers: [...(next.vpn.servers || [])] };
+      next.vpn.servers.splice(i, 1);
+      if (!next.vpn.servers.length) next.vpn.on = false;
+      save(next).then(renderVpn);
+    });
+  renderSites();
+  renderVpn();
+  const proxyOk = (v) => v === "direct" || /^(socks5h?|socks|http):\/\/[^\s]+$/i.test(v) || /^[^\s:/]+:\d+$/.test(v);
+  p.querySelector("#sp-add").addEventListener("click", () => {
+    const site = p.querySelector("#sp-site").value.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    const proxy = p.querySelector("#sp-proxy").value.trim();
+    if (!site || !proxyOk(proxy)) return toast("A site, and socks5://host:port, host:port or direct");
+    const next = net();
+    next.sites = [...next.sites.filter((s) => s.site !== site), { site, proxy }];
+    save(next).then(renderSites);
+    p.querySelector("#sp-site").value = p.querySelector("#sp-proxy").value = "";
+  });
+  p.querySelector("#vpn-add").addEventListener("click", () => {
+    const url = p.querySelector("#vpn-url").value.trim();
+    if (!proxyOk(url) || url === "direct") return toast("The server's address: socks5://host:port or http://host:port");
+    const name = p.querySelector("#vpn-name").value.trim() || url.replace(/^\w+:\/\/([^@]*@)?/, "").replace(/:\d+$/, "");
+    const next = net();
+    const id = `v${Date.now().toString(36)}`;
+    next.vpn = { ...next.vpn, servers: [...(next.vpn.servers || []), { id, name, url }] };
+    if (!next.vpn.current) next.vpn.current = id;
+    save(next).then(renderVpn);
+    p.querySelector("#vpn-name").value = p.querySelector("#vpn-url").value = "";
+  });
+  invoke("net_status").then((s) => (p.querySelector("#net-restart-note").hidden = s.running === s.wanted), () => {});
 }
 
 // --- Backup ----------------------------------------------------------------------------

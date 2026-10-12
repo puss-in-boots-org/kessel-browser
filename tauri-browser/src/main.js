@@ -3404,6 +3404,64 @@ async function findInPage(command, page) {
 // One chip in the address bar for the active tab: what was stopped, a way
 // to open it anyway, and a way to allow the site from now on.
 
+// --- VPN (net.rs) ---------------------------------------------------------------------------
+// A pill in the address bar once you've added a VPN server: click turns it
+// on or off, right-click picks the server. Every window shows the same.
+
+let vpnState = null; // { running, on, current, servers: [{ id, name }] }
+
+async function refreshVpn() {
+  const s = await invoke("net_status").catch(() => null);
+  vpnState = s ? { running: s.running, ...s.vpn } : null;
+  updateVpnButton();
+}
+
+function vpnServerName() {
+  const s = vpnState?.servers.find((x) => x.id === vpnState.current) || vpnState?.servers[0];
+  return s?.name || "your VPN server";
+}
+
+function updateVpnButton() {
+  const btn = document.getElementById("vpn-btn");
+  const show = !!(vpnState?.running && vpnState.servers.length);
+  btn.hidden = !show;
+  if (!show) return;
+  btn.classList.toggle("on", !!vpnState.on);
+  btn.title = vpnState.on ? `VPN on, through ${vpnServerName()} -- click to turn it off` : `VPN off -- click to go through ${vpnServerName()}`;
+}
+
+async function setVpn(on, server) {
+  const btn = document.getElementById("vpn-btn");
+  btn.classList.add("busy");
+  try {
+    const s = await invoke("vpn_set", { on, server: server ?? null });
+    toast(s.on ? `VPN on: through ${s.name || "your server"}` : "VPN off");
+  } catch (err) {
+    toast(`VPN: ${err}`);
+  } finally {
+    btn.classList.remove("busy");
+    refreshVpn();
+  }
+}
+
+function vpnMenu(e) {
+  e.preventDefault();
+  if (!vpnState) return;
+  const rect = document.getElementById("vpn-btn").getBoundingClientRect();
+  showContextMenu(
+    [
+      { header: "Go through" },
+      ...vpnState.servers.map((s) => ({ label: s.name || s.id, checked: vpnState.on && s.id === vpnState.current, action: () => setVpn(true, s.id) })),
+      "-",
+      { label: vpnState.on ? "Turn the VPN off" : "Turn the VPN on", iconName: "shield", action: () => setVpn(!vpnState.on) },
+      { label: "VPN settings", iconName: "settings", action: () => createTab("kessel://settings/network") },
+    ],
+    rect.left,
+    rect.bottom + 4,
+    { dropdown: true, width: 240 }
+  );
+}
+
 // --- Install as app (apps.rs) ----------------------------------------------------------
 // A site with a web app manifest: the address bar offers to install it. Any
 // web page can be, from the menu.
@@ -5236,6 +5294,11 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("home-btn").addEventListener("click", () => runCommand("home"));
   document.getElementById("share-btn").addEventListener("click", toggleSharePopup);
   document.getElementById("install-app-btn").addEventListener("click", installApp);
+  document.getElementById("vpn-btn").addEventListener("click", () => vpnState && setVpn(!vpnState.on));
+  document.getElementById("vpn-btn").addEventListener("contextmenu", vpnMenu);
+  await listen("vpn-changed", refreshVpn);
+  await listen("settings-changed", refreshVpn);
+  refreshVpn();
   // What a tab's page offers as an app, or that it was installed.
   await listen("app-offer", (event) => {
     const { id, offer, installed } = event.payload;
