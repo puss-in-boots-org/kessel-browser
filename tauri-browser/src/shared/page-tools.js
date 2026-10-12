@@ -728,6 +728,311 @@
       else window.addEventListener('load', function () { later(findApp, 300); });
     }
 
+    // --- Spelling and grammar as you type (proof.rs) ---
+    // The engine checks neither. In the field you're typing in: words
+    // Windows' spell checker doesn't know get a red wavy line, what
+    // LanguageTool finds (if you turned it on) a blue one; right-click one
+    // for its suggestions. Text boxes get a see-through copy of themselves
+    // laid over them for the lines; editable pages, highlights.
+    function startProofing(opts) {
+      if (!opts || (!opts.spell && !opts.grammar) || window.top !== window) return;
+      var SPELL = '#e5484d', GRAMMAR = '#3b82f6';
+      var field = null, kind = '', marks = [], grammarMarks = [], overlay = null, menu = null;
+      var timer = 0, gTimer = 0, seq = 0, checkedText = null, gText = null, map = [];
+
+      var hostOf = function (el) {
+        if (!el || el.spellcheck === false) return null;
+        if (el.tagName === 'TEXTAREA') return el.readOnly || el.disabled ? null : el;
+        if (el.tagName === 'INPUT') {
+          var t = (el.type || 'text').toLowerCase();
+          return (t === 'text' || t === 'search') && !el.readOnly && !el.disabled ? el : null;
+        }
+        if (el.isContentEditable) {
+          var root = el;
+          while (root.parentElement && root.parentElement.isContentEditable) root = root.parentElement;
+          return root.spellcheck === false ? null : root;
+        }
+        return null;
+      };
+      var langOf = function (el) {
+        var tagged = el && el.closest && el.closest('[lang]');
+        return opts.lang || (tagged && tagged.lang) || navigator.language || '';
+      };
+      var blockOf = function (node) {
+        var el = node.parentElement;
+        while (el && el !== field && getComputedStyle(el).display.indexOf('inline') === 0) el = el.parentElement;
+        return el;
+      };
+      // The field's text -- and, for an editable page, which text node each
+      // stretch of it is in.
+      var textOf = function () {
+        if (kind !== 'rich') return field.value;
+        map = [];
+        var text = '', walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT), node, lastBlock = null;
+        while ((node = walker.nextNode())) {
+          var block = blockOf(node);
+          if (text && block !== lastBlock) text += '\n';
+          lastBlock = block;
+          map.push({ node: node, start: text.length });
+          text += node.data;
+        }
+        return text;
+      };
+      var rangeOf = function (start, end) {
+        var r = document.createRange(), set = 0;
+        for (var i = 0; i < map.length; i++) {
+          var m = map[i], len = m.node.data.length;
+          if (!(set & 1) && start >= m.start && start <= m.start + len) { r.setStart(m.node, start - m.start); set |= 1; }
+          if (!(set & 2) && end >= m.start && end <= m.start + len) { r.setEnd(m.node, end - m.start); set |= 2; }
+        }
+        return set === 3 ? r : null;
+      };
+
+      var style = document.createElement('style');
+      style.textContent = '::highlight(kessel-spell){text-decoration:underline wavy ' + SPELL + ';text-decoration-skip-ink:none}::highlight(kessel-grammar){text-decoration:underline wavy ' + GRAMMAR + ';text-decoration-skip-ink:none}';
+      (document.head || document.documentElement).appendChild(style);
+
+      var all = function () {
+        return marks.concat(grammarMarks).sort(function (a, b) { return a.start - b.start; }).filter(function (m, i, list) {
+          return !i || m.start >= list[i - 1].start + list[i - 1].length;
+        });
+      };
+      // The lines under the words.
+      var render = function () {
+        if (!field) return;
+        var list = all();
+        if (kind === 'rich') {
+          if (!window.Highlight || !window.CSS || !CSS.highlights) return;
+          textOf();
+          var spell = new Highlight(), grammar = new Highlight();
+          list.forEach(function (m) {
+            var r = rangeOf(m.start, m.start + m.length);
+            m.rects = function () { return r ? r.getClientRects() : []; };
+            if (r) (m.kind === 'grammar' ? grammar : spell).add(r);
+          });
+          CSS.highlights.set('kessel-spell', spell);
+          CSS.highlights.set('kessel-grammar', grammar);
+          return;
+        }
+        if (!overlay) {
+          overlay = document.createElement('kessel-proof');
+          overlay.setAttribute('aria-hidden', 'true');
+          document.documentElement.appendChild(overlay);
+        }
+        var cs = getComputedStyle(field), r = field.getBoundingClientRect(), s = overlay.style;
+        ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontStretch', 'letterSpacing', 'lineHeight', 'textTransform', 'textIndent', 'wordSpacing', 'tabSize', 'direction', 'textAlign'].forEach(function (p) { s[p] = cs[p]; });
+        s.position = 'absolute';
+        s.left = r.left + scrollX + 'px';
+        s.top = r.top + scrollY + 'px';
+        s.width = r.width + 'px';
+        s.height = r.height + 'px';
+        s.boxSizing = 'border-box';
+        s.borderStyle = 'solid';
+        s.borderColor = 'transparent';
+        s.color = 'transparent';
+        s.background = 'transparent';
+        s.margin = '0';
+        s.overflow = 'hidden';
+        s.pointerEvents = 'none';
+        s.zIndex = '2147483646';
+        s.whiteSpace = kind === 'area' ? 'pre-wrap' : 'pre';
+        s.overflowWrap = kind === 'area' ? 'break-word' : 'normal';
+        s.display = 'block';
+        var text = field.value, at = 0;
+        overlay.textContent = '';
+        list.forEach(function (m) {
+          overlay.appendChild(document.createTextNode(text.slice(at, m.start)));
+          var span = document.createElement('span');
+          span.style.cssText = 'text-decoration:underline wavy ' + (m.kind === 'grammar' ? GRAMMAR : SPELL) + ';text-decoration-skip-ink:none;color:transparent';
+          span.textContent = text.slice(m.start, m.start + m.length);
+          overlay.appendChild(span);
+          m.rects = function () { return span.getClientRects(); };
+          at = m.start + m.length;
+        });
+        overlay.appendChild(document.createTextNode(text.slice(at) + (kind === 'area' ? '\n ' : '')));
+        overlay.scrollTop = field.scrollTop;
+        overlay.scrollLeft = field.scrollLeft;
+      };
+      var check = function () {
+        if (!field) return;
+        var f = field, text = textOf(), lang = langOf(field);
+        if (text !== checkedText) {
+          checkedText = text;
+          if (text !== gText) grammarMarks = [];
+          if (opts.spell && text.trim()) {
+            BRIDGE.request('proof-check', { text: text, lang: lang }).then(function (list) {
+              if (field !== f || textOf() !== text) return;
+              marks = Array.isArray(list) ? list : [];
+              render();
+            });
+          } else marks = [];
+          if (opts.grammar && text.trim().length > 3) {
+            clearTimeout(gTimer);
+            gTimer = setTimeout(function () {
+              if (field !== f || textOf() !== text) return;
+              gText = text;
+              BRIDGE.send('proof-grammar', { seq: ++seq, text: text, lang: lang });
+            }, 1500);
+          }
+        }
+        render();
+      };
+      BRIDGE.on('proof-grammar', function (d) {
+        if (!field || d.seq !== seq || textOf() !== gText) return;
+        grammarMarks = Array.isArray(d.matches) ? d.matches : [];
+        render();
+      });
+      var schedule = function () {
+        clearTimeout(timer);
+        timer = setTimeout(check, 350);
+      };
+      var detach = function () {
+        field = null;
+        marks = [];
+        grammarMarks = [];
+        checkedText = null;
+        if (overlay) overlay.remove();
+        overlay = null;
+        if (window.CSS && CSS.highlights) {
+          CSS.highlights.delete('kessel-spell');
+          CSS.highlights.delete('kessel-grammar');
+        }
+      };
+      // The menu at a marked word.
+      var closeMenu = function () {
+        if (menu) menu.remove();
+        menu = null;
+      };
+      document.addEventListener('focusin', function (e) {
+        var el = hostOf(e.target);
+        if (el === field) return;
+        detach();
+        if (!el) return;
+        field = el;
+        kind = el.tagName === 'TEXTAREA' ? 'area' : el.tagName === 'INPUT' ? 'line' : 'rich';
+        schedule();
+      }, true);
+      document.addEventListener('focusout', function (e) {
+        if (!field || hostOf(e.target) !== field) return;
+        setTimeout(function () {
+          if (!menu && field && document.activeElement !== field && !field.contains(document.activeElement)) detach();
+        }, 150);
+      }, true);
+      document.addEventListener('input', function (e) {
+        if (field && (e.target === field || field.contains(e.target))) {
+          closeMenu();
+          schedule();
+        }
+      }, true);
+      document.addEventListener('scroll', function () {
+        if (field) render();
+        closeMenu();
+      }, true);
+      window.addEventListener('resize', function () { if (field) render(); });
+
+      var apply = function (m, replacement) {
+        closeMenu();
+        if (kind === 'rich') {
+          textOf();
+          var r = rangeOf(m.start, m.start + m.length);
+          if (!r) return;
+          var sel = getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+          document.execCommand('insertText', false, replacement);
+        } else {
+          field.focus();
+          field.setSelectionRange(m.start, m.start + m.length);
+          // (insertText keeps Ctrl+Z working, and the page hears it.)
+          if (!document.execCommand('insertText', false, replacement)) {
+            field.setRangeText(replacement, m.start, m.start + m.length, 'end');
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+        checkedText = null;
+        check();
+      };
+      var showMenu = function (x, y, m, word, suggestions) {
+        closeMenu();
+        menu = document.createElement('kessel-proof-menu');
+        var root = menu.attachShadow({ mode: 'closed' });
+        var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+        root.innerHTML = '<style>:host{all:initial;position:fixed;z-index:2147483647}div{font:13px system-ui,sans-serif;min-width:180px;max-width:320px;padding:4px;border-radius:9px;box-shadow:0 6px 24px rgba(0,0,0,.28);' +
+          (dark ? 'background:#2b2b2f;color:#eee;border:1px solid #444' : 'background:#fff;color:#222;border:1px solid #ddd') +
+          '}p{margin:4px 8px 6px;font-size:12px;opacity:.75}button{display:block;width:100%;text-align:left;border:0;background:none;color:inherit;font:inherit;padding:6px 10px;border-radius:6px;cursor:pointer}button.fix{font-weight:600}button:hover{background:' +
+          (dark ? '#3a3a40' : '#eef2ff') + '}hr{border:0;border-top:1px solid ' + (dark ? '#444' : '#e5e5e5') + ';margin:4px 2px}</style><div role="menu"></div>';
+        var box = root.querySelector('div');
+        var item = function (label, cls, act) {
+          var b = document.createElement('button');
+          b.textContent = label;
+          b.className = cls || '';
+          b.setAttribute('role', 'menuitem');
+          b.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+          b.addEventListener('click', function (ev) { ev.preventDefault(); act(); });
+          box.appendChild(b);
+        };
+        if (m.message) {
+          var p = document.createElement('p');
+          p.textContent = m.message;
+          box.appendChild(p);
+        }
+        (suggestions || []).slice(0, 6).forEach(function (s) { item(s === '' ? '(delete it)' : s, 'fix', function () { apply(m, s); }); });
+        if (!suggestions || !suggestions.length) item('No suggestions', '', closeMenu);
+        if (m.kind === 'spell') {
+          box.appendChild(document.createElement('hr'));
+          var learn = function (add) {
+            return function () {
+              BRIDGE.send('proof-learn', { word: word, lang: langOf(field), add: add });
+              marks = marks.filter(function (x) { return x.kind !== 'spell' || (checkedText || '').substr(x.start, x.length) !== word; });
+              closeMenu();
+              render();
+            };
+          };
+          item('Add to dictionary', '', learn(true));
+          item('Ignore', '', learn(false));
+        }
+        document.documentElement.appendChild(menu);
+        var h = box.offsetHeight || 160;
+        menu.style.left = Math.max(4, Math.min(x, innerWidth - 224)) + 'px';
+        menu.style.top = Math.max(4, Math.min(y + 4, innerHeight - h - 4)) + 'px';
+        menu.__items = function () { return [].map.call(box.querySelectorAll('button'), function (b) { return b.textContent; }); };
+        menu.__pick = function (label) { [].forEach.call(box.querySelectorAll('button'), function (b) { if (b.textContent === label) b.click(); }); };
+      };
+      document.addEventListener('contextmenu', function (e) {
+        if (!field || !(e.target === field || field.contains(e.target))) return;
+        var hit = null;
+        all().forEach(function (m) {
+          if (hit || !m.rects) return;
+          [].forEach.call(m.rects(), function (r) {
+            if (e.clientX >= r.left - 1 && e.clientX <= r.right + 1 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 4) hit = m;
+          });
+        });
+        if (!hit) return;
+        e.preventDefault();
+        var word = (checkedText || '').substr(hit.start, hit.length);
+        if (hit.kind === 'spell' && !(hit.replacements && hit.replacements.length)) {
+          BRIDGE.request('proof-suggest', { word: word, lang: langOf(field) }).then(function (list) { showMenu(e.clientX, e.clientY, hit, word, Array.isArray(list) ? list : []); });
+        } else showMenu(e.clientX, e.clientY, hit, word, hit.replacements);
+      }, true);
+      document.addEventListener('mousedown', function (e) { if (menu && e.target !== menu) closeMenu(); }, true);
+      document.addEventListener('keydown', function (e) { if (menu && e.key === 'Escape') closeMenu(); }, true);
+
+      // For tests: the marks, and the menu.
+      window.__kesselProof = {
+        marks: function () {
+          return all().map(function (m) {
+            var r = m.rects && m.rects()[0];
+            return { start: m.start, length: m.length, kind: m.kind, x: r ? r.left + r.width / 2 : -1, y: r ? r.top + r.height / 2 : -1 };
+          });
+        },
+        menu: function () { return menu ? menu.__items() : null; },
+        pick: function (label) { if (menu) menu.__pick(label); },
+      };
+    }
+    if (window.top === window) {
+      BRIDGE.request('site-tweaks').then(function (t) { startProofing(t && t.proofing); }, function () {});
+    }
+
     // --- An app's badge and the files it was opened with (apps.rs) ---
     // The engine keeps both for apps it installed itself; Kessel's apps get
     // them here: the badge on the app's taskbar button (or the tab), the

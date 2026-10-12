@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**93% overall** -- 764 done (✅ 🟢 🌐), 77 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 44 to do (⏳), 111 skipped (⏭️), of 1045.
+**93% overall** -- 766 done (✅ 🟢 🌐), 77 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -57,7 +57,7 @@ branch, one small commit per feature or group of features.
 | [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 15 |  | 1 |  |  | `██████████` 97% |
-| [17. Reading & research](#17-reading--research) | 15 | 4 | 1 | 2 |  | `█████████░` 89% |
+| [17. Reading & research](#17-reading--research) | 17 | 4 | 1 |  |  | `██████████` 98% |
 | [18. Translation](#18-translation) | 7 |  | 1 | 2 |  | `████████░░` 75% |
 | [19. PDF](#19-pdf) | 17 |  | 1 |  |  | `██████████` 97% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
@@ -631,8 +631,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.05 | Reading progress | 🧪 | Progress bar and minutes to read in reader view |
 | 17.06 | Page translation | ✅ | Right-click the page -> Translate this page (Google Translate) |
 | 17.07 | Dictionary | ✅ | Right-click a word -> Define (Wiktionary, else your search engine); in the address bar: define word (1.17) |
-| 17.08 | Spell checker | ⏳ | |
-| 17.09 | Grammar checking | ⏳ | |
+| 17.08 | Spell checker | ✅ | Windows' own spell checker (its dictionaries; nothing leaves the PC): red underlines in text boxes and editable text, right-click for suggestions, Add to dictionary, Ignore; language in Settings -> Page tools |
+| 17.09 | Grammar checking | ✅ | Opt-in, with LanguageTool: blue underlines and its suggestions on right-click |
 | 17.10 | Text-to-speech | ✅ | Right-click selected text -> Read aloud (and Stop); Reader view -> Read aloud with your voice and speed |
 | 17.11 | Page narration | 🧪 | Reader view reads the article paragraph by paragraph, highlighting each |
 | 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |

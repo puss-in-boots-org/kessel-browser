@@ -58,6 +58,8 @@ pub fn site_tweaks_for(app: &tauri::AppHandle, url: &str) -> serde_json::Value {
         // Settings -> History -> "Remember what pages say": the page sends
         // its text once it has loaded (bridge.rs decides what's kept).
         "remember_text": crate::history_page_text_on(&f),
+        // Spelling and grammar as you type (proof.rs).
+        "proofing": crate::proof::page_options(&f),
     })
 }
 

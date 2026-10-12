@@ -33,6 +33,7 @@ mod privacy;
 mod privacy_stats;
 mod profile;
 mod profiles;
+mod proof;
 mod saved_sessions;
 mod security;
 mod shields;
@@ -5672,6 +5673,7 @@ fn main() {
             net::surfshark_disconnect,
             net::surfshark_locations,
             pdf::pdf_bytes,
+            proof::proof_languages,
             apps::app_badges,
             notifications::notify_fit,
             notifications::notify_ready,
