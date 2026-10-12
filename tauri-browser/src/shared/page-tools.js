@@ -697,6 +697,37 @@
       else window.addEventListener('load', function () { later(findSearch, 1500); });
     }
 
+    // --- The site as an app (apps.rs): its manifest, icons and name ---
+    // Read once it has loaded, for "Install as app"; the manifest the way
+    // the engine itself would fetch it (with this site's cookies only if it
+    // asks for them).
+    function findApp() {
+      if (!/^https?:/.test(location.protocol)) return;
+      var icons = [];
+      var links = document.querySelectorAll('link[rel~="icon"][href], link[rel="apple-touch-icon"][href]');
+      for (var i = 0; i < links.length && icons.length < 20; i++) {
+        icons.push({ src: links[i].href, sizes: links[i].getAttribute('sizes') || '', type: links[i].getAttribute('type') || '' });
+      }
+      var theme = document.querySelector('meta[name="theme-color"][content]');
+      var info = { title: document.title || '', icons: icons, themeColor: theme ? theme.getAttribute('content') : '', manifest: null, manifestUrl: '' };
+      var link = document.querySelector('link[rel~="manifest"][href]');
+      if (!link) return BRIDGE.send('app-info', info);
+      info.manifestUrl = link.href;
+      fetch(link.href, { credentials: link.crossOrigin === 'use-credentials' ? 'include' : 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (text) {
+          if (text && text.length < 200000) {
+            try { info.manifest = JSON.parse(text); } catch (e) {}
+          }
+          BRIDGE.send('app-info', info);
+        })
+        .catch(function () { BRIDGE.send('app-info', info); });
+    }
+    if (window.top === window) {
+      if (document.readyState === 'complete') later(findApp, 300);
+      else window.addEventListener('load', function () { later(findApp, 300); });
+    }
+
     // --- Highlights and notes: kept by their words, found again on load ---
     // (A note stays out of the page's markup -- the site's scripts can read
     // that -- and only shows in the popup you open.)

@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**89% overall** -- 731 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 79 to do (⏳), 111 skipped (⏭️), of 1045.
+**90% overall** -- 737 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 48 partly done (🟡), 73 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -71,7 +71,7 @@ branch, one small commit per feature or group of features.
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
 | [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
-| [31. Progressive Web Apps](#31-progressive-web-apps) | 2 |  |  | 12 | 1 | `█░░░░░░░░░` 14% |
+| [31. Progressive Web Apps](#31-progressive-web-apps) | 7 |  | 1 | 6 | 1 | `█████░░░░░` 54% |
 | [32. Notifications](#32-notifications) | 2 | 1 |  | 6 | 1 | `███░░░░░░░` 33% |
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
@@ -99,7 +99,7 @@ branch, one small commit per feature or group of features.
 | [56. Account system](#56-account-system) | 1 |  | 1 |  | 12 | `████████░░` 75% |
 | [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
-| [59. Offline functionality](#59-offline-functionality) | 8 |  | 1 | 1 |  | `█████████░` 85% |
+| [59. Offline functionality](#59-offline-functionality) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
 | [62. "Crazy advanced" features](#62-crazy-advanced-features) | 16 | 1 | 5 | 2 | 8 | `████████░░` 81% |
@@ -868,21 +868,21 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 31.01 | Install website as app | ⏳ | |
-| 31.02 | PWA manifest | ⏳ | |
-| 31.03 | App icon | ⏳ | |
-| 31.04 | Standalone mode | ⏳ | |
+| 31.01 | Install website as app | ✅ | Menu -> Install as app, or the address bar's button on a site with a manifest: a Start menu shortcut (Kessel Apps); Settings -> Apps lists them |
+| 31.02 | PWA manifest | ✅ | Its name, start page (on its own site only), icons and colour are read from the manifest |
+| 31.03 | App icon | ✅ | The site's best icon on the shortcut, the window and its own taskbar button |
+| 31.04 | Standalone mode | ✅ | Opens in a window of its own: the page and a slim bar, no tabs or address bar |
 | 31.05 | Offline functionality | 🌐 | A site's service worker keeps it working offline (37.09, tested) |
 | 31.06 | Push notifications | ⏭️ | WebView2 has no push service: a push subscription never gets an answer (tested) |
 | 31.07 | Background sync | 🌐 | Background sync: a site's service worker syncs once it's online (tested) |
 | 31.08 | Periodic background tasks | ⏳ | |
 | 31.09 | App shortcuts | ⏳ | |
 | 31.10 | Badges | ⏳ | |
-| 31.11 | Launch handling | ⏳ | |
+| 31.11 | Launch handling | ✅ | Started while Kessel is open: the open Kessel opens it; started alone: just the app's window |
 | 31.12 | Share integration | ⏳ | |
 | 31.13 | File handling | ⏳ | |
 | 31.14 | Protocol handling | ⏳ | |
-| 31.15 | URL handling | ⏳ | |
+| 31.15 | URL handling | 🟡 | A link given to kessel.exe opens in the Kessel already open; links to an app's site don't move into its window |
 
 ### 32. Notifications
 
@@ -1365,7 +1365,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 59.01 | Offline page cache | ✅ | As 17.04: the reading list keeps whole copies of pages |
 | 59.02 | Offline reading | ✅ | Offline, the reading list opens its saved copy; the can't-be-reached page offers it (tested) |
-| 59.03 | Offline PWAs | 🟡 | Sites with a service worker work offline (37.09); installing them as apps is still to do (31.01) |
+| 59.03 | Offline PWAs | ✅ | Sites with a service worker work offline (37.09), and install as apps (31.01) |
 | 59.04 | Service workers | 🌐 | Service workers answer their pages' requests (tested, 60.04) |
 | 59.05 | Background synchronization | 🌐 | A site's service worker gets its background sync once it's online (tested) |
 | 59.06 | Cached resources | 🌐 | The engine's HTTP cache and service-worker caches |

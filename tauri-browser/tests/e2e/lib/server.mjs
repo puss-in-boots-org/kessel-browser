@@ -172,6 +172,17 @@ self.addEventListener('fetch', (e) => { if (new URL(e.request.url).pathname === 
       // A 1x1 PNG (any name), any site may show it.
       res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
       res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64"));
+    } else if (parts[0] === "webapp") {
+      // A site that can be installed as an app: its manifest names it, its
+      // start page and its icon.
+      if (parts[1] === "manifest.json") {
+        res.writeHead(200, { "Content-Type": "application/manifest+json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify({ name: "Test Web App", short_name: "TestApp", start_url: "/webapp/start?from=app", display: "standalone", theme_color: "#3355aa", icons: [{ src: "/img/app-icon.png", sizes: "192x192", type: "image/png" }] }));
+      } else {
+        const title = parts[1] === "start" ? "Web App Start" : "Web App";
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><link rel="manifest" href="/webapp/manifest.json"><meta name="theme-color" content="#3355aa"></head><body><h1>${title}</h1></body></html>`);
+      }
     } else if (parts[0] === "content") {
       // Its own image (#own), another site's (#other, from ?other=<origin>),
       // and a script that marks the page (data-js) when JavaScript runs.
