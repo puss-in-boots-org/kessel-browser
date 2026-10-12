@@ -18,10 +18,21 @@ pub(crate) struct Request {
     pub urls: Vec<String>,
     pub app: Option<String>,
     pub new_window: bool,
+    // Files an app was opened with ("Open with", apps.rs).
+    pub files: Vec<String>,
+    // Links in a scheme an app may handle (web+thing:…, mailto:…).
+    pub links: Vec<String>,
 }
 
 // Switches that take the next argument as their value (profile.rs, crash.rs).
-const VALUED: [&str; 3] = ["--profile", "--profile-dir", "--after"];
+const VALUED: [&str; 4] = ["--profile", "--profile-dir", "--after", "--app-file"];
+
+// A link an installed app could handle: its scheme is web+… or one of the
+// web's safelisted ones.
+fn as_link(arg: &str) -> Option<String> {
+    let (scheme, rest) = arg.split_once(':')?;
+    (crate::apps::scheme_ok(&scheme.to_ascii_lowercase()) && !rest.is_empty() && arg.len() <= 2048).then(|| arg.to_string())
+}
 
 fn as_address(arg: &str) -> Option<String> {
     let lower = arg.to_ascii_lowercase();
@@ -51,15 +62,25 @@ pub(crate) fn request_from_args(args: &[String]) -> Request {
         } else if arg == "--single-argument" {
             // A link Windows handed over (defaults.rs): everything after is
             // that one address -- never a switch.
-            if let Some(url) = as_address(&args[i + 1..].join(" ")) {
+            let link = args[i + 1..].join(" ");
+            if let Some(url) = as_address(&link) {
                 request.urls.push(url);
+            } else if let Some(link) = as_link(&link) {
+                request.links.push(link);
             }
             break;
+        } else if arg == "--app-file" {
+            i += 1;
+            if let Some(file) = args.get(i).filter(|f| Path::new(f.as_str()).is_absolute() && Path::new(f.as_str()).is_file()) {
+                request.files.push(file.clone());
+            }
         } else if VALUED.contains(&arg.as_str()) {
             i += 1;
         } else if !arg.starts_with("--") {
             if let Some(url) = as_address(arg) {
                 request.urls.push(url);
+            } else if let Some(link) = as_link(arg) {
+                request.links.push(link);
             }
         }
         i += 1;
@@ -120,10 +141,16 @@ pub(crate) fn listen(app: &tauri::AppHandle, data_dir: &Path) {
 // What a later start asked for, done here: a web app's window; the
 // addresses as tabs in the window you used last (in front); or, asked for
 // nothing, a new window -- like any browser started again.
-pub(crate) fn serve(app: &tauri::AppHandle, request: Request) {
+pub(crate) fn serve(app: &tauri::AppHandle, mut request: Request) {
     let state = app.state::<BrowserState>();
-    if let Some(url) = request.app {
-        let _ = open_app_window(app, &url);
+    if let Some(url) = request.app.take() {
+        if let Ok(id) = open_app_window(app, &url) {
+            crate::apps::give_files(id, request.files.iter().map(PathBuf::from).collect());
+        }
+        return;
+    }
+    // Links and addresses that are an installed app's: its window.
+    if to_apps(app, &mut request) && request.urls.is_empty() {
         return;
     }
     let win = state.current_window();
@@ -142,6 +169,27 @@ pub(crate) fn serve(app: &tauri::AppHandle, request: Request) {
             let _ = browser_windows::create(app, false, init);
         }
     }
+}
+
+// The links an installed app handles, and the addresses in an installed
+// app's scope, open in its window (out of `request`). True: something did.
+pub(crate) fn to_apps(app: &tauri::AppHandle, request: &mut Request) -> bool {
+    let mut opened = false;
+    for link in std::mem::take(&mut request.links) {
+        if let Some(target) = crate::apps::protocol_target(app, &link) {
+            opened |= open_app_window(app, &target).is_ok();
+        }
+    }
+    let mut rest = Vec::new();
+    for url in std::mem::take(&mut request.urls) {
+        if crate::apps::app_for_url(app, &url).is_some() && open_app_window(app, &url).is_ok() {
+            opened = true;
+        } else {
+            rest.push(url);
+        }
+    }
+    request.urls = rest;
+    opened
 }
 
 // A web app's own window: the page on its own, without the browser's

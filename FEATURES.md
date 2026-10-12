@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**92% overall** -- 759 done (✅ 🟢 🌐), 76 built and waiting for their first run on Windows or a phone (🧪), 50 partly done (🟡), 50 to do (⏳), 110 skipped (⏭️), of 1045.
+**93% overall** -- 764 done (✅ 🟢 🌐), 77 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 44 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -71,7 +71,7 @@ branch, one small commit per feature or group of features.
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
 | [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
-| [31. Progressive Web Apps](#31-progressive-web-apps) | 7 |  | 1 | 6 | 1 | `█████░░░░░` 54% |
+| [31. Progressive Web Apps](#31-progressive-web-apps) | 12 | 1 |  |  | 2 | `██████████` 100% |
 | [32. Notifications](#32-notifications) | 6 | 1 | 1 | 1 | 1 | `████████░░` 83% |
 | [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
@@ -875,14 +875,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 31.05 | Offline functionality | 🌐 | A site's service worker keeps it working offline (37.09, tested) |
 | 31.06 | Push notifications | ⏭️ | WebView2 has no push service: a push subscription never gets an answer (tested) |
 | 31.07 | Background sync | 🌐 | Background sync: a site's service worker syncs once it's online (tested) |
-| 31.08 | Periodic background tasks | ⏳ | |
-| 31.09 | App shortcuts | ⏳ | |
-| 31.10 | Badges | ⏳ | |
+| 31.08 | Periodic background tasks | ⏭️ | WebView2 refuses it (permission denied): the engine allows it only to apps it installed itself |
+| 31.09 | App shortcuts | 🧪 | The manifest's shortcuts in the app's taskbar jump list (on its own site only) |
+| 31.10 | Badges | ✅ | navigator.setAppBadge: a count (or a dot) on the app's taskbar button, or on its tab |
 | 31.11 | Launch handling | ✅ | Started while Kessel is open: the open Kessel opens it; started alone: just the app's window |
-| 31.12 | Share integration | ⏳ | |
-| 31.13 | File handling | ⏳ | |
-| 31.14 | Protocol handling | ⏳ | |
-| 31.15 | URL handling | 🟡 | A link given to kessel.exe opens in the Kessel already open; links to an app's site don't move into its window |
+| 31.12 | Share integration | 🌐 | navigator.share: the engine's own, Windows' share window (not tried here) |
+| 31.13 | File handling | ✅ | Its file types get Open with -> the app; the files reach its page through launchQueue |
+| 31.14 | Protocol handling | ✅ | Its web+ links (from Windows, and from pages) open in its window; mailto: and the like only inside Kessel |
+| 31.15 | URL handling | ✅ | Links into an installed app's scope, from other programs, open in its window |
 
 ### 32. Notifications
 

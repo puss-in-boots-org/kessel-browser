@@ -728,6 +728,51 @@
       else window.addEventListener('load', function () { later(findApp, 300); });
     }
 
+    // --- An app's badge and the files it was opened with (apps.rs) ---
+    // The engine keeps both for apps it installed itself; Kessel's apps get
+    // them here: the badge on the app's taskbar button (or the tab), the
+    // files ("Open with") through the page's launchQueue.
+    if (window.top === window && navigator.setAppBadge) {
+      var setBadge = navigator.setAppBadge.bind(navigator);
+      var clearBadge = navigator.clearAppBadge ? navigator.clearAppBadge.bind(navigator) : null;
+      navigator.setAppBadge = function (count) {
+        var n = count === undefined ? -1 : Math.max(0, Math.floor(Number(count) || 0));
+        BRIDGE.send('badge', { count: n });
+        return setBadge(count).catch(function () {});
+      };
+      navigator.clearAppBadge = function () {
+        BRIDGE.send('badge', { count: 0 });
+        return clearBadge ? clearBadge().catch(function () {}) : Promise.resolve();
+      };
+    }
+    if (window.top === window && 'launchQueue' in window) {
+      var launchFiles = null;
+      var consumer = null;
+      var deliver = function () {
+        if (!consumer || !launchFiles || !launchFiles.length) return;
+        var handles = launchFiles.map(function (f) {
+          var bytes = Uint8Array.from(atob(f.data), function (c) { return c.charCodeAt(0); });
+          var file = new File([bytes], f.name);
+          return { kind: 'file', name: f.name, getFile: function () { return Promise.resolve(file); } };
+        });
+        launchFiles = [];
+        try { consumer({ files: handles, targetURL: location.href }); } catch (e) {}
+      };
+      var shim = {
+        setConsumer: function (fn) {
+          consumer = fn;
+          if (launchFiles === null) {
+            launchFiles = [];
+            BRIDGE.request('launch-files').then(function (list) {
+              launchFiles = Array.isArray(list) ? list : [];
+              deliver();
+            }, function () {});
+          } else deliver();
+        },
+      };
+      try { Object.defineProperty(window, 'launchQueue', { value: shim, configurable: true, writable: true }); } catch (e) {}
+    }
+
     // --- Highlights and notes: kept by their words, found again on load ---
     // (A note stays out of the page's markup -- the site's scripts can read
     // that -- and only shows in the popup you open.)
