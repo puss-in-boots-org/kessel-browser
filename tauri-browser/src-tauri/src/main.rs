@@ -28,6 +28,7 @@ mod media;
 mod net;
 mod notifications;
 mod page;
+mod pdf;
 mod privacy;
 mod privacy_stats;
 mod profile;
@@ -152,6 +153,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("tasks", "tasks.html"),
     ("diagnostics", "diagnostics.html"),
     ("reader", "reader.html"),
+    // A PDF in Kessel's viewer: kessel://pdf?src=<its address> (pdf.rs).
+    ("pdf", "pdfjs/web/viewer.html"),
     ("shot", "shot.html"),
     ("feeds", "feeds.html"),
     // What Shields did, your protections, what Kessel connects to by itself.
@@ -2084,6 +2087,10 @@ fn with_account(app: &tauri::AppHandle, builder: WebviewBuilder<tauri::Wry>, acc
 fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &tauri::Url) -> bool {
     if is_internal_nav(nav_url) {
         return true;
+    }
+    // A PDF: in Kessel's own viewer (pdf.rs).
+    if pdf::intercept(app, id, label, nav_url) {
+        return false;
     }
     let st = app.state::<BrowserState>();
     let shields = app.state::<shields::Shields>();
@@ -5652,6 +5659,7 @@ fn main() {
             net::surfshark_connect,
             net::surfshark_disconnect,
             net::surfshark_locations,
+            pdf::pdf_bytes,
             notifications::notify_fit,
             notifications::notify_ready,
             notifications::notify_clicked,
