@@ -48,6 +48,13 @@ pub(crate) fn request_from_args(args: &[String]) -> Request {
             request.app = args.get(i).and_then(|u| as_address(u));
         } else if arg == "--new-window" {
             request.new_window = true;
+        } else if arg == "--single-argument" {
+            // A link Windows handed over (defaults.rs): everything after is
+            // that one address -- never a switch.
+            if let Some(url) = as_address(&args[i + 1..].join(" ")) {
+                request.urls.push(url);
+            }
+            break;
         } else if VALUED.contains(&arg.as_str()) {
             i += 1;
         } else if !arg.starts_with("--") {
@@ -186,5 +193,9 @@ mod tests {
         assert_eq!(r.app.as_deref(), Some("https://app.example/"));
         assert!(r.new_window);
         assert_eq!(request_from_args(&args(&["--app=javascript:alert(1)"])).app, None, "only web, Kessel and file addresses");
+        let r = request_from_args(&args(&["--profile", "Work", "--single-argument", "https://a.example/?q=--app=https://evil.example/"]));
+        assert_eq!(r.urls, vec!["https://a.example/?q=--app=https://evil.example/"], "a link stays a link");
+        assert_eq!(r.app, None);
+        assert!(request_from_args(&args(&["--single-argument", "--app=https://evil.example/"])).app.is_none(), "never a switch");
     }
 }
