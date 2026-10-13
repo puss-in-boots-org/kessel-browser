@@ -14,6 +14,8 @@ lists are checked locally.
   It has the Windows installer (`.exe`), an `.msi`, and the Android app.
   The installers aren't code-signed yet, so Windows SmartScreen will ask
   before running them.
+- **How to use it:** the [user guide](docs/GUIDE.md) -- also inside Kessel:
+  press F1.
 - **Build it yourself:** see [`tauri-browser/README.md`](tauri-browser/README.md).
 - **What's done and what's next:** [`FEATURES.md`](FEATURES.md) tracks
   more than 1,000 browser features, one row each.
