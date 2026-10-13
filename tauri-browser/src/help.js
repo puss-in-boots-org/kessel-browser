@@ -1,18 +1,20 @@
-// kessel://help (F1): every shortcut Kessel has -- read live from the
-// command list, so shortcuts you changed show as you set them -- plus the
-// mouse, the address bar, privacy, troubleshooting and version info.
+// kessel://help (F1): the guide -- a tour of Kessel by topic (guide.js) --
+// then every shortcut Kessel has -- read live from the command list, so
+// shortcuts you changed show as you set them -- plus the mouse, the address
+// bar, privacy, troubleshooting and version info.
 // kessel://help/<section> opens at that section.
 
 import { icon } from "./shared/icons.js";
 import { initTheme } from "./shared/theme.js";
 import { toast, escapeHtml, keycapsHtml } from "./shared/api.js";
+import { GUIDE } from "./shared/guide.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
 const $ = (id) => document.getElementById(id);
 
-const SECTIONS = [
+const REFERENCE = [
   { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard" },
   { id: "mouse", label: "Mouse", icon: "arrowRight" },
   { id: "address-bar", label: "Address bar", icon: "search" },
@@ -21,6 +23,7 @@ const SECTIONS = [
   { id: "troubleshooting", label: "Troubleshooting", icon: "warning" },
   { id: "about", label: "About Kessel", icon: "logo" },
 ];
+const SECTIONS = [...GUIDE.map(({ id, label, icon }) => ({ id, label, icon, guide: true })), ...REFERENCE];
 
 // Keys that belong to the page itself (the engine handles them) or to a
 // particular place, so they aren't in the command list.
@@ -200,6 +203,7 @@ async function aboutSection() {
 async function render() {
   const commands = await invoke("get_commands").catch(() => []);
   const bodies = {
+    ...Object.fromEntries(GUIDE.map((g) => [g.id, `<p class="sub">${escapeHtml(g.intro)}</p>${tips(g.tips)}`])),
     shortcuts: shortcutsSection(commands),
     mouse: mouseSection(),
     "address-bar": addressBarSection(),
@@ -271,9 +275,10 @@ window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
   $("logo").outerHTML = icon("help", 18);
   $("search-icon").outerHTML = icon("search", 16);
-  $("nav").innerHTML = SECTIONS.map(
-    (s) => `<a class="nav-item" href="#${s.id}" data-section="${s.id}">${icon(s.icon, 15)}<span>${escapeHtml(s.label)}</span></a>`,
-  ).join("");
+  const navItem = (s) => `<a class="nav-item" href="#${s.id}" data-section="${s.id}">${icon(s.icon, 15)}<span>${escapeHtml(s.label)}</span></a>`;
+  $("nav").innerHTML =
+    `<div class="nav-group">Guide</div>${SECTIONS.filter((s) => s.guide).map(navItem).join("")}` +
+    `<div class="nav-group">Reference</div>${SECTIONS.filter((s) => !s.guide).map(navItem).join("")}`;
   for (const a of document.querySelectorAll(".nav-item")) {
     a.addEventListener("click", (e) => {
       e.preventDefault();
@@ -282,7 +287,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
   await render();
-  showSection(location.hash.slice(1) || "shortcuts");
+  showSection(location.hash.slice(1) || GUIDE[0].id);
   window.addEventListener("hashchange", () => showSection(location.hash.slice(1)));
 
   // The nav follows the scrolling.
