@@ -218,8 +218,9 @@ pub(crate) fn config_from(features: &serde_json::Value) -> Config {
     Config { dns, strict: n.get("dns_strict").and_then(|v| v.as_bool()).unwrap_or(false), sites, vpn, default }
 }
 
-// Addresses on this PC or your own network: never through the VPN.
-fn local(host: &str) -> bool {
+// Addresses on this PC or your own network: never through the VPN (and
+// where a password may be filled in over plain http -- see autofill_for).
+pub(crate) fn local(host: &str) -> bool {
     let h = host.trim_matches(['[', ']']).to_ascii_lowercase();
     match h.parse::<IpAddr>() {
         Ok(IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),

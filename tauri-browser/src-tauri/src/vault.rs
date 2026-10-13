@@ -107,7 +107,10 @@ fn site_matches_host(site: &str, host: &str) -> bool {
     if site_host.is_empty() {
         return false;
     }
-    site_host == host || host.ends_with(&format!(".{}", site_host)) || site_host.ends_with(&format!(".{}", host))
+    // The site itself or one of its subdomains (a login for example.com
+    // works on accounts.example.com) -- never the other way round, where
+    // one for shop.example.com would be offered to all of example.com.
+    site_host == host || host.ends_with(&format!(".{}", site_host))
 }
 
 fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
@@ -611,4 +614,18 @@ pub fn generate_password(length: usize, use_upper: bool, use_numbers: bool, use_
     (0..len)
         .map(|_| chars[rng.random_range(0..chars.len())])
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::site_matches_host;
+
+    #[test]
+    fn a_login_goes_to_its_site_and_subdomains_only() {
+        assert!(site_matches_host("example.com", "example.com"));
+        assert!(site_matches_host("https://example.com/login", "accounts.example.com"));
+        assert!(!site_matches_host("shop.example.com", "example.com"), "not up to the parent");
+        assert!(!site_matches_host("example.com", "evil-example.com"));
+        assert!(!site_matches_host("example.com", "example.com.evil.net"));
+    }
 }

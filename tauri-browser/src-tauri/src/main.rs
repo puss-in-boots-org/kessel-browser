@@ -1099,7 +1099,10 @@ fn is_kessel_page(url: &tauri::Url) -> bool {
     let host = url.host_str().unwrap_or("");
     match url.scheme() {
         "tauri" => true,
-        "http" | "https" => host == "localhost" || host == "127.0.0.1" || host == "::1" || host.ends_with(".localhost"),
+        // tauri.localhost is Kessel's own origin. Any other local address
+        // is a website like the rest (your dev server, a local service) --
+        // except under `tauri dev`, which serves Kessel's pages from one.
+        "http" | "https" => host == "tauri.localhost" || (tauri::is_dev() && (host == "localhost" || host == "127.0.0.1" || host == "[::1]")),
         _ => false,
     }
 }
@@ -4309,6 +4312,11 @@ pub(crate) fn autofill_for(app: &tauri::AppHandle, _id: u32, url: &str, password
         return None;
     }
     let host = url.host_str()?.to_string();
+    // Over plain http anyone on the network can stand in for the site, so
+    // no password goes there -- except on your own network (a router's page).
+    if url.scheme() != "https" && !net::local(&host) {
+        return None;
+    }
     let item = app.state::<Vault>().find_for_host(vault_timeout(&state), &host)?;
     Some(if password {
         serde_json::json!({ "username": item.username, "password": item.password })
@@ -4577,9 +4585,14 @@ fn open_downloads_folder(app: tauri::AppHandle) -> Result<(), String> {
     tauri_plugin_opener::open_path(dir.to_string_lossy().to_string(), None::<&str>).map_err(|e| e.to_string())
 }
 
+// Opens a finished download -- only a file that's in the downloads list,
+// never any path a page names.
 #[tauri::command]
-fn open_download(app: tauri::AppHandle, path: String) -> Result<(), String> {
-    let _ = &app;
+fn open_download(webview: Webview, state: tauri::State<BrowserState>, path: String) -> Result<(), String> {
+    require_internal_page(&webview)?;
+    if !state.store.downloads.lock().unwrap().iter().any(|d| d.path == path) {
+        return Err("That file isn't in your downloads".into());
+    }
     tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| e.to_string())
 }
 
@@ -4791,14 +4804,7 @@ async fn get_active_tab_url(app: tauri::AppHandle, webview: Webview) -> Option<S
         let tabs = state.tabs.lock().unwrap();
         let webview = tabs.get(&active_id)?;
         let url = webview.url().ok()?;
-        let scheme = url.scheme();
-        let host = url.host_str().unwrap_or("");
-        let is_internal = (scheme != "http" && scheme != "https")
-            || host == "localhost"
-            || host == "127.0.0.1"
-            || host == "::1"
-            || host.ends_with(".localhost");
-        if is_internal {
+        if url.scheme() == "file" || is_internal_nav(&url) {
             None
         } else {
             Some(url.to_string())
