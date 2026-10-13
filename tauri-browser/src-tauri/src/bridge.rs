@@ -178,6 +178,12 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
         // A link opened with Ctrl, Shift or the middle button.
         "link" => {
             let link = d.get("url")?.as_str()?.to_string();
+            // A website can't send you to a file on this PC or your network
+            // (file://server/share would hand that server your Windows
+            // sign-in) -- only a local page can, as in Chrome.
+            if !link_allowed(url, &link) {
+                return None;
+            }
             let ctrl = d.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false);
             let shift = d.get("shift").and_then(|v| v.as_bool()).unwrap_or(false);
             let middle = d.get("button").and_then(|v| v.as_u64()) == Some(1);
@@ -332,6 +338,13 @@ fn request(app: &tauri::AppHandle, id: u32, url: &str, name: &str, d: &serde_jso
     Some(result)
 }
 
+// Whether page `from` may open `link` in a new tab or window: anything but
+// a file:// link, which only another local page may follow.
+fn link_allowed(from: &str, link: &str) -> bool {
+    let is_file = |u: &str| u.get(..5).is_some_and(|s| s.eq_ignore_ascii_case("file:"));
+    !is_file(link) || is_file(from)
+}
+
 // Where a link opened with modifier keys goes, like any browser: Shift ->
 // a new window; Ctrl or the middle button -> a new tab, in front or behind
 // depending on your setting, and Shift turns that around.
@@ -399,5 +412,14 @@ mod tests {
         assert_eq!(a.len(), 32);
         assert_ne!(a, b);
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn websites_cant_open_files() {
+        use super::link_allowed;
+        assert!(link_allowed("https://example.com/", "https://other.example/"));
+        assert!(!link_allowed("https://example.com/", "file://attacker.example/share/x"));
+        assert!(!link_allowed("http://example.com/", "FILE:///C:/Windows/"));
+        assert!(link_allowed("file:///C:/Users/me/index.html", "file:///C:/Users/me/other.html"));
     }
 }

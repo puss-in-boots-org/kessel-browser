@@ -33,7 +33,9 @@ pub(crate) fn safe_path(name: &str) -> Option<PathBuf> {
                 // Windows' reserved device names and a trailing dot or space
                 // don't name the file they seem to.
                 let stem = p.split('.').next().unwrap_or("").to_ascii_uppercase();
-                if p.ends_with('.') || p.ends_with(' ') || ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "LPT1", "LPT2", "LPT3"].contains(&stem.as_str()) || p.contains(':') {
+                let device = ["CON", "PRN", "AUX", "NUL"].contains(&stem.as_str())
+                    || ((stem.starts_with("COM") || stem.starts_with("LPT")) && stem.len() == 4 && stem.as_bytes()[3].is_ascii_digit());
+                if p.ends_with('.') || p.ends_with(' ') || device || p.contains(':') {
                     return None;
                 }
                 out.push(p);
@@ -324,10 +326,11 @@ mod tests {
 
     #[test]
     fn refuses_names_that_leave_the_folder() {
-        for name in ["../evil.js", "/etc/x", "C:/x", "a/../../b", "con.txt", "x:y"] {
+        for name in ["../evil.js", "/etc/x", "C:/x", "a/../../b", "con.txt", "x:y", "com9.js", "LPT7", "a/aux.json"] {
             assert!(safe_path(name).is_none(), "{name}");
         }
         assert_eq!(safe_path("a/b.js"), Some(PathBuf::from("a").join("b.js")));
+        assert!(safe_path("computer.js").is_some() && safe_path("com10.js").is_some(), "only the devices themselves");
     }
 
     #[test]
