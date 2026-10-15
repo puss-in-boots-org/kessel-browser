@@ -52,6 +52,13 @@ fn entry_for(app: &tauri::AppHandle, path: &str) -> Option<u32> {
     list.iter().rev().find(|d| !d.finished && d.path == path).map(|d| d.id)
 }
 
+// Whether a file being saved to `path` is one of Kessel's running downloads
+// (and not, say, a page saving through the File System Access API).
+#[cfg(windows)]
+pub fn is_download(app: &tauri::AppHandle, path: &str) -> bool {
+    entry_for(app, path).is_some()
+}
+
 #[cfg(windows)]
 mod live {
     use super::*;

@@ -42,6 +42,34 @@ export const tests = [
     },
   },
   {
+    // WebView2 holds a program back as a "dangerous file" until it's kept in
+    // the download bubble Kessel hides -- it used to sit there, all of it
+    // saved, never finished (security.rs, SaveFileSecurityCheckStarting).
+    name: "a program (.exe) finishes downloading and says so",
+    async run({ launch, site, assert, waitFor }) {
+      const folder = mkdtempSync(path.join(tmpdir(), "kessel-downloads-"));
+      try {
+        const k = await launch({ env: { KESSEL_TEST_OFFSCREEN: "1" }, settings: { warn_dangerous_downloads: false, features: { download_dir: folder } } });
+        const [tab] = await k.tabs();
+        const toolbar = await k.toolbar();
+        await toolbar.evaluate(`window.__finished = []; window.__TAURI__.event.listen("download-finished", (e) => window.__finished.push(e.payload)); 1`);
+        await k.invoke("navigate", { id: tab.id, url: `${site.origin}/page/programs` });
+        const page = await k.page((t) => t.url.startsWith(`${site.origin}/page/programs`));
+        await page.waitFor(`location.pathname === "/page/programs" && document.readyState === "complete" && !!document.body`, { message: "the page loaded" });
+        await page.evaluate(`(() => { const a = document.createElement("a"); a.href = "/download/kessel-test-plain.exe"; a.download = "kessel-test-plain.exe"; document.body.append(a); a.click(); })()`, { userGesture: true });
+
+        const done = await waitFor(async () => (await k.invoke("get_downloads")).find((d) => d.url.endsWith("/download/kessel-test-plain.exe") && d.finished), { message: "the program finished downloading", timeout: 15000 });
+        assert(done.success, "successfully");
+        assert.equal(path.basename(done.path), "kessel-test-plain.exe", "under its own name");
+        assert.equal(statSync(done.path).size, "Kessel test download\n".length, "all of it");
+        const event = await toolbar.waitFor(`window.__finished.find((d) => d.url.endsWith("/download/kessel-test-plain.exe"))`, { message: "download-finished for it" });
+        assert(event.success, "the event says it worked");
+      } finally {
+        rmSync(folder, { recursive: true, force: true });
+      }
+    },
+  },
+  {
     name: "a cancelled download says so and offers to try again; the list searches and sorts",
     async run({ launch, site, assert, waitFor, sleep }) {
       const folder = mkdtempSync(path.join(tmpdir(), "kessel-downloads-"));
