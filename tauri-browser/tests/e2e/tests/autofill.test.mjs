@@ -121,4 +121,37 @@ export const tests = [
       assert(!(await k.invoke("kessel_notices")).some((n) => n.id === "form-offer"), "already kept");
     },
   },
+  {
+    // A sign-in or search widget that focuses a hidden or off-screen field
+    // used to pop the list in a corner of the page, over no field at all.
+    name: "a hidden or off-screen field gets no list, but a real one still does",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch();
+      await k.invoke("autofill_save_address", { address: { name: "Jane Doe", street: "1 Main St", city: "Budapest", postal_code: "1011", country: "Hungary" } });
+      const { page } = await open(k, `${site.origin}/checkout`);
+      await page.session.send("Emulation.setFocusEmulationEnabled", { enabled: true });
+      // An address field the page keeps hidden (display:none) and one pushed
+      // off-screen -- both classify as "name", both empty.
+      await page.evaluate(`(() => {
+        for (const css of ['display:none', 'position:absolute;left:-9999px;top:-9999px']) {
+          const el = document.createElement('input');
+          el.setAttribute('autocomplete', 'name'); el.style.cssText = css; el.className = 'ghost';
+          document.body.appendChild(el);
+        }
+        return true;
+      })()`);
+      for (const i of [0, 1]) {
+        await page.evaluate(`document.querySelectorAll('.ghost')[${i}].focus()`);
+        for (let n = 0; n < 8; n++) {
+          assert(!(await k.targets()).some((t) => t.url.includes("forms.html")), `no list for the hidden field #${i}`);
+          await new Promise((r) => setTimeout(r, 80));
+        }
+      }
+      // The real, visible field still gets the list. (Focusing the
+      // off-screen field scrolled the page, so put it back first.)
+      await page.evaluate(`document.querySelectorAll('.ghost').forEach((e) => e.remove()); window.scrollTo(0, 0)`);
+      await page.click(...(await center(page, "#name")));
+      await list(k, waitFor, "Jane Doe, 1 Main St");
+    },
+  },
 ];
