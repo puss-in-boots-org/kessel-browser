@@ -560,8 +560,12 @@
       document.addEventListener('focusin', function (e) {
         var el = e.target, k = formKind(el);
         if (!k || k === 'cc-csc' || el.value) return closeList();
-        formField = el;
         var r = el.getBoundingClientRect();
+        // A hidden, zero-size or off-screen field -- some sign-in and search
+        // widgets put the focus on one -- gets no list: it would otherwise
+        // show in a corner of the page with no field under it.
+        if (r.width < 1 || r.height < 1 || r.bottom <= 0 || r.right <= 0 || r.top >= window.innerHeight || r.left >= window.innerWidth) return closeList();
+        formField = el;
         formOpen = true;
         BRIDGE.send('form-focus', { kind: groupOf(k), rect: [r.left, r.top, r.width, r.height], dpr: window.devicePixelRatio || 1 });
       }, true);

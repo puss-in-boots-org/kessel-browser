@@ -302,7 +302,7 @@ pub(crate) fn on_focus(app: &tauri::AppHandle, id: u32, url: &str, d: &serde_jso
     let (app2, url) = (app.clone(), url.to_string());
     // (Not inside WebView2's message event: making a webview there deadlocks.)
     later(app, move || {
-        if items.as_array().is_none_or(|l| l.is_empty()) || rect.len() != 4 {
+        if items.as_array().is_none_or(|l| l.is_empty()) || rect.len() != 4 || rect[2] < 1.0 || rect[3] < 1.0 {
             hide(&app2);
         } else {
             show_list(&app2, id, url, kind, items, &rect, dpr);
