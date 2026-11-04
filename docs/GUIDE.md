@@ -7,6 +7,7 @@ Kessel is a light, fast browser for Windows. This guide is also inside Kessel: p
 ## Contents
 
 - [Getting started](#getting-started)
+- [Home](#home)
 - [Shields & privacy](#shields--privacy)
 - [Safety & passwords](#safety--passwords)
 - [VPN & network](#vpn--network)
@@ -29,6 +30,17 @@ Kessel is a light, fast browser for Windows with Shields, a password vault, a VP
 - **Keep your tabs.** Turn on "Keep tabs when Kessel closes" and your windows, tabs, groups and workspaces come back next time. Settings → Tabs (`kessel://settings/tabs`)
 - **Your keys, your way.** Every shortcut can be changed, and mouse gestures (hold the right button and draw) run commands too. Settings → Keyboard & Mouse (`kessel://settings/shortcuts`)
 - **Everything else.** Settings → All features lists every feature with how to use it. Open it (`kessel://settings/features`)
+
+## Home
+
+Home is the page a new tab opens on -- and the one a window keeps when you close its last tab. Under the search box sits a corner of small cards.
+
+- **Recently opened.** The pages you opened last, as cards. Click one to go back; the × on a card hides it from Home (your history keeps it).
+- **Weather.** Type your town into the weather card once. Only that town goes to Open-Meteo -- Kessel never guesses where you are. Switch between °C and °F on the card.
+- **One music tab.** Spotify and Apple Music, and YouTube Music, SoundCloud, Deezer and TIDAL, open in a pinned music tab that Kessel reuses instead of opening another. The card shows what your tabs -- or the Spotify app -- play, with play/pause and skip.
+- **Free games & deals.** This week's free games on Epic, Steam and GOG, and the best Steam discounts, a click away.
+- **Stats and notes.** CPU and memory at a glance, with how much Kessel itself uses (the task manager is one click away), and a notepad that's also in the side panel's Notes.
+- **Make it yours.** **Customize**, at the top right of the corner, turns each card on or off, and chooses whether the clock and speed dial shrink so the cards fit.
 
 ## Shields & privacy
 
@@ -158,6 +170,18 @@ Everything Kessel does, and how to use it -- as in Settings → All features.
 | Sleeping / paused tabs | Automatic for tabs you haven't used; tune in Settings → Performance. Tab menu → Put to sleep. |
 | Energy saver | On battery (or always: Settings → Performance): background tabs pause after a minute and sleep after 15, and Kessel's own animations stop. A leaf in the toolbar says it's on. |
 | Move tabs between windows | Drag a tab onto another window, or out of the strip for a new window; or tab menu → Move. |
+
+### Home
+
+| Feature | How |
+| --- | --- |
+| Home corner | Under the search box on Home (the new tab page): recently opened pages, free games & deals, the weather, music, PC & Kessel stats and notes. Customize, at the top right of the corner, picks which show and whether the clock and speed dial shrink to make room. |
+| Home stays open | Closing a window's only tab leaves Home in its place, and closing Home itself keeps it -- no new tab to open every time. |
+| Recently opened | Cards for the pages you opened last (no searches). The x on a card hides it; Customize brings hidden ones back. Middle-click opens one in a new tab. |
+| Weather | Pick your town on the weather card: current conditions, today's high and low, wind, humidity, rain and the next hours, from Open-Meteo -- only the town is sent. °C or °F on the card. |
+| Music tab | Spotify, Apple Music, YouTube Music, SoundCloud, Deezer and TIDAL open in one pinned music tab that's reused. What your tabs and other apps (the Spotify app, say) play shows on the card with play/pause and skip. |
+| Free games & deals | This week's free games on Epic, Steam and GOG, and big Steam discounts, on Home's games card. |
+| Stats and notes | Home's stats card: CPU, memory, and what Kessel itself uses. Its notes card is kept with the side panel's Notes, as "Home notes". |
 
 ### Windows
 

@@ -179,7 +179,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 1.06 | Stop loading | ✅ | Escape, or the reload button, which turns into a stop button while loading |
 | 1.07 | Home button | ✅ | Next to reload (Settings -> Appearance can hide it); Alt+Home; stays in the same tab |
 | 1.08 | Home page | 🟢 | Settings -> Search & Startup |
-| 1.09 | New tab page | 🟢 | |
+| 1.09 | New tab page | ✅ | Home corner under a smaller clock and speed dial: recently opened pages as cards, weather (Open-Meteo, the town you pick), music card -- Spotify and Apple Music first -- opening one pinned music tab, with what tabs and other apps (Windows media controls) play; free games & deals (GamerPower, CheapShark), PC & Kessel stats, notes (shared with the side panel). Customize picks the cards. Closing the last tab leaves Home; closing Home keeps it |
 | 1.10 | Search from address bar | 🟢 | |
 | 1.11 | URL suggestions | ✅ | Your history (often and lately visited first), bookmarks and open tabs; "yout" completes to youtube.com in place |
 | 1.12 | Search suggestions | ✅ | From your search engine as you type (Google, Bing, DuckDuckGo, Brave, Ecosia, Startpage); off in private windows; Settings -> Search |

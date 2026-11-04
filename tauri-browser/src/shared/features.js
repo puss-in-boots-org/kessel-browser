@@ -19,6 +19,15 @@ export const FEATURES = [
     ["Energy saver", "On battery (or always: Settings -> Performance): background tabs pause after a minute and sleep after 15, and Kessel's own animations stop. A leaf in the toolbar says it's on."],
     ["Move tabs between windows", "Drag a tab onto another window, or out of the strip for a new window; or tab menu -> Move."],
   ]],
+  ["Home", [
+    ["Home corner", "Under the search box on Home (the new tab page): recently opened pages, free games & deals, the weather, music, PC & Kessel stats and notes. Customize, at the top right of the corner, picks which show and whether the clock and speed dial shrink to make room."],
+    ["Home stays open", "Closing a window's only tab leaves Home in its place, and closing Home itself keeps it -- no new tab to open every time."],
+    ["Recently opened", "Cards for the pages you opened last (no searches). The x on a card hides it; Customize brings hidden ones back. Middle-click opens one in a new tab."],
+    ["Weather", "Pick your town on the weather card: current conditions, today's high and low, wind, humidity, rain and the next hours, from Open-Meteo -- only the town is sent. °C or °F on the card."],
+    ["Music tab", "Spotify, Apple Music, YouTube Music, SoundCloud, Deezer and TIDAL open in one pinned music tab that's reused. What your tabs and other apps (the Spotify app, say) play shows on the card with play/pause and skip."],
+    ["Free games & deals", "This week's free games on Epic, Steam and GOG, and big Steam discounts, on Home's games card."],
+    ["Stats and notes", "Home's stats card: CPU, memory, and what Kessel itself uses. Its notes card is kept with the side panel's Notes, as \"Home notes\"."],
+  ]],
   ["Windows", [
     ["New window", "Ctrl+N. Shift+Enter in the address bar opens it there."],
     ["Profiles", "Ctrl+Shift+M (Settings -> Profiles): Kessels of their own -- history, bookmarks, passwords, settings, cookies, extensions, search engines, downloads folder. Open one, make one, or put a shortcut that opens it on your desktop."],
