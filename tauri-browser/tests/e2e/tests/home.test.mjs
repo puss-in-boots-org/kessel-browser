@@ -130,4 +130,28 @@ export const tests = [
       assert(other === null || typeof other.title === "string", "the system media answer has the right shape");
     },
   },
+  {
+    name: "a private window's Home leaves out your history and notes",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch();
+      const [first] = await k.tabs();
+      await k.invoke("navigate", { id: first.id, url: `${site.origin}/login` });
+      await k.page(`${site.origin}/login`);
+      await k.invoke("new_window", { private: true });
+      const privateHome = await waitFor(async () => {
+        for (const target of (await k.targets()).filter((t) => t.url.includes("newtab.html"))) {
+          const page = await k.attach(target);
+          if ((await page.evaluate(`window.__TAURI__.core.invoke("home_context")`).catch(() => null))?.private) return page;
+        }
+        return null;
+      }, { message: "the private window's Home" });
+      await waitFor(() => visible(privateHome, "weather"), { message: "the weather card shows" });
+      assert(!(await visible(privateHome, "recent")), "no recently opened pages");
+      assert(!(await visible(privateHome, "notes")), "no notes");
+      await privateHome.evaluate(`document.getElementById("corner-customize").click()`);
+      await waitFor(() => visible(privateHome, "corner-menu"), { message: "the customize menu" });
+      assert(!(await privateHome.evaluate(`document.getElementById("corner-menu").textContent.includes("Recently opened")`)), "nor a switch for them");
+      assert.equal((await k.invoke("get_settings")).features?.home?.recent, undefined, "and the normal windows' choice is untouched");
+    },
+  },
 ];

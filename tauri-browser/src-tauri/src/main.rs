@@ -5462,6 +5462,7 @@ fn main() {
             home::home_places,
             home::home_played,
             home::home_music,
+            home::home_context,
             home::home_games,
             home::home_system_media,
             home::home_system_media_action,

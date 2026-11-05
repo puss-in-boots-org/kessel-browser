@@ -130,6 +130,15 @@ pub async fn home_places(webview: Webview, query: String, language: Option<Strin
     Ok(parse_places(&data))
 }
 
+// Where this Home is: { private } -- a private window's Home leaves out
+// your history and notes.
+#[tauri::command]
+pub fn home_context(webview: Webview, state: tauri::State<BrowserState>) -> Result<serde_json::Value, String> {
+    crate::require_internal_page(&webview)?;
+    let private = state.window_of(&webview).map(|w| state.is_private(&w)).unwrap_or(false);
+    Ok(serde_json::json!({ "private": private }))
+}
+
 // --- Music ---------------------------------------------------------------------------
 
 // Tabs that have played sound, the latest first; and which of them play

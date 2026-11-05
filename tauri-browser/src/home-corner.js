@@ -22,16 +22,26 @@ const SIDE = ["weather", "music", "stats", "notes"];
 const RECENT_COUNT = 12;
 const MAX_HIDDEN = 200;
 
-export function homePrefs() {
+// A private window's Home leaves out your history and your notes.
+let privateWindow = false;
+
+function savedPrefs() {
   const saved = currentSettings()?.features?.home;
   const prefs = { ...DEFAULTS, ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}) };
   if (!Array.isArray(prefs.hidden)) prefs.hidden = [];
   return prefs;
 }
 
+// What this Home shows: your choices, less what a private window leaves out.
+export function homePrefs() {
+  const prefs = savedPrefs();
+  if (privateWindow) prefs.recent = prefs.notes = false;
+  return prefs;
+}
+
 async function saveHome(patch) {
   const features = { ...(currentSettings()?.features || {}) };
-  features.home = { ...homePrefs(), ...patch };
+  features.home = { ...savedPrefs(), ...patch };
   await saveSettings({ features });
 }
 
@@ -77,12 +87,14 @@ function recentCard(v) {
   const card = el("div", "rc");
   card.tabIndex = 0;
   card.setAttribute("role", "link");
-  card.title = `${v.title || host}\n${v.url}`;
+  // A title that's just the address reads better as the site.
+  const title = v.title && !/^https?:\/\//i.test(v.title) ? v.title : host;
+  card.title = `${title}\n${v.url}`;
   const thumb = el("div", "rc-thumb");
   thumb.style.setProperty("--hue", hue(host));
   thumb.append(siteIcon(v.url, { label: host }));
   const text = el("div", "rc-text");
-  text.append(el("div", "rc-title", v.title || host));
+  text.append(el("div", "rc-title", title));
   const meta = el("div", "rc-meta");
   meta.append(el("span", "rc-host", host), el("span", "rc-when", formatRelativeTime(v.visited_at)));
   text.append(meta);
@@ -95,7 +107,7 @@ function recentCard(v) {
   card.append(thumb, text, hide);
   card.addEventListener("click", (e) => openLink(v.url, e));
   card.addEventListener("auxclick", (e) => e.button === 1 && openLink(v.url, e));
-  card.addEventListener("keydown", (e) => e.key === "Enter" && openLink(v.url, e));
+  card.addEventListener("keydown", (e) => e.key === "Enter" && e.target === card && openLink(v.url, e));
   return card;
 }
 
@@ -577,7 +589,7 @@ function gameCard(g) {
   card.append(pic, text);
   card.addEventListener("click", (e) => openLink(g.url, e));
   card.addEventListener("auxclick", (e) => e.button === 1 && openLink(g.url, e));
-  card.addEventListener("keydown", (e) => e.key === "Enter" && openLink(g.url, e));
+  card.addEventListener("keydown", (e) => e.key === "Enter" && e.target === card && openLink(g.url, e));
   return card;
 }
 
@@ -786,6 +798,7 @@ function buildMenu() {
     ["compact", "Smaller clock and speed dial"],
   ];
   for (const [key, label] of toggles) {
+    if (privateWindow && (key === "recent" || key === "notes")) continue;
     const row = el("label", "cm-row");
     const box = el("input");
     box.type = "checkbox";
@@ -803,7 +816,7 @@ function buildMenu() {
     renderWeatherSetup(!!homePrefs().place);
   });
   menu.append(place);
-  if (prefs.hidden.length) {
+  if (prefs.hidden.length && !privateWindow) {
     const unhide = el("button", "cm-item", `Show ${prefs.hidden.length} hidden page${prefs.hidden.length === 1 ? "" : "s"} again`);
     unhide.type = "button";
     unhide.addEventListener("click", () => {
@@ -859,7 +872,8 @@ function apply() {
   if (!$("corner-menu").hidden) buildMenu();
 }
 
-export function initCorner() {
+export async function initCorner() {
+  privateWindow = !!(await invoke("home_context").catch(() => null))?.private;
   const customize = $("corner-customize");
   customize.innerHTML = `${icon("settings", 14)}<span>Customize</span>`;
   customize.addEventListener("click", (e) => {
