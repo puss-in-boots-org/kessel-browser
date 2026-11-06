@@ -156,12 +156,14 @@ pub(crate) fn serve(app: &tauri::AppHandle, mut request: Request) {
     let win = state.current_window();
     match win {
         Some(win) if !request.urls.is_empty() && !request.new_window => {
-            for url in request.urls {
-                let _ = open_tab_in_front(app, &win, Some(url), None);
-            }
+            // The window first, then the tabs: a page can't be made in a
+            // minimized window (see restore_for_new_page).
             if let Some(window) = state.window_handle(&win) {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
+            }
+            for url in request.urls {
+                let _ = open_tab_in_front(app, &win, Some(url), None);
             }
         }
         _ => {
