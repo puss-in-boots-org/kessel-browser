@@ -441,11 +441,36 @@ struct PageState {
     // The page the tab was on before this one (guard_navigation runs ahead
     // of the NavigationStarting handler and starts the new page's state).
     previous_url: String,
+    // This page came from a navigation WebView2 counts as the user's (Kessel
+    // sent the tab, or a click did) -- so it may act "with a user gesture"
+    // for a few seconds after it loads (see gesture_is_yours).
+    gesture_load: bool,
+    // When it finished loading.
+    loaded_at: Option<std::time::Instant>,
+    // A real click or key press on it (page-tools.js tells Kessel).
+    touched: bool,
 }
 
 // Kessel is about to send tab `id` somewhere: not the page's own doing.
 pub(crate) fn kessel_navigates(state: &BrowserState, id: u32) {
     state.pages.lock().unwrap().entry(id).or_default().kessel_nav = true;
+}
+
+// A real click or key press on page `id` (page-tools.js, through the bridge).
+pub(crate) fn page_touched(state: &BrowserState, id: u32) {
+    state.pages.lock().unwrap().entry(id).or_default().touched = true;
+}
+
+// How long WebView2 lets a page it loaded for Kessel -- from the address
+// bar, a link opened in a new tab, a restored tab -- or after a click, act
+// "with a user gesture": the engine's 5 seconds, from when it loaded.
+const LOAD_GESTURE: std::time::Duration = std::time::Duration::from_millis(5500);
+
+// Whether a navigation WebView2 calls user-initiated really is. A page
+// redirecting by itself in its first seconds looks to WebView2 like your
+// click, so in that time only a real click or key press on the page counts.
+fn gesture_is_yours(gesture_load: bool, loaded_at: Option<std::time::Instant>, touched: bool) -> bool {
+    touched || !gesture_load || loaded_at.is_some_and(|t| t.elapsed() >= LOAD_GESTURE)
 }
 
 // The address tab `id` is on (kessel://... for Kessel's own pages).
@@ -2209,10 +2234,14 @@ fn guard_navigation(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &taur
         url: nav_url.to_string(),
         history: (!private).then(|| HistoryWait { url: nav_url.to_string(), same_document: false, stale_title: String::new() }),
         // For the NavigationStarting handler (which runs after this): where
-        // the tab was, whether Kessel sent it, whether Kessel muted it.
+        // the tab was, whether Kessel sent it, whether Kessel muted it, and
+        // whether that page's own gestures were real (gesture_is_yours).
         previous_url: old.url,
         kessel_nav: old.kessel_nav,
         auto_muted: old.auto_muted,
+        gesture_load: old.gesture_load,
+        loaded_at: old.loaded_at,
+        touched: old.touched,
         ..Default::default()
     };
     true
@@ -2352,18 +2381,20 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
             // or off; the sound off on a site you muted.
             let target = tauri::Url::parse(&uri).ok().filter(|u| matches!(u.scheme(), "http" | "https"));
             let features = st.store.settings.lock().unwrap().features.clone();
-            let (kessel_nav, from) = {
+            let (mut user, mut redirected) = (windows::core::BOOL::default(), windows::core::BOOL::default());
+            args.IsUserInitiated(&mut user)?;
+            args.IsRedirected(&mut redirected)?;
+            let (kessel_nav, from, yours) = {
                 let mut pages = st.pages.lock().unwrap();
                 let page = pages.entry(id).or_default();
                 // guard_navigation has usually started the new page's state
-                // already (and kept where the tab was).
+                // already (and kept where the tab was, and how its gestures
+                // stand).
                 let from = if page.url == uri { page.previous_url.clone() } else { page.url.clone() };
-                (std::mem::take(&mut page.kessel_nav), from)
+                let yours = user.as_bool() && gesture_is_yours(page.gesture_load, page.loaded_at, page.touched);
+                (std::mem::take(&mut page.kessel_nav), from, yours)
             };
             if let (Some(target), Some(from_url)) = (&target, tauri::Url::parse(&from).ok().filter(|u| matches!(u.scheme(), "http" | "https"))) {
-                let (mut user, mut redirected) = (windows::core::BOOL::default(), windows::core::BOOL::default());
-                args.IsUserInitiated(&mut user)?;
-                args.IsRedirected(&mut redirected)?;
                 let new_document = args
                     .cast::<ICoreWebView2NavigationStartingEventArgs3>()
                     .ok()
@@ -2374,11 +2405,20 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
                     })
                     .unwrap_or(true);
                 let other_site = privacy::site_of_host(from_url.host_str().unwrap_or("")) != privacy::site_of_host(target.host_str().unwrap_or(""));
-                if !user.as_bool() && !redirected.as_bool() && !kessel_nav && new_document && other_site && !permissions::content_allowed(&features, &permissions::site_of(&from), "redirects") {
+                if !yours && !redirected.as_bool() && !kessel_nav && new_document && other_site && !permissions::content_allowed(&features, &permissions::site_of(&from), "redirects") {
                     args.SetCancel(true)?;
                     emit_to_tab_window(&app_start, id, "redirect-blocked", serde_json::json!({ "id": id, "page": from, "url": uri }));
                     return Ok(());
                 }
+            }
+            {
+                // The page it's going to: loaded "with a gesture" if WebView2
+                // says so (Kessel's own navigations and clicks), untouched yet.
+                let mut pages = st.pages.lock().unwrap();
+                let page = pages.entry(id).or_default();
+                page.gesture_load = user.as_bool() || kessel_nav;
+                page.loaded_at = None;
+                page.touched = false;
             }
             if let Some(core) = &sender {
                 let site = permissions::site_of(&uri);
@@ -2525,6 +2565,8 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
                     return Ok(()); // an earlier page, left before it finished
                 }
                 page.loading = false;
+                // Its seconds "with a gesture" count from here (gesture_is_yours).
+                page.loaded_at.get_or_insert_with(std::time::Instant::now);
             }
             emit_to_tab_window(&app_done, id, "tab-load-finished", serde_json::json!({ "id": id }));
             // The cookies it set meet your cookie rules.
@@ -5849,6 +5891,20 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pages_first_seconds_need_a_real_click() {
+        let now = std::time::Instant::now();
+        let long_ago = now.checked_sub(std::time::Duration::from_secs(10)).unwrap();
+        // Loaded by Kessel (or a click), still loading or just loaded: only a
+        // real click or key press makes WebView2's "user-initiated" true.
+        assert!(!gesture_is_yours(true, None, false), "still loading, untouched");
+        assert!(!gesture_is_yours(true, Some(now), false), "just loaded, untouched");
+        assert!(gesture_is_yours(true, Some(now), true), "just loaded, clicked");
+        // Its seconds over, or never given any: WebView2's word stands.
+        assert!(gesture_is_yours(true, Some(long_ago), false), "loaded 10 s ago");
+        assert!(gesture_is_yours(false, None, false), "reached by the page itself");
+    }
 
     #[test]
     fn sound_for_window_sharing() {

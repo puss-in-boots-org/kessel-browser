@@ -282,6 +282,12 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::passwords::on_login(app, id, url, d.get("username").and_then(|v| v.as_str()).unwrap_or(""), d.get("password")?.as_str()?);
             None
         }
+        // The first real click or key press on the page (or one of its
+        // frames): what it does now counts as yours (main.rs gesture_is_yours).
+        "input" => {
+            crate::page_touched(&app.state::<BrowserState>(), id);
+            None
+        }
         // A mouse gesture drawn in the page.
         "gesture" => {
             crate::tools::on_gesture(app, label, d.get("g")?.as_str()?);

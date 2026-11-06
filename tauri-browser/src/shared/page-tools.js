@@ -204,6 +204,19 @@
     else settingsKnown = true;
     BRIDGE.on('tweaks-changed', function () { BRIDGE.request('site-tweaks').then(tweaksArrived); });
 
+    // --- The first real click or key press (main.rs gesture_is_yours) ---
+    // For its first seconds, a page WebView2 loaded for Kessel looks to it
+    // as if you'd just clicked, so a redirect it makes by itself would pass
+    // for yours. Kessel only believes it once it heard of a real one here.
+    var touched = false;
+    function firstInput(e) {
+      if (touched || !e.isTrusted) return;
+      touched = true;
+      BRIDGE.send('input', {});
+    }
+    window.addEventListener('pointerdown', firstInput, true);
+    window.addEventListener('keydown', firstInput, true);
+
     // --- Mouse gestures: hold the right button and draw ---
     var trail = null;
     var suppressMenu = false;
