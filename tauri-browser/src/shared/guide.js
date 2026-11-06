@@ -24,6 +24,20 @@ export const GUIDE = [
     ],
   },
   {
+    id: "home",
+    label: "Home",
+    icon: "home",
+    intro: "Home is the page a new tab opens on -- and the one a window keeps when you close its last tab. Under the search box sits a corner of small cards.",
+    tips: [
+      ["Recently opened", "The pages you opened last, as cards. Click one to go back; the × on a card hides it from Home (your history keeps it)."],
+      ["Weather", "Type your town into the weather card once. Only that town goes to Open-Meteo -- Kessel never guesses where you are. Switch between °C and °F on the card."],
+      ["One music tab", "Spotify and Apple Music, and YouTube Music, SoundCloud, Deezer and TIDAL, open in a pinned music tab that Kessel reuses instead of opening another. The card shows what your tabs -- or the Spotify app -- play, with play/pause and skip."],
+      ["Free games & deals", "This week's free games on Epic, Steam and GOG, and the best Steam discounts, a click away."],
+      ["Stats and notes", "CPU and memory at a glance, with how much Kessel itself uses (the task manager is one click away), and a notepad that's also in the side panel's Notes."],
+      ["Make it yours", "<b>Customize</b>, at the top right of the corner, turns each card on or off, and chooses whether the clock and speed dial shrink so the cards fit."],
+    ],
+  },
+  {
     id: "shields",
     label: "Shields & privacy",
     icon: "shield",

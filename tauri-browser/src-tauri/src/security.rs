@@ -411,6 +411,30 @@ pub(crate) unsafe fn install_hooks(app: &tauri::AppHandle, core: &webview2_com::
         )?;
     }
 
+    // A program (.exe, .msi, ...) a site hands over is a "dangerous file" to
+    // WebView2: once it has all of it, it waits for you to keep it in the
+    // download bubble Kessel hides (wry handles DownloadStarting) -- so it
+    // never finished, and Kessel's list showed it downloading for good.
+    // Kessel's own warning (below, before the download starts) is where you
+    // decide about such a file, so WebView2's hidden one is skipped. Only
+    // for Kessel's downloads: a page saving a file some other way keeps
+    // WebView2's check.
+    if let Ok(core26) = core.cast::<ICoreWebView2_26>() {
+        let app = app.clone();
+        core26.add_SaveFileSecurityCheckStarting(
+            &webview2_com::SaveFileSecurityCheckStartingEventHandler::create(Box::new(move |_, args| {
+                let Some(args) = args else { return Ok(()) };
+                let mut path = PWSTR::null();
+                args.FilePath(&mut path)?;
+                if crate::downloads::is_download(&app, &take_pwstr(path)) {
+                    args.SetSuppressDefaultPolicy(true)?;
+                }
+                Ok(())
+            })),
+            &mut token,
+        )?;
+    }
+
     if let Ok(core4) = core.cast::<ICoreWebView2_4>() {
         let app = app.clone();
         core4.add_DownloadStarting(

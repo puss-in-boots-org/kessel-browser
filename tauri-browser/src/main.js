@@ -2715,6 +2715,9 @@ async function openWindowInit(init) {
 async function closeTab(id, { remember = true } = {}) {
   const tab = tabs.find((t) => t.id === id);
   if (!tab) return;
+  // The window's only tab, already showing Home: there's nothing to close
+  // down to, so Home stays put (closing it would only build another one).
+  if (remember && tabs.length === 1 && !tab.account && !tab.discarded && HOME_PAGES.has(internalPageKey(tab.url))) return;
   if (hoverTab === id || hoverShown) hideHoverCard();
   // Gone from the strip at once, and the next tab shown before this one's
   // page is torn down -- never a frame without a page.
@@ -2844,6 +2847,41 @@ async function sleepTabs(list) {
 // kessel://settings into the omnibox) -- opening them again focuses the
 // one already-open tab instead of spawning another full webview. The rail
 // icons themselves go through the side panel instead (see below).
+// Kessel's Home page (newtab.html), under either name.
+const HOME_PAGES = new Set(["kessel://newtab", "kessel://home"]);
+
+// The Home page's music card (newtab.js -> home.rs): its services open in
+// this window's music tab, a pinned tab kept for music -- one tab, found
+// again by its site, instead of a new tab on every click. A service that
+// isn't open yet takes the music tab over, unless that one is playing.
+const MUSIC_HOSTS = ["open.spotify.com", "music.apple.com", "music.youtube.com", "soundcloud.com", "deezer.com", "listen.tidal.com", "music.amazon.com"];
+const musicHost = (url) => {
+  const host = hostOf(url || "");
+  return MUSIC_HOSTS.find((m) => host === m || host.endsWith(`.${m}`)) || null;
+};
+
+async function openMusic({ url = null, tab = null } = {}) {
+  if (tab != null) return findTab(tab) && activateTab(tab);
+  const want = musicHost(url);
+  if (!want) return;
+  const same = tabs.find((t) => musicHost(t.url) === want);
+  if (same) return activateTab(same.id);
+  const music = tabs.find((t) => t.music && musicHost(t.url)) ?? tabs.find((t) => t.pinned && musicHost(t.url));
+  if (music && !music.audible) {
+    if (music.discarded) {
+      // Asleep: it wakes straight into the new service.
+      music.url = url;
+      return activateTab(music.id);
+    }
+    await activateTab(music.id);
+    await invoke("navigate", { id: music.id, url }).catch((err) => toast(String(err)));
+    return;
+  }
+  const id = await createTab(url, null, { pinned: true });
+  const created = findTab(id);
+  if (created) created.music = true;
+}
+
 const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks", "kessel://tasks", "kessel://diagnostics", "kessel://privacy"]);
 
 async function openSingleton(route) {
@@ -5426,6 +5464,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await listen("tab-search-close", (event) => closeTab(event.payload.id));
   // The media controls' "go to this tab".
   await listen("media-activate", (event) => activateTab(event.payload.id));
+  await listenHere("home-music", (event) => openMusic(event.payload || {}));
   // A tab started or stopped playing sound, or was (un)muted.
   await listen("tab-audio", (event) => {
     const tab = findTab(event.payload.id);

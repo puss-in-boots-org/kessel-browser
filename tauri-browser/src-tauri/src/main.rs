@@ -20,6 +20,7 @@ mod extensions;
 mod forms;
 mod graphics;
 mod history;
+mod home;
 mod import;
 mod instance;
 mod keys;
@@ -2446,6 +2447,7 @@ unsafe fn install_page_watchers(app: &tauri::AppHandle, platform: &tauri::webvie
                 let (mut playing, mut muted) = (windows::core::BOOL::default(), windows::core::BOOL::default());
                 core8.IsDocumentPlayingAudio(&mut playing)?;
                 core8.IsMuted(&mut muted)?;
+                home::note_audio(id, playing.as_bool());
                 emit_to_tab_window(&app, id, "tab-audio", serde_json::json!({ "id": id, "playing": playing.as_bool(), "muted": muted.as_bool() }));
                 Ok(())
             }
@@ -5456,6 +5458,15 @@ fn main() {
             page::page_selection,
             media::page_media,
             media::media_action,
+            home::home_weather,
+            home::home_places,
+            home::home_played,
+            home::home_music,
+            home::home_context,
+            home::home_games,
+            home::home_system_media,
+            home::home_system_media_action,
+            home::home_stats,
             graphics::graphics_info,
             tools::page_tool,
             tools::take_screenshot,

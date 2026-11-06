@@ -122,6 +122,12 @@ async fn snapshot(app: &tauri::AppHandle) -> Snapshot {
     }
 }
 
+// Every process the engines run right now (the Home page's stats card adds
+// Kessel's own to it).
+pub(crate) async fn engine_pids(app: &tauri::AppHandle) -> Vec<u32> {
+    snapshot(app).await.processes.into_iter().map(|p| p.pid).collect()
+}
+
 #[cfg(windows)]
 unsafe fn read_processes(infos: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ProcessExtendedInfoCollection, engine: u32) -> Vec<EngineProcess> {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;

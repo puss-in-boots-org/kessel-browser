@@ -161,11 +161,15 @@ function renderConnections() {
   const s = currentSettings() || {};
   const f = s.features || {};
   const feeds = Array.isArray(f.feeds) ? f.feeds.length : 0;
+  const home = f.home && typeof f.home === "object" ? f.home : {};
+  const weather = home.weather !== false && !!home.place?.name;
   const list = [
     ["Filter lists for Shields", "Downloaded from their makers now and then, then used on this computer", badge(s.adblock_enabled), null],
     ["Lists of dangerous sites", "Downloaded, then checked on this computer -- the sites you visit aren't sent", badge(s.safe_browsing), null],
     ["Search suggestions", "What you type in the address bar goes to your search engine (never from a private window)", badge(s.search_suggestions !== false), null],
     ["Answers in the address bar", "Exchange rates from the European Central Bank, definitions from Wiktionary", badge(s.address_answers !== false), null],
+    ["Home's weather", weather ? `The forecast for ${home.place.name} from Open-Meteo -- only that town, never where you are` : "Open-Meteo, once you pick a town on Home's weather card", badge(weather), null],
+    ["Home's free games & deals", "GamerPower and CheapShark's lists, at most every 3 hours, without your cookies", badge(home.games !== false), null],
     ["Extension updates", "Your extensions' own update addresses", badge(s.extensions_auto_update !== false), null],
     ["Feeds and watched pages", `The ${feeds} feed${feeds === 1 ? "" : "s"} you follow and the pages you watch, without your cookies`, badge(feeds > 0, "Yours", "None"), null],
     ["Password breach check", "Only when you ask: the first 5 characters of each password's hash, never the password", badge(true, "When asked"), null],

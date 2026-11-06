@@ -3,6 +3,7 @@ import { initTheme, currentSettings } from "./shared/theme.js";
 import { hostOf } from "./shared/api.js";
 import { resolveTyped } from "./shared/search.js";
 import { siteIcon, alignToChrome, injectRefractionFilter, watchCustomWallpaper } from "./shared/glass.js";
+import { initCorner } from "./home-corner.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -67,6 +68,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   injectRefractionFilter();
   watchCustomWallpaper(currentSettings);
   document.getElementById("omnibox-icon").innerHTML = icon("search", 18);
+  // The corner under it all: recently opened, weather, music.
+  initCorner();
 
   // Once a second only while the clock shows seconds.
   let clockTimer = null;
