@@ -599,6 +599,29 @@ fn raise_resize_borders(window: &Window) {
 #[cfg(not(windows))]
 fn raise_resize_borders(_window: &Window) {}
 
+// WebView2 can't start a page inside a minimized window: a webview made
+// there stays empty for good -- its tab shows only the window's glass, and
+// even sending it somewhere else doesn't help. That's how a link from
+// another app (a sign-in an app opened, a link to a page deep in a site)
+// became a blank tab whenever Kessel sat in the taskbar. So the window comes
+// back on screen before a tab's page is made in it.
+fn restore_for_new_page(window: &Window) {
+    if !window.is_minimized().unwrap_or(false) {
+        return;
+    }
+    let _ = window.unminimize();
+    // (On the main thread that's at once; if not, Windows itself.)
+    #[cfg(windows)]
+    if window.is_minimized().unwrap_or(false) {
+        if let Ok(hwnd) = window.hwnd() {
+            use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_RESTORE};
+            unsafe {
+                let _ = ShowWindow(hwnd, SW_RESTORE);
+            }
+        }
+    }
+}
+
 fn side_panel_bounds(window: &Window, insets: (f64, f64), preferred_width: f64) -> tauri::Result<(LogicalPosition<f64>, LogicalSize<f64>)> {
     let size = window.inner_size()?;
     let scale = window.scale_factor()?;
@@ -783,6 +806,7 @@ fn create_tab_internal(
             }
         });
 
+    restore_for_new_page(&window);
     let webview = window
         .add_child(
             builder,
@@ -3038,7 +3062,12 @@ unsafe fn install_shields_hooks(
                     if let Some(reason) = security::unreachable_text(status) {
                         if let Ok(url) = webview_source(&sender) {
                             if url.starts_with("http://") || url.starts_with("https://") {
-                                security::show_warning(&app_nav, id, &label_nav, "offline", &url, reason);
+                                // The engine's own error, and whether Kessel's
+                                // network layer carried it: what tells one
+                                // "can't be reached" from another.
+                                let via = if net::running() { ", through Kessel's network layer" } else { "" };
+                                let detail = format!("{reason} (WebView2 error {}{via})", status.0);
+                                security::show_warning(&app_nav, id, &label_nav, "offline", &url, &detail);
                             }
                         }
                     }
