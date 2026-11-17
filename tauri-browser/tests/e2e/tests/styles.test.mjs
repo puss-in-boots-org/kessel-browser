@@ -180,4 +180,40 @@ export const tests = [
       await waitFor(async () => await shown("forward-btn"), { message: "Forward back" });
     },
   },
+  {
+    name: "Canvas: one row, the page's colour, site first",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch({ settings: { ui_style: "canvas", bookmarks_bar: false } });
+      const toolbar = await k.toolbar();
+      const parent = (id) => toolbar.evaluate(`document.getElementById("${id}").parentElement.id`);
+      // One row: the address bar sits in the tab strip, pages start under it.
+      await waitFor(async () => (await parent("address-wrap")) === "tab-bar", { message: "the address bar in the tab row" });
+      assert.equal(await toolbar.evaluate(`document.getElementById("nav-bar").hidden`), true, "no second row");
+      const rowBottom = await toolbar.evaluate(`Math.ceil(document.getElementById("tab-bar").getBoundingClientRect().bottom)`);
+      await waitFor(async () => (await chromeTop(toolbar)) === rowBottom, { message: "pages start under the one row" });
+
+      // A page with a theme-color: the toolbar takes on its hue.
+      const plain = await cssVar(toolbar, "--k-chrome-fill");
+      const tab = await k.activeTab();
+      await k.invoke("navigate", { id: tab.id, url: `${site.origin}/webapp/` });
+      await waitFor(async () => (await cssVar(toolbar, "--k-stripe")) === "#3355aa", { message: "the page's colour along the top" });
+      assert((await cssVar(toolbar, "--k-chrome-fill")) !== plain, "the toolbar is tinted");
+      assert.equal(await toolbar.evaluate(`document.querySelector('.tab.active').style.getPropertyValue("--tab-tint")`), "#3355aa", "its tab carries the colour");
+
+      // Site first: the host stands out until the address bar has the focus.
+      const host = new URL(site.origin).hostname.replace(/^www\./, "");
+      await waitFor(async () => (await toolbar.evaluate(`document.querySelector("#url-display .u-host")?.textContent`)) === host, { message: "the site's name shown" });
+      // (An off-screen window never has the focus.)
+      await toolbar.session.send("Emulation.setFocusEmulationEnabled", { enabled: true });
+      await toolbar.evaluate(`document.getElementById("url-input").focus()`);
+      assert.equal(await toolbar.evaluate(`document.getElementById("url-display").hidden`), true, "the whole address while typing");
+      await toolbar.evaluate(`document.getElementById("url-input").blur()`);
+
+      // Two rows again: everything goes back where it was.
+      await k.invoke("update_settings", { settings: { ...(await k.invoke("get_settings")), ui_custom: { canvas: { toolbarLayout: "two" } } } });
+      await waitFor(async () => (await parent("address-wrap")) === "nav-bar", { message: "the address bar back in its row" });
+      assert.equal(await toolbar.evaluate(`document.getElementById("nav-bar").hidden`), false, "the second row is back");
+      await waitFor(async () => (await chromeTop(toolbar)) > rowBottom, { message: "pages start under the second row" });
+    },
+  },
 ];

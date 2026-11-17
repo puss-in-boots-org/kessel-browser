@@ -129,6 +129,7 @@ Install sites as apps, add extensions and keep track of what you download.
 Make Kessel look and feel the way you want.
 
 - **Styles and colours.** Pick a style and its colours, a wallpaper, light or dark (or follow Windows). Chrome themes' colours work too. Settings → Appearance (`kessel://settings/appearance`)
+- **Canvas.** The newest style: one row of chrome, so pages start higher; the toolbar and each tab take on their site's colour; the address bar puts the site's name first; and the new tab page's sky follows the time of day. Each of these is an option any style can use.
 - **Tabs on the side.** Settings → Tabs → Tab layout: **Side** puts the tabs in a column beside the page, resizable and collapsible to icons.
 - **Compact or touch.** Settings → Appearance → Density: Compact for more page, Touch for bigger targets. The toolbar's buttons can be hidden and moved.
 - **Split view.** Right-click a tab → **Open side by side with this tab**, or drag a tab to the page's edge: two tabs in one window.
@@ -195,6 +196,10 @@ Everything Kessel does, and how to use it -- as in Settings → All features.
 | Pop-out window | Drag a tab below the toolbar, or tab menu → Pop out. |
 | Compact or touch | Settings → Appearance → Density: Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger. Any style. |
 | Your own toolbar | Settings → Appearance → Toolbar buttons: hide the buttons you don't use, and move the others where you want them. |
+| One-row toolbar | Settings → Appearance → Toolbar → Layout: One row puts the address bar beside the tabs, so the page starts a whole toolbar higher. Canvas has it on. Any style. |
+| The page's colour | Settings → Appearance → Colour: the toolbar takes on the colour of the site you're on, and Tabs → Colour-coded tabs washes each tab with its site's colour. Canvas has both on. |
+| Site first | Settings → Appearance → Toolbar → Address shows: the site's name stands out, the rest of the address is dimmed, until you click it. |
+| Time-of-day sky | Settings → Appearance → Background → Time of day: the new tab page's sky follows the clock, sun and moon included. It's repainted every half hour, so it costs nothing. |
 | Name a window | Palette → Name window…: the name shows in its tab bar and on the taskbar, and comes back with the session. Click it to rename. |
 | Saved sessions | Palette → Save all windows (or this window) as a session, or History → Saved sessions. Open one again whenever you like -- or every time Kessel starts (Settings → Search & Startup). |
 | Split view | Tab menu → Open side by side with this tab, or drag a tab to the page's edge: two tabs in one window. Drag the divider to resize; swap or close from its buttons. |
