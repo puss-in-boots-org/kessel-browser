@@ -158,6 +158,7 @@ export const OPTIONS = [
   { key: "tabSeparators", group: "tabs", label: "Separators between tabs", type: "toggle", def: false },
   { key: "closeButton", group: "tabs", label: "Close buttons", type: "choice", choices: [["hover", "On hover"], ["always", "Always"], ["active", "Active tab"], ["never", "Never"]], def: "hover" },
   { key: "showFavicons", group: "tabs", label: "Site icons on tabs", type: "toggle", def: true },
+  { key: "tabTint", group: "tabs", label: "Colour-coded tabs", desc: "Each tab is washed with its site's colour, so you find it at a glance", type: "toggle", def: false },
   { key: "activeTabElevation", group: "tabs", label: "Active tab lift", desc: "A shadow that raises the active tab off the bar", type: "range", min: 0, max: 100, step: 5, unit: "%", def: 0 },
 
   // Toolbar & address bar
@@ -313,7 +314,7 @@ export const STYLES = {
       mode: "dark", accent: "#ff7a59", accent2: "#ffc46b", pageTint: 60,
       font: "system", fontSize: 13.5, headingWeight: 600, letterSpacing: -0.005,
       radius: 10, panelRadius: 14, buttonRadius: 10, iconShape: "squircle", iconStroke: 1.7,
-      toolbarLayout: "one", tabShape: "pill", tabHeight: 30, tabWidth: 190, tabGap: 4, tabPadding: 9, tabIndicator: "none", activeTabElevation: 25,
+      toolbarLayout: "one", tabShape: "pill", tabHeight: 30, tabWidth: 190, tabGap: 4, tabPadding: 9, tabIndicator: "none", activeTabElevation: 25, tabTint: true,
       navHeight: 46, buttonSize: 30, addressShape: "pill", addressHeight: 32, addressDisplay: "site", dividers: true,
       stripeTop: "page", stripeHeight: 2,
       background: "sky", chromeOpacity: 100,
@@ -1029,6 +1030,7 @@ export function buildLook(r, settings, color = pageColor) {
   classes["k-tab-sep"] = v.tabSeparators;
   attrs["data-k-close"] = v.closeButton;
   classes["k-no-favicons"] = !v.showFavicons;
+  classes["k-tab-tint"] = v.tabTint;
   const shadowHex = v.shadowColor;
   const e = v.activeTabElevation / 100;
   vars["--k-tab-shadow"] = e > 0 ? `0 ${px(2 + e * 4)} ${px(4 + e * 14)} ${alpha(shadowHex, 0.12 + e * 0.35)}` : "0 0 #0000";
@@ -1203,7 +1205,7 @@ const ALL_CLASSES = [
   "k-label-case", "k-tab-case", "k-text-glow", "k-tab-sep", "k-no-favicons", "k-rail-float", "k-no-logo", "k-wall",
   "k-ambient", "k-bevel", "k-gloss", "k-glow", "k-overlay", "k-neon", "k-hud", "k-anim-border", "k-rivets",
   "k-ornaments", "k-glitch", "k-pulse", "k-nt-no-clock", "k-nt-no-date", "k-nt-no-speed", "k-nt-no-bm", "k-nt-bare",
-  "k-nt-center", "k-sb-hidden", "k-solid", "k-soft", "k-page-tint",
+  "k-nt-center", "k-sb-hidden", "k-solid", "k-soft", "k-page-tint", "k-tab-tint",
 ];
 let appliedVars = new Set();
 

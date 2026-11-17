@@ -13,7 +13,7 @@ import { setupOmnibox } from "./omnibox.js";
 import { resolveTyped, allEngines, engineById } from "./shared/search.js";
 import { cleanLink } from "./shared/links.js";
 import { playUiSound } from "./shared/sounds.js";
-import { setPageColor } from "./shared/styles.js";
+import { setPageColor, isColourful } from "./shared/styles.js";
 import { RAIL_ITEMS, DEFAULT_RAIL_ITEMS, aiTarget, aiPrompt, WORKSPACE_COLORS } from "./shared/sidebar-panels.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -934,6 +934,7 @@ function tabElement(tab, account, group, lastInGroup) {
   c.toggle("group-end", !!lastInGroup);
   setStyleVar(el, "--acct", account?.color);
   setStyleVar(el, "--group", group ? groupColor(group) : null);
+  setStyleVar(el, "--tab-tint", tabTint(tab));
   // The full title on hover -- the strip truncates it (hover cards say
   // more, when they're on).
   const tip = currentSettings()?.tab_hover_cards !== false ? null : tab.discarded ? `${tab.title || ""}\nSleeping to save memory -- click to wake it up`.trim() : tab.title || "";
@@ -4579,10 +4580,12 @@ function wireUrlDisplay() {
 // The active page's own colour (its theme-color, or what its top is painted
 // with -- page-tools.js), for styles that take it on. Kessel's own pages
 // have none.
+function tabTint(tab) {
+  return tab && !String(tab.url || "").startsWith("kessel://") && isColourful(tab.tint) ? tab.tint : null;
+}
+
 function applyPageTint() {
-  const tab = findTab(activeTabId);
-  const color = tab && !String(tab.url || "").startsWith("kessel://") ? tab.tint : null;
-  if (setPageColor(color, currentSettings())) {
+  if (setPageColor(tabTint(findTab(activeTabId)), currentSettings())) {
     // That repainted the style's colours: the workspace's go on again.
     styleAccent = null;
     applyWorkspaceTint();
@@ -5655,6 +5658,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     const tab = findTab(id);
     if (!tab) return;
     tab.tint = color || null;
+    const el = tabEls.get(id);
+    if (el) setStyleVar(el, "--tab-tint", tabTint(tab));
     if (id === activeTabId) applyPageTint();
   });
 

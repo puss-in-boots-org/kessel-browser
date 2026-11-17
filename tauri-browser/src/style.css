@@ -315,6 +315,9 @@ html.k-energy *, html.k-energy *::before, html.k-energy *::after { animation: no
   position: relative;
 }
 .tab:hover { background: var(--surface); }
+/* Colour-coded tabs (Appearance -> Tabs): each washed with its site's own
+   colour (main.js tabTint). */
+html.k-tab-tint .tab:not(.active):not(:hover) { background: color-mix(in srgb, var(--tab-tint, transparent) 18%, transparent); }
 .tab.active { background: var(--k-tab-active-bg, var(--surface)); }
 .tab.active::after {
   content: "";
@@ -484,6 +487,8 @@ html[data-k-layout="one"] #tab-bar {
 html[data-k-layout="one"] #window-controls { margin: 0; }
 html[data-k-layout="one"] #address-wrap { flex: 0 0 clamp(220px, 24vw, 460px); margin: 0 6px 0 4px; }
 html[data-k-layout="one"] #address-wrap:focus-within { flex-basis: clamp(320px, 52vw, 780px); }
+/* With the tabs at the side, the row is the address bar's. */
+html.vertical-tabs[data-k-layout="one"] #address-wrap { flex: 1 1 auto; }
 /* Tabs shaped to sit on the page's edge stay there. */
 html[data-k-layout="one"]:is([data-k-tab-shape="folder"], [data-k-tab-shape="slanted"], [data-k-tab-shape="underline"]) #tabs { align-self: flex-end; }
 
