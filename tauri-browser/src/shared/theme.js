@@ -43,8 +43,12 @@ function applyTheme(settings) {
   const ambient = root.classList.contains("k-ambient");
   if (ambient && !ambientOn) root.style.setProperty("--k-ambient-delay", `-${Date.now() % 120000}ms`);
   ambientOn = ambient;
+  // "Time of day" background: painted again as the sky changes.
+  clearTimeout(skyTimer);
+  if (r.values.background === "sky") skyTimer = setTimeout(() => applyTheme(window.__kesselSettings), 1800000 - (Date.now() % 1800000) + 500);
   window.dispatchEvent(new CustomEvent("kessel-settings", { detail: settings }));
 }
+let skyTimer = 0;
 
 let cached = null;
 // >0 while this page has style edits the backend hasn't confirmed yet: an

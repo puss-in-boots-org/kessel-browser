@@ -1,0 +1,54 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { tintToward, isColourful, skyCss, luminance, resolveStyle, buildLook, STYLE_IDS, STYLES } from "../../src/shared/styles.js";
+
+test("isColourful: greys, whites, blacks and near-whites have no colour", () => {
+  for (const c of ["#ffffff", "#000000", "#808080", "#faf7ff", "#1e2327", "nope", ""]) assert.equal(isColourful(c), false, c);
+  for (const c of ["#1f7a4d", "#5b2a86", "#0b3d91", "#ff0000"]) assert.equal(isColourful(c), true, c);
+});
+
+test("tintToward keeps the chrome's lightness and leaves grey pages alone", () => {
+  const base = "#131316";
+  assert.equal(tintToward(base, "#ffffff", 60), base);
+  assert.equal(tintToward(base, "#1f7a4d", 0), base);
+  const green = tintToward(base, "#1f7a4d", 60);
+  assert.notEqual(green, base);
+  // Still dark: text on it keeps its contrast.
+  assert.ok(Math.abs(luminance(green) - luminance(base)) < 0.03, green);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(green.slice(i, i + 2), 16));
+  assert.ok(g > r && g > b, `green wins: ${green}`);
+  // Light chrome stays light.
+  assert.ok(luminance(tintToward("#efeeea", "#0b3d91", 100)) > 0.6);
+});
+
+test("skyCss follows the clock", () => {
+  const at = (h) => skyCss(new Date(2026, 10, 17, h, 0));
+  assert.notEqual(at(3), at(12));
+  assert.match(at(12), /radial-gradient\(circle at [\d.]+% [\d.]+%/);
+  assert.match(at(23), /linear-gradient\(180deg, #[0-9a-f]{6}, #[0-9a-f]{6}\)/);
+  // Washed toward the background, white text reads on a noon sky, dark
+  // text on a midnight one.
+  const sky = (h, bg) => skyCss(new Date(2026, 10, 17, h, 0), bg).match(/linear-gradient\(180deg, (#\w{6}), (#\w{6})\)/).slice(1).map(luminance);
+  for (const l of sky(12, "#16161a")) assert.ok(l < 0.18, `noon on dark: ${l}`);
+  for (const l of sky(0, "#f6f5f2")) assert.ok(l > 0.25, `midnight on light: ${l}`);
+});
+
+test("Canvas resolves: one row, page tint, page-coloured edge", () => {
+  assert.ok(STYLE_IDS.includes("canvas") && STYLES.canvas);
+  const settings = { ui_style: "canvas", ui_custom: {} };
+  const r = resolveStyle(settings);
+  const plain = buildLook(r, settings, null);
+  assert.equal(plain.attrs["data-k-layout"], "one");
+  assert.equal(plain.vars["--k-stripe"], r.values.accent);
+  const tinted = buildLook(r, settings, "#5b2a86");
+  assert.equal(tinted.vars["--k-stripe"], "#5b2a86");
+  assert.notEqual(tinted.vars["--k-chrome-fill"], plain.vars["--k-chrome-fill"]);
+  assert.ok(tinted.classes["k-page-tint"]);
+});
+
+test("styles without page tint ignore the page's colour", () => {
+  const settings = { ui_style: "robust", ui_custom: { robust: { accent: "#1f6feb" } } };
+  const r = resolveStyle(settings);
+  assert.deepEqual(buildLook(r, settings, "#5b2a86"), buildLook(r, settings, null));
+  assert.equal(buildLook(r, settings, null).attrs["data-k-layout"], "two");
+});
