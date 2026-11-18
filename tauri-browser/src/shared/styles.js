@@ -320,7 +320,7 @@ export const STYLES = {
       background: "sky", chromeOpacity: 100,
       shadow: 24, shadowSoftness: 26, shadowOffset: 6,
       railWidth: 52, railIcon: 34, railGap: 4,
-      easing: "smooth", tabAnimation: "fade", clockSize: 96, clockWeight: 200, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
+      easing: "smooth", tabAnimation: "fade", clockSize: 124, clockWeight: 400, ntSearchWidth: 640, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
     },
     quick: ["mode", "accent", "pageTint", "toolbarLayout", "background", "stripeTop", "tabShape", "radius"],
     presets: [
@@ -726,16 +726,20 @@ export function skyCss(date = new Date(), bg = null) {
   const [h1, ...b] = SKY[i + 1];
   const t = ((h - h0) / (h1 - h0)) * 100;
   // Top, horizon: the bright horizon is where the page's text sits.
-  const amounts = luminance(bg) > 0.4 ? [60, 66] : [52, 76];
+  const amounts = luminance(bg) > 0.4 ? [80, 86] : [52, 76];
   const [top, bottom] = a.slice(0, 2).map((c, n) => (isHexColor(bg) ? mixHex(mixHex(c, b[n], t), bg, amounts[n]) : mixHex(c, b[n], t)));
   const light = mixHex(a[2], b[2], t);
   // The sun crosses 6:00-19:00, the moon the rest; both peak at the middle.
+  // Their arc keeps to the top right, clear of the clock and the search box
+  // in the middle of the new tab page.
   const day = h >= 6 && h < 19;
   const f = day ? (h - 6) / 13 : ((h + 24 - 19) % 24) / 11;
-  const x = (8 + f * 84).toFixed(1);
-  const y = (78 - Math.sin(f * Math.PI) * 62).toFixed(1);
-  const size = day ? 26 : 16;
-  return `radial-gradient(circle at ${x}% ${y}%, ${alpha(light, day ? 0.9 : 0.75)} 0, ${alpha(light, 0.28)} ${size / 6}%, transparent ${size}%), linear-gradient(180deg, ${top}, ${bottom})`;
+  const x = (60 + f * 36).toFixed(1);
+  const y = (45 - Math.sin(f * Math.PI) * 33).toFixed(1);
+  // A disc with a soft halo (in px, so it stays a sun or a moon at any
+  // window size rather than a blur).
+  const [disc, halo] = day ? [18, 260] : [10, 150];
+  return `radial-gradient(circle at ${x}% ${y}%, ${alpha(light, 0.95)} 0 ${disc}px, ${alpha(light, 0.2)} ${disc + 1.5}px, ${alpha(light, 0.06)} ${halo * 0.4}px, transparent ${halo}px), linear-gradient(180deg, ${top}, ${bottom})`;
 }
 
 

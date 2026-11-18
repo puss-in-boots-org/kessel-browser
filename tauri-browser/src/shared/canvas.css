@@ -67,3 +67,46 @@ html[data-ui-style="canvas"][data-page="toolbar"] {
   & .rail-logo { transform: scale(0.86); }
   & .rail-btn.panel-open { color: var(--accent); background: transparent; box-shadow: inset 2px 0 0 var(--accent); }
 }
+
+/* ===========================================================================
+   3. The new tab page as a front page: a dateline, the time set in serif
+      under the sky, and the widgets as columns under ruled headings
+   ========================================================================= */
+
+html[data-ui-style="canvas"][data-k-page="newtab"] {
+  & #date { font-family: var(--k2-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
+  & #date::before { content: "Kessel · "; }
+  & #clock { font-family: var(--k2-serif); letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; margin: 6px 0 30px; }
+  & #omnibox-wrap { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 82%, transparent); }
+  & #omnibox { font-size: 16px; }
+
+  /* Headings: a kicker in mono, ruled to the end of its column. */
+  & :is(.section h2, .panel-head h2) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--k2-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  & :is(.section h2, .panel-head h2)::after { content: ""; flex: 1; height: 1px; background: var(--k2-hair); }
+  & .section { padding-left: 0; padding-right: 0; }
+  & .section h2 { margin: 0 0 12px; }
+  & :is(.corner-btn, .panel-btn) { border-radius: 999px; }
+  & .panel-hint { font-family: var(--k2-mono); font-size: 10.5px; }
+
+  /* The small print. */
+  & :is(.rc-host, .rc-when, .g-meta, .g-price, .w-hour-time, .w-range, .s-sub, .n-saved, .m-app) { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
+  /* With the corner's widgets under it, the page is compact: a smaller clock
+     keeps them in view. */
+  &.k-home-compact #clock { font-size: min(var(--k-clock-size, 84px), 76px); margin: 0 0 18px; }
+  /* Nothing there yet: a printed aside rather than an error-grey line. */
+  & :is(.corner-empty, .grid .empty) { font-family: var(--k2-serif); font-style: italic; font-size: 14px; }
+  & .rc-title, .g-title { font-weight: 600; }
+  /* Numbers that matter, in serif. */
+  & .w-temp { font-family: var(--k2-serif); font-weight: 400; letter-spacing: -0.02em; }
+  & .w-stat-value, .w-hour-temp { font-variant-numeric: tabular-nums; }
+}
