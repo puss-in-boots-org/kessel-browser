@@ -12,6 +12,10 @@ const { listen } = window.__TAURI__.event;
 
 // Last load's look, straight away -- the settings are still on their way.
 applyCachedLook();
+// Which page this is, popups included, for Canvas's per-page rules
+// (canvas.css): its file's name (menu.html -> "menu"). (data-page, which only
+// full pages have, stays as it is: styles.css tells pages from popups by it.)
+document.documentElement.dataset.kPage = location.pathname.split("/").pop().replace(/\.html$/, "") || "index";
 
 // What glass.js needs from the style: whether the glass is on, and what the
 // backdrop layer behind the chrome paints.

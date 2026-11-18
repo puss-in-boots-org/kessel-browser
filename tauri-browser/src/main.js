@@ -5332,6 +5332,10 @@ function toggleEngineMenu() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
+  // The UI overhaul: everyone moves onto Canvas once. The look you had stays
+  // a click away under Settings -> Appearance -> Classic looks.
+  const before = currentSettings();
+  if (before && !(before.features?.ui_gen >= 2)) saveSettings({ ui_style: "canvas", features: { ...before.features, ui_gen: 2 } }).catch(() => {});
   injectRefractionFilter();
   watchCustomWallpaper(currentSettings);
   // Account tabs copy the wallpaper and our geometry from Main (glass.js).

@@ -351,8 +351,9 @@ export async function launch({ settings = {}, args = [], profileDir = null, keep
   profileDir = profileDir || mkdtempSync(path.join(tmpdir(), "kessel-e2e-"));
   mkdirSync(path.join(profileDir, "Data"), { recursive: true });
   if (!reuse) {
-    // Test pages are plain http on 127.0.0.2: don't try https first.
-    writeFileSync(path.join(profileDir, "Data", "settings.json"), JSON.stringify({ shields_https_upgrade: false, ...settings }));
+    // Test pages are plain http on 127.0.0.2: don't try https first. And a
+    // profile of today's Kessel: no one-time move onto Canvas (main.js).
+    writeFileSync(path.join(profileDir, "Data", "settings.json"), JSON.stringify({ shields_https_upgrade: false, ...settings, features: { ui_gen: 2, ...settings.features } }));
   }
   const port = nextPort++;
   const logs = [];

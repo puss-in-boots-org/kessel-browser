@@ -37,11 +37,21 @@ export const tests = [
     },
   },
   {
+    name: "the overhaul moves an older profile onto Canvas once, keeping its old look",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch({ settings: { ui_style: "robust", ui_custom: { robust: { accent: "#123456" } }, features: { ui_gen: 0 } } });
+      const toolbar = await k.toolbar();
+      await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "canvas", { message: "moved onto Canvas" });
+      await waitFor(() => saved(k).features?.ui_gen === 2, { message: "and that's remembered" });
+      assert.equal(saved(k).ui_custom?.robust?.accent, "#123456", "Robust keeps its changes, a click away");
+    },
+  },
+  {
     name: "a style picked in Settings reaches the toolbar and is saved",
     async run({ launch, assert, waitFor }) {
       const k = await launch();
       const toolbar = await k.toolbar();
-      assert.equal(await htmlAttr(toolbar, "data-ui-style"), "glass", "Liquid Glass by default");
+      assert.equal(await htmlAttr(toolbar, "data-ui-style"), "canvas", "Canvas by default");
       const settings = await openSettings(k);
       await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
       await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "robust", { message: "toolbar in Robust" });

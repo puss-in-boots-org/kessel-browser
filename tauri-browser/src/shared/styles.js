@@ -305,7 +305,7 @@ const BASE_PALETTE = {
 export const STYLES = {
   canvas: {
     name: "Canvas",
-    tagline: "One quiet row of chrome that takes its colour from the page",
+    tagline: "Kessel's own look: one quiet row of chrome in the colour of the page you're on, serif mastheads, small print in mono and the sky outside over every page",
     palette: {
       dark: { bg: "#16161a", surface: "#1e1e23", surface2: "#25252b", hover: "#2c2c33", border: "#2a2a31", text: "#ececf1", textDim: "#a8a8b2", textFaint: "#787884", chromeBg: "#131316", railBg: "#131316", tabActiveBg: "#26262d", addressBg: "#1d1d22" },
       light: { bg: "#f6f5f2", surface: "#ffffff", surface2: "#efeee9", hover: "#e8e6e0", border: "#e2e0d9", text: "#1c1b19", textDim: "#64625c", textFaint: "#a19f98", chromeBg: "#efeeea", railBg: "#efeeea", tabActiveBg: "#ffffff", addressBg: "#ffffff", danger: "#d6453d", success: "#1f8a4c", warning: "#b86e00" },
@@ -741,15 +741,15 @@ export function skyCss(date = new Date(), bg = null) {
 
 // --- Resolving: settings -> the values in effect -----------------------------------
 
-// The style and your changes to every style. Settings saved before styles
-// existed (ui_style empty) map onto Liquid Glass or, with glass off, Hyper
-// Clean -- keeping the old dark/light choice, accent, custom colours, frost
-// and wallpaper.
+// The style and your changes to every style. Without one (a new profile, or
+// settings saved before styles existed) it's Canvas, Kessel's own look -- or,
+// with the old glass switched off, Hyper Clean -- keeping an old dark/light
+// choice, accent and custom colours.
 export function styleState(settings) {
   const s = settings || {};
   const custom = s.ui_custom && typeof s.ui_custom === "object" && !Array.isArray(s.ui_custom) ? s.ui_custom : {};
   if (s.ui_style && STYLES[s.ui_style]) return { id: s.ui_style, all: custom };
-  const id = s.glass_enabled === false ? "clean" : "glass";
+  const id = s.glass_enabled === false ? "clean" : "canvas";
   const legacy = {};
   legacy.mode = s.theme === "light" ? "light" : "dark";
   if (s.accent && String(s.accent).toLowerCase() !== "#7c5cff") legacy.accent = s.accent;
@@ -757,11 +757,6 @@ export function styleState(settings) {
     if (s.custom_bg) legacy["bg@dark"] = s.custom_bg;
     if (s.custom_surface) legacy["surface@dark"] = s.custom_surface;
     if (s.custom_text) legacy["text@dark"] = s.custom_text;
-  }
-  if (id === "glass") {
-    if (s.glass_blur != null && s.glass_blur !== 14) legacy.glassBlur = s.glass_blur;
-    if (s.glass_refraction === false) legacy.glassRefraction = false;
-    if (s.wallpaper && s.wallpaper !== "nightfall") legacy.wallpaper = s.wallpaper;
   }
   return { id, all: { ...custom, [id]: { ...legacy, ...(custom[id] || {}) } } };
 }
@@ -1092,6 +1087,12 @@ export function buildLook(r, settings, color = pageColor) {
   vars["--k-wall-filter"] = wallFilter.join(" ") || "none";
   vars["--k-wall-inset"] = v.wallBlur > 0 && v.background !== "solid" ? px(-v.wallBlur * 2) : "0px";
   classes["k-ambient"] = v.ambientMotion && (v.background === "gradient" || v.background === "pattern");
+  // Canvas's own pages (canvas.css): the sky over each page's masthead and
+  // the dateline above its title, both from the clock when this is applied.
+  if (r.id === "canvas") {
+    if (v.background === "sky") vars["--k2-horizon"] = skyCss(new Date(), v.bg);
+    vars["--k2-dateline"] = JSON.stringify(`Kessel · ${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`);
+  }
 
   // Depth
   const s = v.shadow / 100;
