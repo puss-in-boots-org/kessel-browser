@@ -161,6 +161,32 @@ html[data-ui-style="canvas"]:is([data-k-page="settings"], [data-k-page="history"
 
 html[data-ui-style="canvas"][data-k-page="feeds"] .feed.on { background: transparent; color: var(--text); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); border-radius: 0 8px 8px 0; }
 
+/* ===========================================================================
+   5. Menus, panels and popups: the same type -- titles in serif, labels as
+      mono kickers, shortcuts, sizes and addresses as mono small print.
+      (Sizes and spacing stay: Rust sizes these windows from their content.)
+   ========================================================================= */
+
+html[data-ui-style="canvas"] {
+  &:is([data-k-page="menu"], [data-k-page="context"], [data-k-page="palette"]) .keys { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
+  &:is([data-k-page="palette"], [data-k-page="tabsearch"]) .section,
+  &[data-k-page="context"] .header,
+  &[data-k-page="shields"] h3 { font-family: var(--k2-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+  &[data-k-page="tabsearch"] :is(.sub, .side, #count),
+  &[data-k-page="palette"] #count,
+  &[data-k-page="suggest"] .detail.url,
+  &[data-k-page="hovercard"] :is(#host, #memory) { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
+
+  &:is([data-k-page="siteinfo"], [data-k-page="bookmark"]) h1 { font-family: var(--k2-serif); font-size: 19px; font-weight: 600; letter-spacing: -0.005em; }
+  &[data-k-page="siteinfo"] .rules button { border-radius: 999px; }
+  &[data-k-page="bookmark"] .form label { font-family: var(--k2-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* Shields: the counts as serif figures under a rule, like the privacy
+     dashboard's. */
+  &[data-k-page="shields"] .stat { background: transparent; box-shadow: none; border-top: 1px solid var(--k2-rule); border-radius: 0; text-align: left; padding: 8px 2px 4px; }
+  &[data-k-page="shields"] .stat b { font-family: var(--k2-serif); font-size: 26px; font-weight: 400; line-height: 1.1; }
+}
+
 /* Privacy: the counts as big serif figures, each under its rule. */
 html[data-ui-style="canvas"][data-k-page="privacy"] {
   & .tile { background: transparent; border: none; border-top: 1px solid var(--k2-rule); border-radius: 0; box-shadow: none; padding-left: 0; }
