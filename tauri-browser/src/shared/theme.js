@@ -12,6 +12,10 @@ const { listen } = window.__TAURI__.event;
 
 // Last load's look, straight away -- the settings are still on their way.
 applyCachedLook();
+// Which page this is, popups included, for Canvas's per-page rules
+// (canvas.css): its file's name (menu.html -> "menu"). (data-page, which only
+// full pages have, stays as it is: styles.css tells pages from popups by it.)
+document.documentElement.dataset.kPage = location.pathname.split("/").pop().replace(/\.html$/, "") || "index";
 
 // What glass.js needs from the style: whether the glass is on, and what the
 // backdrop layer behind the chrome paints.
@@ -43,8 +47,12 @@ function applyTheme(settings) {
   const ambient = root.classList.contains("k-ambient");
   if (ambient && !ambientOn) root.style.setProperty("--k-ambient-delay", `-${Date.now() % 120000}ms`);
   ambientOn = ambient;
+  // "Time of day" background: painted again as the sky changes.
+  clearTimeout(skyTimer);
+  if (r.values.background === "sky") skyTimer = setTimeout(() => applyTheme(window.__kesselSettings), 1800000 - (Date.now() % 1800000) + 500);
   window.dispatchEvent(new CustomEvent("kessel-settings", { detail: settings }));
 }
+let skyTimer = 0;
 
 let cached = null;
 // >0 while this page has style edits the backend hasn't confirmed yet: an

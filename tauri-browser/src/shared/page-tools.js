@@ -745,6 +745,53 @@
       else window.addEventListener('load', function () { later(findApp, 300); });
     }
 
+    // --- The page's own colour (for "Take on the page's colour") ---
+    // Its theme-color (the one for the colour scheme in use), else what the
+    // top of the page is painted with. Read when the document is parsed and
+    // again once it has loaded (late CSS) -- nothing watches it after that.
+    // Sent as "#rrggbb", or "" for none.
+    var swatch = null;
+    var sentTint = null;
+    function cssHex(value) {
+      if (!value) return '';
+      swatch = swatch || document.createElement('canvas').getContext('2d');
+      swatch.fillStyle = '#000001';
+      swatch.fillStyle = value;
+      var v = swatch.fillStyle;
+      // rgba(...) means see-through: not the page's colour.
+      return /^#[0-9a-f]{6}$/.test(v) && v !== '#000001' ? v : '';
+    }
+    function pageColour() {
+      var metas = document.querySelectorAll('meta[name="theme-color"][content]');
+      for (var i = 0; i < metas.length; i++) {
+        var media = metas[i].getAttribute('media');
+        var c = (!media || matchMedia(media).matches) && cssHex(metas[i].getAttribute('content'));
+        if (c) return c;
+      }
+      var el = document.elementFromPoint(innerWidth / 2, 4);
+      for (; el; el = el.parentElement) {
+        c = cssHex(getComputedStyle(el).backgroundColor);
+        if (c) return c;
+      }
+      return document.body ? cssHex(getComputedStyle(document.body).backgroundColor) : '';
+    }
+    function tellTint() {
+      try {
+        var c = pageColour();
+        if (c !== sentTint) BRIDGE.send('tint', { color: c });
+        sentTint = c;
+      } catch (e) {}
+    }
+    if (window.top === window && /^(https?|file):/.test(location.protocol)) {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tellTint);
+      else tellTint();
+      if (document.readyState === 'complete') later(tellTint, 300);
+      else window.addEventListener('load', function () { later(tellTint, 300); });
+      // Back from the back/forward cache: the toolbar may show another
+      // page's colour by now.
+      window.addEventListener('pageshow', function (e) { if (e.persisted) { sentTint = null; tellTint(); } });
+    }
+
     // --- Spelling and grammar as you type (proof.rs) ---
     // The engine checks neither. In the field you're typing in: words
     // Windows' spell checker doesn't know get a red wavy line, what

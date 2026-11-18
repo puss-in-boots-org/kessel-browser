@@ -25,6 +25,15 @@ const MAX_HIDDEN = 200;
 // A private window's Home leaves out your history and your notes.
 let privateWindow = false;
 
+// Compact or not, as last time (never shown yet: the default, compact),
+// from the first paint: otherwise the page jumps up as the settings arrive
+// and the corner shows -- and a click aimed at the search box lands on
+// whatever moved under it.
+const COMPACT_KEY = "kessel.home.compact";
+try {
+  if (localStorage.getItem(COMPACT_KEY) ?? "1") document.documentElement.classList.add("k-home-compact");
+} catch {}
+
 function savedPrefs() {
   const saved = currentSettings()?.features?.home;
   const prefs = { ...DEFAULTS, ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}) };
@@ -852,7 +861,11 @@ function apply() {
   const corner = $("corner");
   const wide = WIDE.some((k) => prefs[k]);
   const side = SIDE.some((k) => prefs[k]);
-  document.documentElement.classList.toggle("k-home-compact", !!((wide || side) && prefs.compact));
+  const compact = !!((wide || side) && prefs.compact);
+  document.documentElement.classList.toggle("k-home-compact", compact);
+  try {
+    localStorage.setItem(COMPACT_KEY, compact ? "1" : "");
+  } catch {}
   corner.classList.toggle("no-wide", !wide);
   corner.classList.toggle("no-side", !side);
   corner.classList.toggle("empty", !wide && !side);

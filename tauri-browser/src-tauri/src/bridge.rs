@@ -282,6 +282,17 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::passwords::on_login(app, id, url, d.get("username").and_then(|v| v.as_str()).unwrap_or(""), d.get("password")?.as_str()?);
             None
         }
+        // The page's own colour as it loaded (page-tools.js): its
+        // theme-color, or what its top is painted with -- for styles whose
+        // toolbar takes it on. Only "#rrggbb" or "" (none) gets through.
+        "tint" if top_frame => {
+            let color = d.get("color")?.as_str()?;
+            let ok = color.is_empty() || (color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|b| b.is_ascii_hexdigit()));
+            if ok {
+                crate::emit_to_tab_window(app, id, "tab-tint", serde_json::json!({ "id": id, "color": color }));
+            }
+            None
+        }
         // The first real click or key press on the page (or one of its
         // frames): what it does now counts as yours (main.rs gesture_is_yours).
         "input" => {

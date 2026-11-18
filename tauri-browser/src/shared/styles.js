@@ -13,7 +13,7 @@
 // follows the same look. Nothing here runs continuously: effects that move
 // (ambient drift, pulsing, the animated focus border) are opt-in.
 
-export const STYLE_IDS = ["glass", "clean", "futuristic", "robust", "vintage", "gamer", "fluent", "soft", "terminal", "aqua", "brutal"];
+export const STYLE_IDS = ["canvas", "glass", "clean", "futuristic", "robust", "vintage", "gamer", "fluent", "soft", "terminal", "aqua", "brutal"];
 
 // --- Fonts ---------------------------------------------------------------------
 // Windows ships every one of these (Inter only if you installed it), so the
@@ -101,6 +101,7 @@ export const OPTIONS = [
   { key: "accentText", group: "colour", label: "Text on the accent", type: "choice", choices: [["auto", "Automatic"], ["light", "Light"], ["dark", "Dark"]], def: "auto" },
   { key: "surfaceTint", group: "colour", label: "Tint surfaces with the accent", type: "range", min: 0, max: 40, step: 1, unit: "%", def: 0 },
   { key: "textContrast", group: "colour", label: "Secondary text strength", desc: "Pull dim and faint text toward full strength", type: "range", min: 0, max: 100, step: 5, unit: "%", def: 0 },
+  { key: "pageTint", group: "colour", label: "Take on the page's colour", desc: "The toolbar quietly picks up the colour of the site you're on. Grey, white and black sites leave it as it is.", type: "range", min: 0, max: 100, step: 5, unit: "%", def: 0 },
 
   // Palette (per mode)
   { key: "bg", group: "palette", label: "Background", type: "color", perMode: true },
@@ -157,9 +158,11 @@ export const OPTIONS = [
   { key: "tabSeparators", group: "tabs", label: "Separators between tabs", type: "toggle", def: false },
   { key: "closeButton", group: "tabs", label: "Close buttons", type: "choice", choices: [["hover", "On hover"], ["always", "Always"], ["active", "Active tab"], ["never", "Never"]], def: "hover" },
   { key: "showFavicons", group: "tabs", label: "Site icons on tabs", type: "toggle", def: true },
+  { key: "tabTint", group: "tabs", label: "Colour-coded tabs", desc: "Each tab is washed with its site's colour, so you find it at a glance", type: "toggle", def: false },
   { key: "activeTabElevation", group: "tabs", label: "Active tab lift", desc: "A shadow that raises the active tab off the bar", type: "range", min: 0, max: 100, step: 5, unit: "%", def: 0 },
 
   // Toolbar & address bar
+  { key: "toolbarLayout", group: "toolbar", label: "Layout", desc: "One row puts the address bar beside the tabs: more of the page fits on screen", type: "choice", choices: [["two", "Two rows"], ["one", "One row"]], def: "two" },
   { key: "tabBarPad", group: "toolbar", label: "Space above the tabs", type: "range", min: 0, max: 16, step: 1, unit: "px", def: 7 },
   { key: "navHeight", group: "toolbar", label: "Toolbar height", type: "range", min: 34, max: 68, step: 1, unit: "px", def: 52 },
   { key: "buttonSize", group: "toolbar", label: "Button size", type: "range", min: 24, max: 42, step: 1, unit: "px", def: 32 },
@@ -169,11 +172,12 @@ export const OPTIONS = [
   { key: "addressShape", group: "toolbar", label: "Address bar shape", type: "choice", choices: [["pill", "Pill"], ["rounded", "Rounded"], ["square", "Square"], ["chamfer", "Cut corners"], ["underline", "Just a line"]], def: "pill" },
   { key: "addressRadius", group: "toolbar", label: "Address bar roundness", type: "range", min: 0, max: 24, step: 1, unit: "px", def: 8, showIf: (v) => v.addressShape === "rounded" },
   { key: "addressHeight", group: "toolbar", label: "Address bar height", type: "range", min: 26, max: 48, step: 1, unit: "px", def: 34 },
+  { key: "addressDisplay", group: "toolbar", label: "Address shows", desc: "Site first: the site's name stands out and https://www. is left off until you click", type: "choice", choices: [["full", "The whole address"], ["site", "Site first"]], def: "full" },
   { key: "addressAlign", group: "toolbar", label: "Address text", type: "choice", choices: [["left", "Left"], ["center", "Centred"]], def: "left" },
   { key: "bookmarksHeight", group: "toolbar", label: "Bookmarks bar height", type: "range", min: 22, max: 40, step: 1, unit: "px", def: 30 },
   { key: "dividers", group: "toolbar", label: "Divider lines", desc: "Lines between the tab strip, toolbar and page", type: "toggle", def: true, notFor: ["glass"] },
   { key: "windowControls", group: "toolbar", label: "Window buttons", type: "choice", choices: [["windows", "Windows"], ["mac", "Traffic lights"], ["minimal", "Minimal"], ["outline", "Outlined"]], def: "windows" },
-  { key: "stripeTop", group: "toolbar", label: "Top edge", desc: "A band along the very top of the window", type: "choice", choices: [["none", "None"], ["accent", "Accent"], ["gradient", "Gradient"], ["hazard", "Hazard stripes"], ["rainbow", "Rainbow"], ["rule", "Double rule"]], def: "none" },
+  { key: "stripeTop", group: "toolbar", label: "Top edge", desc: "A band along the very top of the window", type: "choice", choices: [["none", "None"], ["accent", "Accent"], ["gradient", "Gradient"], ["page", "The page's colour"], ["hazard", "Hazard stripes"], ["rainbow", "Rainbow"], ["rule", "Double rule"]], def: "none" },
   { key: "stripeHeight", group: "toolbar", label: "Top edge thickness", type: "range", min: 1, max: 8, step: 1, unit: "px", def: 3, showIf: (v) => v.stripeTop !== "none" },
 
   // Side rail
@@ -184,7 +188,7 @@ export const OPTIONS = [
   { key: "showRailLogo", group: "rail", label: "Kessel button", desc: "The new tab button at the top", type: "toggle", def: true },
 
   // Background
-  { key: "background", group: "background", label: "Background", type: "choice", choices: [["solid", "Solid"], ["gradient", "Gradient"], ["wallpaper", "Wallpaper"], ["pattern", "Pattern"]], def: "solid" },
+  { key: "background", group: "background", label: "Background", type: "choice", choices: [["solid", "Solid"], ["gradient", "Gradient"], ["wallpaper", "Wallpaper"], ["pattern", "Pattern"], ["sky", "Time of day"]], def: "solid" },
   { key: "wallpaper", group: "background", label: "Wallpaper", type: "wallpaper", def: "nightfall", showIf: (v) => v.background === "wallpaper" },
   { key: "bgGradientA", group: "background", label: "Gradient from", type: "color", def: "#1b1440", showIf: (v) => v.background === "gradient" },
   { key: "bgGradientB", group: "background", label: "Gradient to", type: "color", def: "#0b3a4a", showIf: (v) => v.background === "gradient" },
@@ -299,6 +303,35 @@ const BASE_PALETTE = {
 };
 
 export const STYLES = {
+  canvas: {
+    name: "Canvas",
+    tagline: "Kessel's own look: one quiet row of chrome in the colour of the page you're on, serif mastheads, small print in mono and the sky outside over every page",
+    palette: {
+      dark: { bg: "#16161a", surface: "#1e1e23", surface2: "#25252b", hover: "#2c2c33", border: "#2a2a31", text: "#ececf1", textDim: "#a8a8b2", textFaint: "#787884", chromeBg: "#131316", railBg: "#131316", tabActiveBg: "#26262d", addressBg: "#1d1d22" },
+      light: { bg: "#f6f5f2", surface: "#ffffff", surface2: "#efeee9", hover: "#e8e6e0", border: "#e2e0d9", text: "#1c1b19", textDim: "#64625c", textFaint: "#a19f98", chromeBg: "#efeeea", railBg: "#efeeea", tabActiveBg: "#ffffff", addressBg: "#ffffff", danger: "#d6453d", success: "#1f8a4c", warning: "#b86e00" },
+    },
+    defaults: {
+      mode: "dark", accent: "#ff7a59", accent2: "#ffc46b", pageTint: 60,
+      font: "system", fontSize: 13.5, headingWeight: 600, letterSpacing: -0.005,
+      radius: 10, panelRadius: 14, buttonRadius: 10, iconShape: "squircle", iconStroke: 1.7,
+      toolbarLayout: "one", tabShape: "pill", tabHeight: 30, tabWidth: 190, tabGap: 4, tabPadding: 9, tabIndicator: "none", activeTabElevation: 25, tabTint: true,
+      navHeight: 46, buttonSize: 30, addressShape: "pill", addressHeight: 32, addressDisplay: "site", dividers: true,
+      stripeTop: "page", stripeHeight: 2,
+      background: "sky", chromeOpacity: 100,
+      shadow: 24, shadowSoftness: 26, shadowOffset: 6,
+      railWidth: 52, railIcon: 34, railGap: 4,
+      easing: "smooth", tabAnimation: "fade", clockSize: 124, clockWeight: 400, ntSearchWidth: 640, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
+    },
+    quick: ["mode", "accent", "pageTint", "toolbarLayout", "background", "stripeTop", "tabShape", "radius"],
+    presets: [
+      { name: "Studio", values: {} },
+      { name: "Gallery", values: { mode: "light", accent: "#d9480f" } },
+      { name: "Charcoal", values: { pageTint: 0, stripeTop: "accent", background: "solid", accent: "#9aa4b2", accent2: "#d5dbe3" } },
+      { name: "Two rows", values: { toolbarLayout: "two", tabShape: "folder", tabRadius: 10, tabHeight: 32 } },
+      { name: "Chameleon", values: { pageTint: 100, tabIndicator: "underline", indicatorThickness: 2 } },
+    ],
+  },
+
   glass: {
     name: "Liquid Glass",
     tagline: "Translucent capsules floating over a wallpaper",
@@ -630,17 +663,99 @@ export function isHexColor(value) {
   return !!parseHex(value);
 }
 
+function rgbToHsl([r, g, b]) {
+  [r, g, b] = [r / 255, g / 255, b / 255];
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+
+function hslToRgb(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r, g, b].map((v) => (v + l - c / 2) * 255);
+}
+
+// Whether a page's colour has a colour at all: greys, whites and blacks
+// (and near-whites like #faf7ff, which HSL calls fully saturated) don't.
+export function isColourful(hex) {
+  const rgb = parseHex(hex);
+  return !!rgb && (Math.max(...rgb) - Math.min(...rgb)) / 255 >= 0.08;
+}
+
+// "Take on the page's colour": the page's hue, at the chrome colour's own
+// lightness (so text on it keeps its contrast), mixed `percent` into it.
+export function tintToward(base, page, percent) {
+  const b = parseHex(base);
+  if (!b || percent <= 0 || !isColourful(page)) return base;
+  const [h, s] = rgbToHsl(parseHex(page));
+  const l = rgbToHsl(b)[2];
+  // A touch lighter on dark chrome, darker on light, or the hue barely shows.
+  const target = hslToRgb(h, Math.min(s, 0.6), Math.min(0.92, Math.max(0.1, l < 0.5 ? l + 0.05 : l - 0.04)));
+  return mixHex(base, toHex(target), Math.min(100, percent));
+}
+
+// "Time of day" background: the sky outside, more or less -- night, dawn,
+// day and dusk, with the sun (or moon) on its arc. Worked out from the clock
+// when the look is applied (theme.js repaints it every half hour); nothing
+// moves in between, so it costs nothing.
+const SKY = [
+  // hour, top, bottom, light
+  [0, "#0b1026", "#1d2148", "#c9d4ff"],
+  [5, "#151a3d", "#3d2f5e", "#ffd6b0"],
+  [7, "#e9967a", "#fbd9b9", "#fff3d6"],
+  [10, "#4f9be0", "#cfe6f7", "#fffbe6"],
+  [16, "#4a86c8", "#f0d5ae", "#fff1c9"],
+  [19, "#e9774f", "#5e3a86", "#ffd27a"],
+  [21, "#1d1745", "#36295f", "#c9d4ff"],
+  [24, "#0b1026", "#1d2148", "#c9d4ff"],
+];
+
+// `bg`: the style's background, which the sky is washed toward so its text
+// reads at every hour (a bright noon sky under white text wouldn't). Without
+// `disc`, no sun or moon (Canvas's pages: it would sit on their buttons).
+export function skyCss(date = new Date(), bg = null, { disc: withDisc = true } = {}) {
+  const h = date.getHours() + date.getMinutes() / 60;
+  const i = Math.max(0, SKY.findIndex((k) => k[0] > h) - 1);
+  const [h0, ...a] = SKY[i];
+  const [h1, ...b] = SKY[i + 1];
+  const t = ((h - h0) / (h1 - h0)) * 100;
+  // Top, horizon: the bright horizon is where the page's text sits.
+  const amounts = luminance(bg) > 0.4 ? [80, 86] : [52, 76];
+  const [top, bottom] = a.slice(0, 2).map((c, n) => (isHexColor(bg) ? mixHex(mixHex(c, b[n], t), bg, amounts[n]) : mixHex(c, b[n], t)));
+  const light = mixHex(a[2], b[2], t);
+  // The sun crosses 6:00-19:00, the moon the rest; both peak at the middle.
+  // Their arc keeps to the top right, clear of the clock and the search box
+  // in the middle of the new tab page.
+  const day = h >= 6 && h < 19;
+  const f = day ? (h - 6) / 13 : ((h + 24 - 19) % 24) / 11;
+  const x = (60 + f * 36).toFixed(1);
+  const y = (45 - Math.sin(f * Math.PI) * 33).toFixed(1);
+  // A disc with a soft halo (in px, so it stays a sun or a moon at any
+  // window size rather than a blur).
+  const [disc, halo] = day ? [18, 260] : [10, 150];
+  if (!withDisc) return `linear-gradient(180deg, ${top}, ${bottom})`;
+  return `radial-gradient(circle at ${x}% ${y}%, ${alpha(light, 0.95)} 0 ${disc}px, ${alpha(light, 0.2)} ${disc + 1.5}px, ${alpha(light, 0.06)} ${halo * 0.4}px, transparent ${halo}px), linear-gradient(180deg, ${top}, ${bottom})`;
+}
+
+
 // --- Resolving: settings -> the values in effect -----------------------------------
 
-// The style and your changes to every style. Settings saved before styles
-// existed (ui_style empty) map onto Liquid Glass or, with glass off, Hyper
-// Clean -- keeping the old dark/light choice, accent, custom colours, frost
-// and wallpaper.
+// The style and your changes to every style. Without one (a new profile, or
+// settings saved before styles existed) it's Canvas, Kessel's own look -- or,
+// with the old glass switched off, Hyper Clean -- keeping an old dark/light
+// choice, accent and custom colours.
 export function styleState(settings) {
   const s = settings || {};
   const custom = s.ui_custom && typeof s.ui_custom === "object" && !Array.isArray(s.ui_custom) ? s.ui_custom : {};
   if (s.ui_style && STYLES[s.ui_style]) return { id: s.ui_style, all: custom };
-  const id = s.glass_enabled === false ? "clean" : "glass";
+  const id = s.glass_enabled === false ? "clean" : "canvas";
   const legacy = {};
   legacy.mode = s.theme === "light" ? "light" : "dark";
   if (s.accent && String(s.accent).toLowerCase() !== "#7c5cff") legacy.accent = s.accent;
@@ -648,11 +763,6 @@ export function styleState(settings) {
     if (s.custom_bg) legacy["bg@dark"] = s.custom_bg;
     if (s.custom_surface) legacy["surface@dark"] = s.custom_surface;
     if (s.custom_text) legacy["text@dark"] = s.custom_text;
-  }
-  if (id === "glass") {
-    if (s.glass_blur != null && s.glass_blur !== 14) legacy.glassBlur = s.glass_blur;
-    if (s.glass_refraction === false) legacy.glassRefraction = false;
-    if (s.wallpaper && s.wallpaper !== "nightfall") legacy.wallpaper = s.wallpaper;
   }
   return { id, all: { ...custom, [id]: { ...legacy, ...(custom[id] || {}) } } };
 }
@@ -797,6 +907,7 @@ export function patternCss(values) {
 export function backdropCss(values) {
   if (values.background === "gradient") return `linear-gradient(${values.bgGradientAngle}deg, ${values.bgGradientA}, ${values.bgGradientB})`;
   if (values.background === "pattern") return patternCss(values);
+  if (values.background === "sky") return skyCss(new Date(), values.bg);
   return null;
 }
 
@@ -804,6 +915,8 @@ export function backdropCss(values) {
 export function backdropTone(values) {
   if (values.background === "gradient") return (luminance(values.bgGradientA) + luminance(values.bgGradientB)) / 2 > 0.25 ? "light" : "dark";
   if (values.background === "pattern") return luminance(values.bg) > 0.25 ? "light" : "dark";
+  // Washed toward the style's own background (skyCss): its mode.
+  if (values.background === "sky") return luminance(values.bg) > 0.4 ? "light" : "dark";
   return null;
 }
 
@@ -817,7 +930,7 @@ function grainImage(amount, mode) {
 // The whole look as {vars, attrs, classes, css}: applied to <html> by
 // applyLook, and cached so the next page load paints it before settings
 // arrive from Rust.
-export function buildLook(r, settings) {
+export function buildLook(r, settings, color = pageColor) {
   // Settings -> Appearance -> Density: whatever the style, its tab strip,
   // toolbar, bookmarks bar, rail and menus a size smaller, or bigger to
   // touch.
@@ -850,12 +963,15 @@ export function buildLook(r, settings) {
   vars["--k-accent-fill"] = v.accentGradient ? `linear-gradient(${v.gradientAngle}deg, ${v.accent}, ${v.accent2})` : v.accent;
   vars["--k-selection"] = v.selection;
   vars["--k-link"] = v.link;
-  vars["--k-tab-active-bg"] = tinted(v.tabActiveBg);
-  vars["--k-address-bg"] = tinted(v.addressBg);
+  // The colour of the site you're on (toolbar only, see setPageColor).
+  const page = v.pageTint > 0 && isColourful(color) ? (hex) => tintToward(hex, color, v.pageTint) : (hex) => hex;
+  vars["--k-tab-active-bg"] = page(tinted(v.tabActiveBg));
+  vars["--k-address-bg"] = page(tinted(v.addressBg));
   const seeThrough = v.background !== "solid" && !glass;
   const fill = (hex) => (seeThrough && v.chromeOpacity < 100 ? `color-mix(in srgb, ${hex} ${v.chromeOpacity}%, transparent)` : hex);
-  vars["--k-chrome-fill"] = fill(tinted(v.chromeBg));
-  vars["--k-rail-fill"] = fill(tinted(v.railBg));
+  vars["--k-chrome-fill"] = fill(page(tinted(v.chromeBg)));
+  vars["--k-rail-fill"] = fill(page(tinted(v.railBg)));
+  classes["k-page-tint"] = v.pageTint > 0 || v.stripeTop === "page";
 
   // Typography
   vars["--font"] = fontStack(v.font, v.fontCustom);
@@ -915,6 +1031,7 @@ export function buildLook(r, settings) {
   classes["k-tab-sep"] = v.tabSeparators;
   attrs["data-k-close"] = v.closeButton;
   classes["k-no-favicons"] = !v.showFavicons;
+  classes["k-tab-tint"] = v.tabTint;
   const shadowHex = v.shadowColor;
   const e = v.activeTabElevation / 100;
   vars["--k-tab-shadow"] = e > 0 ? `0 ${px(2 + e * 4)} ${px(4 + e * 14)} ${alpha(shadowHex, 0.12 + e * 0.35)}` : "0 0 #0000";
@@ -943,12 +1060,15 @@ export function buildLook(r, settings) {
   vars["--k-bm-h"] = px(v.bookmarksHeight);
   vars["--k-divider-w"] = v.dividers ? "1px" : "0px";
   attrs["data-k-winctl"] = v.windowControls;
+  attrs["data-k-layout"] = v.toolbarLayout;
+  attrs["data-k-address-display"] = v.addressDisplay;
   attrs["data-k-stripe"] = v.stripeTop;
   vars["--k-stripe-h"] = px(v.stripeHeight);
   vars["--k-stripe"] = {
     none: "none",
     accent: v.accent,
     gradient: `linear-gradient(90deg, ${v.accent}, ${v.accent2})`,
+    page: isColourful(color) ? color : v.accent,
     hazard: "repeating-linear-gradient(-45deg, #f5c400 0 9px, #16181b 9px 18px)",
     rainbow: "linear-gradient(90deg, #ff5f6d, #ffc371, #47e891, #3ab0ff, #a86bff, #ff5f6d)",
     rule: `linear-gradient(${v.text}, ${v.text}) top / 100% 1px no-repeat, linear-gradient(${v.text}, ${v.text}) bottom / 100% 1px no-repeat`,
@@ -973,6 +1093,12 @@ export function buildLook(r, settings) {
   vars["--k-wall-filter"] = wallFilter.join(" ") || "none";
   vars["--k-wall-inset"] = v.wallBlur > 0 && v.background !== "solid" ? px(-v.wallBlur * 2) : "0px";
   classes["k-ambient"] = v.ambientMotion && (v.background === "gradient" || v.background === "pattern");
+  // Canvas's own pages (canvas.css): the sky over each page's masthead and
+  // the dateline above its title, both from the clock when this is applied.
+  if (r.id === "canvas") {
+    if (v.background === "sky") vars["--k2-horizon"] = skyCss(new Date(), v.bg, { disc: false });
+    vars["--k2-dateline"] = JSON.stringify(`Kessel · ${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`);
+  }
 
   // Depth
   const s = v.shadow / 100;
@@ -1086,7 +1212,7 @@ const ALL_CLASSES = [
   "k-label-case", "k-tab-case", "k-text-glow", "k-tab-sep", "k-no-favicons", "k-rail-float", "k-no-logo", "k-wall",
   "k-ambient", "k-bevel", "k-gloss", "k-glow", "k-overlay", "k-neon", "k-hud", "k-anim-border", "k-rivets",
   "k-ornaments", "k-glitch", "k-pulse", "k-nt-no-clock", "k-nt-no-date", "k-nt-no-speed", "k-nt-no-bm", "k-nt-bare",
-  "k-nt-center", "k-sb-hidden", "k-solid", "k-soft",
+  "k-nt-center", "k-sb-hidden", "k-solid", "k-soft", "k-page-tint", "k-tab-tint",
 ];
 let appliedVars = new Set();
 
@@ -1122,10 +1248,26 @@ export function applyStyle(settings) {
   const r = resolveStyle(settings);
   const look = buildLook(r, settings);
   applyLook(look);
+  tintInUse = !!look.classes["k-page-tint"];
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(look));
+    // Without the page's colour: other pages load this before their own.
+    localStorage.setItem(CACHE_KEY, JSON.stringify(pageColor ? buildLook(r, settings, null) : look));
   } catch {}
   return r;
+}
+
+// The toolbar's active page's own colour (page-tools.js reads it from the
+// page), for "Take on the page's colour" and the page-coloured top edge.
+// Repaints only when the look uses it; returns whether it did.
+let pageColor = null;
+let tintInUse = false;
+export function setPageColor(hex, settings) {
+  const next = isColourful(hex) ? String(hex).toLowerCase() : null;
+  if (next === pageColor) return false;
+  pageColor = next;
+  if (!tintInUse || !settings) return false;
+  applyLook(buildLook(resolveStyle(settings), settings));
+  return true;
 }
 
 // The look this page had last time, painted straight away while the real

@@ -13,6 +13,7 @@ import { setupOmnibox } from "./omnibox.js";
 import { resolveTyped, allEngines, engineById } from "./shared/search.js";
 import { cleanLink } from "./shared/links.js";
 import { playUiSound } from "./shared/sounds.js";
+import { setPageColor, isColourful } from "./shared/styles.js";
 import { RAIL_ITEMS, DEFAULT_RAIL_ITEMS, aiTarget, aiPrompt, WORKSPACE_COLORS } from "./shared/sidebar-panels.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -722,7 +723,8 @@ function reportChromeInsets() {
   const vtabs = document.getElementById("vtabs");
   const left = Math.ceil((vtabs.hidden ? document.getElementById("rail") : vtabs).getBoundingClientRect().right);
   const bm = document.getElementById("bookmarks-bar");
-  const lastChrome = bm.hidden ? document.getElementById("nav-bar") : bm;
+  const nav = document.getElementById("nav-bar");
+  const lastChrome = !bm.hidden ? bm : !nav.hidden ? nav : document.getElementById("tab-bar");
   const top = Math.ceil(lastChrome.getBoundingClientRect().bottom);
   writeChromeGeometry({ left, top, w: window.innerWidth, h: window.innerHeight });
   // Where the tab strip is, for windows dragged onto it (tabdrag.rs).
@@ -932,6 +934,7 @@ function tabElement(tab, account, group, lastInGroup) {
   c.toggle("group-end", !!lastInGroup);
   setStyleVar(el, "--acct", account?.color);
   setStyleVar(el, "--group", group ? groupColor(group) : null);
+  setStyleVar(el, "--tab-tint", tabTint(tab));
   // The full title on hover -- the strip truncates it (hover cards say
   // more, when they're on).
   const tip = currentSettings()?.tab_hover_cards !== false ? null : tab.discarded ? `${tab.title || ""}\nSleeping to save memory -- click to wake it up`.trim() : tab.title || "";
@@ -2382,6 +2385,7 @@ function showContextMenu(items, x, y, { dropdown = false, width = 290 } = {}) {
 // `force`: even while you're typing in it (Escape, undoing your edit).
 function updateAddressBarForActiveTab(force = false) {
   const tab = findTab(activeTabId);
+  applyPageTint();
   const input = document.getElementById("url-input");
   if (force || document.activeElement !== input) {
     // Internal kessel:// pages show a blank omnibox, like a real browser's
@@ -2391,6 +2395,7 @@ function updateAddressBarForActiveTab(force = false) {
     input.classList.remove("search-mode");
     omnibox?.reset();
   }
+  renderUrlDisplay();
   document.getElementById("share-btn").hidden = !(tab && /^(https?|file):/.test(tab.url || ""));
   updateSiteButton();
   updateStarButton();
@@ -4534,6 +4539,59 @@ function tellWorkspaces(asked = false) {
   invoke("tell_side_panel", { message: { type: "workspaces", current: currentWorkspace, list } }).catch(() => {});
 }
 
+// Appearance -> Toolbar -> "Address shows: Site first": while you aren't
+// typing, the site's name bright and the rest dimmed, without https://www.
+// (the lock says how it's reached; the address is punycode, as Chromium has
+// it, so look-alike letters can't pass for a real site). Clicking it, or
+// any shortcut that focuses the address bar, brings the whole address back.
+function renderUrlDisplay() {
+  const input = document.getElementById("url-input");
+  const display = document.getElementById("url-display");
+  const tab = findTab(activeTabId);
+  let url = null;
+  if (document.documentElement.getAttribute("data-k-address-display") === "site" && document.activeElement !== input && tab && input.value === tab.url) {
+    try {
+      url = /^https?:/.test(input.value) ? new URL(input.value) : null;
+    } catch {}
+  }
+  display.hidden = !url;
+  document.getElementById("address-wrap").classList.toggle("k-site-first", !!url);
+  if (!url) return;
+  let rest = (url.port ? `:${url.port}` : "") + (url.pathname === "/" ? "" : url.pathname) + url.search + url.hash;
+  try {
+    rest = decodeURI(rest);
+  } catch {}
+  display.innerHTML = `<span class="u-host">${escapeHtml(url.hostname.replace(/^www\./, ""))}</span><span class="u-rest">${escapeHtml(rest)}</span>`;
+}
+
+function wireUrlDisplay() {
+  const input = document.getElementById("url-input");
+  input.addEventListener("focus", renderUrlDisplay);
+  input.addEventListener("blur", renderUrlDisplay);
+  document.getElementById("url-display").addEventListener("mousedown", (e) => {
+    // The field takes over before the click (or right-click) lands.
+    e.preventDefault();
+    input.focus();
+    if (e.button === 0) input.select();
+  });
+  window.addEventListener("kessel-settings", renderUrlDisplay);
+}
+
+// The active page's own colour (its theme-color, or what its top is painted
+// with -- page-tools.js), for styles that take it on. Kessel's own pages
+// have none.
+function tabTint(tab) {
+  return tab && !String(tab.url || "").startsWith("kessel://") && isColourful(tab.tint) ? tab.tint : null;
+}
+
+function applyPageTint() {
+  if (setPageColor(tabTint(findTab(activeTabId)), currentSettings())) {
+    // That repainted the style's colours: the workspace's go on again.
+    styleAccent = null;
+    applyWorkspaceTint();
+  }
+}
+
 // A workspace's colour is its window's accent while you're in it.
 let styleAccent = null;
 function applyWorkspaceTint() {
@@ -4831,7 +4889,8 @@ async function toggleCommandPalette() {
   hideHoverCard();
   const width = Math.min(560, Math.max(320, window.innerWidth - 40));
   const x = Math.round(window.innerWidth / 2 + width / 2);
-  const y = Math.round(document.getElementById("nav-bar")?.getBoundingClientRect().bottom || 80);
+  const nav = document.getElementById("nav-bar");
+  const y = Math.round((nav.hidden ? document.getElementById("tab-bar") : nav).getBoundingClientRect().bottom || 80);
   await invoke("toggle_popup", { kind: "palette", x, y, width, height: 460, init: {} }).catch(() => {});
 }
 
@@ -5071,6 +5130,26 @@ function applyTabLayout() {
   updateStripOverflow();
 }
 
+// Settings -> Appearance -> Toolbar -> Layout: "One row" moves the back /
+// forward buttons, the address bar and the menu into the tab strip's row,
+// so the page starts a whole toolbar higher.
+function applyToolbarLayout() {
+  const one = document.documentElement.getAttribute("data-k-layout") === "one";
+  const bar = document.getElementById("tab-bar");
+  const nav = document.getElementById("nav-bar");
+  const [cluster, address, menu] = ["nav-cluster", "address-wrap", "menu-cluster"].map((id) => document.getElementById(id));
+  if (one === (cluster.parentElement === bar)) return;
+  if (one) {
+    bar.prepend(cluster, address);
+    bar.insertBefore(menu, document.getElementById("window-controls"));
+  } else {
+    nav.append(cluster, address, menu);
+  }
+  nav.hidden = one;
+  reportChromeInsets();
+  updateStripOverflow();
+}
+
 function wireVerticalTabs() {
   document.getElementById("vtabs-collapse").addEventListener("click", () => saveSettings({ vertical_tabs_collapsed: !currentSettings()?.vertical_tabs_collapsed }));
   const vtabs = document.getElementById("vtabs");
@@ -5253,6 +5332,10 @@ function toggleEngineMenu() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
+  // The UI overhaul: everyone moves onto Canvas once. The look you had stays
+  // a click away under Settings -> Appearance -> Classic looks.
+  const before = currentSettings();
+  if (before && !(before.features?.ui_gen >= 2)) saveSettings({ ui_style: "canvas", features: { ...before.features, ui_gen: 2 } }).catch(() => {});
   injectRefractionFilter();
   watchCustomWallpaper(currentSettings);
   // Account tabs copy the wallpaper and our geometry from Main (glass.js).
@@ -5273,6 +5356,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   // (and beside vertical tabs).
   wireVerticalTabs();
   applyTabLayout();
+  applyToolbarLayout();
+  wireUrlDisplay();
   await wireChromeInsets();
 
   wireTabLifecycle();
@@ -5282,6 +5367,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("tab-search-btn").addEventListener("click", toggleTabSearch);
   window.addEventListener("kessel-settings", () => {
     applyTabLayout();
+    applyToolbarLayout();
     renderTabs();
   });
   // The mouse left the window, or it lost the focus: no card left behind.
@@ -5568,6 +5654,17 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (id === activeTabId) updateAddressBarForActiveTab();
     renderTabs();
     persistSession();
+  });
+
+  // The page's own colour, as it loaded ("" for none).
+  await listen("tab-tint", (event) => {
+    const { id, color } = event.payload;
+    const tab = findTab(id);
+    if (!tab) return;
+    tab.tint = color || null;
+    const el = tabEls.get(id);
+    if (el) setStyleVar(el, "--tab-tint", tabTint(tab));
+    if (id === activeTabId) applyPageTint();
   });
 
   // Titles and icons change often (a video starting, an unread count), so

@@ -315,6 +315,9 @@ html.k-energy *, html.k-energy *::before, html.k-energy *::after { animation: no
   position: relative;
 }
 .tab:hover { background: var(--surface); }
+/* Colour-coded tabs (Appearance -> Tabs): each washed with its site's own
+   colour (main.js tabTint). */
+html.k-tab-tint .tab:not(.active):not(:hover) { background: color-mix(in srgb, var(--tab-tint, transparent) 18%, transparent); }
 .tab.active { background: var(--k-tab-active-bg, var(--surface)); }
 .tab.active::after {
   content: "";
@@ -470,6 +473,32 @@ html.tab-settling #tabs > * { transition: none !important; }
   padding: 0 10px;
   background: var(--k-chrome-fill, var(--bg));
 }
+
+#nav-bar[hidden] { display: none; }
+
+/* One row (Appearance -> Toolbar -> Layout): the buttons, address bar and
+   menu sit in the tab strip's row (main.js applyToolbarLayout). The address
+   bar takes a third of it, and more while you type in it. */
+html[data-k-layout="one"] #tab-bar {
+  height: max(var(--k-nav-h, 52px), calc(var(--k-tab-h, 33px) + var(--k-tabbar-pad, 7px)));
+  align-items: center;
+  padding: 0 0 0 8px;
+}
+html[data-k-layout="one"] #window-controls { margin: 0; }
+html[data-k-layout="one"] #address-wrap { flex: 0 0 clamp(220px, 24vw, 460px); margin: 0 6px 0 4px; }
+/* Wider while you type -- only then: a button in it taking the focus on
+   mousedown mustn't move out from under the mouse before the mouseup. */
+html[data-k-layout="one"] #address-wrap:has(#url-input:focus) { flex-basis: clamp(320px, 52vw, 780px); }
+/* With the tabs at the side, the row is the address bar's. */
+html.vertical-tabs[data-k-layout="one"] #address-wrap { flex: 1 1 auto; }
+/* Tabs shaped to sit on the page's edge stay there. */
+html[data-k-layout="one"]:is([data-k-tab-shape="folder"], [data-k-tab-shape="slanted"], [data-k-tab-shape="underline"]) #tabs { align-self: flex-end; }
+
+/* The page's own colour comes and goes with the tab: ease it in. */
+html.k-page-tint #tab-bar, html.k-page-tint #nav-bar, html.k-page-tint #rail, html.k-page-tint #vtabs, html.k-page-tint #bookmarks-bar, html.k-page-tint #address-wrap {
+  transition: background-color var(--dur-slow, 0.36s) ease, border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+html.k-page-tint body::before { transition: background-color var(--dur-slow, 0.36s) ease; }
 
 #nav-cluster { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
@@ -653,6 +682,25 @@ html.fullscreen #progress-bar { display: none !important; }
   color: var(--text);
 }
 #url-input::placeholder { color: var(--text-faint); }
+/* "Site first": the address bar shows this instead of the field until you
+   click or tab into it (main.js renderUrlDisplay); the field stays there,
+   see-through, so focus and shortcuts reach it as always. */
+#url-display {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--k-address-font, inherit);
+  font-size: var(--k-address-font-size, 13px);
+  text-align: var(--k-address-align, left);
+  color: var(--text-faint);
+  cursor: text;
+}
+#url-display[hidden] { display: none; }
+#url-display .u-host { color: var(--text); font-weight: 600; }
+#address-wrap.k-site-first { position: relative; }
+#address-wrap.k-site-first #url-input { position: absolute; left: 0; width: 1px; opacity: 0; pointer-events: none; }
 
 #engine-btn, #star-btn, #share-btn, #ext-btn {
   background: none;

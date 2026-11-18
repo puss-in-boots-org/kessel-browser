@@ -566,6 +566,7 @@ function mockLook(id) {
     "m-rivets": v.rivets,
     "m-dividers": v.dividers,
     "m-stripe": !!stripe,
+    "m-one": v.toolbarLayout === "one",
   };
   return { r, vars, flags };
 }
@@ -866,7 +867,11 @@ function build() {
   node.querySelector(".k-search input").placeholder = `Search ${OPTIONS.length} options…`;
 
   const gallery = node.querySelector(".style-gallery");
-  for (const id of STYLE_IDS) gallery.appendChild(styleCard(id));
+  for (const id of STYLE_IDS) {
+    // Canvas is Kessel's own look; the rest are how Kessel looked before it.
+    if (id !== "canvas" && !gallery.querySelector(".k-classic-label")) gallery.appendChild(el(`<p class="k-classic-label"><b>Classic looks</b><small>Kessel as it was before Canvas, page for page</small></p>`));
+    gallery.appendChild(styleCard(id));
+  }
   node.insertBefore(presetsCard(), node.querySelector(".k-bar"));
 
   const groups = node.querySelector(".k-groups");

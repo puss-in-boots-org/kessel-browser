@@ -37,11 +37,35 @@ export const tests = [
     },
   },
   {
+    name: "the overhaul moves an older profile onto Canvas once, keeping its old look",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch({ settings: { ui_style: "robust", ui_custom: { robust: { accent: "#123456" } }, features: { ui_gen: 0 } } });
+      const toolbar = await k.toolbar();
+      await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "canvas", { message: "moved onto Canvas" });
+      await waitFor(() => saved(k).features?.ui_gen === 2, { message: "and that's remembered" });
+      assert.equal(saved(k).ui_custom?.robust?.accent, "#123456", "Robust keeps its changes, a click away");
+    },
+  },
+  {
+    name: "Canvas's pages: a dateline over a serif title -- a classic look keeps its own",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch({ settings: { ui_style: "canvas" } });
+      const settings = await openSettings(k);
+      assert.equal(await htmlAttr(settings, "data-k-page"), "settings", "the page is named for canvas.css");
+      const masthead = () => settings.evaluate(`(() => { const h = document.querySelector("#settings-nav h1"); return { before: getComputedStyle(h, "::before").content, font: getComputedStyle(h).fontFamily }; })()`);
+      const m = await masthead();
+      assert(/Kessel ·/.test(m.before), `the dateline: ${m.before}`);
+      assert(/Sitka/.test(m.font), `the serif: ${m.font}`);
+      await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
+      await waitFor(async () => (await masthead()).before === "none", { message: "Robust: the page as it was" });
+    },
+  },
+  {
     name: "a style picked in Settings reaches the toolbar and is saved",
     async run({ launch, assert, waitFor }) {
       const k = await launch();
       const toolbar = await k.toolbar();
-      assert.equal(await htmlAttr(toolbar, "data-ui-style"), "glass", "Liquid Glass by default");
+      assert.equal(await htmlAttr(toolbar, "data-ui-style"), "canvas", "Canvas by default");
       const settings = await openSettings(k);
       await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
       await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "robust", { message: "toolbar in Robust" });
@@ -178,6 +202,42 @@ export const tests = [
 
       await settings.evaluate(`document.getElementById('tb-forward-btn').click()`);
       await waitFor(async () => await shown("forward-btn"), { message: "Forward back" });
+    },
+  },
+  {
+    name: "Canvas: one row, the page's colour, site first",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch({ settings: { ui_style: "canvas", bookmarks_bar: false } });
+      const toolbar = await k.toolbar();
+      const parent = (id) => toolbar.evaluate(`document.getElementById("${id}").parentElement.id`);
+      // One row: the address bar sits in the tab strip, pages start under it.
+      await waitFor(async () => (await parent("address-wrap")) === "tab-bar", { message: "the address bar in the tab row" });
+      assert.equal(await toolbar.evaluate(`document.getElementById("nav-bar").hidden`), true, "no second row");
+      const rowBottom = await toolbar.evaluate(`Math.ceil(document.getElementById("tab-bar").getBoundingClientRect().bottom)`);
+      await waitFor(async () => (await chromeTop(toolbar)) === rowBottom, { message: "pages start under the one row" });
+
+      // A page with a theme-color: the toolbar takes on its hue.
+      const plain = await cssVar(toolbar, "--k-chrome-fill");
+      const tab = await k.activeTab();
+      await k.invoke("navigate", { id: tab.id, url: `${site.origin}/webapp/` });
+      await waitFor(async () => (await cssVar(toolbar, "--k-stripe")) === "#3355aa", { message: "the page's colour along the top" });
+      assert((await cssVar(toolbar, "--k-chrome-fill")) !== plain, "the toolbar is tinted");
+      assert.equal(await toolbar.evaluate(`document.querySelector('.tab.active').style.getPropertyValue("--tab-tint")`), "#3355aa", "its tab carries the colour");
+
+      // Site first: the host stands out until the address bar has the focus.
+      const host = new URL(site.origin).hostname.replace(/^www\./, "");
+      await waitFor(async () => (await toolbar.evaluate(`document.querySelector("#url-display .u-host")?.textContent`)) === host, { message: "the site's name shown" });
+      // (An off-screen window never has the focus.)
+      await toolbar.session.send("Emulation.setFocusEmulationEnabled", { enabled: true });
+      await toolbar.evaluate(`document.getElementById("url-input").focus()`);
+      assert.equal(await toolbar.evaluate(`document.getElementById("url-display").hidden`), true, "the whole address while typing");
+      await toolbar.evaluate(`document.getElementById("url-input").blur()`);
+
+      // Two rows again: everything goes back where it was.
+      await k.invoke("update_settings", { settings: { ...(await k.invoke("get_settings")), ui_custom: { canvas: { toolbarLayout: "two" } } } });
+      await waitFor(async () => (await parent("address-wrap")) === "nav-bar", { message: "the address bar back in its row" });
+      assert.equal(await toolbar.evaluate(`document.getElementById("nav-bar").hidden`), false, "the second row is back");
+      await waitFor(async () => (await chromeTop(toolbar)) > rowBottom, { message: "pages start under the second row" });
     },
   },
 ];

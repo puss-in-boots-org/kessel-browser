@@ -147,6 +147,7 @@ export const GUIDE = [
     intro: "Make Kessel look and feel the way you want.",
     tips: [
       ["Styles and colours", `Pick a style and its colours, a wallpaper, light or dark (or follow Windows). Chrome themes' colours work too. <a data-open="kessel://settings/appearance">Settings → Appearance</a>`],
+      ["Canvas", "Kessel's own look: one row of chrome, so pages start higher, in the colour of the site you're on; the site's name first in the address bar; the new tab page as a front page under the sky outside; and every Kessel page with a serif masthead, ruled sections and small print in mono. The looks Kessel had before are under Appearance → Classic looks, each with your changes kept."],
       ["Tabs on the side", "Settings → Tabs → Tab layout: <b>Side</b> puts the tabs in a column beside the page, resizable and collapsible to icons."],
       ["Compact or touch", "Settings → Appearance → Density: Compact for more page, Touch for bigger targets. The toolbar's buttons can be hidden and moved."],
       ["Split view", "Right-click a tab → <b>Open side by side with this tab</b>, or drag a tab to the page's edge: two tabs in one window."],

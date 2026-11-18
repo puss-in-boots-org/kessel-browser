@@ -1,0 +1,193 @@
+/* Canvas -- Kessel's own look since the UI overhaul. The other styles in
+   shared/styles.js are the classic looks: everything here applies only with
+   Canvas on (html[data-ui-style="canvas"]), so a classic look still shows
+   every page exactly as it was.
+
+   Ink and paper with one hot accent; the colour of the page you're on in the
+   chrome; serif mastheads; mono for the small print (addresses, times, sizes,
+   keys); the sky outside over every Kessel page. Nothing moves on its own:
+   the only motion answers the mouse or the keyboard, and the sky is repainted
+   twice an hour (theme.js).
+
+   html[data-k-page] names the page, popups included (theme.js). Imported by
+   theme.css after styles.css, so a rule here beats a style option's at the
+   same specificity; the html[...] prefix beats each page's own <style>. */
+
+html[data-ui-style="canvas"] {
+  --k2-serif: "Sitka Display", "Sitka Heading", Georgia, serif;
+  --k2-mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  /* The strong rule over a section, and the hairline between its rows. */
+  --k2-rule: color-mix(in srgb, var(--text) 70%, transparent);
+  --k2-hair: color-mix(in srgb, var(--border) 85%, transparent);
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+}
+
+/* ===========================================================================
+   1. Components, on every page
+   ========================================================================= */
+
+html[data-ui-style="canvas"] {
+  & .btn { border-radius: 999px; padding: 7px 16px; font-weight: 550; }
+  & .btn.sm { padding: 5px 12px; }
+  & .btn.icon-only { padding: 0; width: 32px; height: 32px; }
+  & .btn.sm.icon-only { width: 28px; height: 28px; }
+  & .btn:not(.primary, .danger) { background: transparent; }
+  & .btn:not(.primary, .danger):hover { background: var(--surface-hover); }
+  & .btn:not(.primary, .danger, .ghost):hover { border-color: var(--text-faint); }
+  & .btn.primary { box-shadow: none; }
+  & .field { border-radius: 10px; }
+  & .switch { width: 34px; height: 20px; }
+  & .switch:not(.on) { background: color-mix(in srgb, var(--text-faint) 55%, transparent); }
+  & .switch::after { top: 3px; left: 3px; width: 14px; height: 14px; box-shadow: none; }
+  & .switch.on::after { transform: translateX(14px); }
+  & :is(.chip, .key-chip, .site-chip, .segmented, .segmented button) { border-radius: 999px; }
+  & :is(kbd, .key-chip, code, .k-hex, .k-num) { font-family: var(--k2-mono); }
+  & kbd { font-size: 11px; font-weight: 500; border-bottom-width: 1px; }
+  & .badge { font-family: var(--k2-mono); }
+  & .toast { border-radius: 999px; padding: 9px 18px; }
+  & .modal { border-radius: var(--radius-lg); }
+  & .modal :is(h2, h3) { font-family: var(--k2-serif); font-weight: 600; font-size: 22px; letter-spacing: 0; }
+}
+
+/* ===========================================================================
+   2. The window: tabs, address, rail (index.html; the layout itself is the
+      style's options -- one row, the page's colour, site first)
+   ========================================================================= */
+
+html[data-ui-style="canvas"][data-page="toolbar"] {
+  /* Site first: the site in the UI's face, the rest of the address as small
+     print. */
+  & #url-display .u-rest { font-family: var(--k2-mono); font-size: 11.5px; letter-spacing: -0.01em; }
+  & #url-display .u-host { letter-spacing: -0.005em; }
+  /* The bookmarks bar's hint, while it's empty, as a printed aside. */
+  & #bookmarks-bar .bm-empty { font-family: var(--k2-serif); font-style: italic; font-size: 13px; }
+  /* The rail: Kessel's mark smaller, the panels as a column of plain icons,
+     the open one marked with a bar like the active tab's. */
+  & .rail-logo { transform: scale(0.86); }
+  & .rail-btn.panel-open { color: var(--accent); background: transparent; box-shadow: inset 2px 0 0 var(--accent); }
+}
+
+/* ===========================================================================
+   3. The new tab page as a front page: a dateline, the time set in serif
+      under the sky, and the widgets as columns under ruled headings
+   ========================================================================= */
+
+html[data-ui-style="canvas"][data-k-page="newtab"] {
+  & #date { font-family: var(--k2-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
+  & #date::before { content: "Kessel · "; }
+  & #clock { font-family: var(--k2-serif); letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; margin: 6px 0 30px; }
+  & #omnibox-wrap { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 82%, transparent); }
+  & #omnibox { font-size: 16px; }
+
+  /* Headings: a kicker in mono, ruled to the end of its column. */
+  & :is(.section h2, .panel-head h2) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: var(--k2-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  & :is(.section h2, .panel-head h2)::after { content: ""; flex: 1; height: 1px; background: var(--k2-hair); }
+  & .section { padding-left: 0; padding-right: 0; }
+  & .section h2 { margin: 0 0 12px; }
+  & :is(.corner-btn, .panel-btn) { border-radius: 999px; }
+  & .panel-hint { font-family: var(--k2-mono); font-size: 10.5px; }
+
+  /* The small print. */
+  & :is(.rc-host, .rc-when, .g-meta, .g-price, .w-hour-time, .w-range, .s-sub, .n-saved, .m-app) { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
+  /* Nothing there yet: a printed aside rather than an error-grey line. */
+  & :is(.corner-empty, .grid .empty) { font-family: var(--k2-serif); font-style: italic; font-size: 14px; }
+  & .rc-title, .g-title { font-weight: 600; }
+  /* Numbers that matter, in serif. */
+  & .w-temp { font-family: var(--k2-serif); font-weight: 400; letter-spacing: -0.02em; }
+  & .w-stat-value, .w-hour-temp { font-variant-numeric: tabular-nums; }
+}
+
+/* ===========================================================================
+   4. Kessel's own pages: the sky over a masthead, a dateline over the page's
+      name in serif, sections ruled rather than boxed, small print in mono
+   ========================================================================= */
+
+html[data-ui-style="canvas"]:is([data-k-page="settings"], [data-k-page="history"], [data-k-page="bookmarks"], [data-k-page="downloads"], [data-k-page="passwords"], [data-k-page="help"], [data-k-page="feeds"], [data-k-page="tasks"], [data-k-page="privacy"], [data-k-page="diagnostics"], [data-k-page="gpu"]) {
+  /* The sky outside, fading down from the top of the page. */
+  & body { background: transparent; }
+  & body::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: 280px;
+    z-index: -1;
+    pointer-events: none;
+    background: var(--k2-horizon, none);
+    opacity: 0.55;
+    -webkit-mask-image: linear-gradient(#000, transparent);
+    mask-image: linear-gradient(#000, transparent);
+  }
+
+  /* Mastheads: the dateline, then the page's name in serif. */
+  & h1 { font-family: var(--k2-serif); font-weight: 600; font-size: 34px; line-height: 1.05; letter-spacing: -0.01em; text-transform: none; font-variant-caps: normal; flex-wrap: wrap; }
+  /* (A title that's a row with its icon: the dateline still goes above.) */
+  & h1::before { content: var(--k2-dateline, "Kessel"); display: block; flex: 0 0 100%; margin-bottom: 9px; font: 500 10px/1.4 var(--k2-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+  & :is(#side, #settings-nav) h1 { font-size: 28px; margin: 4px 10px 20px; }
+  & :is(#side, #settings-nav) h1::before { letter-spacing: 0.08em; }
+  & :is(.panel > h2, .content > h2, main > h2, section > h2) { font-family: var(--k2-serif); font-weight: 600; font-size: 25px; letter-spacing: -0.005em; color: var(--text); text-transform: none; font-variant-caps: normal; }
+  & :is(.sub, .panel > .sub) { color: var(--text-dim); }
+  & main > header { background: transparent; }
+  /* Nothing there yet: a printed aside. */
+  & :is(.empty-state, .empty, #empty, #no-results) { font-family: var(--k2-serif); font-style: italic; font-size: 15px; }
+
+  /* Side navigation is part of the page, not a panel beside it; the page
+     you're on is marked with the accent's bar. */
+  & :is(#side, #settings-nav) { background: transparent; border-right-color: var(--k2-hair); }
+  & :is(#side, #settings-nav) .nav-item { border-radius: 0 8px 8px 0; }
+  & :is(#side, #settings-nav) .nav-item:hover { background: color-mix(in srgb, var(--surface-hover) 60%, transparent); }
+  & :is(#side, #settings-nav) .nav-item.active { background: transparent; color: var(--text); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
+  & :is(#side, #settings-nav) .nav-item.active svg { color: var(--accent); }
+
+  /* Sections are ruled, not boxed: a strong rule over each, hairlines
+     between its rows. */
+  & :is(.setting-card, .card) { background: transparent; border: none; border-top: 1px solid var(--k2-rule); border-radius: 0; box-shadow: none; }
+  & :is(.k-card-title, .shortcut-category, .section-title, .side-title) { font-family: var(--k2-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+}
+
+html[data-ui-style="canvas"][data-k-page="feeds"] .feed.on { background: transparent; color: var(--text); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); border-radius: 0 8px 8px 0; }
+
+/* ===========================================================================
+   5. Menus, panels and popups: the same type -- titles in serif, labels as
+      mono kickers, shortcuts, sizes and addresses as mono small print.
+      (Sizes and spacing stay: Rust sizes these windows from their content.)
+   ========================================================================= */
+
+html[data-ui-style="canvas"] {
+  &:is([data-k-page="menu"], [data-k-page="context"], [data-k-page="palette"]) .keys { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
+  &:is([data-k-page="palette"], [data-k-page="tabsearch"]) .section,
+  &[data-k-page="context"] .header,
+  &[data-k-page="shields"] h3 { font-family: var(--k2-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+  &[data-k-page="tabsearch"] :is(.sub, .side, #count),
+  &[data-k-page="palette"] #count,
+  &[data-k-page="suggest"] .detail.url,
+  &[data-k-page="hovercard"] :is(#host, #memory) { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
+
+  &:is([data-k-page="siteinfo"], [data-k-page="bookmark"]) h1 { font-family: var(--k2-serif); font-size: 19px; font-weight: 600; letter-spacing: -0.005em; }
+  &[data-k-page="siteinfo"] .rules button { border-radius: 999px; }
+  &[data-k-page="bookmark"] .form label { font-family: var(--k2-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* Shields: the counts as serif figures under a rule, like the privacy
+     dashboard's. */
+  &[data-k-page="shields"] .stat { background: transparent; box-shadow: none; border-top: 1px solid var(--k2-rule); border-radius: 0; text-align: left; padding: 8px 2px 4px; }
+  &[data-k-page="shields"] .stat b { font-family: var(--k2-serif); font-size: 26px; font-weight: 400; line-height: 1.1; }
+}
+
+/* Privacy: the counts as big serif figures, each under its rule. */
+html[data-ui-style="canvas"][data-k-page="privacy"] {
+  & .tile { background: transparent; border: none; border-top: 1px solid var(--k2-rule); border-radius: 0; box-shadow: none; padding-left: 0; }
+  & .tile .n { font-family: var(--k2-serif); font-weight: 400; font-size: 44px; letter-spacing: -0.02em; }
+  & .chart { background: transparent; border-color: var(--k2-hair); }
+  & .chart-axis { font-family: var(--k2-mono); font-size: 10.5px; }
+}
