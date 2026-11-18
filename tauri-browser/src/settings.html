@@ -143,6 +143,11 @@
     .mock .m-lines i:nth-child(2) { width: 58%; }
     .mock .m-lines i:nth-child(3) { width: 68%; }
     .mock .m-btn { position: absolute; right: 8px; bottom: 7px; width: 26px; height: 11px; border-radius: var(--m-r); background: var(--m-fill); }
+    /* One row: the buttons and address beside the tabs. */
+    .mock.m-one .m-main { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); grid-template-rows: 24px 1fr; }
+    .mock.m-one .m-nav { grid-area: 1 / 1; border-top: none; }
+    .mock.m-one .m-tabs { grid-area: 1 / 2; align-items: center; }
+    .mock.m-one .m-page { grid-column: 1 / -1; }
     .mock.m-glass .m-rail, .mock.m-glass .m-tabs, .mock.m-glass .m-nav { background: transparent; border: none; }
     .mock.m-glass .m-rail { margin: 5px 0 5px 5px; border-radius: 9px; }
     .mock.m-glass :is(.m-rail, .m-tab.on, .m-addr, .m-page) {

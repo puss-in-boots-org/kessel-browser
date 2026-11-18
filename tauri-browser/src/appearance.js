@@ -566,6 +566,7 @@ function mockLook(id) {
     "m-rivets": v.rivets,
     "m-dividers": v.dividers,
     "m-stripe": !!stripe,
+    "m-one": v.toolbarLayout === "one",
   };
   return { r, vars, flags };
 }

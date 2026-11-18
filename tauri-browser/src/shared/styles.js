@@ -718,8 +718,9 @@ const SKY = [
 ];
 
 // `bg`: the style's background, which the sky is washed toward so its text
-// reads at every hour (a bright noon sky under white text wouldn't).
-export function skyCss(date = new Date(), bg = null) {
+// reads at every hour (a bright noon sky under white text wouldn't). Without
+// `disc`, no sun or moon (Canvas's pages: it would sit on their buttons).
+export function skyCss(date = new Date(), bg = null, { disc: withDisc = true } = {}) {
   const h = date.getHours() + date.getMinutes() / 60;
   const i = Math.max(0, SKY.findIndex((k) => k[0] > h) - 1);
   const [h0, ...a] = SKY[i];
@@ -739,6 +740,7 @@ export function skyCss(date = new Date(), bg = null) {
   // A disc with a soft halo (in px, so it stays a sun or a moon at any
   // window size rather than a blur).
   const [disc, halo] = day ? [18, 260] : [10, 150];
+  if (!withDisc) return `linear-gradient(180deg, ${top}, ${bottom})`;
   return `radial-gradient(circle at ${x}% ${y}%, ${alpha(light, 0.95)} 0 ${disc}px, ${alpha(light, 0.2)} ${disc + 1.5}px, ${alpha(light, 0.06)} ${halo * 0.4}px, transparent ${halo}px), linear-gradient(180deg, ${top}, ${bottom})`;
 }
 
@@ -1094,7 +1096,7 @@ export function buildLook(r, settings, color = pageColor) {
   // Canvas's own pages (canvas.css): the sky over each page's masthead and
   // the dateline above its title, both from the clock when this is applied.
   if (r.id === "canvas") {
-    if (v.background === "sky") vars["--k2-horizon"] = skyCss(new Date(), v.bg);
+    if (v.background === "sky") vars["--k2-horizon"] = skyCss(new Date(), v.bg, { disc: false });
     vars["--k2-dateline"] = JSON.stringify(`Kessel · ${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`);
   }
 
