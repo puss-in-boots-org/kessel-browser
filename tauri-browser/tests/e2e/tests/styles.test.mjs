@@ -47,6 +47,20 @@ export const tests = [
     },
   },
   {
+    name: "Canvas's pages: a dateline over a serif title -- a classic look keeps its own",
+    async run({ launch, assert, waitFor }) {
+      const k = await launch({ settings: { ui_style: "canvas" } });
+      const settings = await openSettings(k);
+      assert.equal(await htmlAttr(settings, "data-k-page"), "settings", "the page is named for canvas.css");
+      const masthead = () => settings.evaluate(`(() => { const h = document.querySelector("#settings-nav h1"); return { before: getComputedStyle(h, "::before").content, font: getComputedStyle(h).fontFamily }; })()`);
+      const m = await masthead();
+      assert(/Kessel ·/.test(m.before), `the dateline: ${m.before}`);
+      assert(/Sitka/.test(m.font), `the serif: ${m.font}`);
+      await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
+      await waitFor(async () => (await masthead()).before === "none", { message: "Robust: the page as it was" });
+    },
+  },
+  {
     name: "a style picked in Settings reaches the toolbar and is saved",
     async run({ launch, assert, waitFor }) {
       const k = await launch();

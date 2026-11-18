@@ -37,6 +37,7 @@ export const FEATURES = [
     ["Pop-out window", "Drag a tab below the toolbar, or tab menu -> Pop out."],
     ["Compact or touch", "Settings -> Appearance -> Density: Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger. Any style."],
     ["Your own toolbar", "Settings -> Appearance -> Toolbar buttons: hide the buttons you don't use, and move the others where you want them."],
+    ["Canvas, Kessel's look", "Settings -> Appearance: the page's colour in one row of chrome, the new tab page as a front page, and every Kessel page and menu with serif titles, ruled sections and mono small print. Classic looks: the styles Kessel had before, each with your changes."],
     ["One-row toolbar", "Settings -> Appearance -> Toolbar -> Layout: One row puts the address bar beside the tabs, so the page starts a whole toolbar higher. Canvas has it on. Any style."],
     ["The page's colour", "Settings -> Appearance -> Colour: the toolbar takes on the colour of the site you're on, and Tabs -> Colour-coded tabs washes each tab with its site's colour. Canvas has both on."],
     ["Site first", "Settings -> Appearance -> Toolbar -> Address shows: the site's name stands out, the rest of the address is dimmed, until you click it."],

@@ -101,9 +101,6 @@ html[data-ui-style="canvas"][data-k-page="newtab"] {
 
   /* The small print. */
   & :is(.rc-host, .rc-when, .g-meta, .g-price, .w-hour-time, .w-range, .s-sub, .n-saved, .m-app) { font-family: var(--k2-mono); font-size: 10.5px; letter-spacing: 0; }
-  /* With the corner's widgets under it, the page is compact: a smaller clock
-     keeps them in view. */
-  &.k-home-compact #clock { font-size: min(var(--k-clock-size, 84px), 76px); margin: 0 0 18px; }
   /* Nothing there yet: a printed aside rather than an error-grey line. */
   & :is(.corner-empty, .grid .empty) { font-family: var(--k2-serif); font-style: italic; font-size: 14px; }
   & .rc-title, .g-title { font-weight: 600; }

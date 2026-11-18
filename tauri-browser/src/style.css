@@ -486,7 +486,9 @@ html[data-k-layout="one"] #tab-bar {
 }
 html[data-k-layout="one"] #window-controls { margin: 0; }
 html[data-k-layout="one"] #address-wrap { flex: 0 0 clamp(220px, 24vw, 460px); margin: 0 6px 0 4px; }
-html[data-k-layout="one"] #address-wrap:focus-within { flex-basis: clamp(320px, 52vw, 780px); }
+/* Wider while you type -- only then: a button in it taking the focus on
+   mousedown mustn't move out from under the mouse before the mouseup. */
+html[data-k-layout="one"] #address-wrap:has(#url-input:focus) { flex-basis: clamp(320px, 52vw, 780px); }
 /* With the tabs at the side, the row is the address bar's. */
 html.vertical-tabs[data-k-layout="one"] #address-wrap { flex: 1 1 auto; }
 /* Tabs shaped to sit on the page's edge stay there. */
