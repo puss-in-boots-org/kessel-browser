@@ -270,3 +270,63 @@ html[data-ui-style="instrument"][data-k-page="newtab"] {
   & :is(.corner-empty, .grid .empty) { font-family: var(--k3-label); letter-spacing: 0.04em; text-transform: lowercase; color: var(--text-faint); }
 }
 html[data-ui-style="instrument"][data-k-page="newtab"][data-k-mode="dark"] .panel { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
+
+/* ===========================================================================
+   4. Kessel's own pages: a control panel. The side navigation is the side of
+      the case; the page you're on is a raised key with its LED lit. Times,
+      sizes and counts read out in the LCD's characters.
+   ========================================================================= */
+
+html[data-ui-style="instrument"]:is([data-k-page="settings"], [data-k-page="history"], [data-k-page="bookmarks"], [data-k-page="downloads"], [data-k-page="passwords"], [data-k-page="help"], [data-k-page="feeds"], [data-k-page="tasks"], [data-k-page="privacy"], [data-k-page="diagnostics"], [data-k-page="gpu"]) {
+  & :is(#side, #settings-nav) { background: var(--k-chrome-fill, var(--bg)); border-right: 1px solid var(--border); }
+  & h1 { font-family: var(--k3-label); font-weight: 600; letter-spacing: 0.01em; }
+  & :is(#side, #settings-nav) h1 { font-size: 20px; }
+  & :is(#side, #settings-nav) .nav-item { position: relative; border-radius: 5px; }
+  & :is(#side, #settings-nav) .nav-item:hover { background: rgb(0 0 0 / 0.05); color: var(--text); }
+  & :is(#side, #settings-nav) .nav-item.active,
+  &[data-k-page="feeds"] .feed.on {
+    background: var(--k3-key);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--border), inset 0 -2px 0 var(--k3-key-edge);
+  }
+  & :is(#side, #settings-nav) .nav-item.active svg { color: var(--accent); }
+  & :is(#side, #settings-nav) .nav-item.active::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    translate: 0 -50%;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  & :is(.sub, .panel > .sub) { color: var(--text-dim); }
+  /* A search box's glass shows its magnifier dim green. */
+  & :is(.search, .k-search, #search-wrap) svg { color: var(--k3-lcd-dim); }
+  & main > header { background: transparent; }
+
+  /* Read-outs in the LCD's characters. */
+  & :is(.visit .time, .visit .host, .visit .count, .dl-row .dl-sub, td.num, .about-value, .lr-sub) { font-family: var(--k3-lcd); font-size: 11px; }
+  & .day { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  & th { font-family: var(--k3-label); font-weight: 500; letter-spacing: 0.08em; text-transform: lowercase; color: var(--text-dim); }
+  & .dl-row .bar { background: var(--k3-slot); border-radius: 1px; }
+  /* Section headings in the report pages are printed on the case. */
+  & .content > h2 { font-family: var(--k3-label); font-size: 12px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  /* On / off / a warning: an LED beside the word, not a coloured pill. */
+  & .state { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 0; font-family: var(--k3-label); text-transform: lowercase; color: var(--text-dim); }
+  & .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--k3-led-off); flex-shrink: 0; }
+  & .state.ok::before { background: var(--k3-led-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-green) 25%, transparent); }
+  & .state.warn::before { background: var(--k3-led-amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-amber) 25%, transparent); }
+  & :is(.empty-state, .empty, #empty, #no-results) { font-family: var(--k3-label); letter-spacing: 0.04em; text-transform: lowercase; color: var(--text-faint); }
+}
+html[data-ui-style="instrument"][data-k-mode="dark"] :is(#side, #settings-nav) .nav-item:hover { background: rgb(255 255 255 / 0.05); }
+
+/* Privacy: the counts on LCD read-outs. */
+html[data-ui-style="instrument"][data-k-page="privacy"] {
+  & .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  & .tile .n { display: inline-block; padding: 2px 10px 4px; border-radius: 4px; background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; }
+  & .chart-axis { font-family: var(--k3-lcd); font-size: 10.5px; }
+}
