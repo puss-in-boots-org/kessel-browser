@@ -33,12 +33,20 @@ test("skyCss follows the clock", () => {
   for (const l of sky(0, "#f6f5f2")) assert.ok(l > 0.25, `midnight on light: ${l}`);
 });
 
-test("Canvas resolves: one row, page tint, page-coloured edge", () => {
-  assert.ok(STYLE_IDS.includes("canvas") && STYLES.canvas);
-  const settings = { ui_style: "canvas", ui_custom: {} };
+test("Instrument is Kessel's look: first, the default, one row, a lit orange key", () => {
+  assert.ok(STYLE_IDS[0] === "instrument" && STYLES.instrument);
+  assert.equal(resolveStyle({}).id, "instrument");
+  const r = resolveStyle({ ui_style: "instrument", ui_custom: {} });
+  const look = buildLook(r, {}, null);
+  assert.equal(look.attrs["data-k-layout"], "one");
+  assert.equal(look.vars["--k-tab-active-bg"], r.values.accent);
+  assert.equal(look.vars["--accent-text"], "#0b0b10", "dark legends on the orange keys");
+});
+
+test("the page's colour, on a style that asks for it", () => {
+  const settings = { ui_style: "clean", ui_custom: { clean: { pageTint: 60, stripeTop: "page" } } };
   const r = resolveStyle(settings);
   const plain = buildLook(r, settings, null);
-  assert.equal(plain.attrs["data-k-layout"], "one");
   assert.equal(plain.vars["--k-stripe"], r.values.accent);
   const tinted = buildLook(r, settings, "#5b2a86");
   assert.equal(tinted.vars["--k-stripe"], "#5b2a86");

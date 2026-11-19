@@ -37,27 +37,32 @@ export const tests = [
     },
   },
   {
-    name: "the overhaul moves an older profile onto Canvas once, keeping its old look",
+    name: "the overhaul moves a profile onto Instrument once, keeping its old look",
     async run({ launch, assert, waitFor }) {
       const k = await launch({ settings: { ui_style: "robust", ui_custom: { robust: { accent: "#123456" } }, features: { ui_gen: 0 } } });
       const toolbar = await k.toolbar();
-      await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "canvas", { message: "moved onto Canvas" });
-      await waitFor(() => saved(k).features?.ui_gen === 2, { message: "and that's remembered" });
+      await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "instrument", { message: "moved onto Instrument" });
+      await waitFor(() => saved(k).features?.ui_gen === 3, { message: "and that's remembered" });
       assert.equal(saved(k).ui_custom?.robust?.accent, "#123456", "Robust keeps its changes, a click away");
+      // Canvas, the overhaul's first draft, is gone: a profile left on it
+      // moves too; a classic look picked since then stays.
+      const drafted = await (await launch({ settings: { ui_style: "canvas", features: { ui_gen: 2 } } })).toolbar();
+      await waitFor(async () => (await htmlAttr(drafted, "data-ui-style")) === "instrument", { message: "off Canvas onto Instrument" });
+      const picked = await launch({ settings: { ui_style: "vintage", features: { ui_gen: 2 } } });
+      await waitFor(() => saved(picked).features?.ui_gen === 3, { message: "the move done" });
+      assert.equal(await htmlAttr(await picked.toolbar(), "data-ui-style"), "vintage", "the classic look picked stays");
     },
   },
   {
-    name: "Canvas's pages: a dateline over a serif title -- a classic look keeps its own",
+    name: "Instrument's pages: typing goes into an LCD -- a classic look keeps its own",
     async run({ launch, assert, waitFor }) {
-      const k = await launch({ settings: { ui_style: "canvas" } });
+      const k = await launch({ settings: { ui_style: "instrument" } });
       const settings = await openSettings(k);
-      assert.equal(await htmlAttr(settings, "data-k-page"), "settings", "the page is named for canvas.css");
-      const masthead = () => settings.evaluate(`(() => { const h = document.querySelector("#settings-nav h1"); return { before: getComputedStyle(h, "::before").content, font: getComputedStyle(h).fontFamily }; })()`);
-      const m = await masthead();
-      assert(/Kessel ·/.test(m.before), `the dateline: ${m.before}`);
-      assert(/Sitka/.test(m.font), `the serif: ${m.font}`);
+      assert.equal(await htmlAttr(settings, "data-k-page"), "settings", "the page is named for instrument.css");
+      const font = () => settings.evaluate(`getComputedStyle(document.querySelector(".k-search .field")).fontFamily`);
+      assert(/Cascadia/.test(await font()), `the LCD's characters: ${await font()}`);
       await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
-      await waitFor(async () => (await masthead()).before === "none", { message: "Robust: the page as it was" });
+      await waitFor(async () => !/Cascadia/.test(await font()), { message: "Robust: the page as it was" });
     },
   },
   {
@@ -65,7 +70,7 @@ export const tests = [
     async run({ launch, assert, waitFor }) {
       const k = await launch();
       const toolbar = await k.toolbar();
-      assert.equal(await htmlAttr(toolbar, "data-ui-style"), "canvas", "Canvas by default");
+      assert.equal(await htmlAttr(toolbar, "data-ui-style"), "instrument", "Instrument by default");
       const settings = await openSettings(k);
       await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
       await waitFor(async () => (await htmlAttr(toolbar, "data-ui-style")) === "robust", { message: "toolbar in Robust" });
@@ -205,9 +210,10 @@ export const tests = [
     },
   },
   {
-    name: "Canvas: one row, the page's colour, site first",
+    name: "options any style can use: one row, the page's colour, site first",
     async run({ launch, site, assert, waitFor }) {
-      const k = await launch({ settings: { ui_style: "canvas", bookmarks_bar: false } });
+      const custom = { toolbarLayout: "one", pageTint: 60, stripeTop: "page", addressDisplay: "site", tabTint: true };
+      const k = await launch({ settings: { ui_style: "clean", ui_custom: { clean: custom }, bookmarks_bar: false } });
       const toolbar = await k.toolbar();
       const parent = (id) => toolbar.evaluate(`document.getElementById("${id}").parentElement.id`);
       // One row: the address bar sits in the tab strip, pages start under it.
@@ -234,7 +240,7 @@ export const tests = [
       await toolbar.evaluate(`document.getElementById("url-input").blur()`);
 
       // Two rows again: everything goes back where it was.
-      await k.invoke("update_settings", { settings: { ...(await k.invoke("get_settings")), ui_custom: { canvas: { toolbarLayout: "two" } } } });
+      await k.invoke("update_settings", { settings: { ...(await k.invoke("get_settings")), ui_custom: { clean: { ...custom, toolbarLayout: "two" } } } });
       await waitFor(async () => (await parent("address-wrap")) === "nav-bar", { message: "the address bar back in its row" });
       assert.equal(await toolbar.evaluate(`document.getElementById("nav-bar").hidden`), false, "the second row is back");
       await waitFor(async () => (await chromeTop(toolbar)) > rowBottom, { message: "pages start under the second row" });

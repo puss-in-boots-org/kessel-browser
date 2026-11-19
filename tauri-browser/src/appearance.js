@@ -868,8 +868,8 @@ function build() {
 
   const gallery = node.querySelector(".style-gallery");
   for (const id of STYLE_IDS) {
-    // Canvas is Kessel's own look; the rest are how Kessel looked before it.
-    if (id !== "canvas" && !gallery.querySelector(".k-classic-label")) gallery.appendChild(el(`<p class="k-classic-label"><b>Classic looks</b><small>Kessel as it was before Canvas, page for page</small></p>`));
+    // Instrument is Kessel's own look; the rest are how Kessel looked before it.
+    if (id !== "instrument" && !gallery.querySelector(".k-classic-label")) gallery.appendChild(el(`<p class="k-classic-label"><b>Classic looks</b><small>Kessel as it was before Instrument, page for page</small></p>`));
     gallery.appendChild(styleCard(id));
   }
   node.insertBefore(presetsCard(), node.querySelector(".k-bar"));

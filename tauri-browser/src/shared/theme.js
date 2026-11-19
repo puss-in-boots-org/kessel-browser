@@ -12,8 +12,8 @@ const { listen } = window.__TAURI__.event;
 
 // Last load's look, straight away -- the settings are still on their way.
 applyCachedLook();
-// Which page this is, popups included, for Canvas's per-page rules
-// (canvas.css): its file's name (menu.html -> "menu"). (data-page, which only
+// Which page this is, popups included, for Instrument's per-page rules
+// (instrument.css): its file's name (menu.html -> "menu"). (data-page, which only
 // full pages have, stays as it is: styles.css tells pages from popups by it.)
 document.documentElement.dataset.kPage = location.pathname.split("/").pop().replace(/\.html$/, "") || "index";
 

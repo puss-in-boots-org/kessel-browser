@@ -13,7 +13,7 @@
 // follows the same look. Nothing here runs continuously: effects that move
 // (ambient drift, pulsing, the animated focus border) are opt-in.
 
-export const STYLE_IDS = ["canvas", "glass", "clean", "futuristic", "robust", "vintage", "gamer", "fluent", "soft", "terminal", "aqua", "brutal"];
+export const STYLE_IDS = ["instrument", "glass", "clean", "futuristic", "robust", "vintage", "gamer", "fluent", "soft", "terminal", "aqua", "brutal"];
 
 // --- Fonts ---------------------------------------------------------------------
 // Windows ships every one of these (Inter only if you installed it), so the
@@ -303,32 +303,32 @@ const BASE_PALETTE = {
 };
 
 export const STYLES = {
-  canvas: {
-    name: "Canvas",
-    tagline: "Kessel's own look: one quiet row of chrome in the colour of the page you're on, serif mastheads, small print in mono and the sky outside over every page",
+  // Kessel's own look (instrument.css draws the hardware): a warm grey
+  // enclosure, tabs on numbered keys, the address in an LCD, status on LEDs.
+  // "tabActiveBg" is the lit key; "addressBg" the LCD's glass.
+  instrument: {
+    name: "Instrument",
+    tagline: "Kessel's own look: a piece of hardware -- tabs on numbered keys, the address in an LCD, what's loading or playing on LEDs, and a grille to grab the window by",
     palette: {
-      dark: { bg: "#16161a", surface: "#1e1e23", surface2: "#25252b", hover: "#2c2c33", border: "#2a2a31", text: "#ececf1", textDim: "#a8a8b2", textFaint: "#787884", chromeBg: "#131316", railBg: "#131316", tabActiveBg: "#26262d", addressBg: "#1d1d22" },
-      light: { bg: "#f6f5f2", surface: "#ffffff", surface2: "#efeee9", hover: "#e8e6e0", border: "#e2e0d9", text: "#1c1b19", textDim: "#64625c", textFaint: "#a19f98", chromeBg: "#efeeea", railBg: "#efeeea", tabActiveBg: "#ffffff", addressBg: "#ffffff", danger: "#d6453d", success: "#1f8a4c", warning: "#b86e00" },
+      light: { bg: "#e2ded6", surface: "#ece9e3", surface2: "#f5f3ef", hover: "#faf9f6", border: "#bfb9ad", text: "#22211d", textDim: "#5b5850", textFaint: "#858176", chromeBg: "#d6d2c9", railBg: "#d6d2c9", tabActiveBg: "=accent", addressBg: "#3a463c", link: "#b9400c", danger: "#c8352b", success: "#2e7d3a", warning: "#a86200" },
+      dark: { bg: "#1b1b19", surface: "#262624", surface2: "#31312d", hover: "#3a3a36", border: "#46453f", text: "#ecebe5", textDim: "#a9a79e", textFaint: "#7d7b72", chromeBg: "#222220", railBg: "#222220", tabActiveBg: "=accent", addressBg: "#1d251f", link: "#ff8a5c" },
     },
     defaults: {
-      mode: "dark", accent: "#ff7a59", accent2: "#ffc46b", pageTint: 60,
-      font: "system", fontSize: 13.5, headingWeight: 600, letterSpacing: -0.005,
-      radius: 10, panelRadius: 14, buttonRadius: 10, iconShape: "squircle", iconStroke: 1.7,
-      toolbarLayout: "one", tabShape: "pill", tabHeight: 30, tabWidth: 190, tabGap: 4, tabPadding: 9, tabIndicator: "none", activeTabElevation: 25, tabTint: true,
-      navHeight: 46, buttonSize: 30, addressShape: "pill", addressHeight: 32, addressDisplay: "site", dividers: true,
-      stripeTop: "page", stripeHeight: 2,
-      background: "sky", chromeOpacity: 100,
-      shadow: 24, shadowSoftness: 26, shadowOffset: 6,
-      railWidth: 52, railIcon: 34, railGap: 4,
-      easing: "smooth", tabAnimation: "fade", clockSize: 124, clockWeight: 400, ntSearchWidth: 640, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
+      mode: "light", accent: "#ff5a1f", accent2: "#2f5bd3", accentText: "dark",
+      font: "bahnschrift", fontSize: 13.5, headingWeight: 600, letterSpacing: 0,
+      radius: 6, panelRadius: 8, buttonRadius: 5, iconShape: "rounded", iconStroke: 1.8,
+      toolbarLayout: "one", tabShape: "rounded", tabRadius: 5, tabHeight: 30, tabWidth: 176, tabGap: 5, tabPadding: 8, tabIndicator: "none",
+      navHeight: 46, buttonSize: 30, addressShape: "rounded", addressRadius: 4, addressHeight: 32, addressDisplay: "site", dividers: false,
+      background: "solid", shadow: 0, bookmarksHeight: 30,
+      railWidth: 52, railIcon: 34, railGap: 6,
+      easing: "smooth", tabAnimation: "fade", clockSize: 64, clockWeight: 400, ntSearchWidth: 620, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
     },
-    quick: ["mode", "accent", "pageTint", "toolbarLayout", "background", "stripeTop", "tabShape", "radius"],
+    quick: ["mode", "accent", "toolbarLayout", "font", "fontSize", "tabShape", "radius", "addressDisplay"],
     presets: [
-      { name: "Studio", values: {} },
-      { name: "Gallery", values: { mode: "light", accent: "#d9480f" } },
-      { name: "Charcoal", values: { pageTint: 0, stripeTop: "accent", background: "solid", accent: "#9aa4b2", accent2: "#d5dbe3" } },
-      { name: "Two rows", values: { toolbarLayout: "two", tabShape: "folder", tabRadius: 10, tabHeight: 32 } },
-      { name: "Chameleon", values: { pageTint: 100, tabIndicator: "underline", indicatorThickness: 2 } },
+      { name: "Warm grey", values: {} },
+      { name: "Graphite", values: { mode: "dark" } },
+      { name: "Cobalt keys", values: { accent: "#2f5bd3", accent2: "#ff5a1f" } },
+      { name: "Two rows", values: { toolbarLayout: "two" } },
     ],
   },
 
@@ -718,9 +718,8 @@ const SKY = [
 ];
 
 // `bg`: the style's background, which the sky is washed toward so its text
-// reads at every hour (a bright noon sky under white text wouldn't). Without
-// `disc`, no sun or moon (Canvas's pages: it would sit on their buttons).
-export function skyCss(date = new Date(), bg = null, { disc: withDisc = true } = {}) {
+// reads at every hour (a bright noon sky under white text wouldn't).
+export function skyCss(date = new Date(), bg = null) {
   const h = date.getHours() + date.getMinutes() / 60;
   const i = Math.max(0, SKY.findIndex((k) => k[0] > h) - 1);
   const [h0, ...a] = SKY[i];
@@ -740,7 +739,6 @@ export function skyCss(date = new Date(), bg = null, { disc: withDisc = true } =
   // A disc with a soft halo (in px, so it stays a sun or a moon at any
   // window size rather than a blur).
   const [disc, halo] = day ? [18, 260] : [10, 150];
-  if (!withDisc) return `linear-gradient(180deg, ${top}, ${bottom})`;
   return `radial-gradient(circle at ${x}% ${y}%, ${alpha(light, 0.95)} 0 ${disc}px, ${alpha(light, 0.2)} ${disc + 1.5}px, ${alpha(light, 0.06)} ${halo * 0.4}px, transparent ${halo}px), linear-gradient(180deg, ${top}, ${bottom})`;
 }
 
@@ -748,14 +746,14 @@ export function skyCss(date = new Date(), bg = null, { disc: withDisc = true } =
 // --- Resolving: settings -> the values in effect -----------------------------------
 
 // The style and your changes to every style. Without one (a new profile, or
-// settings saved before styles existed) it's Canvas, Kessel's own look -- or,
+// settings saved before styles existed) it's Instrument, Kessel's own look -- or,
 // with the old glass switched off, Hyper Clean -- keeping an old dark/light
 // choice, accent and custom colours.
 export function styleState(settings) {
   const s = settings || {};
   const custom = s.ui_custom && typeof s.ui_custom === "object" && !Array.isArray(s.ui_custom) ? s.ui_custom : {};
   if (s.ui_style && STYLES[s.ui_style]) return { id: s.ui_style, all: custom };
-  const id = s.glass_enabled === false ? "clean" : "canvas";
+  const id = s.glass_enabled === false ? "clean" : "instrument";
   const legacy = {};
   legacy.mode = s.theme === "light" ? "light" : "dark";
   if (s.accent && String(s.accent).toLowerCase() !== "#7c5cff") legacy.accent = s.accent;
@@ -1093,12 +1091,6 @@ export function buildLook(r, settings, color = pageColor) {
   vars["--k-wall-filter"] = wallFilter.join(" ") || "none";
   vars["--k-wall-inset"] = v.wallBlur > 0 && v.background !== "solid" ? px(-v.wallBlur * 2) : "0px";
   classes["k-ambient"] = v.ambientMotion && (v.background === "gradient" || v.background === "pattern");
-  // Canvas's own pages (canvas.css): the sky over each page's masthead and
-  // the dateline above its title, both from the clock when this is applied.
-  if (r.id === "canvas") {
-    if (v.background === "sky") vars["--k2-horizon"] = skyCss(new Date(), v.bg, { disc: false });
-    vars["--k2-dateline"] = JSON.stringify(`Kessel · ${new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`);
-  }
 
   // Depth
   const s = v.shadow / 100;

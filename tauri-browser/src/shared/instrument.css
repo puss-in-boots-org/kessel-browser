@@ -1,0 +1,136 @@
+/* Instrument -- Kessel's own look: the browser as a piece of hardware. The
+   other styles in shared/styles.js are the classic looks; everything here
+   applies only with Instrument on (html[data-ui-style="instrument"]), so a
+   classic look still shows every page exactly as it was.
+
+   A warm grey enclosure. Buttons are keys with a lower edge that sink when
+   pressed; the lit key is orange. Text you type goes into an LCD -- dark
+   glass, green characters. What's happening shows on LEDs. Labels are
+   printed on the case: lowercase, spaced out, in Bahnschrift (Windows' DIN).
+   Switches slide, sliders are faders, keyboard shortcuts are keycaps.
+
+   Nothing moves on its own -- no glow, no blur, no animation -- so it costs
+   nothing to show. html[data-k-page] names the page, popups included
+   (theme.js). Imported by theme.css after styles.css, so a rule here beats a
+   style option's at the same specificity; the html[...] prefix beats each
+   page's own <style>. */
+
+html[data-ui-style="instrument"] {
+  --k3-label: Bahnschrift, "DIN Alternate", "Segoe UI", sans-serif;
+  --k3-lcd: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  /* The LCD: its glass is the style's address bar colour. */
+  --k3-lcd-bg: var(--k-address-bg, #3a463c);
+  --k3-lcd-ink: #cde8b8;
+  --k3-lcd-dim: #8ea78a;
+  --k3-lcd-edge: color-mix(in srgb, var(--k3-lcd-bg) 65%, #000);
+  /* A key's cap and the darker lower edge that gives it its height. */
+  --k3-key: var(--surface-2);
+  --k3-key-edge: color-mix(in srgb, var(--border) 78%, #000);
+  --k3-slot: color-mix(in srgb, var(--text) 72%, var(--bg));
+  --k3-led-green: #3fbf5f;
+  --k3-led-amber: #f0a400;
+  --k3-led-off: color-mix(in srgb, var(--text-faint) 55%, transparent);
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 10px;
+}
+
+/* ===========================================================================
+   1. Parts, on every page
+   ========================================================================= */
+
+html[data-ui-style="instrument"] {
+  /* Keys. */
+  & .btn {
+    border-radius: 5px;
+    background: var(--k3-key);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--k3-key-edge);
+    font-weight: 500;
+    box-shadow: none;
+  }
+  & .btn:hover { background: var(--surface-hover); }
+  & .btn:active { transform: translateY(1px); border-bottom-width: 1px; scale: 1; }
+  & .btn.primary { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 72%, #000); color: var(--accent-text); }
+  & .btn.danger { background: var(--k3-key); color: var(--danger); }
+  & .btn.ghost { background: transparent; border-color: transparent; }
+  & .btn.ghost:hover { background: var(--surface-hover); }
+
+  /* What you type goes into an LCD. */
+  & :is(input.field, textarea.field) {
+    background: var(--k3-lcd-bg);
+    color: var(--k3-lcd-ink);
+    caret-color: var(--k3-lcd-ink);
+    border: 1px solid var(--k3-lcd-edge);
+    border-radius: 4px;
+    box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.22);
+    font-family: var(--k3-lcd);
+    font-size: 12.5px;
+  }
+  & :is(input.field, textarea.field)::placeholder { color: var(--k3-lcd-dim); }
+  & :is(input.field, textarea.field):focus { border-color: var(--accent); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.22), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  & select.field { background-color: var(--k3-key); border-bottom: 2px solid var(--k3-key-edge); border-radius: 5px; }
+
+  /* Slide switches: a dark slot, a ridged knob; on, the slot lights. */
+  & .switch { width: 36px; height: 18px; border-radius: 3px; background: var(--k3-slot); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35); }
+  & .switch::after {
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 14px;
+    border-radius: 2px;
+    background-color: var(--k3-key);
+    background-image: repeating-linear-gradient(90deg, transparent 0 4px, rgb(0 0 0 / 0.22) 4px 5px);
+    background-size: 9px 8px;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.3);
+  }
+  & .switch.on { background: var(--accent); }
+  & .switch.on::after { transform: translateX(16px); }
+
+  /* Choices are a row of keys; the chosen one is lit. */
+  & .segmented { background: transparent; border: none; padding: 0; gap: 3px; }
+  & .segmented button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; color: var(--text); }
+  & .segmented button.active { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+  & .chip { border-radius: 4px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); color: var(--text); }
+  & .chip.active { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+
+  /* Sliders are faders: a thin slot and a cap with a line across it. */
+  & input[type="range"] { -webkit-appearance: none; appearance: none; height: 20px; background: transparent; }
+  & input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--k3-slot); }
+  & input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 20px;
+    margin-top: -8px;
+    border-radius: 2px;
+    border: 1px solid var(--k3-key-edge);
+    background: linear-gradient(var(--text) 0 0) center / 100% 2px no-repeat, var(--k3-key);
+  }
+
+  /* Keyboard shortcuts are keycaps. */
+  & :is(kbd, .key-chip) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; font-family: var(--k3-label); font-weight: 500; }
+
+  /* Panels are modules screwed into the case. */
+  & :is(.card, .setting-card, .modal) { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
+  & .modal { border-radius: 10px; }
+
+  /* Labels printed on the case. */
+  & :is(.k-card-title, .shortcut-category, .section-title, .side-title, label.label, .k-presets-head .k-label) {
+    font-family: var(--k3-label);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+    color: var(--text-dim);
+  }
+
+  /* Messages scroll across a strip of LCD. */
+  & .toast { background: var(--k3-lcd-bg); color: var(--k3-lcd-ink); border: 1px solid var(--k3-lcd-edge); border-radius: 4px; font-family: var(--k3-lcd); font-size: 12px; }
+  & .badge { border-radius: 4px; }
+}
+html[data-ui-style="instrument"][data-k-mode="dark"] {
+  --k3-lcd-ink: #b9e0a2;
+  & :is(.card, .setting-card, .modal) { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
+}
