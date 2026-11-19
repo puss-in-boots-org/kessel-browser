@@ -311,13 +311,13 @@ export const STYLES = {
     tagline: "Kessel's own look: a piece of hardware -- tabs on numbered keys, the address in an LCD, what's loading or playing on LEDs, and a grille to grab the window by",
     palette: {
       light: { bg: "#e2ded6", surface: "#ece9e3", surface2: "#f5f3ef", hover: "#faf9f6", border: "#bfb9ad", text: "#22211d", textDim: "#5b5850", textFaint: "#858176", chromeBg: "#d6d2c9", railBg: "#d6d2c9", tabActiveBg: "=accent", addressBg: "#3a463c", link: "#b9400c", danger: "#c8352b", success: "#2e7d3a", warning: "#a86200" },
-      dark: { bg: "#1b1b19", surface: "#262624", surface2: "#31312d", hover: "#3a3a36", border: "#46453f", text: "#ecebe5", textDim: "#a9a79e", textFaint: "#7d7b72", chromeBg: "#222220", railBg: "#222220", tabActiveBg: "=accent", addressBg: "#1d251f", link: "#ff8a5c" },
+      dark: { bg: "#1b1b19", surface: "#262624", surface2: "#31312d", hover: "#3a3a36", border: "#46453f", text: "#ecebe5", textDim: "#a9a79e", textFaint: "#7d7b72", chromeBg: "#222220", railBg: "#222220", tabActiveBg: "=accent", addressBg: "#172a1d", link: "#ff8a5c" },
     },
     defaults: {
       mode: "light", accent: "#ff5a1f", accent2: "#2f5bd3", accentText: "dark",
       font: "bahnschrift", fontSize: 13.5, headingWeight: 600, letterSpacing: 0,
       radius: 6, panelRadius: 8, buttonRadius: 5, iconShape: "rounded", iconStroke: 1.8,
-      toolbarLayout: "one", tabShape: "rounded", tabRadius: 5, tabHeight: 30, tabWidth: 176, tabGap: 5, tabPadding: 8, tabIndicator: "none",
+      toolbarLayout: "two", tabShape: "rounded", tabRadius: 5, tabHeight: 30, tabWidth: 176, tabGap: 5, tabPadding: 8, tabIndicator: "none",
       navHeight: 46, buttonSize: 30, addressShape: "rounded", addressRadius: 4, addressHeight: 32, addressDisplay: "site", dividers: false,
       background: "solid", shadow: 0, bookmarksHeight: 30,
       railWidth: 52, railIcon: 34, railGap: 6,
@@ -328,7 +328,7 @@ export const STYLES = {
       { name: "Warm grey", values: {} },
       { name: "Graphite", values: { mode: "dark" } },
       { name: "Cobalt keys", values: { accent: "#2f5bd3", accent2: "#ff5a1f" } },
-      { name: "Two rows", values: { toolbarLayout: "two" } },
+      { name: "One row", values: { toolbarLayout: "one" } },
     ],
   },
 

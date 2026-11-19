@@ -134,3 +134,90 @@ html[data-ui-style="instrument"][data-k-mode="dark"] {
   --k3-lcd-ink: #b9e0a2;
   & :is(.card, .setting-card, .modal) { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
 }
+
+/* ===========================================================================
+   2. The window (index.html): tabs on numbered keys, the address in an LCD,
+      LEDs for loading and sound, a grille to grab the window by
+   ========================================================================= */
+
+html[data-ui-style="instrument"][data-page="toolbar"] {
+  /* Every button on the case is a key. */
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn, .strip-scroll) {
+    background: var(--k3-key);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--k3-key-edge);
+    border-radius: 5px;
+    color: var(--text);
+  }
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):hover { background: var(--surface-hover); }
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):active { transform: translateY(1px); border-bottom-width: 1px; scale: 1; }
+  & :is(#nav-cluster > button, #menu-cluster > button):disabled { color: var(--text-faint); }
+  & #nav-cluster { gap: 4px; }
+  & .rail-btn.panel-open { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+  & .rail-logo { border-radius: 6px; background: var(--accent); color: var(--accent-text); box-shadow: none; border-bottom: 2px solid color-mix(in srgb, var(--accent) 65%, #000); }
+
+  /* Tabs: a row of channel keys, numbered as Ctrl+1 to 8 reach them; the
+     tab you're on is the lit one. */
+  & :is(#tabs, #vtabs-list) { counter-reset: k3-key; }
+  & .tab {
+    counter-increment: k3-key;
+    background: var(--k3-key);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--k3-key-edge);
+    border-radius: 5px;
+    padding-left: 22px;
+    color: var(--text);
+  }
+  & .tab:hover { background: var(--surface-hover); }
+  & .tab.active { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 72%, #000); color: var(--accent-text); }
+  & .tab.active :is(.tab-title, .close-tab) { color: var(--accent-text); }
+  /* (On the title, placed against the tab: the favicon has its own corner
+     dots.) */
+  & .tab-title::before {
+    content: counter(k3-key);
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    translate: 0 -50%;
+    font: 600 10px/1 var(--k3-label);
+    color: var(--text-faint);
+  }
+  & .tab.active .tab-title::before { color: color-mix(in srgb, var(--accent-text) 55%, transparent); }
+  & :is(.tab.narrow, .tab.pinned) { padding-left: var(--k-tab-pad, 8px); }
+  & :is(.tab.narrow, .tab.pinned) .tab-title::before { content: none; }
+  /* LEDs: green while a page loads (instead of a spinner: nothing turns),
+     amber while it plays sound; a sleeping tab's key is unlit. */
+  & .tab-favicon.loading svg { display: none; }
+  & .tab-favicon.loading::after { content: ""; width: 7px; height: 7px; margin: auto; border-radius: 50%; background: var(--k3-led-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-green) 25%, transparent); }
+  & .tab .tab-audio { color: var(--k3-led-amber); }
+  & .tab.active .tab-audio { color: var(--accent-text); }
+  & .tab .tab-audio.muted { color: var(--text-faint); }
+  & .tab.discarded:not(.active) { background: color-mix(in srgb, var(--k3-key) 55%, var(--k-chrome-fill, var(--bg))); color: var(--text-faint); }
+
+  /* The address: an LCD. */
+  & #address-wrap { border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); }
+  & :is(#url-input, #url-display) { font-family: var(--k3-lcd); font-size: 12.5px; color: var(--k3-lcd-ink); caret-color: var(--k3-lcd-ink); }
+  & #url-input::placeholder { color: var(--k3-lcd-dim); }
+  & #url-display .u-host { color: var(--k3-lcd-ink); font-weight: 600; }
+  & #url-display .u-rest { color: var(--k3-lcd-dim); }
+  & #address-wrap button { color: var(--k3-lcd-dim); }
+  & #address-wrap button:hover { color: var(--k3-lcd-ink); background: rgb(255 255 255 / 0.07); }
+  & #address-wrap #star-btn.starred { color: var(--accent); }
+  & #address-wrap #shields-btn:not(.off) { color: var(--k3-led-green); }
+  & #shields-count { font-family: var(--k3-lcd); }
+
+  /* The grille: the empty part of the strip, where you grab the window. */
+  & #drag-space {
+    margin: 9px 10px;
+    border-radius: 4px;
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--text) 30%, transparent) 0 1.3px, transparent 1.7px);
+    background-size: 7px 7px;
+    background-position: center;
+  }
+
+  /* The bookmarks bar: a strip of tape along the case, written on. */
+  & #bookmarks-bar { background: #f1ede1; border-top: 1px solid #ddd6c3; border-bottom: 1px solid #c9c1ab; }
+  & #bookmarks-bar :is(.bm-chip, .bm-empty) { font-family: "Ink Free", "Segoe Print", var(--k3-label); font-size: 13.5px; color: #2c2a24; }
+  & #bookmarks-bar .bm-chip:hover { background: rgb(0 0 0 / 0.06); color: #000; }
+}
+html[data-ui-style="instrument"][data-page="toolbar"][data-k-mode="dark"] #bookmarks-bar { background: #d9d3c2; }

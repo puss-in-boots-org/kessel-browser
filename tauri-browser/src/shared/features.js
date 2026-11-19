@@ -38,7 +38,7 @@ export const FEATURES = [
     ["Compact or touch", "Settings -> Appearance -> Density: Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger. Any style."],
     ["Your own toolbar", "Settings -> Appearance -> Toolbar buttons: hide the buttons you don't use, and move the others where you want them."],
     ["Instrument, Kessel's look", "Settings -> Appearance: Kessel as a piece of hardware -- tabs on numbered keys (Ctrl+1 to 8), the address in an LCD, loading and sound on LEDs, a grille to grab the window by, and every Kessel page as a panel of keys, switches and faders. Graphite is its dark version. Classic looks: the styles Kessel had before, each with your changes."],
-    ["One-row toolbar", "Settings -> Appearance -> Toolbar -> Layout: One row puts the address bar beside the tabs, so the page starts a whole toolbar higher. Instrument has it on. Any style."],
+    ["One-row toolbar", "Settings -> Appearance -> Toolbar -> Layout: One row puts the address bar beside the tabs, so the page starts a whole toolbar higher. Any style (Instrument: its One row preset)."],
     ["The page's colour", "Settings -> Appearance -> Colour: the toolbar takes on the colour of the site you're on, and Tabs -> Colour-coded tabs washes each tab with its site's colour. Any style."],
     ["Site first", "Settings -> Appearance -> Toolbar -> Address shows: the site's name stands out, the rest of the address is dimmed, until you click it."],
     ["Time-of-day sky", "Settings -> Appearance -> Background -> Time of day: the new tab page's sky follows the clock, sun and moon included. It's repainted every half hour, so it costs nothing."],

@@ -33,12 +33,12 @@ test("skyCss follows the clock", () => {
   for (const l of sky(0, "#f6f5f2")) assert.ok(l > 0.25, `midnight on light: ${l}`);
 });
 
-test("Instrument is Kessel's look: first, the default, one row, a lit orange key", () => {
+test("Instrument is Kessel's look: first, the default, two decks, a lit orange key", () => {
   assert.ok(STYLE_IDS[0] === "instrument" && STYLES.instrument);
   assert.equal(resolveStyle({}).id, "instrument");
   const r = resolveStyle({ ui_style: "instrument", ui_custom: {} });
   const look = buildLook(r, {}, null);
-  assert.equal(look.attrs["data-k-layout"], "one");
+  assert.equal(look.attrs["data-k-layout"], "two");
   assert.equal(look.vars["--k-tab-active-bg"], r.values.accent);
   assert.equal(look.vars["--accent-text"], "#0b0b10", "dark legends on the orange keys");
 });
