@@ -39,7 +39,9 @@ export const tests = [
       const k = await launch();
       await k.invoke("autofill_save_address", { address: { name: "Jane Doe", street: "1 Main St", city: "Budapest", postal_code: "1011", country: "Hungary" } });
       const page = await k.page((t) => t.url.includes("newtab"));
-      await page.waitFor(`!!document.getElementById('omnibox')`);
+      // (Styled first: till its look is applied the page sits lower, and a
+      // click measured then lands on whatever moves under it.)
+      await page.waitFor(`!!document.getElementById('omnibox') && !!document.documentElement.dataset.uiStyle`);
       await page.session.send("Emulation.setFocusEmulationEnabled", { enabled: true });
       // (Away from it and back: the field gets the focus anew.)
       await page.evaluate(`document.getElementById('omnibox').blur()`);
