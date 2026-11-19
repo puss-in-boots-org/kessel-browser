@@ -324,6 +324,53 @@ html[data-ui-style="instrument"]:is([data-k-page="settings"], [data-k-page="hist
 }
 html[data-ui-style="instrument"][data-k-mode="dark"] :is(#side, #settings-nav) .nav-item:hover { background: rgb(255 255 255 / 0.05); }
 
+/* ===========================================================================
+   5. Menus and popups. Typing shows on the LCD: the address's suggestions,
+      the command palette and tab search are its screen, the picked row the
+      cursor bar. Menus are panels: the item under the mouse rises as a key.
+      (Type and colour only -- Rust sizes these windows from their rows.)
+   ========================================================================= */
+
+html[data-ui-style="instrument"]:is([data-k-page="suggest"], [data-k-page="palette"], [data-k-page="tabsearch"]) {
+  & body { background: var(--k3-lcd-bg); border-color: var(--k3-lcd-edge); border-radius: 6px; color: var(--k3-lcd-ink); }
+  & :is(main, #shell) { color: var(--k3-lcd-ink); font-family: var(--k3-lcd); }
+  & :is(.title, #q, .row) { color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-size: 12.5px; }
+  & #q { caret-color: var(--k3-lcd-ink); }
+  & #q::placeholder { color: var(--k3-lcd-dim); }
+  & #search-wrap { border-bottom-color: var(--k3-lcd-edge); }
+  & :is(.detail, .sub, .side, .section, #count, .tail) { color: var(--k3-lcd-dim); opacity: 1; font-family: var(--k3-lcd); }
+  & .detail.url { color: var(--k3-lcd-ink); opacity: 0.8; }
+  & .section { text-transform: lowercase; letter-spacing: 0.1em; font-weight: 500; }
+  & svg { color: var(--k3-lcd-dim); }
+  & mark { background: transparent; color: var(--k3-lcd-ink); text-decoration: underline; }
+  & :is(.row.selected, .row.focused, .row:hover) { background: color-mix(in srgb, var(--k3-lcd-ink) 16%, transparent); }
+  & :is(.row.selected, .row.focused) { box-shadow: inset 3px 0 0 var(--k3-lcd-ink); }
+  & kbd { background: transparent; color: var(--k3-lcd-dim); border: 1px solid color-mix(in srgb, var(--k3-lcd-ink) 30%, transparent); }
+  & .app-icon { filter: grayscale(0.2); }
+}
+
+html[data-ui-style="instrument"]:is([data-k-page="menu"], [data-k-page="context"]) {
+  & body { border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
+  & :is(.item:hover, .item.focused) { background: var(--k3-key); box-shadow: inset 0 0 0 1px var(--border), inset 0 -2px 0 var(--k3-key-edge); border-radius: 5px; }
+  & .item.danger:hover { color: var(--danger); }
+  & .keys { font-family: var(--k3-label); font-size: 10.5px; color: var(--text-faint); }
+  & .header { font-family: var(--k3-label); font-weight: 500; letter-spacing: 0.1em; text-transform: lowercase; color: var(--text-dim); }
+  & .zoom output, & .zoom span:not(.label) { font-family: var(--k3-lcd); }
+}
+
+html[data-ui-style="instrument"]:is([data-k-page="siteinfo"], [data-k-page="shields"], [data-k-page="bookmark"], [data-k-page="hovercard"]) {
+  & body { border-radius: 8px; }
+  & h1 { font-family: var(--k3-label); font-weight: 600; }
+  & h3 { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  & .rules button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; }
+  & .rules button.on { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+  & .form label { font-family: var(--k3-label); font-size: 10.5px; letter-spacing: 0.1em; text-transform: lowercase; }
+  & :is(#host, #memory) { font-family: var(--k3-lcd); font-size: 11px; }
+  /* Shields' counts on LCD read-outs. */
+  & .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: none; }
+  & .stat b { display: inline-block; padding: 1px 8px 2px; border-radius: 3px; background: var(--k3-lcd-bg); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; font-size: 17px; }
+}
+
 /* Privacy: the counts on LCD read-outs. */
 html[data-ui-style="instrument"][data-k-page="privacy"] {
   & .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
