@@ -221,3 +221,52 @@ html[data-ui-style="instrument"][data-page="toolbar"] {
   & #bookmarks-bar .bm-chip:hover { background: rgb(0 0 0 / 0.06); color: #000; }
 }
 html[data-ui-style="instrument"][data-page="toolbar"][data-k-mode="dark"] #bookmarks-bar { background: #d9d3c2; }
+
+/* ===========================================================================
+   3. The new tab page: the front panel -- the time in an LCD, the date
+      printed above it, search as an LCD, sites as pads, the widgets as
+      modules in the case
+   ========================================================================= */
+
+html[data-ui-style="instrument"][data-k-page="newtab"] {
+  & #date { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: lowercase; color: var(--text-dim); margin-bottom: 8px; }
+  & #clock {
+    padding: 8px 22px 10px;
+    margin-bottom: 22px;
+    border-radius: 6px;
+    background: var(--k3-lcd-bg);
+    border: 1px solid var(--k3-lcd-edge);
+    box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25);
+    color: var(--k3-lcd-ink);
+    font-family: var(--k3-lcd);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+  & #omnibox-wrap { background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); border-radius: 6px; box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25); }
+  & #omnibox-wrap:focus-within { border-color: var(--accent); box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  & #omnibox { color: var(--k3-lcd-ink); caret-color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-size: 14px; }
+  & #omnibox::placeholder { color: var(--k3-lcd-dim); }
+  & #omnibox-icon { color: var(--k3-lcd-dim); }
+
+  /* Labels printed on the case, a rule either side. */
+  & :is(.section h2, .panel-head h2) { display: flex; align-items: center; gap: 10px; font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  & .section h2::before, & :is(.section h2, .panel-head h2)::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  & .panel-head h2::before { content: none; }
+
+  /* Sites are pads. */
+  & .tile { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 6px; }
+  & .tile:hover { background: var(--surface-hover); }
+  & .tile:active { transform: translateY(1px); border-bottom-width: 1px; }
+  & .tile .tile-label { font-family: var(--k3-label); color: var(--text); }
+
+  /* The widgets are modules in the case. */
+  & .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
+  & :is(.corner-btn, .panel-btn) { border-radius: 5px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); color: var(--text); }
+  & :is(.rc, .g-card) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 6px; }
+  & :is(.rc-host, .rc-when, .g-meta, .g-price, .w-hour-time, .s-sub, .n-saved) { font-family: var(--k3-lcd); font-size: 10.5px; }
+  /* The temperature on its own little LCD. */
+  & .w-temp { display: inline-block; padding: 2px 10px 4px; border-radius: 4px; background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; }
+  & .w-stat { background: var(--k3-key); border: 1px solid var(--border); border-radius: 5px; }
+  & :is(.corner-empty, .grid .empty) { font-family: var(--k3-label); letter-spacing: 0.04em; text-transform: lowercase; color: var(--text-faint); }
+}
+html[data-ui-style="instrument"][data-k-page="newtab"][data-k-mode="dark"] .panel { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
