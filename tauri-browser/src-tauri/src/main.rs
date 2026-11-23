@@ -1309,6 +1309,16 @@ async fn pop_out(
 
 // "Back to tabs": closes the pop-out and reopens whatever it was showing as
 // the active tab in the browser window you used last.
+/// The rice hub's shared theme (~/.config/rice/theme.json: the accent it picked
+/// from the wallpaper), or "" without the hub. Kessel's pages poll it for
+/// "Accent from the wallpaper".
+#[tauri::command]
+fn rice_theme() -> String {
+    std::env::var_os("USERPROFILE")
+        .and_then(|h| std::fs::read_to_string(std::path::PathBuf::from(h).join(".config").join("rice").join("theme.json")).ok())
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 async fn dock_popout(app: tauri::AppHandle, id: u32) -> Result<u32, String> {
     let app2 = app.clone();
@@ -5451,6 +5461,7 @@ fn main() {
         // did nothing. A browser handles them itself (open_new_window).
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .invoke_handler(tauri::generate_handler![
+            rice_theme,
             new_tab,
             open_background_tab,
             open_singleton_tab,

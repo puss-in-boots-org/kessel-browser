@@ -13,7 +13,7 @@ import { setupOmnibox } from "./omnibox.js";
 import { resolveTyped, allEngines, engineById } from "./shared/search.js";
 import { cleanLink } from "./shared/links.js";
 import { playUiSound } from "./shared/sounds.js";
-import { setPageColor, isColourful } from "./shared/styles.js";
+import { setPageColor, isColourful, STYLES } from "./shared/styles.js";
 import { RAIL_ITEMS, DEFAULT_RAIL_ITEMS, aiTarget, aiPrompt, WORKSPACE_COLORS } from "./shared/sidebar-panels.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -5332,10 +5332,13 @@ function toggleEngineMenu() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   await initTheme();
-  // The UI overhaul: everyone moves onto Canvas once. The look you had stays
-  // a click away under Settings -> Appearance -> Classic looks.
+  // The UI overhaul: everyone moves onto Instrument, Kessel's own look, once
+  // -- the look you had stays a click away under Settings -> Appearance ->
+  // Classic looks. (ui_gen 2 was its first draft, Canvas, now gone: a classic
+  // look picked since then stays.)
   const before = currentSettings();
-  if (before && !(before.features?.ui_gen >= 2)) saveSettings({ ui_style: "canvas", features: { ...before.features, ui_gen: 2 } }).catch(() => {});
+  const gen = before?.features?.ui_gen ?? 0;
+  if (before && gen < 3) saveSettings({ ...(gen < 2 || !STYLES[before.ui_style] ? { ui_style: "instrument" } : {}), features: { ...before.features, ui_gen: 3 } }).catch(() => {});
   injectRefractionFilter();
   watchCustomWallpaper(currentSettings);
   // Account tabs copy the wallpaper and our geometry from Main (glass.js).

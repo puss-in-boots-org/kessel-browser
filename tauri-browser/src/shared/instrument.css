@@ -1,0 +1,379 @@
+/* Instrument -- Kessel's own look: the browser as a piece of hardware. The
+   other styles in shared/styles.js are the classic looks; everything here
+   applies only with Instrument on (html[data-ui-style="instrument"]), so a
+   classic look still shows every page exactly as it was.
+
+   A warm grey enclosure. Buttons are keys with a lower edge that sink when
+   pressed; the lit key is orange. Text you type goes into an LCD -- dark
+   glass, green characters. What's happening shows on LEDs. Labels are
+   printed on the case: lowercase, spaced out, in Bahnschrift (Windows' DIN).
+   Switches slide, sliders are faders, keyboard shortcuts are keycaps.
+
+   Nothing moves on its own -- no glow, no blur, no animation -- so it costs
+   nothing to show. html[data-k-page] names the page, popups included
+   (theme.js). Imported by theme.css after styles.css, so a rule here beats a
+   style option's at the same specificity; the html[...] prefix beats each
+   page's own <style>. */
+
+html[data-ui-style="instrument"] {
+  --k3-label: Bahnschrift, "DIN Alternate", "Segoe UI", sans-serif;
+  --k3-lcd: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+  /* The LCD: its glass is the style's address bar colour. */
+  --k3-lcd-bg: var(--k-address-bg, #3a463c);
+  --k3-lcd-ink: #cde8b8;
+  --k3-lcd-dim: #8ea78a;
+  --k3-lcd-edge: color-mix(in srgb, var(--k3-lcd-bg) 65%, #000);
+  /* A key's cap and the darker lower edge that gives it its height. */
+  --k3-key: var(--surface-2);
+  --k3-key-edge: color-mix(in srgb, var(--border) 78%, #000);
+  --k3-slot: color-mix(in srgb, var(--text) 72%, var(--bg));
+  --k3-led-green: #3fbf5f;
+  --k3-led-amber: #f0a400;
+  --k3-led-off: color-mix(in srgb, var(--text-faint) 55%, transparent);
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 10px;
+}
+
+/* ===========================================================================
+   1. Parts, on every page
+   ========================================================================= */
+
+html[data-ui-style="instrument"] {
+  /* Keys. */
+  & .btn {
+    border-radius: 5px;
+    background: var(--k3-key);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--k3-key-edge);
+    font-weight: 500;
+    box-shadow: none;
+  }
+  & .btn:hover { background: var(--surface-hover); }
+  & .btn:active { transform: translateY(1px); border-bottom-width: 1px; scale: 1; }
+  & .btn.primary { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 72%, #000); color: var(--accent-text); }
+  & .btn.danger { background: var(--k3-key); color: var(--danger); }
+  & .btn.ghost { background: transparent; border-color: transparent; }
+  & .btn.ghost:hover { background: var(--surface-hover); }
+
+  /* What you type goes into an LCD. */
+  & :is(input.field, textarea.field) {
+    background: var(--k3-lcd-bg);
+    color: var(--k3-lcd-ink);
+    caret-color: var(--k3-lcd-ink);
+    border: 1px solid var(--k3-lcd-edge);
+    border-radius: 4px;
+    box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.22);
+    font-family: var(--k3-lcd);
+    font-size: 12.5px;
+  }
+  & :is(input.field, textarea.field)::placeholder { color: var(--k3-lcd-dim); }
+  & :is(input.field, textarea.field):focus { border-color: var(--accent); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.22), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  & select.field { background-color: var(--k3-key); border-bottom: 2px solid var(--k3-key-edge); border-radius: 5px; }
+
+  /* Slide switches: a dark slot, a ridged knob; on, the slot lights. */
+  & .switch { width: 36px; height: 18px; border-radius: 3px; background: var(--k3-slot); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35); }
+  & .switch::after {
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 14px;
+    border-radius: 2px;
+    background-color: var(--k3-key);
+    background-image: repeating-linear-gradient(90deg, transparent 0 4px, rgb(0 0 0 / 0.22) 4px 5px);
+    background-size: 9px 8px;
+    background-position: center;
+    background-repeat: no-repeat;
+    box-shadow: 0 1px 0 rgb(0 0 0 / 0.3);
+  }
+  & .switch.on { background: var(--accent); }
+  & .switch.on::after { transform: translateX(16px); }
+
+  /* Choices are a row of keys; the chosen one is lit. */
+  & .segmented { background: transparent; border: none; padding: 0; gap: 3px; }
+  & .segmented button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; color: var(--text); }
+  & .segmented button.active { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+  & .chip { border-radius: 4px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); color: var(--text); }
+  & .chip.active { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+
+  /* Sliders are faders: a thin slot and a cap with a line across it. */
+  & input[type="range"] { -webkit-appearance: none; appearance: none; height: 20px; background: transparent; }
+  & input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--k3-slot); }
+  & input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 20px;
+    margin-top: -8px;
+    border-radius: 2px;
+    border: 1px solid var(--k3-key-edge);
+    background: linear-gradient(var(--text) 0 0) center / 100% 2px no-repeat, var(--k3-key);
+  }
+
+  /* Keyboard shortcuts are keycaps. */
+  & :is(kbd, .key-chip) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; font-family: var(--k3-label); font-weight: 500; }
+
+  /* Panels are modules screwed into the case. */
+  & :is(.card, .setting-card, .modal) { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
+  & .modal { border-radius: 10px; }
+
+  /* Labels printed on the case. */
+  & :is(.k-card-title, .shortcut-category, .section-title, .side-title, label.label, .k-presets-head .k-label) {
+    font-family: var(--k3-label);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+    color: var(--text-dim);
+  }
+
+  /* Messages scroll across a strip of LCD. */
+  & .toast { background: var(--k3-lcd-bg); color: var(--k3-lcd-ink); border: 1px solid var(--k3-lcd-edge); border-radius: 4px; font-family: var(--k3-lcd); font-size: 12px; }
+  & .badge { border-radius: 4px; }
+}
+html[data-ui-style="instrument"][data-k-mode="dark"] {
+  --k3-lcd-ink: #b9e0a2;
+  & :is(.card, .setting-card, .modal) { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
+}
+
+/* ===========================================================================
+   2. The window (index.html): tabs on numbered keys, the address in an LCD,
+      LEDs for loading and sound, a grille to grab the window by
+   ========================================================================= */
+
+html[data-ui-style="instrument"][data-page="toolbar"] {
+  /* Every button on the case is a key. */
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn, .strip-scroll) {
+    background: var(--k3-key);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--k3-key-edge);
+    border-radius: 5px;
+    color: var(--text);
+  }
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):hover { background: var(--surface-hover); }
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):active { transform: translateY(1px); border-bottom-width: 1px; scale: 1; }
+  & :is(#nav-cluster > button, #menu-cluster > button):disabled { color: var(--text-faint); }
+  & #nav-cluster { gap: 4px; }
+  & .rail-btn.panel-open { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+  & .rail-logo { border-radius: 6px; background: var(--accent); color: var(--accent-text); box-shadow: none; border-bottom: 2px solid color-mix(in srgb, var(--accent) 65%, #000); }
+
+  /* Tabs: a row of channel keys, numbered as Ctrl+1 to 8 reach them; the
+     tab you're on is the lit one. */
+  & :is(#tabs, #vtabs-list) { counter-reset: k3-key; }
+  & .tab {
+    counter-increment: k3-key;
+    background: var(--k3-key);
+    border: 1px solid var(--border);
+    border-bottom: 2px solid var(--k3-key-edge);
+    border-radius: 5px;
+    padding-left: 22px;
+    color: var(--text);
+  }
+  & .tab:hover { background: var(--surface-hover); }
+  & .tab.active { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 72%, #000); color: var(--accent-text); }
+  & .tab.active :is(.tab-title, .close-tab) { color: var(--accent-text); }
+  /* (On the title, placed against the tab: the favicon has its own corner
+     dots.) */
+  & .tab-title::before {
+    content: counter(k3-key);
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    translate: 0 -50%;
+    font: 600 10px/1 var(--k3-label);
+    color: var(--text-faint);
+  }
+  & .tab.active .tab-title::before { color: color-mix(in srgb, var(--accent-text) 55%, transparent); }
+  & :is(.tab.narrow, .tab.pinned) { padding-left: var(--k-tab-pad, 8px); }
+  & :is(.tab.narrow, .tab.pinned) .tab-title::before { content: none; }
+  /* LEDs: green while a page loads (instead of a spinner: nothing turns),
+     amber while it plays sound; a sleeping tab's key is unlit. */
+  & .tab-favicon.loading svg { display: none; }
+  & .tab-favicon.loading::after { content: ""; width: 7px; height: 7px; margin: auto; border-radius: 50%; background: var(--k3-led-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-green) 25%, transparent); }
+  & .tab .tab-audio { color: var(--k3-led-amber); }
+  & .tab.active .tab-audio { color: var(--accent-text); }
+  & .tab .tab-audio.muted { color: var(--text-faint); }
+  & .tab.discarded:not(.active) { background: color-mix(in srgb, var(--k3-key) 55%, var(--k-chrome-fill, var(--bg))); color: var(--text-faint); }
+
+  /* The address: an LCD. */
+  & #address-wrap { border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); }
+  & :is(#url-input, #url-display) { font-family: var(--k3-lcd); font-size: 12.5px; color: var(--k3-lcd-ink); caret-color: var(--k3-lcd-ink); }
+  & #url-input::placeholder { color: var(--k3-lcd-dim); }
+  & #url-display .u-host { color: var(--k3-lcd-ink); font-weight: 600; }
+  & #url-display .u-rest { color: var(--k3-lcd-dim); }
+  & #address-wrap button { color: var(--k3-lcd-dim); }
+  & #address-wrap button:hover { color: var(--k3-lcd-ink); background: rgb(255 255 255 / 0.07); }
+  & #address-wrap #star-btn.starred { color: var(--accent); }
+  & #address-wrap #shields-btn:not(.off) { color: var(--k3-led-green); }
+  & #shields-count { font-family: var(--k3-lcd); }
+
+  /* The grille: the empty part of the strip, where you grab the window. */
+  & #drag-space {
+    margin: 9px 10px;
+    border-radius: 4px;
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--text) 30%, transparent) 0 1.3px, transparent 1.7px);
+    background-size: 7px 7px;
+    background-position: center;
+  }
+
+  /* The bookmarks bar: a strip of tape along the case, written on. */
+  & #bookmarks-bar { background: #f1ede1; border-top: 1px solid #ddd6c3; border-bottom: 1px solid #c9c1ab; }
+  & #bookmarks-bar :is(.bm-chip, .bm-empty) { font-family: "Ink Free", "Segoe Print", var(--k3-label); font-size: 13.5px; color: #2c2a24; }
+  & #bookmarks-bar .bm-chip:hover { background: rgb(0 0 0 / 0.06); color: #000; }
+}
+html[data-ui-style="instrument"][data-page="toolbar"][data-k-mode="dark"] #bookmarks-bar { background: #d9d3c2; }
+
+/* ===========================================================================
+   3. The new tab page: the front panel -- the time in an LCD, the date
+      printed above it, search as an LCD, sites as pads, the widgets as
+      modules in the case
+   ========================================================================= */
+
+html[data-ui-style="instrument"][data-k-page="newtab"] {
+  & #date { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: lowercase; color: var(--text-dim); margin-bottom: 8px; }
+  & #clock {
+    padding: 8px 22px 10px;
+    margin-bottom: 22px;
+    border-radius: 6px;
+    background: var(--k3-lcd-bg);
+    border: 1px solid var(--k3-lcd-edge);
+    box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25);
+    color: var(--k3-lcd-ink);
+    font-family: var(--k3-lcd);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+  & #omnibox-wrap { background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); border-radius: 6px; box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25); }
+  & #omnibox-wrap:focus-within { border-color: var(--accent); box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  & #omnibox { color: var(--k3-lcd-ink); caret-color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-size: 14px; }
+  & #omnibox::placeholder { color: var(--k3-lcd-dim); }
+  & #omnibox-icon { color: var(--k3-lcd-dim); }
+
+  /* Labels printed on the case, a rule either side. */
+  & :is(.section h2, .panel-head h2) { display: flex; align-items: center; gap: 10px; font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  & .section h2::before, & :is(.section h2, .panel-head h2)::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  & .panel-head h2::before { content: none; }
+
+  /* Sites are pads. */
+  & .tile { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 6px; }
+  & .tile:hover { background: var(--surface-hover); }
+  & .tile:active { transform: translateY(1px); border-bottom-width: 1px; }
+  & .tile .tile-label { font-family: var(--k3-label); color: var(--text); }
+
+  /* The widgets are modules in the case. */
+  & .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
+  & :is(.corner-btn, .panel-btn) { border-radius: 5px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); color: var(--text); }
+  & :is(.rc, .g-card) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 6px; }
+  & :is(.rc-host, .rc-when, .g-meta, .g-price, .w-hour-time, .s-sub, .n-saved) { font-family: var(--k3-lcd); font-size: 10.5px; }
+  /* The temperature on its own little LCD. */
+  & .w-temp { display: inline-block; padding: 2px 10px 4px; border-radius: 4px; background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; }
+  & .w-stat { background: var(--k3-key); border: 1px solid var(--border); border-radius: 5px; }
+  & :is(.corner-empty, .grid .empty) { font-family: var(--k3-label); letter-spacing: 0.04em; color: var(--text-faint); }
+}
+html[data-ui-style="instrument"][data-k-page="newtab"][data-k-mode="dark"] .panel { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
+
+/* ===========================================================================
+   4. Kessel's own pages: a control panel. The side navigation is the side of
+      the case; the page you're on is a raised key with its LED lit. Times,
+      sizes and counts read out in the LCD's characters.
+   ========================================================================= */
+
+html[data-ui-style="instrument"]:is([data-k-page="settings"], [data-k-page="history"], [data-k-page="bookmarks"], [data-k-page="downloads"], [data-k-page="passwords"], [data-k-page="help"], [data-k-page="feeds"], [data-k-page="tasks"], [data-k-page="privacy"], [data-k-page="diagnostics"], [data-k-page="gpu"]) {
+  & :is(#side, #settings-nav) { background: var(--k-chrome-fill, var(--bg)); border-right: 1px solid var(--border); }
+  & h1 { font-family: var(--k3-label); font-weight: 600; letter-spacing: 0.01em; }
+  & :is(#side, #settings-nav) h1 { font-size: 20px; }
+  & :is(#side, #settings-nav) .nav-item { position: relative; border-radius: 5px; }
+  & :is(#side, #settings-nav) .nav-item:hover { background: rgb(0 0 0 / 0.05); color: var(--text); }
+  & :is(#side, #settings-nav) .nav-item.active,
+  &[data-k-page="feeds"] .feed.on {
+    background: var(--k3-key);
+    color: var(--text);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--border), inset 0 -2px 0 var(--k3-key-edge);
+  }
+  & :is(#side, #settings-nav) .nav-item.active svg { color: var(--accent); }
+  & :is(#side, #settings-nav) .nav-item.active::after {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    translate: 0 -50%;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  & :is(.sub, .panel > .sub) { color: var(--text-dim); }
+  /* A search box's glass shows its magnifier dim green. */
+  & :is(.search, .k-search, #search-wrap) svg { color: var(--k3-lcd-dim); }
+  & main > header { background: transparent; }
+
+  /* Read-outs in the LCD's characters. */
+  & :is(.visit .time, .visit .host, .visit .count, .dl-row .dl-sub, td.num, .about-value, .lr-sub) { font-family: var(--k3-lcd); font-size: 11px; }
+  & .day { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  & th { font-family: var(--k3-label); font-weight: 500; letter-spacing: 0.08em; text-transform: lowercase; color: var(--text-dim); }
+  & .dl-row .bar { background: var(--k3-slot); border-radius: 1px; }
+  /* Section headings in the report pages are printed on the case. */
+  & .content > h2 { font-family: var(--k3-label); font-size: 12px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  /* On / off / a warning: an LED beside the word, not a coloured pill. */
+  & .state { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: none; padding: 0; font-family: var(--k3-label); color: var(--text-dim); }
+  & .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--k3-led-off); flex-shrink: 0; }
+  & .state.ok::before { background: var(--k3-led-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-green) 25%, transparent); }
+  & .state.warn::before { background: var(--k3-led-amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-amber) 25%, transparent); }
+  & :is(.empty-state, .empty, #empty, #no-results) { font-family: var(--k3-label); letter-spacing: 0.04em; color: var(--text-faint); }
+}
+html[data-ui-style="instrument"][data-k-mode="dark"] :is(#side, #settings-nav) .nav-item:hover { background: rgb(255 255 255 / 0.05); }
+
+/* ===========================================================================
+   5. Menus and popups. Typing shows on the LCD: the address's suggestions,
+      the command palette and tab search are its screen, the picked row the
+      cursor bar. Menus are panels: the item under the mouse rises as a key.
+      (Type and colour only -- Rust sizes these windows from their rows.)
+   ========================================================================= */
+
+html[data-ui-style="instrument"]:is([data-k-page="suggest"], [data-k-page="palette"], [data-k-page="tabsearch"]) {
+  & body { background: var(--k3-lcd-bg); border-color: var(--k3-lcd-edge); border-radius: 6px; color: var(--k3-lcd-ink); }
+  & :is(main, #shell) { color: var(--k3-lcd-ink); font-family: var(--k3-lcd); }
+  & :is(.title, #q, .row) { color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-size: 12.5px; }
+  & #q { caret-color: var(--k3-lcd-ink); }
+  & #q::placeholder { color: var(--k3-lcd-dim); }
+  & #search-wrap { border-bottom-color: var(--k3-lcd-edge); }
+  & :is(.detail, .sub, .side, .section, #count, .tail) { color: var(--k3-lcd-dim); opacity: 1; font-family: var(--k3-lcd); }
+  & .detail.url { color: var(--k3-lcd-ink); opacity: 0.8; }
+  & .section { text-transform: lowercase; letter-spacing: 0.1em; font-weight: 500; }
+  & svg { color: var(--k3-lcd-dim); }
+  & mark { background: transparent; color: var(--k3-lcd-ink); text-decoration: underline; }
+  & :is(.row.selected, .row.focused, .row:hover) { background: color-mix(in srgb, var(--k3-lcd-ink) 16%, transparent); }
+  & :is(.row.selected, .row.focused) { box-shadow: inset 3px 0 0 var(--k3-lcd-ink); }
+  & kbd { background: transparent; color: var(--k3-lcd-dim); border: 1px solid color-mix(in srgb, var(--k3-lcd-ink) 30%, transparent); }
+  & .app-icon { filter: grayscale(0.2); }
+}
+
+html[data-ui-style="instrument"]:is([data-k-page="menu"], [data-k-page="context"]) {
+  & body { border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
+  & :is(.item:hover, .item.focused) { background: var(--k3-key); box-shadow: inset 0 0 0 1px var(--border), inset 0 -2px 0 var(--k3-key-edge); border-radius: 5px; }
+  & .item.danger:hover { color: var(--danger); }
+  & .keys { font-family: var(--k3-label); font-size: 10.5px; color: var(--text-faint); }
+  & .header { font-family: var(--k3-label); font-weight: 500; letter-spacing: 0.1em; text-transform: lowercase; color: var(--text-dim); }
+  & .zoom output, & .zoom span:not(.label) { font-family: var(--k3-lcd); }
+}
+
+html[data-ui-style="instrument"]:is([data-k-page="siteinfo"], [data-k-page="shields"], [data-k-page="bookmark"], [data-k-page="hovercard"]) {
+  & body { border-radius: 8px; }
+  & h1 { font-family: var(--k3-label); font-weight: 600; }
+  & h3 { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
+  & .rules button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; }
+  & .rules button.on { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
+  & .form label { font-family: var(--k3-label); font-size: 10.5px; letter-spacing: 0.1em; text-transform: lowercase; }
+  & :is(#host, #memory) { font-family: var(--k3-lcd); font-size: 11px; }
+  /* Shields' counts on LCD read-outs. */
+  & .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: none; }
+  & .stat b { display: inline-block; padding: 1px 8px 2px; border-radius: 3px; background: var(--k3-lcd-bg); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; font-size: 17px; }
+}
+
+/* Privacy: the counts on LCD read-outs. */
+html[data-ui-style="instrument"][data-k-page="privacy"] {
+  & .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  & .tile .n { display: inline-block; padding: 2px 10px 4px; border-radius: 4px; background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; }
+  & .chart-axis { font-family: var(--k3-lcd); font-size: 10.5px; }
+}

@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tintToward, isColourful, skyCss, luminance, resolveStyle, buildLook, STYLE_IDS, STYLES } from "../../src/shared/styles.js";
+import { tintToward, isColourful, skyCss, luminance, resolveStyle, buildLook, setRiceAccent, STYLE_IDS, STYLES } from "../../src/shared/styles.js";
+
+test("Accent from the wallpaper: the rice hub's accent lights the keys, only while it's on", () => {
+  const wall = { ui_style: "instrument", ui_custom: { instrument: STYLES.instrument.presets.find((p) => p.name === "Wallpaper").values } };
+  setRiceAccent("#ed9582");
+  const r = resolveStyle(wall);
+  assert.equal(r.values.accent, "#ed9582");
+  assert.equal(buildLook(r, {}, null).vars["--k-tab-active-bg"], "#ed9582");
+  assert.equal(resolveStyle({ ui_style: "instrument", ui_custom: {} }).values.accent, "#ff5a1f", "off: your own accent");
+  setRiceAccent(null); // no hub: your own accent again
+  assert.equal(resolveStyle(wall).values.accent, "#ff5a1f");
+  setRiceAccent("not a colour");
+  assert.equal(resolveStyle(wall).values.accent, "#ff5a1f");
+});
 
 test("isColourful: greys, whites, blacks and near-whites have no colour", () => {
   for (const c of ["#ffffff", "#000000", "#808080", "#faf7ff", "#1e2327", "nope", ""]) assert.equal(isColourful(c), false, c);
@@ -33,12 +46,20 @@ test("skyCss follows the clock", () => {
   for (const l of sky(0, "#f6f5f2")) assert.ok(l > 0.25, `midnight on light: ${l}`);
 });
 
-test("Canvas resolves: one row, page tint, page-coloured edge", () => {
-  assert.ok(STYLE_IDS.includes("canvas") && STYLES.canvas);
-  const settings = { ui_style: "canvas", ui_custom: {} };
+test("Instrument is Kessel's look: first, the default, two decks, a lit orange key", () => {
+  assert.ok(STYLE_IDS[0] === "instrument" && STYLES.instrument);
+  assert.equal(resolveStyle({}).id, "instrument");
+  const r = resolveStyle({ ui_style: "instrument", ui_custom: {} });
+  const look = buildLook(r, {}, null);
+  assert.equal(look.attrs["data-k-layout"], "two");
+  assert.equal(look.vars["--k-tab-active-bg"], r.values.accent);
+  assert.equal(look.vars["--accent-text"], "#0b0b10", "dark legends on the orange keys");
+});
+
+test("the page's colour, on a style that asks for it", () => {
+  const settings = { ui_style: "clean", ui_custom: { clean: { pageTint: 60, stripeTop: "page" } } };
   const r = resolveStyle(settings);
   const plain = buildLook(r, settings, null);
-  assert.equal(plain.attrs["data-k-layout"], "one");
   assert.equal(plain.vars["--k-stripe"], r.values.accent);
   const tinted = buildLook(r, settings, "#5b2a86");
   assert.equal(tinted.vars["--k-stripe"], "#5b2a86");
