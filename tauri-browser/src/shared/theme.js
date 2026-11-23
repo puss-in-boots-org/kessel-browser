@@ -5,7 +5,7 @@
 // backend broadcasts on every save.
 
 import { applyGlass } from "./glass.js";
-import { applyStyle, applyCachedLook, backdropCss, backdropTone } from "./styles.js";
+import { applyStyle, applyCachedLook, backdropCss, backdropTone, setRiceAccent } from "./styles.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -60,7 +60,24 @@ let cached = null;
 let holds = 0;
 const STYLE_FIELDS = ["ui_style", "ui_custom", "ui_presets"];
 
+// "Accent from the wallpaper": the rice hub rewrites ~/.config/rice/theme.json when
+// the wallpaper changes; every Kessel page checks it every 3 s and repaints if the
+// accent moved and the look follows it.
+let riceSeen;
+async function pullRice() {
+  let accent = null;
+  try {
+    accent = JSON.parse((await invoke("rice_theme")) || "null")?.accent || null;
+  } catch {}
+  if (accent === riceSeen) return;
+  riceSeen = accent;
+  setRiceAccent(accent);
+  if (cached && window.__kesselStyle?.values.accentFollow) applyTheme(cached);
+}
+
 export async function initTheme() {
+  await pullRice();
+  setInterval(pullRice, 3000);
   try {
     cached = await invoke("get_settings");
     applyTheme(cached);

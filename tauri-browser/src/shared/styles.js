@@ -24,6 +24,7 @@ export const FONTS = [
   ["segoe", "Segoe UI", `"Segoe UI", system-ui, sans-serif`],
   ["inter", "Inter", `Inter, "Segoe UI Variable Text", "Segoe UI", sans-serif`],
   ["bahnschrift", "Bahnschrift", `Bahnschrift, "DIN Alternate", "Segoe UI", sans-serif`],
+  ["quicksand", "Quicksand (the rice hub's)", `Quicksand, "Segoe UI Variable Text", "Segoe UI", sans-serif`],
   ["helvetica", "Helvetica / Arial", `"Helvetica Neue", Helvetica, Arial, sans-serif`],
   ["verdana", "Verdana", `Verdana, Geneva, sans-serif`],
   ["tahoma", "Tahoma", `Tahoma, Verdana, sans-serif`],
@@ -94,7 +95,8 @@ const CASES = [["asis", "As designed"], ["none", "As written"], ["uppercase", "U
 export const OPTIONS = [
   // Colour & mode
   { key: "mode", group: "colour", label: "Mode", type: "choice", choices: [["dark", "Dark"], ["light", "Light"], ["system", "Follow Windows"]], def: "dark" },
-  { key: "accent", group: "colour", label: "Accent colour", desc: "Buttons, highlights, the active tab", type: "color", def: "#7c5cff" },
+  { key: "accentFollow", group: "colour", label: "Accent from the wallpaper", desc: "Use the rice hub's accent, picked from your wallpaper, and change with it", type: "toggle", def: false },
+  { key: "accent", group: "colour", label: "Accent colour", desc: "Buttons, highlights, the active tab", type: "color", def: "#7c5cff", showIf: (v) => !v.accentFollow },
   { key: "accent2", group: "colour", label: "Second accent", desc: "The other end of gradients, glows and stripes", type: "color", def: "#6bd2ff" },
   { key: "accentGradient", group: "colour", label: "Gradient accents", desc: "Blend the two accents wherever the accent fills something", type: "toggle", def: false },
   { key: "gradientAngle", group: "colour", label: "Gradient angle", type: "range", min: 0, max: 360, step: 5, unit: "°", def: 135, showIf: (v) => v.accentGradient },
@@ -327,6 +329,8 @@ export const STYLES = {
     presets: [
       { name: "Warm grey", values: {} },
       { name: "Graphite", values: { mode: "dark" } },
+      // Graphite with the rice hub's accent (it follows the wallpaper) and font.
+      { name: "Wallpaper", values: { mode: "dark", accentFollow: true, font: "quicksand" } },
       { name: "Cobalt keys", values: { accent: "#2f5bd3", accent2: "#ff5a1f" } },
       { name: "One row", values: { toolbarLayout: "one" } },
     ],
@@ -815,6 +819,13 @@ function resolvePalette(id, custom, mode, accent) {
 // `defaults` -- what each value would be without your changes -- for the
 // Settings page's reset buttons. `forStyle` resolves another style (the
 // previews in Settings).
+// The rice hub's current accent (~/.config/rice/theme.json, set by theme.js),
+// used instead of the accent when "Accent from the wallpaper" is on.
+let riceAccent = null;
+export function setRiceAccent(hex) {
+  riceAccent = /^#[0-9a-f]{6}$/i.test(hex || "") ? hex : null;
+}
+
 export function resolveStyle(settings, forStyle = null) {
   const state = styleState(settings);
   const id = forStyle && STYLES[forStyle] ? forStyle : state.id;
@@ -826,6 +837,7 @@ export function resolveStyle(settings, forStyle = null) {
     defaults[opt.key] = defaultValue(id, opt.key);
     values[opt.key] = custom[opt.key] !== undefined ? custom[opt.key] : defaults[opt.key];
   }
+  if (values.accentFollow && riceAccent) values.accent = riceAccent;
   const mode = values.mode === "system" ? systemMode() : values.mode === "light" ? "light" : "dark";
   const { palette, paletteDefaults } = resolvePalette(id, custom, mode, values.accent);
   for (const key of PALETTE_KEYS) {

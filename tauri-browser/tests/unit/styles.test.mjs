@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tintToward, isColourful, skyCss, luminance, resolveStyle, buildLook, STYLE_IDS, STYLES } from "../../src/shared/styles.js";
+import { tintToward, isColourful, skyCss, luminance, resolveStyle, buildLook, setRiceAccent, STYLE_IDS, STYLES } from "../../src/shared/styles.js";
+
+test("Accent from the wallpaper: the rice hub's accent lights the keys, only while it's on", () => {
+  const wall = { ui_style: "instrument", ui_custom: { instrument: STYLES.instrument.presets.find((p) => p.name === "Wallpaper").values } };
+  setRiceAccent("#ed9582");
+  const r = resolveStyle(wall);
+  assert.equal(r.values.accent, "#ed9582");
+  assert.equal(buildLook(r, {}, null).vars["--k-tab-active-bg"], "#ed9582");
+  assert.equal(resolveStyle({ ui_style: "instrument", ui_custom: {} }).values.accent, "#ff5a1f", "off: your own accent");
+  setRiceAccent(null); // no hub: your own accent again
+  assert.equal(resolveStyle(wall).values.accent, "#ff5a1f");
+  setRiceAccent("not a colour");
+  assert.equal(resolveStyle(wall).values.accent, "#ff5a1f");
+});
 
 test("isColourful: greys, whites, blacks and near-whites have no colour", () => {
   for (const c of ["#ffffff", "#000000", "#808080", "#faf7ff", "#1e2327", "nope", ""]) assert.equal(isColourful(c), false, c);
