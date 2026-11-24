@@ -162,14 +162,36 @@ pub(crate) fn serve(app: &tauri::AppHandle, mut request: Request) {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
-            for url in request.urls {
-                let _ = open_tab_in_front(app, &win, Some(url), None);
+            // A window whose toolbar is still loading (Kessel was starting
+            // when the link came): the addresses join what it opens first,
+            // rather than racing it for the window.
+            let urls = std::mem::take(&mut request.urls);
+            let queued = state.win(&win, |w| w.init.as_mut().map(|init| add_urls(init, &urls)).is_some()).unwrap_or(false);
+            if !queued {
+                for url in urls {
+                    let _ = open_tab_in_front(app, &win, Some(url), None);
+                }
             }
         }
         _ => {
             let init = if request.urls.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": request.urls }) };
             let _ = browser_windows::create(app, false, init);
         }
+    }
+}
+
+// `urls` added to what a window opens first (see take_window_init): its
+// restored tabs, tabs moved in, or the start page -- then these, in front.
+pub(crate) fn add_urls(init: &mut serde_json::Value, urls: &[String]) {
+    if urls.is_empty() {
+        return;
+    }
+    if !init.is_object() {
+        *init = serde_json::json!({});
+    }
+    let list = init.as_object_mut().unwrap().entry("urls").or_insert_with(|| serde_json::json!([]));
+    if let Some(list) = list.as_array_mut() {
+        list.extend(urls.iter().map(|u| serde_json::Value::String(u.clone())));
     }
 }
 
@@ -247,5 +269,21 @@ mod tests {
         assert_eq!(r.urls, vec!["https://a.example/?q=--app=https://evil.example/"], "a link stays a link");
         assert_eq!(r.app, None);
         assert!(request_from_args(&args(&["--single-argument", "--app=https://evil.example/"])).app.is_none(), "never a switch");
+    }
+
+    #[test]
+    fn links_join_what_a_window_opens_first() {
+        let urls = vec!["https://a.example/".to_string()];
+        let mut start_page = serde_json::Value::Null;
+        add_urls(&mut start_page, &urls);
+        assert_eq!(start_page, serde_json::json!({ "urls": ["https://a.example/"] }), "instead of the start page");
+        let mut restored = serde_json::json!({ "session": { "tabs": [] } });
+        add_urls(&mut restored, &urls);
+        add_urls(&mut restored, &["https://b.example/".to_string()]);
+        assert_eq!(restored["urls"], serde_json::json!(["https://a.example/", "https://b.example/"]), "after your tabs, in order");
+        assert!(restored.get("session").is_some(), "your tabs stay");
+        let mut untouched = serde_json::json!({ "session": {} });
+        add_urls(&mut untouched, &[]);
+        assert!(untouched.get("urls").is_none());
     }
 }

@@ -2646,6 +2646,18 @@ function makePlaceholder(url, account = null, title = null, pinned = false, grou
 // opens one in a new window). Returns whether it opened anything.
 async function openWindowInit(init) {
   if (!init) return false;
+  const opened = await openWindowInitTabs(init);
+  // Links from another program that came with these tabs -- the one that
+  // started Kessel, or one handed over while this window was still loading
+  // (instance.rs add_urls): in front, after them, in this same window.
+  if ((init.session?.tabs?.length || init.adopt?.length || init.sleeping?.length) && init.urls?.length) {
+    for (const url of init.urls) await createTab(url);
+    return true;
+  }
+  return opened;
+}
+
+async function openWindowInitTabs(init) {
   if (init.session?.tabs?.length) {
     // The workspace the window was in (tabs of one that's gone join the
     // first one); the others' tabs wait asleep.
@@ -2667,7 +2679,7 @@ async function openWindowInit(init) {
       if (parked && !saved.some((t) => t.group === g.id)) parked.groups.push({ ...g });
     }
     if (!saved.length) {
-      await createTab();
+      if (!init.urls?.length) await createTab();
       for (const g of init.session.groups || []) if (g?.id && !([...parkedWorkspaces.values()].some((p) => p.groups.some((x) => x.id === g.id)))) tabGroups.set(g.id, { ...g });
       normalizeGroups();
       renderWorkspaces();
