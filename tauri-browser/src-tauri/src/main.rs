@@ -37,6 +37,7 @@ mod profiles;
 mod proof;
 mod saved_sessions;
 mod security;
+mod service_workers;
 mod shields;
 mod sidebar;
 mod split;
@@ -2956,6 +2957,8 @@ unsafe fn install_shields_hooks(
         set_timezone_override(&core, true);
     }
     security::install_hooks(app, &core, id, &label)?;
+    // Service workers stuck starting (Gmail's): stopped, so the page loads.
+    service_workers::install_hooks(app, &core, &label);
     permissions::install_hooks(app, &core, id)?;
     // Sites' notifications, shown by Kessel (notifications.rs).
     notifications::install_hooks(app, &core, id);
