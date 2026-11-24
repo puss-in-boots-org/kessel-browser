@@ -37,6 +37,7 @@ mod profiles;
 mod proof;
 mod saved_sessions;
 mod security;
+mod setup;
 mod shields;
 mod sidebar;
 mod split;
@@ -161,6 +162,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("feeds", "feeds.html"),
     // What Shields did, your protections, what Kessel connects to by itself.
     ("privacy", "privacy.html"),
+    // The first-run setup, and again from Settings (setup.rs).
+    ("welcome", "welcome.html"),
 ];
 
 // The pages Kessel starts with when it isn't bringing back your last
@@ -5462,6 +5465,8 @@ fn main() {
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .invoke_handler(tauri::generate_handler![
             rice_theme,
+            setup::pc_profile,
+            setup::desktop_wallpaper,
             new_tab,
             open_background_tab,
             open_singleton_tab,
@@ -5800,6 +5805,8 @@ fn main() {
             // How the last run ended, and safe mode -- before anything that
             // could crash again.
             let startup = crash::start(&data_dir);
+            // A brand-new profile starts on the setup (setup.rs).
+            setup::note_first_run(&data_dir);
             let store = Store::load(data_dir.clone());
             // Secure DNS, sites' own proxies, the VPN: Kessel's own network
             // layer, when they're set up -- the engine's proxy (net.rs).
@@ -5892,7 +5899,7 @@ fn main() {
                 // Settings -> Search & Startup: pages to start with -- or
                 // the addresses Kessel was started with (a link from another
                 // program, a file).
-                let pages = if request.urls.is_empty() { startup_pages(&state.store.settings.lock().unwrap().features) } else { request.urls.clone() };
+                let pages = if request.urls.is_empty() { setup::startup_pages(startup_pages(&state.store.settings.lock().unwrap().features)) } else { request.urls.clone() };
                 let init = if pages.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": pages }) };
                 browser_windows::create(app.handle(), false, init)?;
             } else {

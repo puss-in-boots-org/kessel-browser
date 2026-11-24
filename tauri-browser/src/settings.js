@@ -11,37 +11,50 @@ import { a11yPanel } from "./settings-a11y.js";
 import { profilesPanel } from "./settings-profiles.js";
 import { autofillPanel } from "./settings-autofill.js";
 import { toolbarCard } from "./settings-toolbar.js";
+import { homePanel, buildSearch } from "./settings-home.js";
 import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard, permissionsPanel, downloadsExtras } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
+// Grouped, so the list reads as six short ones instead of one long one.
+// `keywords`: what people call the things in a section, for the search.
+const CATEGORIES = [
+  { id: "start", label: "" },
+  { id: "look", label: "Look & feel" },
+  { id: "browsing", label: "Browsing" },
+  { id: "privacy", label: "Privacy & security" },
+  { id: "yours", label: "Your stuff" },
+  { id: "system", label: "System" },
+];
+
 const SECTIONS = [
-  { id: "appearance", label: "Appearance", icon: "palette" },
-  { id: "accessibility", label: "Accessibility", icon: "eye" },
-  { id: "search", label: "Search & Startup", icon: "search" },
-  { id: "tabs", label: "Tabs", icon: "tabs" },
-  { id: "sidebar", label: "Side panel", icon: "sidebar" },
-  { id: "extensions", label: "Extensions", icon: "puzzle" },
-  { id: "shortcuts", label: "Keyboard & Mouse", icon: "keyboard" },
-  { id: "tools", label: "Page tools", icon: "sparkle" },
-  { id: "privacy", label: "Privacy", icon: "shield" },
-  { id: "cookies", label: "Cookies & site data", icon: "cookie" },
-  { id: "permissions", label: "Site permissions", icon: "shieldCheck" },
-  { id: "security", label: "Security", icon: "lock" },
-  { id: "performance", label: "Performance", icon: "bolt" },
-  { id: "network", label: "Network", icon: "globe" },
-  { id: "pinned", label: "Pinned Sites", icon: "pin" },
-  { id: "apps", label: "Apps", icon: "grid" },
-  { id: "bookmarks", label: "Bookmarks", icon: "bookmark" },
-  { id: "history", label: "History", icon: "history" },
-  { id: "downloads", label: "Downloads", icon: "download" },
-  { id: "passwords", label: "Passwords", icon: "key" },
-  { id: "autofill", label: "Addresses & cards", icon: "card" },
-  { id: "import", label: "Import", icon: "arrowRight" },
-  { id: "profiles", label: "Profiles", icon: "user" },
-  { id: "features", label: "All features", icon: "help" },
-  { id: "about", label: "About", icon: "bolt" },
+  { id: "home", cat: "start", label: "Overview", icon: "home", keywords: "quick setup wizard first run start suggested recommended" },
+  { id: "appearance", cat: "look", label: "Appearance", icon: "palette", keywords: "theme style dark light mode colour color accent wallpaper font zoom toolbar density glass instrument" },
+  { id: "accessibility", cat: "look", label: "Accessibility", icon: "eye", keywords: "contrast motion text size captions screen reader" },
+  { id: "search", cat: "browsing", label: "Search & Startup", icon: "search", keywords: "search engine homepage start pages address bar suggestions restore" },
+  { id: "tabs", cat: "browsing", label: "Tabs", icon: "tabs", keywords: "vertical tabs groups strip hover cards" },
+  { id: "sidebar", cat: "browsing", label: "Side panel", icon: "sidebar", keywords: "ai assistant notes reading list workspaces" },
+  { id: "shortcuts", cat: "browsing", label: "Keyboard & Mouse", icon: "keyboard", keywords: "shortcuts hotkeys gestures mouse click" },
+  { id: "tools", cat: "browsing", label: "Page tools", icon: "sparkle", keywords: "reader screenshot translate boost page filters auto reload" },
+  { id: "extensions", cat: "browsing", label: "Extensions", icon: "puzzle", keywords: "add-ons chrome web store plugins" },
+  { id: "privacy", cat: "privacy", label: "Privacy", icon: "shield", keywords: "shields ad block trackers fingerprinting clear browsing data history private" },
+  { id: "cookies", cat: "privacy", label: "Cookies & site data", icon: "cookie", keywords: "cookies storage site data third-party" },
+  { id: "permissions", cat: "privacy", label: "Site permissions", icon: "shieldCheck", keywords: "camera microphone location notifications pop-ups" },
+  { id: "security", cat: "privacy", label: "Security", icon: "lock", keywords: "https safe browsing smartscreen downloads lock" },
+  { id: "bookmarks", cat: "yours", label: "Bookmarks", icon: "bookmark" },
+  { id: "history", cat: "yours", label: "History", icon: "history" },
+  { id: "downloads", cat: "yours", label: "Downloads", icon: "download", keywords: "folder save location" },
+  { id: "passwords", cat: "yours", label: "Passwords", icon: "key", keywords: "vault logins autofill" },
+  { id: "autofill", cat: "yours", label: "Addresses & cards", icon: "card", keywords: "autofill forms payment" },
+  { id: "pinned", cat: "yours", label: "Pinned Sites", icon: "pin", keywords: "rail quick launch" },
+  { id: "apps", cat: "yours", label: "Apps", icon: "grid", keywords: "installed web apps pwa" },
+  { id: "import", cat: "yours", label: "Import", icon: "arrowRight", keywords: "chrome edge brave opera firefox vivaldi move over" },
+  { id: "profiles", cat: "yours", label: "Profiles", icon: "user", keywords: "accounts people" },
+  { id: "performance", cat: "system", label: "Performance", icon: "bolt", keywords: "speed memory sleep tabs energy saver battery graphics gpu hardware acceleration" },
+  { id: "network", cat: "system", label: "Network", icon: "globe", keywords: "proxy dns vpn user agent" },
+  { id: "features", cat: "system", label: "All features", icon: "help" },
+  { id: "about", cat: "system", label: "About", icon: "logo", keywords: "version backup help" },
 ];
 
 function el(html) {
@@ -1429,6 +1442,7 @@ function featuresPanel() {
 }
 async function buildPanel(id, settings) {
   switch (id) {
+    case "home": return homePanel(settings, { sections: SECTIONS, categories: CATEGORIES });
     case "appearance": return appearancePanel(settings);
     case "accessibility": return await a11yPanel(settings, { el, settingRow, switchHtml });
     case "search": return searchPanel(settings);
@@ -1458,7 +1472,21 @@ async function buildPanel(id, settings) {
   }
 }
 
+// Every section, built (hidden) -- for the search. Sections open since are
+// kept as they are.
+async function buildAll() {
+  const content = document.getElementById("settings-content");
+  for (const section of SECTIONS) {
+    if (document.getElementById(`panel-${section.id}`)) continue;
+    try {
+      const panel = await buildPanel(section.id, currentSettings());
+      if (!document.getElementById(`panel-${section.id}`)) content.appendChild(panel);
+    } catch {}
+  }
+}
+
 async function showSection(id, settings) {
+  document.body.classList.remove("searching");
   document.querySelectorAll(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.id === id));
   const content = document.getElementById("settings-content");
   const existing = document.getElementById(`panel-${id}`);
@@ -1469,6 +1497,12 @@ async function showSection(id, settings) {
   }
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   const panel = await buildPanel(id, settings);
+  // Built meanwhile by the search: that one.
+  const raced = document.getElementById(`panel-${id}`);
+  if (raced) {
+    raced.classList.add("active");
+    return;
+  }
   panel.classList.add("active");
   content.appendChild(panel);
 }
@@ -1477,14 +1511,22 @@ window.addEventListener("DOMContentLoaded", async () => {
   const settings = await initTheme();
 
   const nav = document.getElementById("nav-items");
-  for (const section of SECTIONS) {
-    const item = el(`<div class="nav-item" data-id="${section.id}">${icon(section.icon, 15)}<span>${section.label}</span></div>`);
-    item.addEventListener("click", () => {
-      history.replaceState(null, "", `#${section.id}`);
-      showSection(section.id, currentSettings());
-    });
-    nav.appendChild(item);
+  for (const cat of CATEGORIES) {
+    if (cat.label) nav.appendChild(el(`<div class="nav-cat">${cat.label}</div>`));
+    for (const section of SECTIONS.filter((s) => s.cat === cat.id)) {
+      const item = el(`<div class="nav-item" data-id="${section.id}" tabindex="0" role="link">${icon(section.icon, 15)}<span>${section.label}</span></div>`);
+      const go = () => {
+        history.replaceState(null, "", `#${section.id}`);
+        search.clear();
+        showSection(section.id, currentSettings());
+      };
+      item.addEventListener("click", go);
+      item.addEventListener("keydown", (e) => e.key === "Enter" && go());
+      nav.appendChild(item);
+    }
   }
+  // Search every setting on every page (settings-home.js).
+  const search = buildSearch({ sections: SECTIONS, buildAll, showSection: (id) => showSection(id, currentSettings()) });
 
   // kessel://settings/<section> opens at that section (settings.html#<section>);
   // kessel://settings/clear is Privacy with Clear browsing data open.
@@ -1501,7 +1543,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       focusCookies(decodeURIComponent(hash.slice("cookies:".length)));
       return;
     }
-    await showSection(SECTIONS.some((s) => s.id === hash) ? hash : "appearance", currentSettings());
+    await showSection(SECTIONS.some((s) => s.id === hash) ? hash : "home", currentSettings());
   }
   await followHash();
   window.addEventListener("hashchange", followHash);

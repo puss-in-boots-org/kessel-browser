@@ -875,7 +875,7 @@ function build() {
   node.insertBefore(presetsCard(), node.querySelector(".k-bar"));
 
   const groups = node.querySelector(".k-groups");
-  groups.appendChild(groupCard({ id: "essentials", title: `${STYLES[r.id].name} essentials`, desc: "The options that shape this style the most", iconName: "bolt", keys: STYLES[r.id].quick, openByDefault: true }));
+  groups.appendChild(groupCard({ id: "essentials", title: `${STYLES[r.id].name} essentials`, desc: "The options that shape this style the most", iconName: "bolt", keys: [...new Set(["wallTheme", "wallSource", ...STYLES[r.id].quick])], openByDefault: true }));
   for (const group of GROUPS) {
     if (!groupApplies(group, r.id)) continue;
     const keys = OPTIONS.filter((o) => o.group === group.id).map((o) => o.key);

@@ -4,8 +4,9 @@
 // webview/document) in sync live via the "settings-changed" event the
 // backend broadcasts on every save.
 
-import { applyGlass } from "./glass.js";
-import { applyStyle, applyCachedLook, backdropCss, backdropTone, setRiceAccent } from "./styles.js";
+import { applyGlass, WALLPAPERS } from "./glass.js";
+import { applyStyle, applyCachedLook, backdropCss, backdropTone, setRiceAccent, resolveStyle, setWallpaperSwatches } from "./styles.js";
+import { swatchesFromCss, swatchesFromPixels } from "./wallpaper-theme.js";
 
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
@@ -34,7 +35,171 @@ function glassLook(r) {
 
 let ambientOn = false;
 
+// --- Colours from the wallpaper ------------------------------------------------------
+// styles.js lays a palette made from the wallpaper's colours over the style;
+// this works out those colours for whichever wallpaper the look follows:
+// one of Kessel's (from its CSS, at once), your own image or the Windows
+// desktop wallpaper (sampled from the picture, then remembered here so the
+// next page doesn't sample it again). The desktop's is checked every 5 s
+// while it's in use, so changing it on the desktop recolours Kessel.
+
+const SWATCH_CACHE = "kessel.wallpaper.swatches";
+let wallKey = null;
+const DESKTOP_ID = "kessel.wallpaper.desktop";
+// The desktop wallpaper seen last (its path and date), so a page opening
+// paints its colours straight away instead of after the first check.
+let desktopId = (() => {
+  try {
+    return localStorage.getItem(DESKTOP_ID);
+  } catch {
+    return null;
+  }
+})();
+let desktopTimer = 0;
+let desktopChecked = false;
+
+function readSwatchCache() {
+  try {
+    return JSON.parse(localStorage.getItem(SWATCH_CACHE)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberSwatches(key, swatches) {
+  const cache = readSwatchCache();
+  delete cache[key];
+  cache[key] = swatches;
+  // A handful is plenty: the newest few wallpapers.
+  const keys = Object.keys(cache);
+  for (const old of keys.slice(0, Math.max(0, keys.length - 8))) delete cache[old];
+  try {
+    localStorage.setItem(SWATCH_CACHE, JSON.stringify(cache));
+  } catch {}
+}
+
+// The colours in a picture (a URL or data URL), from a small copy of it.
+export function imageSwatches(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 96;
+        canvas.height = 60;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, 96, 60);
+        resolve(swatchesFromPixels(ctx.getImageData(0, 0, 96, 60).data));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+// The Windows desktop wallpaper: {id, url} (url only when it changed since
+// `known`), or null when there's none Kessel can read.
+export async function desktopWallpaper(known = null) {
+  const got = await invoke("desktop_wallpaper", { known }).catch(() => null);
+  if (!got?.id) return null;
+  return { id: got.id, url: got.data ? `data:${got.mime || "image/jpeg"};base64,${got.data}` : null };
+}
+
+function customStamp() {
+  try {
+    const data = localStorage.getItem("kessel.wallpaper.custom") || "";
+    return data ? `${data.length}:${data.slice(-24)}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function watchDesktop(on) {
+  if (!on) {
+    clearInterval(desktopTimer);
+    desktopTimer = 0;
+    return;
+  }
+  if (desktopTimer) return;
+  const check = async () => {
+    // Only pages on screen keep checking.
+    if (desktopChecked && document.hidden) return;
+    // The picture itself only when no Kessel page has its colours yet: the
+    // file can be megabytes, and every page asks.
+    const known = readSwatchCache()[`desktop:${desktopId}`] ? desktopId : null;
+    const got = await desktopWallpaper(known);
+    desktopChecked = true;
+    const id = got?.id || null;
+    if (id === desktopId && (!got?.url || readSwatchCache()[`desktop:${id}`])) return;
+    desktopId = id;
+    try {
+      if (id) localStorage.setItem(DESKTOP_ID, id);
+      else localStorage.removeItem(DESKTOP_ID);
+    } catch {}
+    const key = `desktop:${id}`;
+    if (id && !readSwatchCache()[key] && got.url) {
+      const swatches = await imageSwatches(got.url);
+      if (swatches?.length) rememberSwatches(key, swatches);
+    }
+    wallKey = null;
+    if (cached) applyTheme(cached);
+  };
+  check();
+  desktopTimer = setInterval(check, 5000);
+}
+
+// Points styles.js at the right wallpaper's colours before the look is
+// built. Returns nothing; a picture still being sampled repaints when done.
+function syncWallpaper(settings) {
+  const v = resolveStyle(settings).values;
+  if (!v.wallTheme && v.mode !== "wallpaper") {
+    watchDesktop(false);
+    return;
+  }
+  const want = v.wallSource === "desktop" && v.wallTheme ? "desktop" : v.wallpaper || "nightfall";
+  watchDesktop(want === "desktop");
+  const key = want === "desktop" ? `desktop:${desktopId}` : want === "custom" ? `custom:${customStamp()}` : want;
+  if (key === wallKey) return;
+  if (want === "desktop" && !readSwatchCache()[key]) {
+    // No desktop wallpaper (yet): the style's own colours until there is.
+    wallKey = null;
+    setWallpaperSwatches(null);
+    return;
+  }
+  if (WALLPAPERS[want]) {
+    wallKey = key;
+    setWallpaperSwatches(swatchesFromCss(WALLPAPERS[want].css));
+    return;
+  }
+  const known = readSwatchCache()[key];
+  if (known) {
+    wallKey = key;
+    setWallpaperSwatches(known);
+    return;
+  }
+  if (want === "custom") {
+    let data = null;
+    try {
+      data = localStorage.getItem("kessel.wallpaper.custom");
+    } catch {}
+    if (!data) {
+      setWallpaperSwatches(null);
+      return;
+    }
+    wallKey = key;
+    imageSwatches(data).then((swatches) => {
+      if (!swatches?.length || wallKey !== key) return;
+      rememberSwatches(key, swatches);
+      setWallpaperSwatches(swatches);
+      if (cached) applyTheme(cached);
+    });
+  }
+}
+
 function applyTheme(settings) {
+  syncWallpaper(settings);
   const r = applyStyle(settings);
   document.documentElement.classList.toggle("reduce-motion", !!settings.reduce_motion);
   applyGlass(settings, glassLook(r));
@@ -89,6 +254,10 @@ export async function initTheme() {
     if (holds > 0 && cached) for (const key of STYLE_FIELDS) incoming[key] = cached[key];
     cached = incoming;
     applyTheme(cached);
+  });
+  // Your own wallpaper changed on another page: its colours too.
+  window.addEventListener("storage", (e) => {
+    if (e.key === "kessel.wallpaper.custom" && cached) applyTheme(cached);
   });
   // "Follow Windows" mode: repaint when Windows switches dark/light.
   try {
