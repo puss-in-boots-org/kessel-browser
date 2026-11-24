@@ -26,7 +26,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY1QzkyQTZDMUNFRTc2NDcKUldSSGR1NGNiQ3JKOVRpNlJFZGJBVE5mWEgzbTZ1d0RaeEJhTzZrOTJwaSt1dWxzUHN0azJjeXEK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI0NkUzMjAxQkJBN0U1RjIKUldUeTVhZTdBVEp1Skh1Umd3QlltS09wZGxxV3BNOVBYWklqSmhBMmJtelRiV2FrT2hHSmFlY0gK",
       "endpoints": [
         "https://github.com/puss-in-boots-org/kessel-browser/releases/latest/download/latest.json"
       ],

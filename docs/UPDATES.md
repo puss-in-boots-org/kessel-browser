@@ -41,7 +41,7 @@ version by hand once.
 2. Name: `TAURI_SIGNING_PRIVATE_KEY`. Value: the whole contents of the
    private key file (one long line of letters).
 3. Only if the key has a password: a second secret,
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The key made for Kessel has none.
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Kessel's key (made with `--ci`) has none.
 
 That's all. The next release (`.github/workflows/release.yml`) signs the
 installers, adds a `.sig` for each, and publishes `latest.json`. Without the
@@ -54,7 +54,7 @@ Only if the key is lost or leaked:
 
 ```
 cd tauri-browser
-npx tauri signer generate --ci -w kessel-updater.key
+npx.cmd --yes @tauri-apps/cli@2 signer generate --ci -w kessel-updater.key
 ```
 
 Put the contents of `kessel-updater.key.pub` in `plugins.updater.pubkey`,
