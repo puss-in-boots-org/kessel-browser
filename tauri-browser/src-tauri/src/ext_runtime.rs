@@ -239,9 +239,9 @@ fn messages(dir: &Path, manifest: &Value, lang: &str) -> Map<String, Value> {
     let short = lang.split('_').next().unwrap_or("en").to_string();
     let mut out = Map::new();
     let mut tried = Vec::new();
-    for locale in [default, short, lang, "en".to_string()] {
-        // English only when nothing else was there.
-        if locale == "en" && !out.is_empty() && !tried.contains(&locale) {
+    for (i, locale) in [default, short, lang, "en".to_string()].into_iter().enumerate() {
+        // The last one, English, only when nothing else was there.
+        if i == 3 && !out.is_empty() {
             continue;
         }
         if tried.contains(&locale) {
