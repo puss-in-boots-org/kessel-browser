@@ -2484,6 +2484,7 @@ dependencies = [
  "pbkdf2",
  "qrcode",
  "rand",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
