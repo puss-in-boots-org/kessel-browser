@@ -666,7 +666,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 19.01 | PDF viewer | ✅ | Kessel's own PDF viewer (PDF.js, pdf.rs) -- or the engine's, in Settings -> Page tools |
+| 19.01 | PDF viewer | ✅ | Kessel's own PDF viewer (PDF.js, pdf.rs) -- or the engine's, in Settings -> Page tools. A PDF whose address doesn't end in .pdf goes there too, once its server says it's a PDF (🧪) |
 | 19.02 | PDF search | 🌐 | In the PDF viewer's toolbar |
 | 19.03 | PDF zoom | 🌐 | In the PDF viewer's toolbar |
 | 19.04 | PDF page navigation | 🌐 | In the PDF viewer's toolbar |

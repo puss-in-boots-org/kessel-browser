@@ -7,6 +7,13 @@
 // fetched with the tab's own cookies (so PDFs behind a sign-in open too).
 // Settings -> Page tools can hand PDFs back to the engine's viewer.
 //
+// Not every PDF's address ends in .pdf (arxiv.org/pdf/2401.01234, a
+// site's /download?id=7...): for those, `watch` sees the server answer
+// "Content-Type: application/pdf" and sends the tab to the viewer then.
+// (Not when you go back or forward to it: if the engine had already shown
+// that PDF, Back from the viewer shows it there once more instead of
+// bouncing you to the viewer again.)
+//
 // Saving (pdf_save) doesn't go through the engine's downloads: the viewer
 // hands Kessel the PDF's bytes -- with what you added, if anything -- and
 // Kessel writes them itself, like Edge does: Save puts a PDF from this
@@ -23,6 +30,13 @@ pub(crate) fn is_pdf_address(url: &tauri::Url) -> bool {
     matches!(url.scheme(), "http" | "https" | "file") && url.path().to_ascii_lowercase().ends_with(".pdf")
 }
 
+// A server's answer with these headers is a PDF to show (not one it wants
+// saved as a download: Content-Disposition: attachment).
+fn is_pdf_response(content_type: &str, disposition: &str) -> bool {
+    let mime = content_type.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    matches!(mime.as_str(), "application/pdf" | "application/x-pdf") && !disposition.trim_start().to_ascii_lowercase().starts_with("attachment")
+}
+
 // The viewer's own address for the PDF at `src` (in Kessel's own origin).
 fn viewer_url(app: &tauri::AppHandle, src: &str) -> Option<String> {
     let toolbar = app.webviews().into_iter().find(|(label, _)| label.starts_with("toolbar-")).and_then(|(_, w)| w.url().ok())?;
@@ -37,6 +51,11 @@ pub(crate) fn intercept(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &
     if !is_pdf_address(nav_url) || !enabled(app) {
         return false;
     }
+    open_in_viewer(app, id, label, nav_url)
+}
+
+// Sends page `id` (webview `label`) to the viewer for the PDF at `src`.
+fn open_in_viewer(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &tauri::Url) -> bool {
     let Some(target) = viewer_url(app, nav_url.as_str()).and_then(|u| tauri::Url::parse(&u).ok()) else { return false };
     let (app2, label2) = (app.clone(), label.to_string());
     later(app, move || {
@@ -47,6 +66,91 @@ pub(crate) fn intercept(app: &tauri::AppHandle, id: u32, label: &str, nav_url: &
         }
     });
     true
+}
+
+// Watches page `id`'s answers from servers: the page it's going to turning
+// out to be a PDF (whatever its address) goes to the viewer.
+#[cfg(windows)]
+pub(crate) unsafe fn watch(app: &tauri::AppHandle, core: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2, id: u32, label: String) -> windows::core::Result<()> {
+    use std::cell::RefCell;
+    use webview2_com::Microsoft::Web::WebView2::Win32::*;
+    use webview2_com::{take_pwstr, NavigationStartingEventHandler, WebResourceResponseReceivedEventHandler};
+    use windows::core::{Interface, HSTRING, PWSTR};
+    thread_local! {
+        // Tab id -> the address its page is going to (main thread only).
+        static GOING: RefCell<HashMap<u32, String>> = RefCell::new(HashMap::new());
+    }
+    let mut token = 0i64;
+    core.add_NavigationStarting(
+        &NavigationStartingEventHandler::create(Box::new(move |_, args| {
+            let Some(args) = args else { return Ok(()) };
+            let mut cancelled = windows::core::BOOL::default();
+            args.Cancel(&mut cancelled)?;
+            let mut uri = PWSTR::null();
+            args.Uri(&mut uri)?;
+            let uri = take_pwstr(uri);
+            let back_or_forward = args
+                .cast::<ICoreWebView2NavigationStartingEventArgs3>()
+                .ok()
+                .map(|a| {
+                    let mut kind = COREWEBVIEW2_NAVIGATION_KIND::default();
+                    let _ = a.NavigationKind(&mut kind);
+                    kind == COREWEBVIEW2_NAVIGATION_KIND_BACK_OR_FORWARD
+                })
+                .unwrap_or(false);
+            GOING.with(|g| {
+                let mut g = g.borrow_mut();
+                if cancelled.as_bool() || back_or_forward {
+                    g.remove(&id);
+                } else {
+                    g.insert(id, uri);
+                }
+            });
+            Ok(())
+        })),
+        &mut token,
+    )?;
+    let core2 = core.cast::<ICoreWebView2_2>()?;
+    let app = app.clone();
+    core2.add_WebResourceResponseReceived(
+        &WebResourceResponseReceivedEventHandler::create(Box::new(move |_, args| {
+            let Some(args) = args else { return Ok(()) };
+            let mut uri = PWSTR::null();
+            args.Request()?.Uri(&mut uri)?;
+            let uri = take_pwstr(uri);
+            // Only the page itself, not what it loads.
+            if !GOING.with(|g| g.borrow().get(&id) == Some(&uri)) {
+                return Ok(());
+            }
+            let response = args.Response()?;
+            let mut status = 0i32;
+            response.StatusCode(&mut status)?;
+            if !(200..300).contains(&status) {
+                return Ok(()); // a redirect: the next answer is the page's
+            }
+            let headers = response.Headers()?;
+            let header = |name: &str| {
+                let mut value = PWSTR::null();
+                if headers.GetHeader(&HSTRING::from(name), &mut value).is_ok() {
+                    take_pwstr(value)
+                } else {
+                    String::new()
+                }
+            };
+            GOING.with(|g| g.borrow_mut().remove(&id));
+            let Ok(url) = tauri::Url::parse(&uri) else { return Ok(()) };
+            if !matches!(url.scheme(), "http" | "https") || is_internal_nav(&url) || is_pdf_address(&url) || !is_pdf_response(&header("Content-Type"), &header("Content-Disposition")) {
+                return Ok(());
+            }
+            if !enabled(&app) {
+                return Ok(());
+            }
+            open_in_viewer(&app, id, &label, &url);
+            Ok(())
+        })),
+        &mut token,
+    )?;
+    Ok(())
 }
 
 // The cookies the tab would send to `src` (the engine's own, HttpOnly ones
@@ -324,6 +428,16 @@ mod tests {
         assert_eq!(downloads::unique_path(&dir, "a.pdf"), dir.join("a (1).pdf"));
         assert_eq!(downloads::unique_path(&dir, "b.pdf"), dir.join("b.pdf"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn which_answers_are_pdfs() {
+        assert!(is_pdf_response("application/pdf", ""));
+        assert!(is_pdf_response("Application/PDF; charset=binary", "inline; filename=\"x.pdf\""));
+        assert!(is_pdf_response("application/x-pdf", ""));
+        assert!(!is_pdf_response("application/pdf", "attachment; filename=x.pdf"), "the server wants it downloaded");
+        assert!(!is_pdf_response("text/html", ""));
+        assert!(!is_pdf_response("", ""));
     }
 
     #[test]

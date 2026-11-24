@@ -2278,9 +2278,14 @@ fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
     #[cfg(windows)]
     {
         let app2 = app.clone();
+        let label = webview.label().to_string();
         let _ = webview.with_webview(move |platform| unsafe {
             if let Err(e) = install_page_watchers(&app2, &platform, id) {
                 eprintln!("couldn't watch page {}: {}", id, e.message());
+            }
+            // A PDF whose address doesn't say so (pdf.rs).
+            if let Err(e) = platform.controller().CoreWebView2().and_then(|core| pdf::watch(&app2, &core, id, label)) {
+                eprintln!("couldn't watch page {} for PDFs: {}", id, e.message());
             }
         });
     }

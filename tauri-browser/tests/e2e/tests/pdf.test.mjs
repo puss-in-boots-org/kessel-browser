@@ -1,6 +1,7 @@
 // PDFs in Kessel's own viewer (pdf.rs, PDF.js in src/pdfjs): a PDF link opens
 // there with thumbnails, the drawing, highlighting, text, image and
 // signature tools and presentation mode; a drawing is saved in the PDF; one
+// whose address doesn't end in .pdf opens there too; Save writes the file; one
 // behind a sign-in opens with the tab's cookies; one on this computer too;
 // and Settings can leave PDFs to the engine's viewer.
 
@@ -115,6 +116,15 @@ export const tests = [
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    },
+  },
+  {
+    name: "a PDF whose address doesn't end in .pdf opens in Kessel's viewer too",
+    async run({ launch, site, assert, waitFor }) {
+      const k = await launch();
+      // (The server says what it is: Content-Type: application/pdf.)
+      const { viewer } = await openPdf(k, waitFor, `${site.origin}/doc/Paper`, "Hello Paper");
+      assert(await viewer.evaluate(`new URLSearchParams(location.search).get("src").endsWith("/doc/Paper")`), "the viewer has its address");
     },
   },
   {
