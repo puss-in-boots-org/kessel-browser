@@ -1,0 +1,11 @@
+/* Kessel's additions to the PDF viewer (kessel-pdf.js): the Save as menu
+   item's icon and the note saying where a PDF was saved. (A file of its own:
+   the viewer's Content-Security-Policy refuses inline styles.) */
+  #kesselSaveAs::before { -webkit-mask-image: var(--toolbarButton-download-icon); mask-image: var(--toolbarButton-download-icon); }
+  #kesselPdfNote { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 100000; display: flex; gap: 12px; align-items: center;
+    max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: 8px; font: 13px system-ui, sans-serif;
+    background: #2b2a33; color: #fbfbfe; box-shadow: 0 4px 16px rgb(0 0 0 / 0.3); }
+  #kesselPdfNote.error { background: #a4000f; }
+  #kesselPdfNote span { overflow-wrap: anywhere; }
+  #kesselPdfNote button { flex: none; border: 0; border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; background: rgb(255 255 255 / 0.18); color: inherit; }
+  #kesselPdfNote button:hover { background: rgb(255 255 255 / 0.28); }

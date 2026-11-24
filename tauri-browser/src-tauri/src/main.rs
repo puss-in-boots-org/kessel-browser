@@ -752,25 +752,7 @@ fn create_tab_internal(
                             dir = dir.join(folder);
                         }
                     }
-                    let mut target = dir.join(&filename);
-                    let mut counter = 1;
-                    let stem = target
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "download".into());
-                    let ext = target
-                        .extension()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    while target.exists() {
-                        let name = if ext.is_empty() {
-                            format!("{} ({})", stem, counter)
-                        } else {
-                            format!("{} ({}).{}", stem, counter, ext)
-                        };
-                        target = dir.join(name);
-                        counter += 1;
-                    }
+                    let target = downloads::unique_path(&dir, &filename);
                     *destination = target.clone();
                     let entry = DownloadEntry {
                         id: dl_id,
@@ -5772,6 +5754,7 @@ fn main() {
             net::surfshark_disconnect,
             net::surfshark_locations,
             pdf::pdf_bytes,
+            pdf::pdf_save,
             proof::proof_languages,
             apps::app_badges,
             notifications::notify_fit,

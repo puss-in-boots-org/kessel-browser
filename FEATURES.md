@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**93% overall** -- 766 done (✅ 🟢 🌐), 77 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 111 skipped (⏭️), of 1045.
+**93% overall** -- 764 done (✅ 🟢 🌐), 79 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -59,7 +59,7 @@ branch, one small commit per feature or group of features.
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 15 |  | 1 |  |  | `██████████` 97% |
 | [17. Reading & research](#17-reading--research) | 17 | 4 | 1 |  |  | `██████████` 98% |
 | [18. Translation](#18-translation) | 7 |  | 1 | 2 |  | `████████░░` 75% |
-| [19. PDF](#19-pdf) | 17 |  | 1 |  |  | `██████████` 97% |
+| [19. PDF](#19-pdf) | 15 | 2 | 1 |  |  | `██████████` 97% |
 | [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
 | [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
 | [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
@@ -672,8 +672,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 19.04 | PDF page navigation | 🌐 | In the PDF viewer's toolbar |
 | 19.05 | PDF thumbnails | ✅ | The viewer's sidebar: a thumbnail of each page |
 | 19.06 | PDF printing | 🌐 | In the PDF viewer's toolbar |
-| 19.07 | PDF download | 🌐 | In the PDF viewer's toolbar |
-| 19.08 | PDF save | 🌐 | In the PDF viewer's toolbar |
+| 19.07 | PDF download | 🧪 | The viewer's Save: a web PDF goes into your downloads folder (and Kessel's downloads list); Save as… (Ctrl+Shift+S) asks where. Kessel writes the file itself (pdf.rs, pdf_save) -- the engine's blob: download didn't save |
+| 19.08 | PDF save | 🧪 | Save (Ctrl+S) keeps what you added in the PDF; a PDF from this computer is saved back into its own file, like Edge. Leaving with unsaved changes asks first |
 | 19.09 | PDF rotation | 🌐 | In the PDF viewer's toolbar |
 | 19.10 | PDF text selection | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 19.11 | PDF copying | 🌐 | Comes with the engine (WebView2, Chromium) |

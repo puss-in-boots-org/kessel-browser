@@ -4,7 +4,7 @@
 // behind a sign-in opens with the tab's cookies; one on this computer too;
 // and Settings can leave PDFs to the engine's viewer.
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -64,6 +64,34 @@ export const tests = [
       await waitFor(() => viewer.evaluate(`PDFViewerApplication.pdfDocument.annotationStorage.size > 0`), { message: "the drawing kept" });
       const saved = await viewer.evaluate(`PDFViewerApplication.pdfDocument.saveDocument().then((b) => new TextDecoder('latin1').decode(b))`);
       assert(saved.includes("/Ink"), "the saved PDF has the drawing (an Ink annotation)");
+    },
+  },
+  {
+    name: "Save writes the PDF into your downloads folder; Save on a local PDF writes back into it",
+    async run({ launch, site, assert, waitFor }) {
+      const dir = mkdtempSync(path.join(tmpdir(), "kessel-pdf-save-"));
+      try {
+        const k = await launch({ settings: { features: { download_dir: dir } } });
+        const { viewer } = await openPdf(k, waitFor, `${site.origin}/doc/Saved.pdf`, "Hello Saved");
+        // The toolbar's Save button (what you add goes in too: the drawing test).
+        await viewer.evaluate(`document.getElementById('downloadButton').click()`);
+        const saved = path.join(dir, "Saved.pdf");
+        await waitFor(() => existsSync(saved), { message: `Saved.pdf in the downloads folder (has ${readdirSync(dir).join(", ")})`, timeout: 15000 });
+        assert(readFileSync(saved, "latin1").startsWith("%PDF-"), "it's a PDF");
+        await waitFor(() => viewer.evaluate(`document.getElementById('kesselPdfNote')?.textContent.includes('Saved')`), { message: "the viewer says it's saved" });
+        assert(await viewer.evaluate(`!!document.getElementById('kesselSaveAs')`), "Save as is in the menu");
+
+        const local = path.join(dir, "Mine.pdf");
+        writeFileSync(local, makePdf("Hello Mine"));
+        const before = statSync(local).mtimeMs;
+        await new Promise((r) => setTimeout(r, 50));
+        const { viewer: mine } = await openPdf(k, waitFor, pathToFileURL(local).href, "Hello Mine");
+        await mine.evaluate(`document.getElementById('downloadButton').click()`);
+        await waitFor(() => statSync(local).mtimeMs !== before, { message: "Mine.pdf saved back into itself", timeout: 15000 });
+        assert(!existsSync(path.join(dir, "Mine (1).pdf")), "not a copy");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     },
   },
   {
