@@ -349,7 +349,9 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
       hide(c.hide || []);
       if (c.generichide) return;
 
-      var seenClasses = new Set(), seenIds = new Set(), newClasses = [], newIds = [], timer = null;
+      // What the page adds is only noted as it happens -- the page is busy
+      // building itself then -- and read a moment later, all at once.
+      var seenClasses = new Set(), seenIds = new Set(), newClasses = [], newIds = [], added = [], timer = null;
       function collect(el) {{
         if (!el || el.nodeType !== 1) return;
         if (el.id && !seenIds.has(el.id)) {{ seenIds.add(el.id); newIds.push(el.id); }}
@@ -366,24 +368,30 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
         }}
       }}
       function flush() {{
-        if (timer || (!newClasses.length && !newIds.length)) return;
+        if (timer || (!added.length && !newClasses.length && !newIds.length)) return;
         timer = later(function () {{
           timer = null;
-          BRIDGE.request('hidden-selectors', {{
-            classes: newClasses.splice(0), ids: newIds.splice(0), exceptions: c.exceptions || []
-          }}).then(function (selectors) {{ if (selectors && selectors.length) hide(selectors); }});
+          var nodes = added.splice(0);
+          for (var i = 0; i < nodes.length; i++) if (nodes[i].isConnected) scan(nodes[i]);
+          if (newClasses.length || newIds.length) {{
+            BRIDGE.request('hidden-selectors', {{
+              classes: newClasses.splice(0), ids: newIds.splice(0), exceptions: c.exceptions || []
+            }}).then(function (selectors) {{ if (selectors && selectors.length) hide(selectors); }});
+          }}
           flush();
         }}, 120);
       }}
       function start() {{
         if (!style.isConnected) mount();
-        scan(document.documentElement);
+        added.push(document.documentElement);
         flush();
         new MutationObserver(function (records) {{
           for (var i = 0; i < records.length; i++) {{
             var r = records[i];
             if (r.type === 'attributes') collect(r.target);
-            else for (var j = 0; j < r.addedNodes.length; j++) scan(r.addedNodes[j]);
+            else for (var j = 0; j < r.addedNodes.length; j++) {{
+              if (r.addedNodes[j].nodeType === 1) added.push(r.addedNodes[j]);
+            }}
           }}
           flush();
         }}).observe(document.documentElement, {{ childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] }});
@@ -484,7 +492,12 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
       }}
       // Covers login forms that render after initial load (most SPAs) --
       // checks once the first time a password field appears, then stops.
-      var observer = new MutationObserver(tryOffer);
+      // At most four looks a second, however busy the page is.
+      var checkSoon = null;
+      var observer = new MutationObserver(function () {{
+        if (checkSoon) return;
+        checkSoon = later(function () {{ checkSoon = null; tryOffer(); }}, 250);
+      }});
       (function startObserving() {{
         if (document.body) {{
           observer.observe(document.body, {{ childList: true, subtree: true }});

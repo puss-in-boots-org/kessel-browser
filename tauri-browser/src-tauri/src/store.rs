@@ -22,6 +22,13 @@ fn write_json<T: Serialize>(path: &Path, value: &T) {
     }
 }
 
+// The same, by the writer thread (see write_atomic_soon).
+fn write_json_soon<T: Serialize>(path: &Path, value: &T) {
+    if let Ok(s) = serde_json::to_string_pretty(value) {
+        write_atomic_soon(path, s);
+    }
+}
+
 // --- Damaged files ----------------------------------------------------------
 //
 // A file is written whole to a temporary file first, then moved over the
@@ -50,6 +57,76 @@ pub(crate) fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     fs::rename(&tmp, path).inspect_err(|_| {
         let _ = fs::remove_file(&tmp);
     })
+}
+
+// --- Saving without the main thread waiting -------------------------------------
+//
+// The main thread is also the one WebView2 asks about every request a page
+// makes (Shields, main.rs install_shields_hooks): while it waits on the
+// disk -- three file operations per save, each of which an antivirus may
+// scan -- every page's downloads wait with it. So the files that change
+// while you browse (the session, settings, downloads) are written by a
+// thread of their own. A file saved again before its last save was written
+// is only written once, with the newer text; flush_writes() waits for them
+// all (on the way out).
+
+struct Writes {
+    queued: Vec<(PathBuf, String)>,
+    writing: bool,
+    started: bool,
+}
+
+static WRITES: Mutex<Writes> = Mutex::new(Writes { queued: Vec::new(), writing: false, started: false });
+static WRITES_CHANGED: std::sync::Condvar = std::sync::Condvar::new();
+
+pub(crate) fn write_atomic_soon(path: &Path, text: String) {
+    let mut writes = WRITES.lock().unwrap();
+    match writes.queued.iter_mut().find(|(p, _)| p == path) {
+        Some(queued) => queued.1 = text,
+        None => writes.queued.push((path.to_path_buf(), text)),
+    }
+    if !writes.started {
+        writes.started = true;
+        let spawned = std::thread::Builder::new().name("kessel-writer".into()).spawn(writer);
+        if spawned.is_err() {
+            // No thread to be had: written here and now, as before.
+            writes.started = false;
+            let queued = std::mem::take(&mut writes.queued);
+            drop(writes);
+            for (path, text) in queued {
+                let _ = write_atomic(&path, &text);
+            }
+            return;
+        }
+    }
+    WRITES_CHANGED.notify_all();
+}
+
+fn writer() {
+    loop {
+        let batch = {
+            let mut writes = WRITES.lock().unwrap();
+            writes.writing = false;
+            WRITES_CHANGED.notify_all();
+            while writes.queued.is_empty() {
+                writes = WRITES_CHANGED.wait(writes).unwrap();
+            }
+            writes.writing = true;
+            std::mem::take(&mut writes.queued)
+        };
+        for (path, text) in batch {
+            let _ = write_atomic(&path, &text);
+        }
+    }
+}
+
+// Waits (up to a few seconds) until every save above is on disk.
+pub(crate) fn flush_writes() {
+    let writes = WRITES.lock().unwrap();
+    if !writes.started {
+        return;
+    }
+    let _ = WRITES_CHANGED.wait_timeout_while(writes, std::time::Duration::from_secs(5), |w| w.writing || !w.queued.is_empty());
 }
 
 // `path`'s text if `valid` says it's whole; else its backup's (which also
@@ -500,16 +577,16 @@ impl Store {
     }
 
     pub fn save_settings(&self) {
-        write_json(&self.dir.join("settings.json"), &*self.settings.lock().unwrap());
+        write_json_soon(&self.dir.join("settings.json"), &*self.settings.lock().unwrap());
     }
     pub fn save_pinned(&self) {
-        write_json(&self.dir.join("pinned.json"), &*self.pinned.lock().unwrap());
+        write_json_soon(&self.dir.join("pinned.json"), &*self.pinned.lock().unwrap());
     }
     pub fn save_downloads(&self) {
-        write_json(&self.dir.join("downloads.json"), &*self.downloads.lock().unwrap());
+        write_json_soon(&self.dir.join("downloads.json"), &*self.downloads.lock().unwrap());
     }
     pub fn save_adblock_lists(&self) {
-        write_json(&self.dir.join("adblock_lists.json"), &*self.adblock_lists.lock().unwrap());
+        write_json_soon(&self.dir.join("adblock_lists.json"), &*self.adblock_lists.lock().unwrap());
     }
 
     // Visiting the page you're already on again (a reload, or clicking the
@@ -587,6 +664,19 @@ mod tests {
         // Gone (deleted to start over): nothing, not the backup.
         fs::remove_file(&file).unwrap();
         assert!(read_text_recovering(&file, valid).is_none());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn saves_in_the_background_keep_the_newest_text() {
+        let dir = std::env::temp_dir().join(format!("kessel-store-soon-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("y.json");
+        for i in 0..50 {
+            write_atomic_soon(&file, format!("{{\"n\":{i}}}"));
+        }
+        flush_writes();
+        assert_eq!(fs::read_to_string(&file).unwrap(), r#"{"n":49}"#, "the last save wins");
         fs::remove_dir_all(&dir).unwrap();
     }
 }

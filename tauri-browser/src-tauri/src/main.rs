@@ -807,12 +807,13 @@ fn create_tab_internal(
         });
 
     restore_for_new_page(&window);
+    // Off-screen until it's shown, but already the size it will be shown
+    // at: a page started in a 1x1 box lays itself out (and picks its
+    // pictures' sizes, its phone-or-desktop layout) for that first, and
+    // does it all again when you switch to it.
+    let size = content_bounds(&window, state.insets(win)).map(|(_, size)| size).ok().filter(|s| s.width >= 1.0 && s.height >= 1.0).unwrap_or(LogicalSize::new(1.0, 1.0));
     let webview = window
-        .add_child(
-            builder,
-            LogicalPosition::new(OFFSCREEN_X, 0.0),
-            LogicalSize::new(1.0, 1.0),
-        )
+        .add_child(builder, LogicalPosition::new(OFFSCREEN_X, 0.0), size)
         .map_err(|e| e.to_string())?;
 
     if private {
@@ -2014,7 +2015,13 @@ fn site_allowed(state: &BrowserState, host: &str) -> bool {
         .allow
         .iter()
         .map(|d| d.trim().trim_start_matches("www."))
-        .any(|d| !d.is_empty() && (host == d || host.ends_with(&format!(".{}", d))))
+        .any(|d| !d.is_empty() && is_same_or_subdomain(host, d))
+}
+
+// `host` is `domain` or one of its subdomains -- asked for every request a
+// page makes, so without building a string each time.
+fn is_same_or_subdomain(host: &str, domain: &str) -> bool {
+    host == domain || (host.len() > domain.len() && host.ends_with(domain) && host.as_bytes()[host.len() - domain.len() - 1] == b'.')
 }
 
 fn shields_up_for(state: &BrowserState, host: &str) -> bool {
@@ -2981,14 +2988,22 @@ unsafe fn install_shields_hooks(
             if is_internal_nav(&page_url) {
                 return Ok(());
             }
+            let st = app_req.state::<BrowserState>();
+            let page_host = page_url.host_str().unwrap_or("");
+            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
+            args.ResourceContext(&mut context)?;
+            // Everything this request needs from the settings, in one look:
+            // this runs for every request every page makes, on the thread
+            // the page is waiting on.
+            let (plan, adblock_on, site_rules) = {
+                let settings = st.store.settings.lock().unwrap();
+                (privacy::request_plan(&settings), settings.adblock_enabled, permissions::request_rules(&settings.features))
+            };
             // Global Privacy Control and Do Not Track, on every request (one
             // whose headers can't be changed still goes past Shields).
-            let plan = privacy::request_plan(&app_req.state::<BrowserState>().store.settings.lock().unwrap());
             if let Some(plan) = plan {
                 let _ = privacy::adjust_request(&request, &plan);
             }
-            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
-            args.ResourceContext(&mut context)?;
             let shields = app_req.state::<shields::Shields>();
             // The page's own document -- guard_navigation already judged it.
             if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
@@ -2996,16 +3011,16 @@ unsafe fn install_shields_hooks(
             {
                 return Ok(());
             }
-            let st = app_req.state::<BrowserState>();
             // Your site settings (permissions::CONTENT): no images on the
             // site, or nothing from other sites -- Shields or not, and never
             // the tab's own document (the page may still be the last one).
+            // Only looked into when some site has such a rule at all.
             let own_document = context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
                 && st.pages.lock().unwrap().get(&id).is_some_and(|p| p.pending_url.is_empty() || p.pending_url == uri);
-            if !own_document {
+            if site_rules && !own_document {
                 let blocked = {
                     let settings = st.store.settings.lock().unwrap();
-                    permissions::content_blocked(&settings.features, page_url.host_str().unwrap_or(""), &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
+                    permissions::content_blocked(&settings.features, page_host, &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
                 };
                 if let Some(reason) = blocked {
                     let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from(reason), &HSTRING::new())?;
@@ -3013,7 +3028,7 @@ unsafe fn install_shields_hooks(
                     return Ok(());
                 }
             }
-            if !shields_up_for(&st, page_url.host_str().unwrap_or("")) {
+            if !adblock_on || site_allowed(&st, page_host) {
                 return Ok(());
             }
             let verdict = shields.check_request(&uri, &page, request_kind(context));
@@ -5280,7 +5295,7 @@ fn write_session(state: &BrowserState) {
     let windows: Vec<WindowSession> = state.sessions.lock().unwrap().iter().map(|(_, s)| s.clone()).filter(|s| !s.tabs.is_empty()).collect();
     let path = state.data_dir.join("session.json");
     if let Ok(s) = serde_json::to_string(&SessionFile { windows }) {
-        let _ = store::write_atomic(&path, &s);
+        store::write_atomic_soon(&path, s);
     }
 }
 
@@ -5931,6 +5946,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shields_down_covers_a_site_and_its_subdomains_only() {
+        assert!(is_same_or_subdomain("example.com", "example.com"));
+        assert!(is_same_or_subdomain("mail.example.com", "example.com"));
+        assert!(!is_same_or_subdomain("badexample.com", "example.com"));
+        assert!(!is_same_or_subdomain("example.com.evil", "example.com"));
+        assert!(!is_same_or_subdomain("com", "example.com"));
+    }
 
     #[test]
     fn a_pages_first_seconds_need_a_real_click() {
