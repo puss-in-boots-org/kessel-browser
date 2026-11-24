@@ -11,6 +11,7 @@ import { a11yPanel } from "./settings-a11y.js";
 import { profilesPanel } from "./settings-profiles.js";
 import { autofillPanel } from "./settings-autofill.js";
 import { toolbarCard } from "./settings-toolbar.js";
+import { updatesCard } from "./settings-updates.js";
 import { searchExtras, toolsPanel, networkPanel, backupCard, tabSoundCard, forgetSitesCard, permissionsPanel, downloadsExtras } from "./settings-tools.js";
 
 const { invoke } = window.__TAURI__.core;
@@ -1406,6 +1407,7 @@ async function aboutPanel() {
   </div>`);
   p.querySelector("#open-help-btn").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://help" }));
   p.querySelector(".setting-card").after(backupCard({ el, settingRow }));
+  p.querySelector(".setting-card").after(updatesCard({ el, settingRow, switchHtml }));
   return p;
 }
 

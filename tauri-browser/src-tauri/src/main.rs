@@ -45,6 +45,7 @@ mod suggest;
 mod tasks;
 mod tabdrag;
 mod tools;
+mod updater;
 mod passwords;
 mod downloads;
 mod permissions;
@@ -5460,6 +5461,8 @@ fn main() {
         // which websites aren't permitted to call, so those links silently
         // did nothing. A browser handles them itself (open_new_window).
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
+        // Kessel's own updates, from GitHub Releases (updater.rs).
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             rice_theme,
             new_tab,
@@ -5778,6 +5781,9 @@ fn main() {
             notifications::notify_ready,
             notifications::notify_clicked,
             notifications::notify_closed,
+            updater::update_status,
+            updater::check_for_updates,
+            updater::install_update,
             notifications::notification_history,
             notifications::clear_notification_history,
             defaults::default_browser_status,
@@ -5806,7 +5812,13 @@ fn main() {
             wg::load(&data_dir);
             net::start(&store.settings.lock().unwrap().features);
             profile::set_browser_args(engine_args(&store.settings.lock().unwrap()));
-            let restore = store.settings.lock().unwrap().restore_tabs || crash::restore_asked();
+            // Restarted by an update's installer: with your tabs, and a chip
+            // that says so.
+            let updated_to = updater::after_update(&data_dir);
+            if let Some(version) = &updated_to {
+                updater::announce(&app.package_info().version.to_string(), version);
+            }
+            let restore = store.settings.lock().unwrap().restore_tabs || crash::restore_asked() || updated_to.is_some();
             commands::rebuild_keymap(&store.settings.lock().unwrap().shortcuts);
             app.manage(page::ZoomLevels::load(&data_dir));
             app.manage(tools::ReaderPages::default());
@@ -5856,6 +5868,8 @@ fn main() {
             browser_lock::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());
             extensions::schedule_updates(app.handle());
+            // Kessel's own updates.
+            updater::start(app.handle());
 
             // The windows of your last session (each with its own tabs), or
             // one window on the start page. The tabs themselves are opened by

@@ -300,6 +300,18 @@
     .always-tag { font-size: 10px; font-weight: 600; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; padding: 0 6px; margin-left: 4px; vertical-align: 1px; }
     @keyframes pulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); } }
 
+    /* About -> Updates: the status, with a badge in its colour. */
+    .update-status { gap: 12px; }
+    .update-status .info { flex: 1; }
+    .update-badge { flex-shrink: 0; width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; color: var(--text-dim); background: color-mix(in srgb, var(--text-dim) 12%, transparent); }
+    .update-badge.ok { color: var(--success, #2fa36b); background: color-mix(in srgb, var(--success, #2fa36b) 14%, transparent); }
+    .update-badge.ready { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+    .update-badge.error { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+    .update-badge.busy { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .update-badge.busy svg { animation: spin 1.1s linear infinite; }
+    .update-bar { margin-top: 8px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text-dim) 16%, transparent); overflow: hidden; max-width: 320px; }
+    .update-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 0.25s ease; }
+    @media (prefers-reduced-motion: reduce) { .update-badge.busy svg { animation: none; } }
     .about-value { max-width: 360px; overflow-wrap: anywhere; text-align: right; font-size: 12.5px; }
 
     /* Clear browsing data */

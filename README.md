@@ -13,7 +13,8 @@ lists are checked locally.
 - **Download:** [latest release](https://github.com/puss-in-boots-org/kessel-browser/releases/latest).
   It has the Windows installer (`.exe`), an `.msi`, and the Android app.
   The installers aren't code-signed yet, so Windows SmartScreen will ask
-  before running them.
+  before running them. After that, Kessel keeps itself up to date
+  ([how](docs/UPDATES.md)).
 - **How to use it:** the [user guide](docs/GUIDE.md) -- also inside Kessel:
   press F1.
 - **Build it yourself:** see [`tauri-browser/README.md`](tauri-browser/README.md).

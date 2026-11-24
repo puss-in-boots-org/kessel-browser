@@ -3690,6 +3690,7 @@ async function tabCrashed({ id, reload, engine, handled }) {
 // Kessel-wide notices: safe mode, tabs to bring back after a crash, a
 // graphics card that keeps failing. A chip by the menu button for each.
 let notices = [];
+const KESSEL_RELEASES = "https://github.com/puss-in-boots-org/kessel-browser/releases";
 
 function renderNotices() {
   const btn = document.getElementById("notice-btn");
@@ -3699,8 +3700,9 @@ function renderNotices() {
   if (!first) return;
   const watched = first.id.startsWith("watch:");
   const offer = first.id === "form-offer";
-  const label = watched ? "Page changed" : offer ? (first.detail?.kind === "card" ? "Save card?" : "Save address?") : { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem" }[first.id] || "Notice";
-  btn.innerHTML = `${icon(watched ? "eye" : offer ? (first.detail?.kind === "card" ? "card" : "user") : first.id === "restore" ? "refresh" : "warning", 12)}<span></span>`;
+  const label = watched ? "Page changed" : offer ? (first.detail?.kind === "card" ? "Save card?" : "Save address?") : { "safe-mode": "Safe mode", restore: "Restore tabs?", gpu: "Graphics problem", update: "Update ready", updated: "Updated" }[first.id] || "Notice";
+  const glyph = watched ? "eye" : offer ? (first.detail?.kind === "card" ? "card" : "user") : { restore: "refresh", update: "download", updated: "sparkle" }[first.id] || "warning";
+  btn.innerHTML = `${icon(glyph, 12)}<span></span>`;
   btn.querySelector("span").textContent = notices.length > 1 ? `${label} +${notices.length - 1}` : label;
   btn.dataset.notice = first.id;
 }
@@ -3732,6 +3734,21 @@ function noticeItems(n) {
             await invoke("restart_kessel").catch((err) => toast(String(err)));
           },
         },
+        dismiss,
+      ];
+    // Kessel's own updates (updater.rs): downloaded and checked, waiting
+    // for a restart -- and, after it, what's new.
+    case "update":
+      return [
+        { header: `Kessel ${n.detail.version} is downloaded and ready. Restart to update -- it takes a few seconds, and your tabs come back.` },
+        { label: "Restart and update", iconName: "refresh", action: () => invoke("install_update").catch((err) => toast(String(err))) },
+        { label: "What's new", iconName: "sparkle", action: () => createTab(`${KESSEL_RELEASES}/tag/v${n.detail.version}`) },
+        { label: "Later", iconName: "clock", action: () => invoke("dismiss_notice", { id: n.id }).catch(() => {}) },
+      ];
+    case "updated":
+      return [
+        { header: `Kessel is updated to ${n.detail.version}.` },
+        { label: "What's new", iconName: "sparkle", action: () => { createTab(`${KESSEL_RELEASES}/tag/v${n.detail.version}`); invoke("dismiss_notice", { id: n.id }).catch(() => {}); } },
         dismiss,
       ];
     // A form sent with an address or a card that isn't saved (forms.rs).
