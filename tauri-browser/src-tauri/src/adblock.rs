@@ -415,6 +415,12 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
   if (AUTOFILL_ENABLED) {{
     (function () {{
       var offered = false;
+      // Taken now, before the page's own scripts run: the chip's click
+      // handler is registered with the engine's own addEventListener, so a
+      // page that replaced it can't get hold of the handler and call it with
+      // a made-up event (see the click handler below).
+      var listen = Function.prototype.call.bind(EventTarget.prototype.addEventListener);
+      var makeElement = Function.prototype.call.bind(Document.prototype.createElement);
 
       function setNativeValue(el, value) {{
         var proto = Object.getPrototypeOf(el);
@@ -442,7 +448,7 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
         BRIDGE.request('autofill-match').then(function (match) {{
           if (!match) return;
           var userField = findUsernameField(pwField);
-          var chip = document.createElement('div');
+          var chip = makeElement(document, 'div');
           chip.textContent = 'Fill saved password (' + match.username + ')';
           chip.style.cssText =
             'position:absolute;z-index:2147483647;background:#16171d;color:#eceef4;' +
@@ -457,9 +463,14 @@ pub fn build_content_script(token: &str, adblock_enabled: bool, autofill_enabled
           position();
           window.addEventListener('scroll', position, true);
           window.addEventListener('resize', position);
-          chip.addEventListener('click', function (e) {{
+          listen(chip, 'click', function (e) {{
             e.preventDefault();
             e.stopPropagation();
+            // Only your own click: the chip is in the page, and the page's
+            // scripts could otherwise click it themselves (chip.click()) and
+            // read the password off the field -- or off the reply, which
+            // they can hear too -- without you ever touching it.
+            if (!e.isTrusted) return;
             chip.remove();
             BRIDGE.request('autofill-fill').then(function (login) {{
               if (!login) return;

@@ -59,6 +59,22 @@ pub(crate) fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     })
 }
 
+// The same, for a file holding a secret (the password vault, the browser
+// lock): its backup is the new text too, not the one before. A backup of
+// the old one would keep what you changed away from -- the vault under the
+// master password you just replaced, the PIN you stopped using -- on disk
+// for good, still opening with the old secret. (A damaged file still
+// falls back on the backup: it's the last whole one.)
+pub(crate) fn write_atomic_secret(path: &Path, text: &str) -> std::io::Result<()> {
+    write_atomic(path, text)?;
+    let backup = with_suffix(path, "bak");
+    let tmp = with_suffix(&backup, "tmp");
+    fs::write(&tmp, text)?;
+    fs::rename(&tmp, &backup).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })
+}
+
 // --- Saving without the main thread waiting -------------------------------------
 //
 // The main thread is also the one WebView2 asks about every request a page
@@ -664,6 +680,21 @@ mod tests {
         // Gone (deleted to start over): nothing, not the backup.
         fs::remove_file(&file).unwrap();
         assert!(read_text_recovering(&file, valid).is_none());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_secret_file_keeps_no_old_secret_in_its_backup() {
+        let dir = std::env::temp_dir().join(format!("kessel-store-secret-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("vault.dat");
+        let valid = |t: &str| serde_json::from_str::<serde_json::Value>(t).is_ok();
+        write_atomic_secret(&file, r#"{"key":"old"}"#).unwrap();
+        write_atomic_secret(&file, r#"{"key":"new"}"#).unwrap();
+        assert_eq!(fs::read_to_string(with_suffix(&file, "bak")).unwrap(), r#"{"key":"new"}"#, "the backup is the new one");
+        // Damaged: still recovered, to the newest whole one.
+        fs::write(&file, r#"{"key":"#).unwrap();
+        assert_eq!(read_text_recovering(&file, valid).as_deref(), Some(r#"{"key":"new"}"#));
         fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -1380,30 +1380,87 @@
         }
         return best;
       }
+      // What you typed into a password field, kept as you type: some
+      // sign-ins clear or remove the field before anything else sees it.
+      var typed = null;
       function capture(pw) {
         if (!pw || !pw.value) return;
         var user = userFieldFor(pw);
         var username = user ? String(user.value).trim() : '';
-        var key = username + '\n' + pw.value;
+        if (!username && typed && typed.pw === pw) username = typed.username;
+        send(username, String(pw.value));
+      }
+      function send(username, password) {
+        var key = username + '\n' + password;
         if (key === lastSent) return;
         lastSent = key;
-        BRIDGE.send('login', { username: username.slice(0, 500), password: String(pw.value).slice(0, 500) });
+        typed = null;
+        BRIDGE.send('login', { username: username.slice(0, 500), password: password.slice(0, 500) });
       }
-      document.addEventListener('submit', function (e) {
-        var pw = e.target && e.target.querySelectorAll ? passwordIn(e.target) : null;
-        if (pw) capture(pw);
+      // A sign-in's first step: a user name sent with no password field on
+      // the page (the password comes on the next page). Kessel keeps it for
+      // that page, which has no user name of its own to send.
+      function userStep(scope) {
+        if (passwordIn(document) || document.querySelector('input[type="password"]')) return;
+        var field = scope.querySelector('input[autocomplete="username"], input[autocomplete="email"], input[type="email"]');
+        if (!field || !field.value) {
+          var fields = scope.querySelectorAll('input[type="text"], input:not([type])');
+          for (var i = 0; i < fields.length; i++) {
+            var hint = ((fields[i].name || '') + ' ' + (fields[i].id || '') + ' ' + (fields[i].getAttribute('autocomplete') || '')).toLowerCase();
+            if (fields[i].value && visible(fields[i]) && /user|email|login|account|identifier|phone/.test(hint)) { field = fields[i]; break; }
+          }
+        }
+        if (field && field.value && visible(field)) BRIDGE.send('login-user', { username: String(field.value).trim().slice(0, 500) });
+      }
+      document.addEventListener('input', function (e) {
+        var t = e.target;
+        if (!t || t.type !== 'password') return;
+        if (!t.value) { typed = null; return; }
+        var user = userFieldFor(t);
+        typed = { pw: t, username: user ? String(user.value).trim() : (typed && typed.pw === t ? typed.username : ''), password: String(t.value) };
       }, true);
-      // Sign-ins that never send a form (most new sites): Enter in the
-      // password field, or a click on a button next to it.
+      document.addEventListener('submit', function (e) {
+        var form = e.target && e.target.querySelectorAll ? e.target : null;
+        if (!form) return;
+        var pw = passwordIn(form);
+        if (pw) capture(pw);
+        else userStep(form);
+      }, true);
+      // Sign-ins that never send a form (most new sites): Enter in a field
+      // of the sign-in, or a click on a button (or something acting as one)
+      // next to it.
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && e.target && e.target.type === 'password') capture(e.target);
+        if (e.key !== 'Enter' || !e.target || e.target.tagName !== 'INPUT') return;
+        var scope = e.target.closest('form') || document;
+        var pw = e.target.type === 'password' ? e.target : passwordIn(scope);
+        if (pw) capture(pw);
+        else userStep(scope);
       }, true);
       document.addEventListener('click', function (e) {
-        var button = e.target && e.target.closest && e.target.closest('button, input[type="submit"], input[type="button"], [role="button"]');
-        if (!button) return;
+        var button = e.target && e.target.closest && e.target.closest('button, input[type="submit"], input[type="button"], input[type="image"], [role="button"], a, [onclick], [tabindex]');
+        if (!button || button.tagName === 'INPUT' && button.type === 'password') return;
+        // The eye that shows the password isn't signing in.
+        if (/show|hide|reveal|toggle|visib|eye/i.test((button.getAttribute('aria-label') || '') + ' ' + (button.className && button.className.baseVal !== undefined ? button.className.baseVal : button.className || ''))) return;
+        // Nor is "Forgot password?" or help.
+        if (/forgot|reset|recover|help|cancel/i.test(String(button.textContent || '').slice(0, 60))) return;
         var scope = button.closest('form') || button.parentElement && button.parentElement.closest('div, section, main') || document;
         var pw = passwordIn(scope) || passwordIn(document);
         if (pw) capture(pw);
+        else userStep(scope);
       }, true);
+      // Signed in without any of that seen (a site that sends the form from
+      // its own script, then moves on): what was typed goes once the page
+      // is left, or once the password field has gone from it.
+      window.addEventListener('pagehide', function () {
+        if (typed) send(typed.username, typed.password);
+      }, true);
+      var gone = null;
+      new MutationObserver(function () {
+        if (!typed || gone) return;
+        gone = later(function () {
+          gone = null;
+          if (typed && (!typed.pw.isConnected || !visible(typed.pw))) send(typed.username, typed.password);
+        }, 400);
+      }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
     })();
   })();

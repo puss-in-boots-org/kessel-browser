@@ -229,6 +229,34 @@ fn never_for(features: &serde_json::Value, host: &str) -> bool {
     features.get("password_never").and_then(|v| v.as_array()).map(|l| l.iter().any(|s| s.as_str() == Some(host))).unwrap_or(false)
 }
 
+// --- Sign-ins in two steps -------------------------------------------------------------
+//
+// Many sites (Google, Microsoft, Amazon...) ask for the user name on one
+// page and the password on the next, so the password's page has no user
+// name to go with it. The first page's step ("login-user", page-tools.js)
+// is kept here for a few minutes, per tab and site, for the second.
+
+static USERNAMES: Mutex<Vec<(u32, String, String, u64)>> = Mutex::new(Vec::new());
+const USERNAME_KEPT_FOR: u64 = 5 * 60;
+
+// "login-user" from page `id` on `url`: a user name just sent on its own.
+pub fn on_username(app: &tauri::AppHandle, id: u32, url: &str, username: &str) {
+    let host = host_of(url);
+    let username = username.trim();
+    if host.is_empty() || username.is_empty() || username.len() > 500 || app.state::<BrowserState>().private_tabs.lock().unwrap().contains(&id) {
+        return;
+    }
+    let now = crate::store::now_unix();
+    let mut list = USERNAMES.lock().unwrap();
+    list.retain(|(tab, h, _, at)| !(*tab == id && *h == host) && now.saturating_sub(*at) < USERNAME_KEPT_FOR);
+    list.push((id, host, username.to_string(), now));
+}
+
+fn recent_username(id: u32, host: &str) -> Option<String> {
+    let now = crate::store::now_unix();
+    USERNAMES.lock().unwrap().iter().rev().find(|(tab, h, _, at)| *tab == id && h == host && now.saturating_sub(*at) < USERNAME_KEPT_FOR).map(|(_, _, u, _)| u.clone())
+}
+
 // "login" from page `id`: the user name and password just sent in a form
 // on `url` (WebView2's address for the page, not the page's word).
 pub fn on_login(app: &tauri::AppHandle, id: u32, url: &str, username: &str, password: &str) {
@@ -250,9 +278,18 @@ pub fn on_login(app: &tauri::AppHandle, id: u32, url: &str, username: &str, pass
     {
         return;
     }
+    // No user name in this step (a sign-in that asks for it on a page of
+    // its own first): the one you gave this site a moment ago.
+    let remembered;
+    let username = if username.is_empty() {
+        remembered = recent_username(id, &host).unwrap_or_default();
+        remembered.as_str()
+    } else {
+        username
+    };
     let vault = app.state::<Vault>();
     let status = vault.status();
-    let saved = if status.unlocked { vault.saved_login(timeout, &host, username, password) } else { None };
+    let saved = vault.saved_login(timeout, &host, username, password);
     // Already saved as it is: nothing to ask.
     if saved == Some(true) {
         return;
@@ -271,7 +308,7 @@ pub fn on_login(app: &tauri::AppHandle, id: u32, url: &str, username: &str, pass
             app,
             &win,
             "password-offer",
-            serde_json::json!({ "n": n, "site": host, "username": username, "update": saved == Some(false), "initialized": status.initialized, "locked": !status.unlocked }),
+            serde_json::json!({ "n": n, "site": host, "username": username, "update": saved == Some(false), "initialized": status.initialized, "locked": !vault.can_save(timeout) }),
         );
     }
 }

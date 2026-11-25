@@ -195,7 +195,12 @@ export const tests = [
       await page.waitFor(`!!${chip}`, { message: "the fill chip" });
       assert.equal(await page.evaluate(`${chip}.textContent`), "Fill saved password (gina)", "it names the account");
       assert.equal(await page.evaluate(`document.getElementById('pass').value`), "", "nothing filled before the click");
-      await page.evaluate(`${chip}.click()`);
+      // The page clicking the chip itself fills nothing: only a real click does.
+      await page.evaluate(`${chip}.click(); ${chip}.dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+      await sleep(800);
+      assert.equal(await page.evaluate(`document.getElementById('pass').value`), "", "the page's own click on the chip fills nothing");
+      const box = await page.evaluate(`(() => { const r = ${chip}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      await page.click(box.x, box.y);
       await page.waitFor(`document.getElementById('pass').value.length > 0`, { message: "filled in" });
       assert.deepEqual(await page.evaluate(`[document.getElementById('user').value, document.getElementById('pass').value]`), ["gina", "Ginas-Saved-Pass-5"], "both fields");
 

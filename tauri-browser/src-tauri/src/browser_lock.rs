@@ -51,8 +51,8 @@ fn read_secret(app: &tauri::AppHandle) -> Option<Secret> {
 
 fn derive(secret: &str, salt: &[u8]) -> Vec<u8> {
     let mut key = [0u8; 32];
-    // (Argon2id with its defaults, as the vault: a moment's work per try.)
-    let _ = argon2::Argon2::default().hash_password_into(secret.as_bytes(), salt, &mut key);
+    // (Argon2id with the vault's parameters: a moment's work per try.)
+    let _ = crate::vault::argon2().hash_password_into(secret.as_bytes(), salt, &mut key);
     key.to_vec()
 }
 
@@ -384,7 +384,8 @@ pub(crate) fn set_browser_lock(app: tauri::AppHandle, webview: Webview, kind: St
     let b64 = base64::engine::general_purpose::STANDARD;
     let record = Secret { kind, salt: b64.encode(&salt), hash: b64.encode(derive(&secret, &salt)) };
     let text = serde_json::to_string_pretty(&record).map_err(|e| e.to_string())?;
-    crate::store::write_atomic(&path, &text).map_err(|e| e.to_string())
+    // (The backup too: the PIN you just changed away from mustn't stay.)
+    crate::store::write_atomic_secret(&path, &text).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

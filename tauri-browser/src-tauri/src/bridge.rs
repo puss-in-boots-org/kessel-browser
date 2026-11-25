@@ -331,6 +331,12 @@ fn handle(app: &tauri::AppHandle, id: u32, label: &str, url: &str, message: &Mes
             crate::popup_attempt(app, id, url, d.get("url")?.as_str()?);
             None
         }
+        // A sign-in's first step, the user name on its own (page-tools.js):
+        // kept for the password's step (passwords.rs).
+        "login-user" if top_frame => {
+            crate::passwords::on_username(app, id, url, d.get("username")?.as_str()?);
+            None
+        }
         // A login just sent (page-tools.js): offer to save it (passwords.rs).
         "login" if top_frame => {
             crate::passwords::on_login(app, id, url, d.get("username").and_then(|v| v.as_str()).unwrap_or(""), d.get("password")?.as_str()?);
