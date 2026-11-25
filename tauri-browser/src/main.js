@@ -5732,12 +5732,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (tab) {
       tab.loading = false;
       tab.loadedAt = Date.now();
-      // A picture of the page you're looking at, once it's drawn -- for its
-      // hover card and tab search (another is taken as you leave it).
-      const id = tab.id;
-      setTimeout(() => {
-        if (id === activeTabId && currentSettings()?.hover_card_preview !== false) invoke("tab_thumbnail", { id, fresh: true }).catch(() => {});
-      }, 1000);
+      // (Its picture, for hover cards and tab search, is taken as you leave
+      // it, or right then if it's the tab showing -- not after every load,
+      // just as the page you're reading starts to scroll.)
     }
     if (event.payload.id === activeTabId) {
       showProgress(false);
