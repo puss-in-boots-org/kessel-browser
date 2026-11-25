@@ -62,6 +62,9 @@ test("setupPatch: one patch with every answer, keeping your other style changes"
   assert.deepEqual(lookValues({ colours: "aurora" }), { wallTheme: true, wallSource: "kessel", mode: "wallpaper", background: "wallpaper", wallpaper: "aurora" });
   assert.deepEqual(lookValues({ colours: "style", mode: "light" }), { wallTheme: false, mode: "light" });
   assert.deepEqual(lookValues({ colours: "desktop", showDesktop: true }).wallpaper, "custom");
+  // The desktop picture behind the toolbar is blurred; without it, nothing to blur.
+  assert.equal(lookValues({ colours: "desktop", showDesktop: true }).wallBlur, 24);
+  assert.equal(lookValues({ colours: "desktop" }).wallBlur, undefined);
 });
 
 test("prettyGpu: the card's name, without the engine's details", async () => {

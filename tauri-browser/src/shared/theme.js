@@ -100,11 +100,41 @@ export function imageSwatches(src) {
 }
 
 // The Windows desktop wallpaper: {id, url} (url only when it changed since
-// `known`), or null when there's none Kessel can read.
+// `known`), or null when there's none Kessel can read. With several
+// monitors it's one monitor's picture (setup.rs picks which); one spanned
+// across all of them is cut down to that monitor's part here.
 export async function desktopWallpaper(known = null) {
   const got = await invoke("desktop_wallpaper", { known }).catch(() => null);
   if (!got?.id) return null;
-  return { id: got.id, url: got.data ? `data:${got.mime || "image/jpeg"};base64,${got.data}` : null };
+  let url = got.data ? `data:${got.mime || "image/jpeg"};base64,${got.data}` : null;
+  if (url && Array.isArray(got.crop) && got.crop.length === 4) url = (await cropImage(url, got.crop)) || url;
+  return { id: got.id, url };
+}
+
+// The [x, y, w, h] part (fractions of the picture) of an image, as a JPEG
+// data URL at most 2560 px wide; null if it can't be read.
+export function cropImage(src, [x, y, w, h]) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const sx = x * img.naturalWidth;
+        const sy = y * img.naturalHeight;
+        const sw = Math.max(1, w * img.naturalWidth);
+        const sh = Math.max(1, h * img.naturalHeight);
+        const scale = Math.min(1, 2560 / sw);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(sw * scale);
+        canvas.height = Math.round(sh * scale);
+        canvas.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
 }
 
 function customStamp() {

@@ -267,7 +267,7 @@ function renderColours(node) {
   );
   node.appendChild(modeLine);
 
-  const deskLine = el(`<div class="option-line" id="desktop-line" ${answers.colours === "desktop" ? "" : "hidden"}><div><div class="t">Show my desktop picture behind the toolbar too</div><div class="d">Off keeps the bars solid, in the wallpaper's colours</div></div>
+  const deskLine = el(`<div class="option-line" id="desktop-line" ${answers.colours === "desktop" ? "" : "hidden"}><div><div class="t">Show my desktop picture behind the toolbar too</div><div class="d">Softly blurred, so it sits quietly behind the tabs. Off keeps the bars solid, in the wallpaper's colours</div></div>
     <button class="switch ${answers.showDesktop ? "on" : ""}" role="switch" aria-checked="${answers.showDesktop}"></button></div>`);
   const sw = deskLine.querySelector(".switch");
   sw.addEventListener("click", () => {

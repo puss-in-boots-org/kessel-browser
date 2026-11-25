@@ -136,12 +136,16 @@ export function recommendDensity(pc) {
   return "normal";
 }
 
+export const DESKTOP_BLUR = 24;
+
 // Colours: "desktop" (the Windows wallpaper's), a Kessel wallpaper's id
 // (with that wallpaper behind the bars), or "style" (the style's own, in
 // `mode`). `showDesktop`: the desktop picture behind the bars too.
 export function lookValues({ colours = "style", mode = "dark", showDesktop = false } = {}) {
   if (colours === "desktop") {
-    return { wallTheme: true, wallSource: "desktop", mode: "wallpaper", ...(showDesktop ? { background: "wallpaper", wallpaper: "custom" } : {}) };
+    // Behind the toolbar, the desktop picture is blurred so it doesn't
+    // compete with the tabs and the address bar.
+    return { wallTheme: true, wallSource: "desktop", mode: "wallpaper", ...(showDesktop ? { background: "wallpaper", wallpaper: "custom", wallBlur: DESKTOP_BLUR } : {}) };
   }
   if (colours && colours !== "style") return { wallTheme: true, wallSource: "kessel", mode: "wallpaper", background: "wallpaper", wallpaper: colours };
   return { wallTheme: false, mode };
@@ -158,7 +162,7 @@ export function setupPatch(settings, answers, allCustom = {}) {
   const look = lookValues(answers);
   const mine = { ...(allCustom[style] || {}) };
   // A fresh choice of colours replaces the last one.
-  for (const key of ["wallTheme", "wallSource", "mode", "background", "wallpaper"]) delete mine[key];
+  for (const key of ["wallTheme", "wallSource", "mode", "background", "wallpaper", "wallBlur"]) delete mine[key];
   return {
     ...(PERFORMANCE[answers.performance]?.settings || {}),
     ...(PRIVACY[answers.privacy]?.settings || {}),
