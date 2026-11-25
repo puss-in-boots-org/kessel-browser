@@ -13,6 +13,8 @@
 // follows the same look. Nothing here runs continuously: effects that move
 // (ambient drift, pulsing, the animated focus border) are opt-in.
 
+import { paletteFromSwatches, wallpaperMode } from "./wallpaper-theme.js";
+
 export const STYLE_IDS = ["instrument", "glass", "clean", "futuristic", "robust", "vintage", "gamer", "fluent", "soft", "terminal", "aqua", "brutal"];
 
 // --- Fonts ---------------------------------------------------------------------
@@ -94,10 +96,12 @@ const CASES = [["asis", "As designed"], ["none", "As written"], ["uppercase", "U
 
 export const OPTIONS = [
   // Colour & mode
-  { key: "mode", group: "colour", label: "Mode", type: "choice", choices: [["dark", "Dark"], ["light", "Light"], ["system", "Follow Windows"]], def: "dark" },
-  { key: "accentFollow", group: "colour", label: "Accent from the wallpaper", desc: "Use the rice hub's accent, picked from your wallpaper, and change with it", type: "toggle", def: false },
-  { key: "accent", group: "colour", label: "Accent colour", desc: "Buttons, highlights, the active tab", type: "color", def: "#7c5cff", showIf: (v) => !v.accentFollow },
-  { key: "accent2", group: "colour", label: "Second accent", desc: "The other end of gradients, glows and stripes", type: "color", def: "#6bd2ff" },
+  { key: "wallTheme", group: "colour", label: "Colours from the wallpaper", desc: "The whole interface -- background, panels, toolbar, tabs, address bar, text, links and both accents -- takes its colours from your wallpaper, and changes with it", type: "toggle", def: false },
+  { key: "wallSource", group: "colour", label: "Which wallpaper", type: "choice", choices: [["kessel", "Kessel's"], ["desktop", "My desktop's"]], def: "kessel", showIf: (v) => v.wallTheme },
+  { key: "mode", group: "colour", label: "Mode", type: "choice", choices: [["dark", "Dark"], ["light", "Light"], ["system", "Follow Windows"], ["wallpaper", "Follow the wallpaper"]], def: "dark" },
+  { key: "accentFollow", group: "colour", label: "Accent from the rice hub", desc: "Use the rice hub's accent, picked from your wallpaper, and change with it", type: "toggle", def: false },
+  { key: "accent", group: "colour", label: "Accent colour", desc: "Buttons, highlights, the active tab", type: "color", def: "#7c5cff", showIf: (v) => !v.accentFollow && !v.wallTheme },
+  { key: "accent2", group: "colour", label: "Second accent", desc: "The other end of gradients, glows and stripes", type: "color", def: "#6bd2ff", showIf: (v) => !v.wallTheme },
   { key: "accentGradient", group: "colour", label: "Gradient accents", desc: "Blend the two accents wherever the accent fills something", type: "toggle", def: false },
   { key: "gradientAngle", group: "colour", label: "Gradient angle", type: "range", min: 0, max: 360, step: 5, unit: "°", def: 135, showIf: (v) => v.accentGradient },
   { key: "accentText", group: "colour", label: "Text on the accent", type: "choice", choices: [["auto", "Automatic"], ["light", "Light"], ["dark", "Dark"]], def: "auto" },
@@ -326,11 +330,15 @@ export const STYLES = {
       easing: "smooth", tabAnimation: "fade", clockSize: 64, clockWeight: 400, ntSearchWidth: 620, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
     },
     quick: ["mode", "accent", "toolbarLayout", "font", "fontSize", "tabShape", "radius", "addressDisplay"],
+    // Colours from the wallpaper leaves the LCD an LCD.
+    wallKeep: ["addressBg"],
     presets: [
       { name: "Warm grey", values: {} },
       { name: "Graphite", values: { mode: "dark" } },
       // Graphite with the rice hub's accent (it follows the wallpaper) and font.
       { name: "Wallpaper", values: { mode: "dark", accentFollow: true, font: "quicksand" } },
+      // The whole enclosure in the desktop wallpaper's colours.
+      { name: "Desktop", values: { mode: "wallpaper", wallTheme: true, wallSource: "desktop" } },
       { name: "Cobalt keys", values: { accent: "#2f5bd3", accent2: "#ff5a1f" } },
       { name: "One row", values: { toolbarLayout: "one" } },
     ],
@@ -784,9 +792,12 @@ export function defaultValue(id, key) {
   return OPTION_MAP[key]?.def;
 }
 
-function resolvePalette(id, custom, mode, accent) {
+// `over`: colours laid over the style's own (Colours from the wallpaper) --
+// your own palette changes still win over them.
+function resolvePalette(id, custom, mode, accent, over = null) {
   const style = STYLES[id] || STYLES.glass;
   const spec = { ...BASE_PALETTE, ...(style.palette[mode] || style.palette.dark) };
+  if (over) for (const [key, hex] of Object.entries(over)) if (!(style.wallKeep || []).includes(key)) spec[key] = hex;
   const out = {};
   const defaults = {};
   const seen = new Set();
@@ -826,6 +837,16 @@ export function setRiceAccent(hex) {
   riceAccent = /^#[0-9a-f]{6}$/i.test(hex || "") ? hex : null;
 }
 
+// The wallpaper's colours (wallpaper-theme.js swatches, set by theme.js for
+// whichever wallpaper the look follows), for "Colours from the wallpaper".
+let wallSwatches = null;
+export function setWallpaperSwatches(list) {
+  wallSwatches = Array.isArray(list) && list.length ? list : null;
+}
+export function wallpaperSwatches() {
+  return wallSwatches;
+}
+
 export function resolveStyle(settings, forStyle = null) {
   const state = styleState(settings);
   const id = forStyle && STYLES[forStyle] ? forStyle : state.id;
@@ -837,9 +858,18 @@ export function resolveStyle(settings, forStyle = null) {
     defaults[opt.key] = defaultValue(id, opt.key);
     values[opt.key] = custom[opt.key] !== undefined ? custom[opt.key] : defaults[opt.key];
   }
+  const mode = values.mode === "system" ? systemMode() : values.mode === "wallpaper" ? wallpaperMode(wallSwatches) : values.mode === "light" ? "light" : "dark";
+  // Colours from the wallpaper: its palette over the style's, its accents
+  // and backdrop colours over the style's defaults (what you set yourself
+  // in those still stands).
+  const wall = values.wallTheme ? paletteFromSwatches(wallSwatches, mode) : null;
+  if (wall) {
+    values.accent = wall.accent;
+    values.accent2 = wall.accent2;
+    for (const key of ["bgGradientA", "bgGradientB", "glassTintColor"]) if (custom[key] === undefined) values[key] = wall[key];
+  }
   if (values.accentFollow && riceAccent) values.accent = riceAccent;
-  const mode = values.mode === "system" ? systemMode() : values.mode === "light" ? "light" : "dark";
-  const { palette, paletteDefaults } = resolvePalette(id, custom, mode, values.accent);
+  const { palette, paletteDefaults } = resolvePalette(id, custom, mode, values.accent, wall?.palette);
   for (const key of PALETTE_KEYS) {
     values[key] = palette[key];
     defaults[key] = paletteDefaults[key];
