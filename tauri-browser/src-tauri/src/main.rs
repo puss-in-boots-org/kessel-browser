@@ -2096,6 +2096,9 @@ enum NewWindowKind {
 fn new_window_kind(url: &tauri::Url, has_size: bool) -> NewWindowKind {
     match url.scheme() {
         "http" | "https" if has_size => NewWindowKind::Popup,
+        // window.open(signInPage) with no size: still a sign-in window,
+        // which has to report back to the page that opened it.
+        "http" | "https" if is_sign_in_page(url, false) => NewWindowKind::Popup,
         "http" | "https" => NewWindowKind::Tab,
         "about" if url.as_str() == "about:blank" => {
             if has_size {
@@ -2111,6 +2114,64 @@ fn new_window_kind(url: &tauri::Url, has_size: bool) -> NewWindowKind {
         "javascript" | "data" | "about" | "file" | "tauri" | "ipc" | "asset" | "edge" | "chrome" | "devtools" | "kessel" | "view-source" | "filesystem" => NewWindowKind::Deny,
         _ => NewWindowKind::OtherProgram,
     }
+}
+
+// A sign-in page (OAuth, OpenID, SAML...) -- one a page opens in a window
+// so the window can hand the result back through window.opener, which a
+// tab can't. Claude, ChatGPT, Notion, Figma, Canva... open "Continue with
+// Google / Apple / Microsoft" like that, often as a blank window they send
+// to the sign-in page once they've looked its address up.
+//   * strict (a window.open(url) of its own): only an unmistakable one --
+//     an identity provider's sign-in page or an OAuth/SAML request;
+//   * loose (a blank window being sent somewhere): also the site's own way
+//     in to one (/api/auth/google, /login/apple, /sso/...), which then
+//     redirects to the provider.
+// Gmail's links go through google.com/url?q=..., so they never match.
+fn is_sign_in_page(url: &tauri::Url, loose: bool) -> bool {
+    if !matches!(url.scheme(), "http" | "https") {
+        return false;
+    }
+    let host = url.host_str().unwrap_or("").to_ascii_lowercase();
+    let path = url.path().to_ascii_lowercase();
+    let keys: Vec<String> = url.query_pairs().map(|(k, _)| k.to_ascii_lowercase()).collect();
+    let has = |k: &str| keys.iter().any(|x| x == k);
+    // An OAuth / OpenID / SAML request, at any provider.
+    if has("redirect_uri") || has("samlrequest") || has("openid.mode") || has("oauth_token") || (has("client_id") && (has("response_type") || has("scope"))) {
+        return true;
+    }
+    // The big identity providers' sign-in pages.
+    const PROVIDERS: &[(&str, &str)] = &[
+        ("accounts.google.com", ""),
+        ("login.microsoftonline.com", ""),
+        ("login.live.com", ""),
+        ("login.microsoft.com", ""),
+        ("appleid.apple.com", ""),
+        ("github.com", "/login/oauth"),
+        ("www.facebook.com", "/dialog/oauth"),
+        ("discord.com", "/oauth2"),
+        ("slack.com", "/oauth"),
+        ("x.com", "/i/oauth2"),
+        ("twitter.com", "/i/oauth2"),
+        ("api.twitter.com", "/oauth"),
+        ("www.linkedin.com", "/oauth"),
+        ("login.yahoo.com", ""),
+        ("www.paypal.com", "/connect"),
+        ("www.paypal.com", "/signin"),
+    ];
+    if PROVIDERS.iter().any(|(h, p)| host == *h && path.contains(p)) {
+        return true;
+    }
+    if [".auth0.com", ".okta.com", ".onelogin.com", ".b2clogin.com"].iter().any(|d| host.ends_with(d)) {
+        return true;
+    }
+    // The site's own door to one.
+    loose
+        && path.split('/').any(|seg| {
+            matches!(
+                seg,
+                "auth" | "oauth" | "oauth2" | "authorize" | "sso" | "saml" | "signin" | "sign-in" | "sign_in" | "login" | "log-in" | "openid" | "oidc"
+            )
+        })
 }
 
 // `opener`: the label of the webview asking. Its tab opens in the window
@@ -2175,6 +2236,13 @@ fn open_new_window(
                     // Sent to a website: that's the tab. (Once -- the window
                     // closes.)
                     if !waiting.swap(false, Ordering::SeqCst) {
+                        return true;
+                    }
+                    // Unless it's a sign-in ("Continue with Google" on
+                    // Claude and many others): that stays a window, which
+                    // can tell the page it came from you've signed in.
+                    if is_sign_in_page(nav_url, true) {
+                        show_web_popup(&app, &label);
                         return true;
                     }
                     let (app2, label, win, account, url) = (app.clone(), label.clone(), win.clone(), account.clone(), nav_url.to_string());
@@ -6144,6 +6212,38 @@ mod tests {
         assert_eq!(kind("data:text/html,hi", false), NewWindowKind::Deny);
         assert_eq!(kind("file:///C:/Windows/win.ini", false), NewWindowKind::Deny);
         assert_eq!(kind("about:settings", false), NewWindowKind::Deny);
+        // window.open(signInPage) without a size: still a sign-in window.
+        assert_eq!(kind("https://accounts.google.com/o/oauth2/v2/auth?client_id=x&redirect_uri=https://claude.ai/cb", false), NewWindowKind::Popup);
+        assert_eq!(kind("https://appleid.apple.com/auth/authorize?client_id=x", false), NewWindowKind::Popup);
+    }
+
+    #[test]
+    fn sign_in_pages_are_told_apart_from_links() {
+        let strict = |u: &str| is_sign_in_page(&tauri::Url::parse(u).unwrap(), false);
+        let loose = |u: &str| is_sign_in_page(&tauri::Url::parse(u).unwrap(), true);
+        // Identity providers and OAuth requests: always.
+        assert!(strict("https://accounts.google.com/o/oauth2/v2/auth?client_id=1&response_type=code&scope=openid"));
+        assert!(strict("https://accounts.google.com/v3/signin/identifier?continue=x"));
+        assert!(strict("https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=1"));
+        assert!(strict("https://appleid.apple.com/auth/authorize?client_id=1"));
+        assert!(strict("https://github.com/login/oauth/authorize?client_id=1"));
+        assert!(strict("https://example.okta.com/app/x/sso/saml"));
+        assert!(strict("https://id.example.com/connect?redirect_uri=https%3A%2F%2Fa.example%2Fcb"));
+        // A site's own door to one: only for a blank window it sends there.
+        assert!(loose("https://claude.ai/api/auth/google"));
+        assert!(loose("https://www.notion.so/login/apple"));
+        assert!(loose("https://app.example.com/sso/start"));
+        assert!(!strict("https://claude.ai/api/auth/google"));
+        // Ordinary links: tabs.
+        assert!(!loose("https://www.google.com/url?q=https://claude.ai/magic-link%23abc"));
+        assert!(!loose("https://claude.ai/magic-link#abc"));
+        assert!(!loose("https://drive.google.com/file/d/x/view"));
+        assert!(!loose("https://docs.google.com/document/d/x/edit"));
+        assert!(!loose("https://github.com/puss-in-boots-org/kessel-browser"));
+        assert!(!loose("https://www.facebook.com/somepage"));
+        assert!(strict("https://www.facebook.com/v19.0/dialog/oauth?app_id=1"));
+        assert!(!loose("https://example.com/authors/jane"));
+        assert!(!loose("about:blank"));
     }
 
     #[test]
