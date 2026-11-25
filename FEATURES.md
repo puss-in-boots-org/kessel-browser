@@ -36,7 +36,7 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**93% overall** -- 843 done (✅ 🟢 🌐), 0 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 111 skipped (⏭️), of 1045.
+**93% overall** -- 843 done (✅ 🟢 🌐), 5 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 106 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
@@ -93,7 +93,7 @@ branch, one small commit per feature or group of features.
 | [50. Media & entertainment extras](#50-media--entertainment-extras) | 5 |  |  | 3 | 3 | `██████░░░░` 63% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 11 |  |  | 1 | 2 | `█████████░` 92% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
-| [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
+| [53. Updates](#53-updates) | 1 | 5 |  |  | 3 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 6 |  | 6 | 1 | 1 | `███████░░░` 69% |
 | [56. Account system](#56-account-system) | 1 |  | 1 |  | 12 | `████████░░` 75% |
@@ -1264,15 +1264,15 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 53.01 | Automatic browser updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
-| 53.02 | Background updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
-| 53.03 | Update notifications | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.01 | Automatic browser updates | 🧪 | Kessel checks its GitHub releases a minute after starting and every six hours (Settings -> About -> Updates can turn it off); updates are signed with Kessel's own updater key (docs/UPDATES.md) |
+| 53.02 | Background updates | 🧪 | Downloaded in the background and checked against the signature; installed when you restart from the chip, with your tabs back |
+| 53.03 | Update notifications | 🧪 | An "Update ready" chip by the menu button, then "Updated" with what's new |
 | 53.04 | Update channels (stable, beta, developer, canary) | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
 | 53.05 | Extension updates | 🟢 | Store extensions update by themselves, keeping their data (tested) |
 | 53.06 | Component updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
-| 53.07 | Security updates | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.07 | Security updates | 🧪 | Security fixes come the same way as every release |
 | 53.08 | Rollback/recovery | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
-| 53.09 | Update verification | ⏭️ | Needs an update server and a code-signing certificate (your choice of provider): left out |
+| 53.09 | Update verification | 🧪 | Each update is checked against Kessel's updater public key before it's installed; a mismatch is refused |
 
 ### 54. Crash handling
 

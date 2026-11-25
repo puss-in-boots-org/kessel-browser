@@ -21,6 +21,18 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI0NkUzMjAxQkJBN0U1RjIKUldUeTVhZTdBVEp1Skh1Umd3QlltS09wZGxxV3BNOVBYWklqSmhBMmJtelRiV2FrT2hHSmFlY0gK",
+      "endpoints": [
+        "https://github.com/puss-in-boots-org/kessel-browser/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

@@ -626,6 +626,11 @@ html.k-page-tint body::before { transition: background-color var(--dur-slow, 0.3
 #notice-btn[hidden] { display: none; }
 #hang-btn:hover,
 #notice-btn:hover { background: color-mix(in srgb, var(--warning) 24%, transparent); }
+/* An update is good news: the accent, not the warning colour. */
+#notice-btn[data-notice="update"],
+#notice-btn[data-notice="updated"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+#notice-btn[data-notice="update"]:hover,
+#notice-btn[data-notice="updated"]:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); }
 
 /* Ctrl+K / Ctrl+E: what you type is searched for. */
 #url-input.search-mode { font-weight: 500; }

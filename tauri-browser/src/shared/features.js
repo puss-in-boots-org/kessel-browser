@@ -148,6 +148,7 @@ export const FEATURES = [
     ["Setup", "A new Kessel starts with a one-minute setup (kessel://welcome) that looks at your PC and suggests how hard Kessel should work, a look, colours, tabs, search and Shields. Run it again any time: Settings -> Overview -> Run setup."],
     ["Search settings", "Settings -> the search box (or press / or Ctrl+F there): finds any setting on any page by its name or what it does, and takes you straight to it."],
     ["Help", "F1: shortcuts and tips."],
+    ["Updates", "Kessel updates itself: it downloads a new version in the background and an \"Update ready\" chip by the menu button restarts on it, with your tabs. Settings -> About -> Updates: check now, or turn automatic updates off."],
     ["Hardware acceleration", "Settings -> Performance: on or off, and which graphics card. kessel://gpu shows what the graphics card does and which video formats play."],
     ["Task manager", "Shift+Esc: every process with its memory and CPU -- each page's with its tabs, the graphics card's, the network's -- and the tabs asleep. End a process, put a tab to sleep, wake one."],
     ["Diagnostics", "Palette -> Diagnostics (kessel://diagnostics): Windows, the processor, memory, network, how much room your data takes, crash reports and which web features work; Copy report."],
