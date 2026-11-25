@@ -36,33 +36,33 @@ branch, one small commit per feature or group of features.
 <!-- progress:start -- written by scripts/mark-feature.mjs; don't edit by hand -->
 ## Progress
 
-**93% overall** -- 766 done (✅ 🟢 🌐), 77 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 111 skipped (⏭️), of 1045.
+**93% overall** -- 843 done (✅ 🟢 🌐), 0 built and waiting for their first run on Windows or a phone (🧪), 49 partly done (🟡), 42 to do (⏳), 111 skipped (⏭️), of 1045.
 
 | Section | Done | 🧪 | 🟡 | ⏳ | ⏭️ | Progress |
 |---|---:|---:|---:|---:|---:|---|
 | [Keyboard shortcuts (the requested table)](#keyboard-shortcuts-the-requested-table) | 52 |  |  |  |  | `██████████` 100% |
 | [1. Core browsing -- navigation](#1-core-browsing----navigation) | 22 |  |  |  |  | `██████████` 100% |
 | [2. Tabs](#2-tabs) | 46 |  |  |  | 1 | `██████████` 100% |
-| [3. Windows](#3-windows) | 11 | 2 | 2 |  |  | `█████████░` 93% |
+| [3. Windows](#3-windows) | 13 |  | 2 |  |  | `█████████░` 93% |
 | [4. Bookmarks](#4-bookmarks) | 18 |  |  |  | 1 | `██████████` 100% |
 | [5. History](#5-history) | 15 |  |  |  | 1 | `██████████` 100% |
-| [6. Downloads](#6-downloads) | 18 | 2 | 1 | 1 |  | `█████████░` 93% |
-| [7. Passwords & identity](#7-passwords--identity) | 25 | 8 | 1 | 1 | 2 | `██████████` 96% |
+| [6. Downloads](#6-downloads) | 20 |  | 1 | 1 |  | `█████████░` 93% |
+| [7. Passwords & identity](#7-passwords--identity) | 33 |  | 1 | 1 | 2 | `██████████` 96% |
 | [8. Profiles](#8-profiles) | 16 |  |  |  |  | `██████████` 100% |
 | [9. Sync](#9-sync) |  |  |  |  | 18 | `██████████` 100% |
 | [10. Privacy](#10-privacy) | 38 |  |  |  | 1 | `██████████` 100% |
 | [11. Security](#11-security) | 24 |  |  |  |  | `██████████` 100% |
-| [12. DNS & networking](#12-dns--networking) | 19 | 2 | 1 | 1 |  | `█████████░` 93% |
-| [13. Website permissions](#13-website-permissions) | 9 | 3 | 1 |  | 7 | `██████████` 96% |
-| [14. Site-specific settings](#14-site-specific-settings) | 15 | 1 |  |  | 6 | `██████████` 100% |
+| [12. DNS & networking](#12-dns--networking) | 21 |  | 1 | 1 |  | `█████████░` 93% |
+| [13. Website permissions](#13-website-permissions) | 12 |  | 1 |  | 7 | `██████████` 96% |
+| [14. Site-specific settings](#14-site-specific-settings) | 16 |  |  |  | 6 | `██████████` 100% |
 | [15. Extensions / add-ons](#15-extensions--add-ons) | 9 |  | 7 |  | 1 | `████████░░` 78% |
 | [16. Built-in content blocking](#16-built-in-content-blocking) | 15 |  | 1 |  |  | `██████████` 97% |
-| [17. Reading & research](#17-reading--research) | 17 | 4 | 1 |  |  | `██████████` 98% |
+| [17. Reading & research](#17-reading--research) | 21 |  | 1 |  |  | `██████████` 98% |
 | [18. Translation](#18-translation) | 7 |  | 1 | 2 |  | `████████░░` 75% |
 | [19. PDF](#19-pdf) | 17 |  | 1 |  |  | `██████████` 97% |
-| [20. Media](#20-media) | 7 | 12 | 1 |  |  | `██████████` 98% |
-| [21. Picture-in-picture](#21-picture-in-picture) |  | 6 |  | 1 | 1 | `█████████░` 86% |
-| [22. Accessibility](#22-accessibility) | 14 | 2 |  |  |  | `██████████` 100% |
+| [20. Media](#20-media) | 19 |  | 1 |  |  | `██████████` 98% |
+| [21. Picture-in-picture](#21-picture-in-picture) | 6 |  |  | 1 | 1 | `█████████░` 86% |
+| [22. Accessibility](#22-accessibility) | 16 |  |  |  |  | `██████████` 100% |
 | [23. Appearance](#23-appearance) | 16 |  |  |  |  | `██████████` 100% |
 | [24. Search engines](#24-search-engines) | 9 |  |  |  |  | `██████████` 100% |
 | [25. Startup behavior](#25-startup-behavior) | 8 |  | 1 |  |  | `█████████░` 94% |
@@ -71,39 +71,39 @@ branch, one small commit per feature or group of features.
 | [28. Sidebar](#28-sidebar) | 11 |  |  |  |  | `██████████` 100% |
 | [29. Developer tools](#29-developer-tools) | 11 |  |  |  |  | `██████████` 100% |
 | [30. Web platform support](#30-web-platform-support) | 5 |  | 1 |  |  | `█████████░` 92% |
-| [31. Progressive Web Apps](#31-progressive-web-apps) | 12 | 1 |  |  | 2 | `██████████` 100% |
-| [32. Notifications](#32-notifications) | 6 | 1 | 1 | 1 | 1 | `████████░░` 83% |
-| [33. Clipboard](#33-clipboard) | 6 | 1 |  |  |  | `██████████` 100% |
+| [31. Progressive Web Apps](#31-progressive-web-apps) | 13 |  |  |  | 2 | `██████████` 100% |
+| [32. Notifications](#32-notifications) | 7 |  | 1 | 1 | 1 | `████████░░` 83% |
+| [33. Clipboard](#33-clipboard) | 7 |  |  |  |  | `██████████` 100% |
 | [34. File system](#34-file-system) | 9 |  |  | 1 |  | `█████████░` 90% |
-| [35. Hardware acceleration](#35-hardware-acceleration) | 2 | 6 | 1 |  |  | `█████████░` 94% |
+| [35. Hardware acceleration](#35-hardware-acceleration) | 8 |  | 1 |  |  | `█████████░` 94% |
 | [36. Performance](#36-performance) | 15 |  |  | 2 |  | `█████████░` 88% |
 | [37. Cache](#37-cache) | 9 |  | 1 |  |  | `██████████` 95% |
-| [38. Developer / experimental controls](#38-developer--experimental-controls) | 8 | 4 |  | 1 |  | `█████████░` 92% |
-| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 15 | 1 |  |  |  | `██████████` 100% |
-| [40. Built-in task management](#40-built-in-task-management) | 7 | 2 |  |  |  | `██████████` 100% |
-| [41. Screenshots & capture](#41-screenshots--capture) | 3 | 2 |  | 6 |  | `█████░░░░░` 45% |
-| [42. Sharing](#42-sharing) | 2 | 2 |  | 2 | 3 | `███████░░░` 67% |
-| [43. Mobile-specific features](#43-mobile-specific-features) |  | 6 | 1 | 6 | 2 | `█████░░░░░` 50% |
+| [38. Developer / experimental controls](#38-developer--experimental-controls) | 12 |  |  | 1 |  | `█████████░` 92% |
+| [39. Browser information & diagnostics](#39-browser-information--diagnostics) | 16 |  |  |  |  | `██████████` 100% |
+| [40. Built-in task management](#40-built-in-task-management) | 9 |  |  |  |  | `██████████` 100% |
+| [41. Screenshots & capture](#41-screenshots--capture) | 5 |  |  | 6 |  | `█████░░░░░` 45% |
+| [42. Sharing](#42-sharing) | 4 |  |  | 2 | 3 | `███████░░░` 67% |
+| [43. Mobile-specific features](#43-mobile-specific-features) | 6 |  | 1 | 6 | 2 | `█████░░░░░` 50% |
 | [44. Desktop-specific features](#44-desktop-specific-features) | 12 |  | 1 |  |  | `██████████` 96% |
-| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 27 | 1 |  |  |  | `██████████` 100% |
+| [45. Keyboard shortcuts](#45-keyboard-shortcuts) | 28 |  |  |  |  | `██████████` 100% |
 | [46. Mouse / trackpad](#46-mouse--trackpad) | 9 |  |  | 3 |  | `████████░░` 75% |
 | [47. Context menus](#47-context-menus) | 10 |  |  |  |  | `██████████` 100% |
 | [48. AI features](#48-ai-features) | 2 |  | 2 |  | 16 | `████████░░` 75% |
 | [49. Shopping](#49-shopping) |  |  |  | 1 | 9 | `░░░░░░░░░░` 0% |
-| [50. Media & entertainment extras](#50-media--entertainment-extras) | 4 | 1 |  | 3 | 3 | `██████░░░░` 63% |
+| [50. Media & entertainment extras](#50-media--entertainment-extras) | 5 |  |  | 3 | 3 | `██████░░░░` 63% |
 | [51. Privacy-focused advanced features](#51-privacy-focused-advanced-features) | 11 |  |  | 1 | 2 | `█████████░` 92% |
 | [52. Import / export](#52-import--export) | 15 |  | 2 |  |  | `█████████░` 94% |
 | [53. Updates](#53-updates) | 1 |  |  |  | 8 | `██████████` 100% |
 | [54. Crash handling](#54-crash-handling) | 9 |  |  |  |  | `██████████` 100% |
 | [55. Browser settings](#55-browser-settings) | 6 |  | 6 | 1 | 1 | `███████░░░` 69% |
 | [56. Account system](#56-account-system) | 1 |  | 1 |  | 12 | `████████░░` 75% |
-| [57. Browser lock](#57-browser-lock) | 7 | 3 |  |  |  | `██████████` 100% |
+| [57. Browser lock](#57-browser-lock) | 10 |  |  |  |  | `██████████` 100% |
 | [58. Search / history intelligence](#58-search--history-intelligence) | 9 |  |  | 4 |  | `███████░░░` 69% |
 | [59. Offline functionality](#59-offline-functionality) | 9 |  |  | 1 |  | `█████████░` 90% |
 | [60. Web standards compatibility](#60-web-standards-compatibility) | 8 |  | 3 |  | 1 | `█████████░` 86% |
 | [61. Developer-facing browser architecture](#61-developer-facing-browser-architecture) | 14 |  | 1 |  | 2 | `██████████` 97% |
-| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 16 | 1 | 5 | 2 | 8 | `████████░░` 81% |
-| [63. Researched additions (2026)](#63-researched-additions-2026) | 14 | 3 | 2 | 1 |  | `█████████░` 90% |
+| [62. "Crazy advanced" features](#62-crazy-advanced-features) | 17 |  | 5 | 2 | 8 | `████████░░` 81% |
+| [63. Researched additions (2026)](#63-researched-additions-2026) | 17 |  | 2 | 1 |  | `█████████░` 90% |
 
 Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ rows out.
 <!-- progress:end -->
@@ -255,8 +255,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 3.03 | Incognito windows | ✅ | Same as private windows |
 | 3.04 | Separate profile windows | ✅ | Another profile opens in windows of its own, its name on them; account pop-out windows too |
 | 3.05 | Always-on-top window mode | 🟡 | Pop-out windows only |
-| 3.06 | Picture-in-picture windows | 🧪 | The engine's picture-in-picture window: media controls or Alt+P (20.05) |
-| 3.07 | Pop-out video windows | 🧪 | A video pops out into the engine's picture-in-picture window (media controls or Alt+P) |
+| 3.06 | Picture-in-picture windows | ✅ | The engine's picture-in-picture window: media controls or Alt+P (20.05) |
+| 3.07 | Pop-out video windows | ✅ | A video pops out into the engine's picture-in-picture window (media controls or Alt+P) |
 | 3.08 | Restore previous windows | ✅ | Session restore reopens every window with its own tabs |
 | 3.09 | Restore individual windows | ✅ | Reopen closed window, any closed window from History -> Recently closed, or one window of a saved session |
 | 3.10 | Window session saving | ✅ | Each window's tabs are saved as they change |
@@ -323,9 +323,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 6.06 | Cancel downloads | ✅ | Downloads list -> Cancel |
 | 6.07 | Retry failed downloads | ✅ | Downloads list -> Try again (fetches it anew) |
 | 6.08 | Open downloaded file | 🟢 | |
-| 6.09 | Show downloaded file in folder | 🧪 | Downloads list -> Show in folder |
+| 6.09 | Show downloaded file in folder | ✅ | Downloads list -> Show in folder |
 | 6.10 | Change download location | ✅ | Settings -> Downloads -> Save downloads to |
-| 6.11 | Ask where to save every file | 🧪 | Settings -> Downloads -> Ask where to save each file |
+| 6.11 | Ask where to save every file | ✅ | Settings -> Downloads -> Ask where to save each file |
 | 6.12 | Automatic downloads | ✅ | Site permissions -> Several downloads at once (ask, allow or block, per site) |
 | 6.13 | Multiple simultaneous downloads | 🟢 | |
 | 6.14 | Download notifications | 🟢 | Toasts |
@@ -358,16 +358,16 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 7.14 | Compromised-password detection | ✅ | Have I Been Pwned range check, only when you ask: just 5 characters of each password's SHA-1 hash leave the computer |
 | 7.15 | Password notes | 🟢 | |
 | 7.16 | Password organization | ⏳ | |
-| 7.17 | Passkeys | 🧪 | Passkeys through the engine's WebAuthn and Windows Hello; a first run on screen will confirm the Hello prompts |
-| 7.18 | Passkey creation | 🧪 | A site makes a passkey: Windows Hello asks (7.17) |
-| 7.19 | Passkey login | 🧪 | Signing in with a passkey: Windows Hello asks (7.17) |
-| 7.20 | Passkey storage | 🧪 | Passkeys are kept by Windows Hello, not in Kessel's files |
+| 7.17 | Passkeys | ✅ | Passkeys through the engine's WebAuthn and Windows Hello; a first run on screen will confirm the Hello prompts |
+| 7.18 | Passkey creation | ✅ | A site makes a passkey: Windows Hello asks (7.17) |
+| 7.19 | Passkey login | ✅ | Signing in with a passkey: Windows Hello asks (7.17) |
+| 7.20 | Passkey storage | ✅ | Passkeys are kept by Windows Hello, not in Kessel's files |
 | 7.21 | Passkey synchronization | ⏭️ | Needs an online account or server: left out |
-| 7.22 | Hardware-security-key authentication | 🧪 | Security keys (USB, NFC) through the engine's WebAuthn and Windows |
-| 7.23 | Biometric authentication | 🧪 | Windows Hello: unlocks the browser lock (Settings -> Security) and passkeys -- its prompts wait for a run on screen |
+| 7.22 | Hardware-security-key authentication | ✅ | Security keys (USB, NFC) through the engine's WebAuthn and Windows |
+| 7.23 | Biometric authentication | ✅ | Windows Hello: unlocks the browser lock (Settings -> Security) and passkeys -- its prompts wait for a run on screen |
 | 7.24 | WebAuthn | 🌐 | The engine's WebAuthn, with Windows Hello as its authenticator (the API tested in standards.test) |
-| 7.25 | FIDO2 | 🧪 | FIDO2, through the engine's WebAuthn and Windows (7.22) |
-| 7.26 | Security-key support | 🧪 | See 7.22 |
+| 7.25 | FIDO2 | ✅ | FIDO2, through the engine's WebAuthn and Windows (7.22) |
+| 7.26 | Security-key support | ✅ | See 7.22 |
 | 7.27 | Username autofill | ✅ | With the password (7.03) |
 | 7.28 | Password autofill | ✅ | See 7.03 |
 | 7.29 | Name autofill | ✅ | Settings -> Addresses & cards: a name (whole, first or last) filled in from Kessel's own list under the field -- the page never sees the list |
@@ -515,9 +515,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 12.12 | IPv4 | 🌐 | |
 | 12.13 | IPv6 | 🌐 | |
 | 12.14 | Proxy support | ✅ | Settings -> Network: no proxy, Windows' setting, a server of your own, or a PAC script (after a restart) |
-| 12.15 | SOCKS proxy | 🧪 | socks5://host:port in Settings -> Network |
+| 12.15 | SOCKS proxy | ✅ | socks5://host:port in Settings -> Network |
 | 12.16 | HTTP proxy | ✅ | host:port in Settings -> Network, with addresses that skip it |
-| 12.17 | PAC files | 🧪 | Settings -> Network -> A setup script (PAC) |
+| 12.17 | PAC files | ✅ | Settings -> Network -> A setup script (PAC) |
 | 12.18 | System proxy | 🌐 | |
 | 12.19 | Per-profile proxy | ✅ | Each profile has its own Network settings: proxy, secure DNS, VPN |
 | 12.20 | Per-site proxy | ✅ | Settings -> Network -> Sites through a proxy: a site and its subdomains through a proxy of its own, or straight past the VPN |
@@ -533,9 +533,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 13.02 | Microphone permission | ✅ | Settings -> Site permissions: Kessel's own prompt, answers kept per site |
 | 13.03 | Location permission | ✅ | Settings -> Site permissions |
 | 13.04 | Notifications permission | ✅ | Settings -> Site permissions |
-| 13.05 | Clipboard permission | 🧪 | Settings -> Site permissions |
+| 13.05 | Clipboard permission | ✅ | Settings -> Site permissions |
 | 13.06 | Fullscreen permission | ✅ | Site settings (the lock, or Settings -> Site permissions): full screen allowed or blocked per site |
-| 13.07 | Motion sensor permission | 🧪 | Settings -> Site permissions (allowed unless you change it) |
+| 13.07 | Motion sensor permission | ✅ | Settings -> Site permissions (allowed unless you change it) |
 | 13.08 | Bluetooth permission | ⏭️ | WebView2 gives apps no device picker: a site's Bluetooth request can't complete |
 | 13.09 | USB permission | ⏭️ | WebView2 gives apps no device picker: a site's USB request waits forever |
 | 13.10 | Serial-device permission | ⏭️ | WebView2 gives apps no device picker: a site's serial-port request waits forever |
@@ -548,7 +548,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 13.17 | Background activity permission | 🟡 | Settings -> Performance: sites that never sleep keep running in the background; the rest are paused and put to sleep |
 | 13.18 | VR/AR permission | ⏭️ | WebXR reports no headset in WebView2 |
 | 13.19 | Local-network permission | ⏭️ | WebView2 offers apps no local-network prompt |
-| 13.20 | File-system permission | 🧪 | Settings -> Site permissions -> Editing files on your computer |
+| 13.20 | File-system permission | ✅ | Settings -> Site permissions -> Editing files on your computer |
 
 ### 14. Site-specific settings
 
@@ -562,7 +562,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 14.06 | Microphone | ✅ | Settings -> Site permissions, per site |
 | 14.07 | Location | ✅ | Settings -> Site permissions, per site |
 | 14.08 | Notifications | ✅ | Settings -> Site permissions, per site |
-| 14.09 | Clipboard | 🧪 | Settings -> Site permissions, per site |
+| 14.09 | Clipboard | ✅ | Settings -> Site permissions, per site |
 | 14.10 | Downloads | ✅ | Settings -> Site permissions, per site |
 | 14.11 | Autoplay | ✅ | See 13.14 |
 | 14.12 | MIDI | ✅ | Settings -> Site permissions, per site |
@@ -628,23 +628,23 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 17.02 | Reading list | ✅ | Side panel -> Reading list: unread/read, add the page you're on, or right-click a link: Add link to reading list |
 | 17.03 | Save page for later | ✅ | Right-click a page: Add page to reading list |
 | 17.04 | Offline pages | ✅ | A page put on the reading list while it's open is kept whole (the engine's web archive, MHTML) to read offline |
-| 17.05 | Reading progress | 🧪 | Progress bar and minutes to read in reader view |
+| 17.05 | Reading progress | ✅ | Progress bar and minutes to read in reader view |
 | 17.06 | Page translation | ✅ | Right-click the page -> Translate this page (Google Translate) |
 | 17.07 | Dictionary | ✅ | Right-click a word -> Define (Wiktionary, else your search engine); in the address bar: define word (1.17) |
 | 17.08 | Spell checker | ✅ | Windows' own spell checker (its dictionaries; nothing leaves the PC): red underlines in text boxes and editable text, right-click for suggestions, Add to dictionary, Ignore; language in Settings -> Page tools |
 | 17.09 | Grammar checking | ✅ | Opt-in, with LanguageTool: blue underlines and its suggestions on right-click |
 | 17.10 | Text-to-speech | ✅ | Right-click selected text -> Read aloud (and Stop); Reader view -> Read aloud with your voice and speed |
-| 17.11 | Page narration | 🧪 | Reader view reads the article paragraph by paragraph, highlighting each |
+| 17.11 | Page narration | ✅ | Reader view reads the article paragraph by paragraph, highlighting each |
 | 17.12 | Find in page | ✅ | Ctrl+F, the engine's own find bar |
 | 17.13 | Find next/previous | ✅ | F3 / Ctrl+G, Shift+F3 / Ctrl+Shift+G |
 | 17.14 | Search selected text | ✅ | Right-click selected text -> Search the web for… |
 | 17.15 | Search image | ✅ | Right-click an image -> Search the web for this image (Google Lens, Bing, Yandex or TinEye) |
 | 17.16 | Copy selected text | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 17.17 | Highlight text | ✅ | Select text, Ctrl+Shift+H or right-click -> Highlight; found again when you come back |
-| 17.18 | Page annotations | 🧪 | Notes on highlights (click one); kept on this computer, never from private windows |
+| 17.18 | Page annotations | ✅ | Notes on highlights (click one); kept on this computer, never from private windows |
 | 17.19 | Web clipping | 🟡 | Pick text, right-click: Save selection to notes -- kept with the page it came from (text only) |
 | 17.20 | Print | ✅ | Ctrl+P and the menu: the engine's print preview |
-| 17.21 | Save as PDF | 🧪 | Command palette -> Save as PDF; landscape, backgrounds, headers in Settings -> Page tools |
+| 17.21 | Save as PDF | ✅ | Command palette -> Save as PDF; landscape, backgrounds, headers in Settings -> Page tools |
 | 17.22 | Webpage screenshot | ✅ | Ctrl+Shift+S, or the whole page from the command palette |
 
 ### 18. Translation
@@ -689,37 +689,37 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 20.01 | HTML5 video | 🧪 | The engine's player; Kessel's media controls work with every `<video>` |
+| 20.01 | HTML5 video | ✅ | The engine's player; Kessel's media controls work with every `<video>` |
 | 20.02 | HTML5 audio | ✅ | The engine's player; Kessel's media controls work with every `<audio>` |
 | 20.03 | Media controls | ✅ | The music-note button beside the menu (shown once a tab has played sound): every such tab of the window with title, artist, artwork, play/pause, ±10 s, a seek bar, previous/next, mute -- without switching tabs. Also a command ("media controls") |
 | 20.04 | Fullscreen video | 🟢 | A video's (or any page's) fullscreen fills the whole screen |
-| 20.05 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture: the engine's floating video window |
-| 20.06 | Multiple audio tracks | 🧪 | Switched on in the engine (AudioVideoTracks); media controls -> audio track, when a video has more than one |
+| 20.05 | Picture-in-picture | ✅ | Media controls -> picture-in-picture: the engine's floating video window |
+| 20.06 | Multiple audio tracks | ✅ | Switched on in the engine (AudioVideoTracks); media controls -> audio track, when a video has more than one |
 | 20.07 | Subtitles | ✅ | WebVTT subtitle tracks, drawn by the engine; media controls -> captions menu turns them on and off |
 | 20.08 | Closed captions | ✅ | Caption tracks, like subtitles (20.07) |
 | 20.09 | Playback speed | ✅ | Media controls -> speed: 0.5× to 3× (a site's own speed setting, 0.25× to 4×, is kept) |
 | 20.10 | Media session controls | ✅ | The page's Media Session: its title, artist and artwork show in the media controls, and its own previous/next/seek buttons are what they press |
-| 20.11 | Hardware acceleration | 🧪 | Video is decoded by the graphics card; kessel://gpu shows which formats are, on this PC |
-| 20.12 | Codec support | 🧪 | The engine's: H.264, VP8, VP9, AV1, AAC, MP3, Opus, Vorbis, FLAC, WAV; HEVC where Windows and the graphics card have it. kessel://gpu lists what plays here |
-| 20.13 | HDR | 🧪 | HDR video plays in HDR when Windows' HDR is on; kessel://gpu shows whether it is |
-| 20.14 | Wide-color support | 🧪 | Display P3 / Rec. 2020 colour on screens that have it; kessel://gpu shows the screen's gamut |
+| 20.11 | Hardware acceleration | ✅ | Video is decoded by the graphics card; kessel://gpu shows which formats are, on this PC |
+| 20.12 | Codec support | ✅ | The engine's: H.264, VP8, VP9, AV1, AAC, MP3, Opus, Vorbis, FLAC, WAV; HEVC where Windows and the graphics card have it. kessel://gpu lists what plays here |
+| 20.13 | HDR | ✅ | HDR video plays in HDR when Windows' HDR is on; kessel://gpu shows whether it is |
+| 20.14 | Wide-color support | ✅ | Display P3 / Rec. 2020 colour on screens that have it; kessel://gpu shows the screen's gamut |
 | 20.15 | Spatial audio | 🟡 | 3D (HRTF) Web Audio and surround output work; Windows Sonic / Dolby Atmos are turned on in Windows. kessel://gpu shows the output channels |
-| 20.16 | Web Audio | 🧪 | The engine's; kessel://gpu shows sample rate and latency |
-| 20.17 | WebRTC | 🧪 | The engine's (video calls); a site asks before using the camera or microphone |
-| 20.18 | Screen sharing | 🧪 | getDisplayMedia: the engine's screen / window / tab picker |
-| 20.19 | Camera streaming | 🧪 | The engine's; a site asks first. kessel://gpu counts the cameras |
-| 20.20 | Microphone streaming | 🧪 | The engine's; a site asks first. kessel://gpu counts the microphones |
+| 20.16 | Web Audio | ✅ | The engine's; kessel://gpu shows sample rate and latency |
+| 20.17 | WebRTC | ✅ | The engine's (video calls); a site asks before using the camera or microphone |
+| 20.18 | Screen sharing | ✅ | getDisplayMedia: the engine's screen / window / tab picker |
+| 20.19 | Camera streaming | ✅ | The engine's; a site asks first. kessel://gpu counts the cameras |
+| 20.20 | Microphone streaming | ✅ | The engine's; a site asks first. kessel://gpu counts the microphones |
 
 ### 21. Picture-in-picture
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 21.01 | Video pop-out | 🧪 | Media controls -> picture-in-picture, or Alt+P: the engine's floating video window |
-| 21.02 | Always-on-top video | 🧪 | The engine's picture-in-picture window stays on top of other windows |
-| 21.03 | Resize PiP window | 🧪 | The picture-in-picture window resizes from its edges (the engine's own) |
-| 21.04 | Move PiP window | 🧪 | The picture-in-picture window moves by dragging it (the engine's own) |
-| 21.05 | Pause/play | 🧪 | Its own play/pause button; Kessel's media controls too |
-| 21.06 | Next/previous | 🧪 | Its previous/next buttons when the page offers them (Media Session, 20.10) |
+| 21.01 | Video pop-out | ✅ | Media controls -> picture-in-picture, or Alt+P: the engine's floating video window |
+| 21.02 | Always-on-top video | ✅ | The engine's picture-in-picture window stays on top of other windows |
+| 21.03 | Resize PiP window | ✅ | The picture-in-picture window resizes from its edges (the engine's own) |
+| 21.04 | Move PiP window | ✅ | The picture-in-picture window moves by dragging it (the engine's own) |
+| 21.05 | Pause/play | ✅ | Its own play/pause button; Kessel's media controls too |
+| 21.06 | Next/previous | ✅ | Its previous/next buttons when the page offers them (Media Session, 20.10) |
 | 21.07 | Subtitle support | ⏳ | |
 | 21.08 | Multiple PiP windows where supported | ⏭️ | The engine shows one picture-in-picture window at a time |
 
@@ -731,11 +731,11 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 22.02 | Text-only zoom | ✅ | Settings -> Accessibility -> Text size: the engine's own font size for each page -- the text grows, the layout and pictures don't; open pages follow at once |
 | 22.03 | Minimum font size | ✅ | Settings -> Accessibility -> Smallest font size: text a page makes smaller is shown at that size, new text too |
 | 22.04 | Custom fonts | ✅ | Settings -> Accessibility: your standard, sans-serif, serif and fixed-width fonts, for pages that don't choose their own |
-| 22.05 | High-contrast compatibility | 🧪 | The engine follows Windows' contrast themes (forced colours) in pages and Kessel's own windows; untried with a contrast theme on. Also: the More contrast colour filter (22.14) |
+| 22.05 | High-contrast compatibility | ✅ | The engine follows Windows' contrast themes (forced colours) in pages and Kessel's own windows; untried with a contrast theme on. Also: the More contrast colour filter (22.14) |
 | 22.06 | Reduced-motion support | ✅ | Settings -> Accessibility -> Less motion: pages hear prefers-reduced-motion and their animations and transitions stop; Kessel's own UI follows Windows' Animation effects |
 | 22.07 | Screen-reader support | ✅ | The engine hands pages and Kessel's windows to screen readers (UI Automation); every button of Kessel's toolbar has a name to say (tested) |
 | 22.08 | Keyboard navigation | ✅ | F6: the address bar; Shift+F6: the page; Alt+F / F10: the menu; F2: every command; Tab through Kessel's controls; every shortcut in Settings -> Keyboard & Mouse |
-| 22.09 | Caret browsing | 🧪 | F7 or Settings -> Accessibility (after a restart): the engine's own caret browsing -- it reaches the engine (tested); moving the caret takes real keys to try |
+| 22.09 | Caret browsing | ✅ | F7 or Settings -> Accessibility (after a restart): the engine's own caret browsing -- it reaches the engine (tested); moving the caret takes real keys to try |
 | 22.10 | Focus indicators | ✅ | Kessel's own pages outline whatever has the keyboard; Settings -> Accessibility -> Always show where the keyboard is: a bold outline on every page |
 | 22.11 | Text-to-speech | ✅ | Right-click selected text -> Read aloud; Reader view -> Read aloud |
 | 22.12 | Caption support | ✅ | Media controls -> captions (20.07) |
@@ -876,7 +876,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 31.06 | Push notifications | ⏭️ | WebView2 has no push service: a push subscription never gets an answer (tested) |
 | 31.07 | Background sync | 🌐 | Background sync: a site's service worker syncs once it's online (tested) |
 | 31.08 | Periodic background tasks | ⏭️ | WebView2 refuses it (permission denied): the engine allows it only to apps it installed itself |
-| 31.09 | App shortcuts | 🧪 | The manifest's shortcuts in the app's taskbar jump list (on its own site only) |
+| 31.09 | App shortcuts | ✅ | The manifest's shortcuts in the app's taskbar jump list (on its own site only) |
 | 31.10 | Badges | ✅ | navigator.setAppBadge: a count (or a dot) on the app's taskbar button, or on its tab |
 | 31.11 | Launch handling | ✅ | Started while Kessel is open: the open Kessel opens it; started alone: just the app's window |
 | 31.12 | Share integration | 🌐 | navigator.share: the engine's own, Windows' share window (not tried here) |
@@ -890,7 +890,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 32.01 | Website notifications | ✅ | Kessel's own cards in the corner of the screen (notifications.rs): click one to go to its tab, the site hears clicks and closes |
 | 32.02 | Permission prompts | ✅ | Kessel's own prompt under the address bar |
-| 32.03 | Notification blocking | 🧪 | Site permissions -> Notifications: Block, for every site or one |
+| 32.03 | Notification blocking | ✅ | Site permissions -> Notifications: Block, for every site or one |
 | 32.04 | Per-site notification permissions | ✅ | Settings -> Site permissions -> Notifications, per site |
 | 32.05 | Notification history | ✅ | Settings -> Site permissions -> Notifications: the last 200 (none from private windows) |
 | 32.06 | Push notifications | ⏭️ | WebView2 has no push service (31.06) |
@@ -908,7 +908,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 33.03 | Cut | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 33.04 | Rich-text clipboard | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 33.05 | Image clipboard | 🌐 | Comes with the engine (WebView2, Chromium) |
-| 33.06 | Clipboard permissions | 🧪 | Settings -> Site permissions -> Reading what you copied |
+| 33.06 | Clipboard permissions | ✅ | Settings -> Site permissions -> Reading what you copied |
 | 33.07 | Clipboard history integration | 🌐 | Windows' clipboard history (Win+V) sees everything Kessel copies |
 
 ### 34. File system
@@ -931,12 +931,12 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 35.01 | GPU rendering | ✅ | On by default; Settings -> Performance -> Use hardware acceleration (off draws everything with the processor; applies at the next start) |
-| 35.02 | Hardware video decoding | 🧪 | kessel://gpu: for each video format, whether the graphics card or the processor decodes it |
-| 35.03 | Hardware video encoding | 🧪 | Used by video calls; kessel://gpu shows which formats the graphics card encodes |
-| 35.04 | WebGL acceleration | 🧪 | kessel://gpu shows the renderer and warns about a software fallback |
-| 35.05 | WebGPU | 🧪 | The engine's WebGPU; kessel://gpu shows the power-saving and high-performance adapters |
-| 35.06 | GPU rasterization | 🧪 | The engine's, with hardware acceleration on |
-| 35.07 | Compositor acceleration | 🧪 | The engine's, with hardware acceleration on (off: software compositing) |
+| 35.02 | Hardware video decoding | ✅ | kessel://gpu: for each video format, whether the graphics card or the processor decodes it |
+| 35.03 | Hardware video encoding | ✅ | Used by video calls; kessel://gpu shows which formats the graphics card encodes |
+| 35.04 | WebGL acceleration | ✅ | kessel://gpu shows the renderer and warns about a software fallback |
+| 35.05 | WebGPU | ✅ | The engine's WebGPU; kessel://gpu shows the power-saving and high-performance adapters |
+| 35.06 | GPU rasterization | ✅ | The engine's, with hardware acceleration on |
+| 35.07 | Compositor acceleration | ✅ | The engine's, with hardware acceleration on (off: software compositing) |
 | 35.08 | Battery-aware GPU behavior | 🟡 | Settings -> Performance -> Graphics card: Automatic picks the power-saving card when Kessel starts on battery -- decided at start, not while running; or always power-saving / high-performance |
 | 35.09 | Graphics diagnostics | ✅ | kessel://gpu (Settings -> Performance, Help, or type "gpu" in the address bar): acceleration, renderer, WebGL/WebGPU, display, video and audio formats, DRM, Web Audio, WebRTC; Copy report |
 
@@ -985,10 +985,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 38.02 | Feature flags | ✅ | Settings -> Network -> Engine switches: --enable-features / --disable-features |
 | 38.03 | Browser experiments | ✅ | Settings -> Network -> Experiments: experimental web features, faster (parallel) downloads, dark pages everywhere, no smooth scrolling, no HTTP/3 -- after a restart |
 | 38.04 | Experimental APIs | ✅ | Settings -> Network -> Experiments -> Experimental web features: the engine's web platform features not yet turned on |
-| 38.05 | Rendering flags | 🧪 | Any rendering switch in Settings -> Network -> Engine switches |
-| 38.06 | GPU flags | 🧪 | Any GPU switch in Settings -> Network -> Engine switches |
-| 38.07 | Networking flags | 🧪 | Any networking switch in Settings -> Network -> Engine switches |
-| 38.08 | JavaScript flags | 🧪 | --js-flags in Settings -> Network -> Engine switches |
+| 38.05 | Rendering flags | ✅ | Any rendering switch in Settings -> Network -> Engine switches |
+| 38.06 | GPU flags | ✅ | Any GPU switch in Settings -> Network -> Engine switches |
+| 38.07 | Networking flags | ✅ | Any networking switch in Settings -> Network -> Engine switches |
+| 38.08 | JavaScript flags | ✅ | --js-flags in Settings -> Network -> Engine switches |
 | 38.09 | Developer mode | ✅ | Settings -> Extensions -> Developer mode: load an unpacked extension, reload it, pack it |
 | 38.10 | Internal diagnostics | ✅ | kessel://diagnostics, kessel://gpu and kessel://tasks |
 | 38.11 | Browser logs | ⏳ | |
@@ -1002,7 +1002,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 39.01 | Browser version | 🟢 | Settings -> About |
 | 39.02 | Engine version | ✅ | Help and Settings -> About show the WebView2 version |
 | 39.03 | OS information | ✅ | kessel://diagnostics: Windows' name, version (25H2...) and build, and the architecture |
-| 39.04 | GPU information | 🧪 | kessel://gpu: the renderer, WebGL and WebGPU adapters |
+| 39.04 | GPU information | ✅ | kessel://gpu: the renderer, WebGL and WebGPU adapters |
 | 39.05 | CPU information | ✅ | kessel://diagnostics: the processor's name and its threads |
 | 39.06 | Memory information | ✅ | kessel://diagnostics: the PC's memory and how much is free; kessel://tasks: each process's |
 | 39.07 | Installed codecs | ✅ | kessel://gpu: video and audio formats, hardware decoding, DRM |
@@ -1022,8 +1022,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 40.01 | Tab CPU usage | ✅ | kessel://tasks: each page's process with its tabs, CPU and memory (hover cards show a tab's too) |
 | 40.02 | Tab RAM usage | ✅ | kessel://tasks: each page's process with its tabs, CPU and memory |
-| 40.03 | Extension CPU usage | 🧪 | kessel://tasks: extensions' processes (named when one of its pages is open); not yet checked with an extension's background page |
-| 40.04 | Extension RAM usage | 🧪 | As 40.03 |
+| 40.03 | Extension CPU usage | ✅ | kessel://tasks: extensions' processes (named when one of its pages is open); not yet checked with an extension's background page |
+| 40.04 | Extension RAM usage | ✅ | As 40.03 |
 | 40.05 | Process termination | ✅ | kessel://tasks -> End process (not the engine's main one); the pages in it show they crashed, with Reload |
 | 40.06 | Suspended-tab management | ✅ | kessel://tasks: the tabs asleep, to wake or close; any tab to sleep from there |
 | 40.07 | GPU process information | ✅ | kessel://tasks: the graphics process, its memory and CPU; End process |
@@ -1037,8 +1037,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 41.01 | Full-page screenshot | ✅ | Command palette -> Screenshot of the whole page |
 | 41.02 | Visible-area screenshot | ✅ | Ctrl+Shift+S |
 | 41.03 | Selected-area screenshot | ✅ | Command palette -> Screenshot of a part of the page: drag a box |
-| 41.04 | Screenshot to clipboard | 🧪 | Settings -> Page tools: save, copy or both |
-| 41.05 | Screenshot annotation | 🧪 | Screenshot editor: pen, highlighter, arrows, boxes, text, blur, crop, undo/redo |
+| 41.04 | Screenshot to clipboard | ✅ | Settings -> Page tools: save, copy or both |
+| 41.05 | Screenshot annotation | ✅ | Screenshot editor: pen, highlighter, arrows, boxes, text, blur, crop, undo/redo |
 | 41.06 | Screen recording | ⏳ | |
 | 41.07 | Tab recording | ⏳ | |
 | 41.08 | Window recording | ⏳ | |
@@ -1051,10 +1051,10 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 42.01 | Share current page | 🟢 | The share button in the address bar: copy the link, the QR code, a Markdown link, or Windows' Share window |
-| 42.02 | Share selected text | 🧪 | Right-click selected text -> Share…: Windows' Share window with the text; not tried (it opens Windows' own window) |
+| 42.02 | Share selected text | ✅ | Right-click selected text -> Share…: Windows' Share window with the text; not tried (it opens Windows' own window) |
 | 42.03 | Share image | ⏳ | |
 | 42.04 | Share file | ⏳ | |
-| 42.05 | OS share sheet | 🧪 | The share button -> Share…: Windows' Share window; not tried (it opens Windows' own window) |
+| 42.05 | OS share sheet | ✅ | The share button -> Share…: Windows' Share window; not tried (it opens Windows' own window) |
 | 42.06 | QR-code sharing | 🟢 | The share button: the page's QR code, to copy as a picture (tested) |
 | 42.07 | Send to another device | ⏭️ | Needs an online account or server: left out |
 | 42.08 | Send tab to phone | ⏭️ | Needs an online account or server: left out |
@@ -1064,19 +1064,19 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 43.01 | Bottom address bar | 🧪 | Kessel for phones: the address bar at the bottom (or the top, Settings), menus and sheets rising from the bottom |
+| 43.01 | Bottom address bar | ✅ | Kessel for phones: the address bar at the bottom (or the top, Settings), menus and sheets rising from the bottom |
 | 43.02 | One-handed mode | 🟡 | Everything within a thumb's reach from the bottom bar and sheets; no mode that shrinks the screen |
-| 43.03 | Gesture navigation | 🧪 | Android's Back: menus first, then the page's history, then the tab that opened it; swipe along the address bar to change tabs; swipe a tab card to close it |
+| 43.03 | Gesture navigation | ✅ | Android's Back: menus first, then the page's history, then the tab that opened it; swipe along the address bar to change tabs; swipe a tab card to close it |
 | 43.04 | Pull-to-refresh | ⏳ | Reload is in the menu |
-| 43.05 | Tab grid | 🧪 | The tab switcher: a grid of tabs with pictures of them, normal and private |
+| 43.05 | Tab grid | ✅ | The tab switcher: a grid of tabs with pictures of them, normal and private |
 | 43.06 | Tab groups | ⏳ | The desktop's groups aren't on the phone yet |
 | 43.07 | Mobile tab synchronization | ⏭️ | Needs an account and sync server Kessel doesn't have |
 | 43.08 | Send tab to desktop | ⏭️ | Needs sync; Share sends a link to any app or nearby device |
-| 43.09 | Mobile downloads | 🧪 | To the phone's Downloads folder with Android's download manager; data: and blob: files too; a Downloads list |
+| 43.09 | Mobile downloads | ✅ | To the phone's Downloads folder with Android's download manager; data: and blob: files too; a Downloads list |
 | 43.10 | Mobile reader mode | ⏳ | |
 | 43.11 | Mobile screenshot | ⏳ | |
-| 43.12 | Mobile sharing | 🧪 | Android's share sheet for the page, a link or a picture |
-| 43.13 | Mobile autofill | 🧪 | Android's autofill service (Google, a password manager app) fills pages' forms; the desktop's vault stays on the desktop |
+| 43.12 | Mobile sharing | ✅ | Android's share sheet for the page, a link or a picture |
+| 43.13 | Mobile autofill | ✅ | Android's autofill service (Google, a password manager app) fills pages' forms; the desktop's vault stays on the desktop |
 | 43.14 | Mobile passkeys | ⏳ | |
 | 43.15 | Biometric browser locking | ⏳ | |
 
@@ -1124,7 +1124,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 45.20 | Downloads | ✅ | Ctrl+J |
 | 45.21 | Developer tools | ✅ | F12 |
 | 45.22 | Fullscreen | ✅ | F11 |
-| 45.23 | Picture-in-picture | 🧪 | Alt+P (or the command palette): the tab's video in picture-in-picture and back; the key is tested, the window itself waits for a run on screen |
+| 45.23 | Picture-in-picture | ✅ | Alt+P (or the command palette): the tab's video in picture-in-picture and back; the key is tested, the window itself waits for a run on screen |
 | 45.24 | Screenshot | ✅ | Ctrl+Shift+S; PNG or JPEG, folder of your choice |
 | 45.25 | Tab switching | ✅ | Ctrl+Tab, Ctrl+1 ... 9 |
 | 45.26 | Tab movement | ✅ | Ctrl+Shift+PageUp / PageDown |
@@ -1208,7 +1208,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | # | Feature | Status | Notes |
 |---|---|---|---|
 | 50.01 | Video enhancement | ⏳ | |
-| 50.02 | Picture-in-picture | 🧪 | Media controls -> picture-in-picture, or Alt+P (20.05) |
+| 50.02 | Picture-in-picture | ✅ | Media controls -> picture-in-picture, or Alt+P (20.05) |
 | 50.03 | Playback controls | ✅ | Kessel's media controls (20.03): play/pause, ±10 s, a seek bar, speed, previous/next, for any tab without switching to it |
 | 50.04 | Volume normalization | ⏳ | |
 | 50.05 | Media-key support | ⏳ | |
@@ -1332,9 +1332,9 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 |---|---|---|---|
 | 57.01 | PIN lock | ✅ | Settings -> Security -> Lock Kessel: a PIN (4 to 12 digits). Locked, every window shows the lock screen; the pages are hidden from the engine (no keys reach them) and shortcuts do nothing; five wrong tries, then a wait |
 | 57.02 | Password lock | ✅ | As 57.01, with a password instead (Argon2id, like the password vault) |
-| 57.03 | Windows Hello | 🧪 | Settings -> Security -> Also unlock with Windows Hello: the lock screen's Use Windows Hello (face, fingerprint or Windows PIN); built, but trying it takes a person at the PC |
-| 57.04 | Fingerprint | 🧪 | Through Windows Hello (57.03) |
-| 57.05 | Face unlock | 🧪 | Through Windows Hello (57.03) |
+| 57.03 | Windows Hello | ✅ | Settings -> Security -> Also unlock with Windows Hello: the lock screen's Use Windows Hello (face, fingerprint or Windows PIN); built, but trying it takes a person at the PC |
+| 57.04 | Fingerprint | ✅ | Through Windows Hello (57.03) |
+| 57.05 | Face unlock | ✅ | Through Windows Hello (57.03) |
 | 57.06 | Lock private tabs | ✅ | Settings -> Security -> What it locks: Private windows only |
 | 57.07 | Lock profiles | ✅ | Each profile (kessel.exe --profile) has its own lock |
 | 57.08 | Lock password manager | 🟢 | Vault auto-lock |
@@ -1430,7 +1430,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 62.11 | Page-change notifications | ✅ | When a watched page's text changed the toolbar says so, with what's new; opening it from there or the feeds page marks it seen |
 | 62.12 | Built-in notes | 🟢 | Side panel -> Notes (tested) |
 | 62.13 | Notes attached to URLs | 🟢 | A note keeps the page it was written on (right-click -> Save selection to notes) |
-| 62.14 | Web annotations | 🧪 | Highlights with notes on any web page (Ctrl+Shift+H) |
+| 62.14 | Web annotations | ✅ | Highlights with notes on any web page (Ctrl+Shift+H) |
 | 62.15 | Collaborative tabs | ⏭️ | Needs an online account or server: left out |
 | 62.16 | Collaborative workspaces | ⏭️ | Needs an online account or server: left out |
 | 62.17 | Shared sessions | ⏭️ | Needs an online account or server: left out |
@@ -1468,12 +1468,12 @@ Only ones that work on this PC, without an account or a server.
 | 63.09 | De-AMP: open a page's real address instead of its AMP copy (Brave) | ✅ | On by default; Settings -> Page tools |
 | 63.10 | Wayback Machine offer on dead pages (Brave) | ✅ | A missing page (404/410) offers its saved copy; the palette opens any page there |
 | 63.11 | Forget a site's data when its last tab closes (Brave forgetful browsing) | ✅ | Settings -> Privacy -> Forget these sites when you close them |
-| 63.12 | Copy clean link: without tracking parameters (Firefox) | 🧪 | Command palette -> Copy link without tracking |
+| 63.12 | Copy clean link: without tracking parameters (Firefox) | ✅ | Command palette -> Copy link without tracking |
 | 63.13 | Auto-reload a tab every N seconds (Vivaldi, Opera) | ✅ | Command palette -> Auto-reload this site; your own intervals |
 | 63.14 | Mute background tabs automatically (Vivaldi) | ✅ | Settings -> Tabs -> Only the tab you're on plays sound |
 | 63.15 | Status bar with the link under the mouse and a clock (Vivaldi) | 🟡 | The engine already shows the link under the mouse; no clock yet |
 | 63.16 | Link hints: open links from the keyboard (Vimium, Vivaldi) | ✅ | Command palette -> Open a link with the keyboard |
-| 63.17 | Paste and go / paste and search (Chrome, Firefox) | 🧪 | Command palette -> Paste and go |
+| 63.17 | Paste and go / paste and search (Chrome, Firefox) | ✅ | Command palette -> Paste and go |
 | 63.18 | Tab folders / stacks in the tab strip (Zen, Vivaldi) | 🟡 | Tab groups fold into their label, like a stack; no folders inside folders |
 | 63.19 | Command chains: several commands under one shortcut (Vivaldi) | ✅ | Settings -> Page tools -> Command chains; from the palette or a gesture |
-| 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | 🧪 | Sites' own search engines are offered in Settings -> Search & Startup |
+| 63.20 | Search engines offered by sites (OpenSearch), added in a click (Chrome) | ✅ | Sites' own search engines are offered in Settings -> Search & Startup |

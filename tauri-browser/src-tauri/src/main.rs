@@ -5848,6 +5848,13 @@ fn main() {
                 sessions: Mutex::new(Vec::new()),
             };
             app.manage(state);
+            // The next starts on this profile come here -- from now, not
+            // once the windows are up: a link clicked twice, or a second one
+            // while Kessel was still starting, used to find no one listening
+            // and start a whole second Kessel (two windows). What they ask
+            // for is done once setup is over (instance::serve, on the main
+            // thread), joining a window still loading (instance::add_urls).
+            instance::listen(app.handle(), &data_dir);
             app.manage(Vault::new(data_dir.clone()));
             start_shields(app.handle());
             security::start(app.handle());
@@ -5877,7 +5884,6 @@ fn main() {
                     let id = instance::open_app_window(app.handle(), url)?;
                     apps::give_files(id, request.files.iter().map(PathBuf::from).collect());
                 }
-                instance::listen(app.handle(), &data_dir);
                 let app_for_watchdog = app.handle().clone();
                 std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
                 return Ok(());
@@ -5902,17 +5908,18 @@ fn main() {
                 let init = if pages.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": pages }) };
                 browser_windows::create(app.handle(), false, init)?;
             } else {
-                for session in saved {
-                    browser_windows::create(app.handle(), false, serde_json::json!({ "session": session }))?;
-                }
-                // Your tabs came back; the addresses asked for, in a window
-                // of their own.
-                if !request.urls.is_empty() {
-                    browser_windows::create(app.handle(), false, serde_json::json!({ "urls": request.urls }))?;
+                // Your tabs come back; the addresses asked for (the link
+                // that started Kessel) open in front in the last of your
+                // windows -- the one in front -- not in a second window.
+                let last = saved.len() - 1;
+                for (i, session) in saved.into_iter().enumerate() {
+                    let mut init = serde_json::json!({ "session": session });
+                    if i == last {
+                        instance::add_urls(&mut init, &request.urls);
+                    }
+                    browser_windows::create(app.handle(), false, init)?;
                 }
             }
-            // The next starts on this profile come here.
-            instance::listen(app.handle(), &data_dir);
 
             let app_for_watchdog = app.handle().clone();
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
