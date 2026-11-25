@@ -54,15 +54,16 @@ export const tests = [
     },
   },
   {
-    name: "Instrument's pages: typing goes into an LCD -- a classic look keeps its own",
-    async run({ launch, assert, waitFor }) {
+    name: "Instrument: one row, and typing goes into a plain field -- the LCD is for read-outs",
+    async run({ launch, assert }) {
       const k = await launch({ settings: { ui_style: "instrument" } });
+      const toolbar = await k.toolbar();
+      assert.equal(await htmlAttr(toolbar, "data-k-layout"), "one", "the address beside the tabs");
+      assert.equal(await toolbar.evaluate(`document.getElementById("address-wrap").parentElement.id`), "tab-bar", "the address is in the tab strip");
       const settings = await openSettings(k);
       assert.equal(await htmlAttr(settings, "data-k-page"), "settings", "the page is named for instrument.css");
-      const font = () => settings.evaluate(`getComputedStyle(document.querySelector(".k-search .field")).fontFamily`);
-      assert(/Cascadia/.test(await font()), `the LCD's characters: ${await font()}`);
-      await settings.evaluate(`document.querySelector('.style-card[data-style="robust"]').click()`);
-      await waitFor(async () => !/Cascadia/.test(await font()), { message: "Robust: the page as it was" });
+      const field = await settings.evaluate(`(() => { const s = getComputedStyle(document.querySelector(".k-search .field")); return s.backgroundColor + " " + s.fontFamily; })()`);
+      assert(!/Cascadia/.test(field) && !/rgb\(58, 70, 60\)/.test(field), `a plain field, not the LCD: ${field}`);
     },
   },
   {

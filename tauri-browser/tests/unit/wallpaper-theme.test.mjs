@@ -88,9 +88,10 @@ test("Colours from the wallpaper recolours the whole look, only while it's on", 
   // Off: the style's own colours.
   const off = resolveStyle({ ui_style: "clean", ui_custom: {} });
   assert.notEqual(off.values.bg, wall.palette.bg);
-  // Instrument keeps its LCD.
+  // Instrument's address is a plain field, so it takes the wallpaper's
+  // colours too (its LCD read-outs are instrument.css's own).
   const inst = resolveStyle({ ui_style: "instrument", ui_custom: { instrument: STYLES.instrument.presets.find((p) => p.name === "Desktop").values } });
-  assert.equal(inst.values.addressBg, resolveStyle({ ui_style: "instrument", ui_custom: { instrument: { mode: "dark" } } }).values.addressBg);
+  assert.notEqual(inst.values.addressBg, resolveStyle({ ui_style: "instrument", ui_custom: { instrument: { mode: "dark" } } }).values.addressBg);
   setWallpaperSwatches(null);
   // No wallpaper colours (yet): the style's own.
   assert.equal(resolveStyle(on).values.bg, resolveStyle({ ui_style: "clean", ui_custom: { clean: { mode: "dark" } } }).values.bg);

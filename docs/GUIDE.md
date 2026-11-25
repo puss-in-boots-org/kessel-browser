@@ -129,7 +129,7 @@ Install sites as apps, add extensions and keep track of what you download.
 Make Kessel look and feel the way you want.
 
 - **Styles and colours.** Pick a style and its colours, a wallpaper, light or dark (or follow Windows). Chrome themes' colours work too. Settings → Appearance (`kessel://settings/appearance`)
-- **Instrument.** Kessel's own look is a piece of hardware: tabs sit on numbered keys (Ctrl+1 to 8 jump to them), the address shows in an LCD, LEDs say what's loading or playing, and the grille beside the tabs is where you grab the window. Settings and the other Kessel pages are panels of keys, slide switches and faders. **Graphite** is the dark version. The looks Kessel had before are under Appearance → Classic looks, each with your changes kept.
+- **Instrument.** Kessel's own look is a quiet piece of hardware: one row, with the address beside the tabs, the tab you're on raised in light, and LEDs saying what's loading or playing. The toolbar's buttons stay plain icons until you point at them; the clock and counts read out on a small LCD. Prefer the address on its own row? Pick **Two rows**. Settings and the other Kessel pages are panels of keys, slide switches and faders. **Graphite** is the dark version. The looks Kessel had before are under Appearance → Classic looks, each with your changes kept.
 - **Tabs on the side.** Settings → Tabs → Tab layout: **Side** puts the tabs in a column beside the page, resizable and collapsible to icons.
 - **Compact or touch.** Settings → Appearance → Density: Compact for more page, Touch for bigger targets. The toolbar's buttons can be hidden and moved.
 - **Split view.** Right-click a tab → **Open side by side with this tab**, or drag a tab to the page's edge: two tabs in one window.
@@ -196,8 +196,8 @@ Everything Kessel does, and how to use it -- as in Settings → All features.
 | Pop-out window | Drag a tab below the toolbar, or tab menu → Pop out. |
 | Compact or touch | Settings → Appearance → Density: Compact fits more page on the screen; Touch makes tabs, buttons and menus big enough for a finger. Any style. |
 | Your own toolbar | Settings → Appearance → Toolbar buttons: hide the buttons you don't use, and move the others where you want them. |
-| Instrument, Kessel's look | Settings → Appearance: Kessel as a piece of hardware -- tabs on numbered keys (Ctrl+1 to 8), the address in an LCD, loading and sound on LEDs, a grille to grab the window by, and every Kessel page as a panel of keys, switches and faders. Graphite is its dark version. Classic looks: the styles Kessel had before, each with your changes. |
-| One-row toolbar | Settings → Appearance → Toolbar → Layout: One row puts the address bar beside the tabs, so the page starts a whole toolbar higher. Any style (Instrument: its One row preset). |
+| Instrument, Kessel's look | Settings → Appearance: Kessel as a quiet piece of hardware -- one row with the address beside the tabs, the tab you're on raised in light, loading and sound on LEDs, the clock and counts on a small LCD, and every Kessel page as a panel of keys, switches and faders. Two rows is a preset; Graphite is its dark version. Classic looks: the styles Kessel had before, each with your changes. |
+| One-row toolbar | Settings → Appearance → Toolbar → Layout: One row puts the address bar beside the tabs, so the page starts a whole toolbar higher. Any style; Instrument starts in one row (Two rows is its preset). |
 | The page's colour | Settings → Appearance → Colour: the toolbar takes on the colour of the site you're on, and Tabs → Colour-coded tabs washes each tab with its site's colour. Any style. |
 | Site first | Settings → Appearance → Toolbar → Address shows: the site's name stands out, the rest of the address is dimmed, until you click it. |
 | Time-of-day sky | Settings → Appearance → Background → Time of day: the new tab page's sky follows the clock, sun and moon included. It's repainted every half hour, so it costs nothing. |
