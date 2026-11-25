@@ -84,4 +84,24 @@ export const tests = [
       await waitFor(async () => !(await k.targets()).some((t) => t.url.includes("/page/SignIn")), { message: "the popup closed" });
     },
   },
+  {
+    name: "a blank window the page sends to a sign-in (Continue with Google on Claude) stays a window that can talk back",
+    async run({ launch, site, assert, sleep }) {
+      const k = await launch();
+      const { page } = await openPage(k, `${site.origin}/page/Chat`);
+      const before = (await k.tabs()).length;
+      await button(page, "google", `
+        window.signIn = window.open('');
+        setTimeout(() => { window.signIn.location.href = '${site.origin}/page/login?client_id=1&redirect_uri=x'; }, 300);
+      `);
+      const popup = await k.page(`${site.origin}/page/login`);
+      await popup.waitFor(`document.readyState === 'complete'`);
+      assert(await popup.evaluate(`!!window.opener`), "the sign-in window knows its opener");
+      await sleep(500);
+      assert.equal((await k.tabs()).length, before, "not a tab");
+      await page.evaluate(`window.addEventListener('message', (e) => { window.heard = e.data; })`);
+      await popup.evaluate(`window.opener.postMessage('signed-in', '*')`);
+      await page.waitFor(`window.heard === 'signed-in'`, { message: "the opener heard back" });
+    },
+  },
 ];
