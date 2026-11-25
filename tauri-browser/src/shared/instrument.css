@@ -1,13 +1,17 @@
-/* Instrument -- Kessel's own look: the browser as a piece of hardware. The
-   other styles in shared/styles.js are the classic looks; everything here
-   applies only with Instrument on (html[data-ui-style="instrument"]), so a
-   classic look still shows every page exactly as it was.
+/* Instrument -- Kessel's own look: a quiet piece of hardware. The other
+   styles in shared/styles.js are the classic looks; everything here applies
+   only with Instrument on (html[data-ui-style="instrument"]), so a classic
+   look still shows every page exactly as it was.
 
-   A warm grey enclosure. Buttons are keys with a lower edge that sink when
-   pressed; the lit key is orange. Text you type goes into an LCD -- dark
-   glass, green characters. What's happening shows on LEDs. Labels are
-   printed on the case: lowercase, spaced out, in Bahnschrift (Windows' DIN).
-   Switches slide, sliders are faders, keyboard shortcuts are keycaps.
+   A warm grey case and one row of chrome: the address sits beside the tabs
+   (the style's default layout). The toolbar's buttons are plain icons until
+   you point at them; the tab you're on is raised in light. Buttons on
+   Kessel's pages are keys with a thin lower edge; the lit key is orange.
+   The LCD -- dark glass, green characters -- is kept for read-outs (the
+   clock, counts, messages); what you type goes into plain fields. What's
+   happening shows on LEDs. Labels are printed on the case: lowercase,
+   spaced out, in Bahnschrift (Windows' DIN); everything else is in the UI's
+   own face, so it reads at a glance.
 
    Nothing moves on its own -- no glow, no blur, no animation -- so it costs
    nothing to show. html[data-k-page] names the page, popups included
@@ -18,8 +22,8 @@
 html[data-ui-style="instrument"] {
   --k3-label: Bahnschrift, "DIN Alternate", "Segoe UI", sans-serif;
   --k3-lcd: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
-  /* The LCD: its glass is the style's address bar colour. */
-  --k3-lcd-bg: var(--k-address-bg, #3a463c);
+  /* The LCD, for read-outs. */
+  --k3-lcd-bg: #3a463c;
   --k3-lcd-ink: #cde8b8;
   --k3-lcd-dim: #8ea78a;
   --k3-lcd-edge: color-mix(in srgb, var(--k3-lcd-bg) 65%, #000);
@@ -30,7 +34,10 @@ html[data-ui-style="instrument"] {
   --k3-led-green: #3fbf5f;
   --k3-led-amber: #f0a400;
   --k3-led-off: color-mix(in srgb, var(--text-faint) 55%, transparent);
-  --radius-sm: 5px;
+  /* A plain field: a little lighter than the case, sunk by a hair. */
+  --k3-field: var(--k-address-bg, var(--surface-2));
+  --k3-field-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+  --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 10px;
 }
@@ -45,31 +52,28 @@ html[data-ui-style="instrument"] {
     border-radius: 5px;
     background: var(--k3-key);
     border: 1px solid var(--border);
-    border-bottom: 2px solid var(--k3-key-edge);
+    border-bottom: 1px solid var(--k3-key-edge);
     font-weight: 500;
     box-shadow: none;
   }
   & .btn:hover { background: var(--surface-hover); }
-  & .btn:active { transform: translateY(1px); border-bottom-width: 1px; scale: 1; }
+  & .btn:active { transform: translateY(1px); scale: 1; }
   & .btn.primary { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 72%, #000); color: var(--accent-text); }
   & .btn.danger { background: var(--k3-key); color: var(--danger); }
   & .btn.ghost { background: transparent; border-color: transparent; }
   & .btn.ghost:hover { background: var(--surface-hover); }
 
-  /* What you type goes into an LCD. */
+  /* What you type goes into a plain field. */
   & :is(input.field, textarea.field) {
-    background: var(--k3-lcd-bg);
-    color: var(--k3-lcd-ink);
-    caret-color: var(--k3-lcd-ink);
-    border: 1px solid var(--k3-lcd-edge);
-    border-radius: 4px;
-    box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.22);
-    font-family: var(--k3-lcd);
-    font-size: 12.5px;
+    background: var(--k3-field);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.05);
   }
-  & :is(input.field, textarea.field)::placeholder { color: var(--k3-lcd-dim); }
-  & :is(input.field, textarea.field):focus { border-color: var(--accent); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.22), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
-  & select.field { background-color: var(--k3-key); border-bottom: 2px solid var(--k3-key-edge); border-radius: 5px; }
+  & :is(input.field, textarea.field)::placeholder { color: var(--text-faint); }
+  & :is(input.field, textarea.field):focus { border-color: var(--accent); box-shadow: var(--k3-field-ring); }
+  & select.field { background-color: var(--k3-key); border-bottom: 1px solid var(--k3-key-edge); border-radius: 6px; }
 
   /* Slide switches: a dark slot, a ridged knob; on, the slot lights. */
   & .switch { width: 36px; height: 18px; border-radius: 3px; background: var(--k3-slot); box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35); }
@@ -91,9 +95,9 @@ html[data-ui-style="instrument"] {
 
   /* Choices are a row of keys; the chosen one is lit. */
   & .segmented { background: transparent; border: none; padding: 0; gap: 3px; }
-  & .segmented button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; color: var(--text); }
+  & .segmented button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); border-radius: 4px; color: var(--text); }
   & .segmented button.active { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
-  & .chip { border-radius: 4px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); color: var(--text); }
+  & .chip { border-radius: 4px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); color: var(--text); }
   & .chip.active { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
 
   /* Sliders are faders: a thin slot and a cap with a line across it. */
@@ -110,7 +114,7 @@ html[data-ui-style="instrument"] {
   }
 
   /* Keyboard shortcuts are keycaps. */
-  & :is(kbd, .key-chip) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; font-family: var(--k3-label); font-weight: 500; }
+  & :is(kbd, .key-chip) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); border-radius: 4px; font-family: var(--k3-label); font-weight: 500; }
 
   /* Panels are modules screwed into the case. */
   & :is(.card, .setting-card, .modal) { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
@@ -131,96 +135,104 @@ html[data-ui-style="instrument"] {
   & .badge { border-radius: 4px; }
 }
 html[data-ui-style="instrument"][data-k-mode="dark"] {
+  --k3-lcd-bg: #172a1d;
   --k3-lcd-ink: #b9e0a2;
   & :is(.card, .setting-card, .modal) { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05); }
 }
 
 /* ===========================================================================
-   2. The window (index.html): tabs on numbered keys, the address in an LCD,
-      LEDs for loading and sound, a grille to grab the window by
+   2. The window (index.html): one quiet row -- plain icons, the address
+      beside the tabs, the tab you're on raised in light, LEDs for loading
+      and sound
    ========================================================================= */
 
 html[data-ui-style="instrument"][data-page="toolbar"] {
-  /* Every button on the case is a key. */
-  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn, .strip-scroll) {
-    background: var(--k3-key);
-    border: 1px solid var(--border);
-    border-bottom: 2px solid var(--k3-key-edge);
-    border-radius: 5px;
-    color: var(--text);
-  }
-  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):hover { background: var(--surface-hover); }
-  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):active { transform: translateY(1px); border-bottom-width: 1px; scale: 1; }
-  & :is(#nav-cluster > button, #menu-cluster > button):disabled { color: var(--text-faint); }
-  & #nav-cluster { gap: 4px; }
-  & .rail-btn.panel-open { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
-  & .rail-logo { border-radius: 6px; background: var(--accent); color: var(--accent-text); box-shadow: none; border-bottom: 2px solid color-mix(in srgb, var(--accent) 65%, #000); }
+  --k3-hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --k3-press: color-mix(in srgb, var(--text) 12%, transparent);
 
-  /* Tabs: a row of channel keys, numbered as Ctrl+1 to 8 reach them; the
-     tab you're on is the lit one. */
-  & :is(#tabs, #vtabs-list) { counter-reset: k3-key; }
+  /* Plain icons: a key only shows under the mouse. */
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn, .strip-scroll) {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-dim);
+  }
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn, .strip-scroll):hover { background: var(--k3-hover); color: var(--text); }
+  & :is(#nav-cluster > button, #menu-cluster > button, #new-tab-btn, #tab-search-btn, .rail-btn):active { background: var(--k3-press); scale: 1; }
+  & :is(#nav-cluster > button, #menu-cluster > button):disabled { color: var(--text-faint); }
+  & #nav-cluster { gap: 2px; }
+  /* The open side panel: its icon lit, a slim LED bar beside it. */
+  & .rail-btn.panel-open { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
+  & .rail-logo { border-radius: 8px; background: var(--accent); color: var(--accent-text); box-shadow: none; transform: scale(0.88); }
+
+  /* Tabs: flat on the case; the one you're on is raised in light. */
   & .tab {
-    counter-increment: k3-key;
-    background: var(--k3-key);
-    border: 1px solid var(--border);
-    border-bottom: 2px solid var(--k3-key-edge);
-    border-radius: 5px;
-    padding-left: 22px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--text-dim);
+  }
+  & .tab:hover { background: var(--k3-hover); color: var(--text); }
+  & .tab.active {
+    background: var(--k-tab-active-bg, var(--surface-2));
+    border-color: color-mix(in srgb, var(--border) 80%, transparent);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.07);
     color: var(--text);
   }
-  & .tab:hover { background: var(--surface-hover); }
-  & .tab.active { background: var(--accent); border-color: color-mix(in srgb, var(--accent) 72%, #000); color: var(--accent-text); }
-  & .tab.active :is(.tab-title, .close-tab) { color: var(--accent-text); }
-  /* (On the title, placed against the tab: the favicon has its own corner
-     dots.) */
-  & .tab-title::before {
-    content: counter(k3-key);
+  & .tab.active::after { content: none; }
+  & .tab .tab-title { font-weight: 450; }
+  & .tab.active .tab-title { font-weight: 550; }
+  /* A thin rule between two flat tabs, so a row of them still reads as
+     tabs -- not beside the raised one, nor the one under the mouse. */
+  &:not(.vertical-tabs) #tabs > .tab:not(.active, :hover) + .tab:not(.active, :hover, .grouped, .split-left, .split-right)::before {
+    content: "";
     position: absolute;
-    left: 7px;
-    top: 50%;
-    translate: 0 -50%;
-    font: 600 10px/1 var(--k3-label);
-    color: var(--text-faint);
+    left: -2px;
+    top: 25%;
+    bottom: 25%;
+    width: 1px;
+    background: color-mix(in srgb, var(--border) 85%, transparent);
   }
-  & .tab.active .tab-title::before { color: color-mix(in srgb, var(--accent-text) 55%, transparent); }
-  & :is(.tab.narrow, .tab.pinned) { padding-left: var(--k-tab-pad, 8px); }
-  & :is(.tab.narrow, .tab.pinned) .tab-title::before { content: none; }
   /* LEDs: green while a page loads (instead of a spinner: nothing turns),
-     amber while it plays sound; a sleeping tab's key is unlit. */
+     amber while it plays sound. */
   & .tab-favicon.loading svg { display: none; }
   & .tab-favicon.loading::after { content: ""; width: 7px; height: 7px; margin: auto; border-radius: 50%; background: var(--k3-led-green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--k3-led-green) 25%, transparent); }
   & .tab .tab-audio { color: var(--k3-led-amber); }
-  & .tab.active .tab-audio { color: var(--accent-text); }
   & .tab .tab-audio.muted { color: var(--text-faint); }
-  & .tab.discarded:not(.active) { background: color-mix(in srgb, var(--k3-key) 55%, var(--k-chrome-fill, var(--bg))); color: var(--text-faint); }
 
-  /* The address: an LCD. */
-  & #address-wrap { border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); }
-  & :is(#url-input, #url-display) { font-family: var(--k3-lcd); font-size: 12.5px; color: var(--k3-lcd-ink); caret-color: var(--k3-lcd-ink); }
-  & #url-input::placeholder { color: var(--k3-lcd-dim); }
-  & #url-display .u-host { color: var(--k3-lcd-ink); font-weight: 600; }
-  & #url-display .u-rest { color: var(--k3-lcd-dim); }
-  & #address-wrap button { color: var(--k3-lcd-dim); }
-  & #address-wrap button:hover { color: var(--k3-lcd-ink); background: rgb(255 255 255 / 0.07); }
-  & #address-wrap #star-btn.starred { color: var(--accent); }
-  & #address-wrap #shields-btn:not(.off) { color: var(--k3-led-green); }
-  & #shields-count { font-family: var(--k3-lcd); }
-
-  /* The grille: the empty part of the strip, where you grab the window. */
-  & #drag-space {
-    margin: 9px 10px;
-    border-radius: 4px;
-    background-image: radial-gradient(circle, color-mix(in srgb, var(--text) 30%, transparent) 0 1.3px, transparent 1.7px);
-    background-size: 7px 7px;
-    background-position: center;
+  /* The address: a plain field, the site in the UI's face and the rest of
+     the address as small print. */
+  & #address-wrap {
+    background: var(--k3-field);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.05);
   }
+  & #address-wrap:focus-within { border-color: var(--accent); box-shadow: var(--k3-field-ring); }
+  /* In one row the address gives way to the tabs as the strip fills, so
+     their titles stay readable a while longer. */
+  &[data-k-layout="one"]:not(.vertical-tabs) #address-wrap:not(:has(#url-input:focus)) { flex: 0 1 clamp(300px, 24vw, 440px); min-width: 300px; }
+  /* Fewer buttons in the field: the search engine only while you type,
+     Share only under the mouse. */
+  & #address-wrap:not(:focus-within) #engine-btn,
+  & #address-wrap:not(:hover, :focus-within) #share-btn { display: none; }
+  & :is(#url-input, #url-display) { color: var(--text); caret-color: var(--accent); }
+  & #url-input::placeholder { color: var(--text-faint); }
+  & #url-display .u-host { color: var(--text); font-weight: 550; }
+  & #url-display .u-rest { color: var(--text-faint); font-family: var(--k3-lcd); font-size: 11.5px; letter-spacing: -0.01em; }
+  & #address-wrap button { color: var(--text-faint); }
+  & #address-wrap button:hover { color: var(--text); background: var(--k3-hover); }
+  & #address-wrap #star-btn.starred { color: var(--accent); }
+  & #address-wrap #shields-btn:not(.off) { color: var(--success); }
 
-  /* The bookmarks bar: a strip of tape along the case, written on. */
-  & #bookmarks-bar { background: #f1ede1; border-top: 1px solid #ddd6c3; border-bottom: 1px solid #c9c1ab; }
-  & #bookmarks-bar :is(.bm-chip, .bm-empty) { font-family: "Ink Free", "Segoe Print", var(--k3-label); font-size: 13.5px; color: #2c2a24; }
-  & #bookmarks-bar .bm-chip:hover { background: rgb(0 0 0 / 0.06); color: #000; }
+  /* The empty part of the strip stays empty: it's where you grab the
+     window. */
+  & #drag-space { margin: 0; background: none; }
+
+  /* The bookmarks bar: part of the case, in the UI's face. */
+  & #bookmarks-bar { background: var(--k-chrome-fill, var(--bg)); border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
+  & #bookmarks-bar :is(.bm-chip, .bm-empty) { color: var(--text-dim); }
+  & #bookmarks-bar .bm-chip:hover { background: var(--k3-hover); color: var(--text); }
 }
-html[data-ui-style="instrument"][data-page="toolbar"][data-k-mode="dark"] #bookmarks-bar { background: #d9d3c2; }
 
 /* ===========================================================================
    3. The new tab page: the front panel -- the time in an LCD, the date
@@ -242,11 +254,12 @@ html[data-ui-style="instrument"][data-k-page="newtab"] {
     font-weight: 400;
     letter-spacing: 0.02em;
   }
-  & #omnibox-wrap { background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); border-radius: 6px; box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25); }
-  & #omnibox-wrap:focus-within { border-color: var(--accent); box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.25), 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
-  & #omnibox { color: var(--k3-lcd-ink); caret-color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-size: 14px; }
-  & #omnibox::placeholder { color: var(--k3-lcd-dim); }
-  & #omnibox-icon { color: var(--k3-lcd-dim); }
+  /* Search: a plain field, like the address. */
+  & #omnibox-wrap { background: var(--k3-field); border: 1px solid var(--border); border-radius: 10px; box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.05); }
+  & #omnibox-wrap:focus-within { border-color: var(--accent); box-shadow: var(--k3-field-ring); }
+  & #omnibox { color: var(--text); caret-color: var(--accent); font-size: 15px; }
+  & #omnibox::placeholder { color: var(--text-faint); }
+  & #omnibox-icon { color: var(--text-faint); }
 
   /* Labels printed on the case, a rule either side. */
   & :is(.section h2, .panel-head h2) { display: flex; align-items: center; gap: 10px; font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
@@ -254,15 +267,15 @@ html[data-ui-style="instrument"][data-k-page="newtab"] {
   & .panel-head h2::before { content: none; }
 
   /* Sites are pads. */
-  & .tile { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 6px; }
+  & .tile { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); border-radius: 6px; }
   & .tile:hover { background: var(--surface-hover); }
-  & .tile:active { transform: translateY(1px); border-bottom-width: 1px; }
+  & .tile:active { transform: translateY(1px); }
   & .tile .tile-label { font-family: var(--k3-label); color: var(--text); }
 
   /* The widgets are modules in the case. */
   & .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
-  & :is(.corner-btn, .panel-btn) { border-radius: 5px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); color: var(--text); }
-  & :is(.rc, .g-card) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 6px; }
+  & :is(.corner-btn, .panel-btn) { border-radius: 5px; background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); color: var(--text); }
+  & :is(.rc, .g-card) { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); border-radius: 6px; }
   & :is(.rc-host, .rc-when, .g-meta, .g-price, .w-hour-time, .s-sub, .n-saved) { font-family: var(--k3-lcd); font-size: 10.5px; }
   /* The temperature on its own little LCD. */
   & .w-temp { display: inline-block; padding: 2px 10px 4px; border-radius: 4px; background: var(--k3-lcd-bg); border: 1px solid var(--k3-lcd-edge); box-shadow: inset 0 2px 0 rgb(0 0 0 / 0.25); color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-weight: 400; }
@@ -288,7 +301,7 @@ html[data-ui-style="instrument"]:is([data-k-page="settings"], [data-k-page="hist
     background: var(--k3-key);
     color: var(--text);
     font-weight: 600;
-    box-shadow: inset 0 0 0 1px var(--border), inset 0 -2px 0 var(--k3-key-edge);
+    box-shadow: inset 0 0 0 1px var(--border), inset 0 -1px 0 var(--k3-key-edge);
   }
   & :is(#side, #settings-nav) .nav-item.active svg { color: var(--accent); }
   & :is(#side, #settings-nav) .nav-item.active::after {
@@ -304,8 +317,7 @@ html[data-ui-style="instrument"]:is([data-k-page="settings"], [data-k-page="hist
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
   }
   & :is(.sub, .panel > .sub) { color: var(--text-dim); }
-  /* A search box's glass shows its magnifier dim green. */
-  & :is(.search, .k-search, #search-wrap) svg { color: var(--k3-lcd-dim); }
+  & :is(.search, .k-search, #search-wrap) svg { color: var(--text-faint); }
   & main > header { background: transparent; }
 
   /* Read-outs in the LCD's characters. */
@@ -332,26 +344,17 @@ html[data-ui-style="instrument"][data-k-mode="dark"] :is(#side, #settings-nav) .
    ========================================================================= */
 
 html[data-ui-style="instrument"]:is([data-k-page="suggest"], [data-k-page="palette"], [data-k-page="tabsearch"]) {
-  & body { background: var(--k3-lcd-bg); border-color: var(--k3-lcd-edge); border-radius: 6px; color: var(--k3-lcd-ink); }
-  & :is(main, #shell) { color: var(--k3-lcd-ink); font-family: var(--k3-lcd); }
-  & :is(.title, #q, .row) { color: var(--k3-lcd-ink); font-family: var(--k3-lcd); font-size: 12.5px; }
-  & #q { caret-color: var(--k3-lcd-ink); }
-  & #q::placeholder { color: var(--k3-lcd-dim); }
-  & #search-wrap { border-bottom-color: var(--k3-lcd-edge); }
-  & :is(.detail, .sub, .side, .section, #count, .tail) { color: var(--k3-lcd-dim); opacity: 1; font-family: var(--k3-lcd); }
-  & .detail.url { color: var(--k3-lcd-ink); opacity: 0.8; }
-  & .section { text-transform: lowercase; letter-spacing: 0.1em; font-weight: 500; }
-  & svg { color: var(--k3-lcd-dim); }
-  & mark { background: transparent; color: var(--k3-lcd-ink); text-decoration: underline; }
-  & :is(.row.selected, .row.focused, .row:hover) { background: color-mix(in srgb, var(--k3-lcd-ink) 16%, transparent); }
-  & :is(.row.selected, .row.focused) { box-shadow: inset 3px 0 0 var(--k3-lcd-ink); }
-  & kbd { background: transparent; color: var(--k3-lcd-dim); border: 1px solid color-mix(in srgb, var(--k3-lcd-ink) 30%, transparent); }
-  & .app-icon { filter: grayscale(0.2); }
+  & body { border-radius: 9px; }
+  & :is(.detail.url, .sub, .side, #count, .tail) { font-family: var(--k3-lcd); font-size: 11px; letter-spacing: 0; }
+  & .section { font-family: var(--k3-label); font-size: 10.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: lowercase; color: var(--text-dim); }
+  & mark { background: transparent; color: var(--text); font-weight: 600; }
+  & :is(.row.selected, .row.focused) { box-shadow: inset 2px 0 0 var(--accent); }
+  & kbd { font-family: var(--k3-label); }
 }
 
 html[data-ui-style="instrument"]:is([data-k-page="menu"], [data-k-page="context"]) {
   & body { border-radius: 8px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45); }
-  & :is(.item:hover, .item.focused) { background: var(--k3-key); box-shadow: inset 0 0 0 1px var(--border), inset 0 -2px 0 var(--k3-key-edge); border-radius: 5px; }
+  & :is(.item:hover, .item.focused) { background: var(--k3-key); box-shadow: inset 0 0 0 1px var(--border), inset 0 -1px 0 var(--k3-key-edge); border-radius: 5px; }
   & .item.danger:hover { color: var(--danger); }
   & .keys { font-family: var(--k3-label); font-size: 10.5px; color: var(--text-faint); }
   & .header { font-family: var(--k3-label); font-weight: 500; letter-spacing: 0.1em; text-transform: lowercase; color: var(--text-dim); }
@@ -362,7 +365,7 @@ html[data-ui-style="instrument"]:is([data-k-page="siteinfo"], [data-k-page="shie
   & body { border-radius: 8px; }
   & h1 { font-family: var(--k3-label); font-weight: 600; }
   & h3 { font-family: var(--k3-label); font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: lowercase; color: var(--text-dim); }
-  & .rules button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 2px solid var(--k3-key-edge); border-radius: 4px; }
+  & .rules button { background: var(--k3-key); border: 1px solid var(--border); border-bottom: 1px solid var(--k3-key-edge); border-radius: 4px; }
   & .rules button.on { background: var(--accent); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 72%, #000); }
   & .form label { font-family: var(--k3-label); font-size: 10.5px; letter-spacing: 0.1em; text-transform: lowercase; }
   & :is(#host, #memory) { font-family: var(--k3-lcd); font-size: 11px; }

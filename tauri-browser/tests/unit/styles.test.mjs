@@ -7,7 +7,7 @@ test("Accent from the wallpaper: the rice hub's accent lights the keys, only whi
   setRiceAccent("#ed9582");
   const r = resolveStyle(wall);
   assert.equal(r.values.accent, "#ed9582");
-  assert.equal(buildLook(r, {}, null).vars["--k-tab-active-bg"], "#ed9582");
+  assert.equal(buildLook(r, {}, null).vars["--accent"], "#ed9582");
   assert.equal(resolveStyle({ ui_style: "instrument", ui_custom: {} }).values.accent, "#ff5a1f", "off: your own accent");
   setRiceAccent(null); // no hub: your own accent again
   assert.equal(resolveStyle(wall).values.accent, "#ff5a1f");
@@ -46,14 +46,16 @@ test("skyCss follows the clock", () => {
   for (const l of sky(0, "#f6f5f2")) assert.ok(l > 0.25, `midnight on light: ${l}`);
 });
 
-test("Instrument is Kessel's look: first, the default, two decks, a lit orange key", () => {
+test("Instrument is Kessel's look: first, the default, one row, dark legends on orange", () => {
   assert.ok(STYLE_IDS[0] === "instrument" && STYLES.instrument);
   assert.equal(resolveStyle({}).id, "instrument");
   const r = resolveStyle({ ui_style: "instrument", ui_custom: {} });
   const look = buildLook(r, {}, null);
-  assert.equal(look.attrs["data-k-layout"], "two");
-  assert.equal(look.vars["--k-tab-active-bg"], r.values.accent);
+  assert.equal(look.attrs["data-k-layout"], "one", "the address beside the tabs");
+  assert.notEqual(look.vars["--k-tab-active-bg"], r.values.accent, "the tab you're on is raised in light, not lit orange");
   assert.equal(look.vars["--accent-text"], "#0b0b10", "dark legends on the orange keys");
+  const two = resolveStyle({ ui_style: "instrument", ui_custom: { instrument: STYLES.instrument.presets.find((p) => p.name === "Two rows").values } });
+  assert.equal(buildLook(two, {}, null).attrs["data-k-layout"], "two", "Two rows is a preset");
 });
 
 test("the page's colour, on a style that asks for it", () => {

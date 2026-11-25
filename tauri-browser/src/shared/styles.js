@@ -309,38 +309,39 @@ const BASE_PALETTE = {
 };
 
 export const STYLES = {
-  // Kessel's own look (instrument.css draws the hardware): a warm grey
-  // enclosure, tabs on numbered keys, the address in an LCD, status on LEDs.
-  // "tabActiveBg" is the lit key; "addressBg" the LCD's glass.
+  // Kessel's own look (instrument.css draws it): a warm grey case with one
+  // quiet row -- the address beside the tabs -- plain icons until you point
+  // at them, the tab you're on raised in light, status on LEDs, and the LCD
+  // kept for read-outs (the clock, counts). "addressBg" is the address
+  // field; the LCD's glass is instrument.css's own.
   instrument: {
     name: "Instrument",
-    tagline: "Kessel's own look: a piece of hardware -- tabs on numbered keys, the address in an LCD, what's loading or playing on LEDs, and a grille to grab the window by",
+    tagline: "Kessel's own look: one quiet row with the address beside the tabs, the tab you're on raised in light, what's loading or playing on LEDs, and read-outs on a small LCD",
     palette: {
-      light: { bg: "#e2ded6", surface: "#ece9e3", surface2: "#f5f3ef", hover: "#faf9f6", border: "#bfb9ad", text: "#22211d", textDim: "#5b5850", textFaint: "#858176", chromeBg: "#d6d2c9", railBg: "#d6d2c9", tabActiveBg: "=accent", addressBg: "#3a463c", link: "#b9400c", danger: "#c8352b", success: "#2e7d3a", warning: "#a86200" },
-      dark: { bg: "#1b1b19", surface: "#262624", surface2: "#31312d", hover: "#3a3a36", border: "#46453f", text: "#ecebe5", textDim: "#a9a79e", textFaint: "#7d7b72", chromeBg: "#222220", railBg: "#222220", tabActiveBg: "=accent", addressBg: "#172a1d", link: "#ff8a5c" },
+      light: { bg: "#e2ded6", surface: "#ece9e3", surface2: "#f5f3ef", hover: "#faf9f6", border: "#c9c3b8", text: "#22211d", textDim: "#5b5850", textFaint: "#858176", chromeBg: "#dcd8cf", railBg: "#dcd8cf", tabActiveBg: "#f7f5f1", addressBg: "#f2efe9", link: "#b9400c", danger: "#c8352b", success: "#2e7d3a", warning: "#a86200" },
+      dark: { bg: "#1b1b19", surface: "#262624", surface2: "#31312d", hover: "#3a3a36", border: "#403f3a", text: "#ecebe5", textDim: "#a9a79e", textFaint: "#7d7b72", chromeBg: "#20201e", railBg: "#20201e", tabActiveBg: "#33332f", addressBg: "#2b2b28", link: "#ff8a5c" },
     },
     defaults: {
       mode: "light", accent: "#ff5a1f", accent2: "#2f5bd3", accentText: "dark",
-      font: "bahnschrift", fontSize: 13.5, headingWeight: 600, letterSpacing: 0,
-      radius: 6, panelRadius: 8, buttonRadius: 5, iconShape: "rounded", iconStroke: 1.8,
-      toolbarLayout: "two", tabShape: "rounded", tabRadius: 5, tabHeight: 30, tabWidth: 176, tabGap: 5, tabPadding: 8, tabIndicator: "none",
-      navHeight: 46, buttonSize: 30, addressShape: "rounded", addressRadius: 4, addressHeight: 32, addressDisplay: "site", dividers: false,
+      font: "system", fontSize: 13.5, headingWeight: 600, letterSpacing: 0,
+      radius: 7, panelRadius: 9, buttonRadius: 6, iconShape: "rounded", iconStroke: 1.7,
+      toolbarLayout: "one", tabShape: "rounded", tabRadius: 7, tabHeight: 30, tabWidth: 200, tabGap: 2, tabPadding: 9, tabIndicator: "none",
+      navHeight: 44, buttonSize: 30, addressShape: "rounded", addressRadius: 7, addressHeight: 30, addressDisplay: "site", dividers: false,
       background: "solid", shadow: 0, bookmarksHeight: 30,
       railWidth: 52, railIcon: 34, railGap: 6,
       easing: "smooth", tabAnimation: "fade", clockSize: 64, clockWeight: 400, ntSearchWidth: 620, ntAlign: "center", ntPanels: "bare", scrollbarWidth: 8,
     },
     quick: ["mode", "accent", "toolbarLayout", "font", "fontSize", "tabShape", "radius", "addressDisplay"],
-    // Colours from the wallpaper leaves the LCD an LCD.
-    wallKeep: ["addressBg"],
     presets: [
       { name: "Warm grey", values: {} },
       { name: "Graphite", values: { mode: "dark" } },
       // Graphite with the rice hub's accent (it follows the wallpaper) and font.
       { name: "Wallpaper", values: { mode: "dark", accentFollow: true, font: "quicksand" } },
-      // The whole enclosure in the desktop wallpaper's colours.
+      // The whole case in the desktop wallpaper's colours.
       { name: "Desktop", values: { mode: "wallpaper", wallTheme: true, wallSource: "desktop" } },
       { name: "Cobalt keys", values: { accent: "#2f5bd3", accent2: "#ff5a1f" } },
-      { name: "One row", values: { toolbarLayout: "one" } },
+      // The address on a row of its own, under the tabs.
+      { name: "Two rows", values: { toolbarLayout: "two" } },
     ],
   },
 
