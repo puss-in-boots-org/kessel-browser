@@ -61,8 +61,8 @@ mod zip;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use store::{now_unix, AdblockLists, Bookmark, DownloadEntry, PinnedSite, Settings, Store};
 use tauri::webview::{DownloadEvent, PageLoadEvent};
@@ -2059,13 +2059,59 @@ fn emit_shields_stats(app: &tauri::AppHandle, id: u32, stats: &shields::TabStats
 
 // A page asked for a new window: a target="_blank" link, or window.open().
 // Without this handler WebView2 (via wry) silently drops the request, so
-// such links did nothing at all. An ordinary link becomes a new foreground
-// tab, like in any browser. A popup that asks for a size, or that starts
-// out blank for the page to fill in (sign-in windows: "Sign in with
-// Google", PayPal...), gets a real popup window instead, because those talk
-// back to the page that opened them through window.opener -- which a
-// separate tab can't provide.
+// such links did nothing at all. What a browser does with each:
+//   * an ordinary link or window.open(url) -> a new foreground tab;
+//   * window.open("") with no size, which the page then sends somewhere
+//     itself -- Gmail opens every link in a mail like this (a blank window
+//     it writes a redirect into, so Drive and other sites don't see where
+//     you came from), and so do Docs, Calendar and many web apps that
+//     look up the address first. Such a window starts hidden; where it
+//     goes turns into a tab, and only one that stays a page of its own
+//     (written into, not sent anywhere) shows up as a window;
+//   * a popup that asks for a size -- sign-in windows ("Sign in with
+//     Google", PayPal, Microsoft...) -- gets a real popup window, because
+//     those talk back to the page that opened them through window.opener,
+//     which a separate tab can't provide;
+//   * a blob: page (a PDF or picture the page just made) -> a window,
+//     which WebView2 loads itself (only the page's own engine can);
+//   * a mailto:, tel:, msteams:... link -> what such a link does in the tab.
 static NEXT_WEB_POPUP_ID: AtomicU32 = AtomicU32::new(1);
+
+// How long a blank window can stay unsent before it's shown as the page
+// it was written into.
+const BLANK_WINDOW_WAIT: Duration = Duration::from_millis(1500);
+
+// What to do with a new window the page asked for at `url`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum NewWindowKind {
+    Tab,
+    // A hidden window whose first trip to a website becomes a tab.
+    BlankThenTab,
+    Popup,
+    // A link in a scheme another program (or an installed app) handles.
+    OtherProgram,
+    Deny,
+}
+
+fn new_window_kind(url: &tauri::Url, has_size: bool) -> NewWindowKind {
+    match url.scheme() {
+        "http" | "https" if has_size => NewWindowKind::Popup,
+        "http" | "https" => NewWindowKind::Tab,
+        "about" if url.as_str() == "about:blank" => {
+            if has_size {
+                NewWindowKind::Popup
+            } else {
+                NewWindowKind::BlankThenTab
+            }
+        }
+        "blob" => NewWindowKind::Popup,
+        // Never in a window of their own: a page's own code (javascript:,
+        // data: -- Chrome blocks those too), Kessel's and the engine's own
+        // pages, files on this PC.
+        "javascript" | "data" | "about" | "file" | "tauri" | "ipc" | "asset" | "edge" | "chrome" | "devtools" | "kessel" | "view-source" | "filesystem" => NewWindowKind::Deny,
+        _ => NewWindowKind::OtherProgram,
+    }
+}
 
 // `opener`: the label of the webview asking. Its tab opens in the window
 // that webview is in right now (tabs can move between windows).
@@ -2085,24 +2131,75 @@ fn open_new_window(
         .or_else(|| state.current_window());
     let Some(win) = win else { return NewWindowResponse::Deny };
     let private = state.is_private(&win);
-    let web = matches!(url.scheme(), "http" | "https");
-    if web && features.size().is_none() {
-        let app2 = app.clone();
-        let url = url.to_string();
-        // After WebView2's event has returned: creating a tab re-enters it.
-        later(app, move || {
-            let _ = open_tab_in_front(&app2, &win, Some(url), account);
-        });
-        return NewWindowResponse::Deny;
-    }
-    if !web && url.as_str() != "about:blank" {
-        return NewWindowResponse::Deny;
+    let kind = new_window_kind(&url, features.size().is_some());
+    match kind {
+        NewWindowKind::Deny => return NewWindowResponse::Deny,
+        NewWindowKind::Tab => {
+            let app2 = app.clone();
+            let url = url.to_string();
+            // After WebView2's event has returned: creating a tab re-enters it.
+            later(app, move || {
+                let _ = open_tab_in_front(&app2, &win, Some(url), account);
+            });
+            return NewWindowResponse::Deny;
+        }
+        NewWindowKind::OtherProgram => {
+            // As if the link were followed in the page itself: an app
+            // Kessel installed that handles it opens (guard_navigation),
+            // otherwise the engine asks whether to open the program.
+            let (app2, opener, link) = (app.clone(), opener.to_string(), url.clone());
+            later(app, move || {
+                if let Some(page) = app2.get_webview(&opener) {
+                    let _ = page.navigate(link);
+                }
+            });
+            return NewWindowResponse::Deny;
+        }
+        NewWindowKind::Popup | NewWindowKind::BlankThenTab => {}
     }
     let label = format!("web-popup-{}", NEXT_WEB_POPUP_ID.fetch_add(1, Ordering::Relaxed));
+    // A blank window, until it goes somewhere: hidden, waiting to be a tab.
+    let waiting = Arc::new(AtomicBool::new(kind == NewWindowKind::BlankThenTab));
     let app2 = app.clone();
     let popup_label = label.clone();
-    let built = tauri::WebviewWindowBuilder::new(app, label, WebviewUrl::External("about:blank".parse().unwrap()))
+    let nav = {
+        let (app, label, waiting, win, account) = (app.clone(), label.clone(), waiting.clone(), win.clone(), account.clone());
+        move |nav_url: &tauri::Url| -> bool {
+            if !waiting.load(Ordering::SeqCst) {
+                return true;
+            }
+            match nav_url.scheme() {
+                // Still blank (its first, empty page).
+                "about" => true,
+                "http" | "https" => {
+                    // Sent to a website: that's the tab. (Once -- the window
+                    // closes.)
+                    if !waiting.swap(false, Ordering::SeqCst) {
+                        return true;
+                    }
+                    let (app2, label, win, account, url) = (app.clone(), label.clone(), win.clone(), account.clone(), nav_url.to_string());
+                    later(&app, move || {
+                        let _ = open_tab_in_front(&app2, &win, Some(url), account);
+                        if let Some(popup) = app2.get_webview_window(&label) {
+                            let _ = popup.destroy();
+                        }
+                    });
+                    false
+                }
+                // Somewhere only this window can go (a blob: the page
+                // made): shown as it is.
+                _ => {
+                    if waiting.swap(false, Ordering::SeqCst) {
+                        show_web_popup(&app, &label);
+                    }
+                    true
+                }
+            }
+        }
+    };
+    let built = tauri::WebviewWindowBuilder::new(app, label.clone(), WebviewUrl::External("about:blank".parse().unwrap()))
         .window_features(features)
+        .visible(kind != NewWindowKind::BlankThenTab)
         // A private window's popups stay private (WebView2 requires the
         // opener and its popup to share a profile anyway).
         .incognito(private)
@@ -2110,14 +2207,41 @@ fn open_new_window(
         .on_document_title_changed(|window, title| {
             let _ = window.set_title(&title);
         })
+        .on_navigation(nav)
         // The popup shares its opener's WebView2 environment (through
         // window_features), so it's signed in as the same account.
         .on_new_window(move |url, features| open_new_window(&app2, &popup_label, url, features, account.clone()))
         .build();
     match built {
-        Ok(window) => NewWindowResponse::Create { window },
-        Err(_) => NewWindowResponse::Deny,
+        Ok(window) => {
+            if kind == NewWindowKind::BlankThenTab {
+                // Written into rather than sent anywhere (a print preview, a
+                // page made on the spot): it's a page of its own -- shown.
+                let (app, waiting) = (app.clone(), waiting.clone());
+                std::thread::spawn(move || {
+                    std::thread::sleep(BLANK_WINDOW_WAIT);
+                    if waiting.swap(false, Ordering::SeqCst) {
+                        show_web_popup(&app, &label);
+                    }
+                });
+            }
+            NewWindowResponse::Create { window }
+        }
+        Err(e) => {
+            eprintln!("couldn't open a window for {}: {}", url, e);
+            NewWindowResponse::Deny
+        }
     }
+}
+
+fn show_web_popup(app: &tauri::AppHandle, label: &str) {
+    let (app2, label) = (app.clone(), label.to_string());
+    later(app, move || {
+        if let Some(popup) = app2.get_webview_window(&label) {
+            let _ = popup.show();
+            let _ = popup.set_focus();
+        }
+    });
 }
 
 // Opens a new tab in window `win` (signed in as `account`), switches to it
@@ -6001,6 +6125,25 @@ mod tests {
         assert!(!is_same_or_subdomain("badexample.com", "example.com"));
         assert!(!is_same_or_subdomain("example.com.evil", "example.com"));
         assert!(!is_same_or_subdomain("com", "example.com"));
+    }
+
+    #[test]
+    fn new_windows_become_tabs_popups_or_nothing() {
+        let kind = |u: &str, sized: bool| new_window_kind(&tauri::Url::parse(u).unwrap(), sized);
+        // A link with target="_blank", window.open(url).
+        assert_eq!(kind("https://drive.google.com/file/d/x/view", false), NewWindowKind::Tab);
+        // Gmail's links: a blank window the page sends on itself.
+        assert_eq!(kind("about:blank", false), NewWindowKind::BlankThenTab);
+        // Sign-in windows ask for a size.
+        assert_eq!(kind("https://accounts.google.com/o/oauth2/auth", true), NewWindowKind::Popup);
+        assert_eq!(kind("about:blank", true), NewWindowKind::Popup);
+        assert_eq!(kind("blob:https://docs.google.com/1234", false), NewWindowKind::Popup);
+        assert_eq!(kind("mailto:a@b.c", false), NewWindowKind::OtherProgram);
+        assert_eq!(kind("msteams:/l/meetup-join/x", false), NewWindowKind::OtherProgram);
+        assert_eq!(kind("javascript:alert(1)", false), NewWindowKind::Deny);
+        assert_eq!(kind("data:text/html,hi", false), NewWindowKind::Deny);
+        assert_eq!(kind("file:///C:/Windows/win.ini", false), NewWindowKind::Deny);
+        assert_eq!(kind("about:settings", false), NewWindowKind::Deny);
     }
 
     #[test]

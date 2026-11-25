@@ -188,7 +188,11 @@
         var activation = navigator.userActivation;
         if (!activation || activation.isActive) return nativeOpen.apply(this, arguments);
         var to = '';
-        try { to = String(new URL(url, location.href)); } catch (e) {}
+        // (A blank one -- window.open('') to fill in or send on later --
+        // has nowhere to open: not this page's own address.)
+        if (url !== undefined && url !== null && String(url) !== '' && String(url) !== 'about:blank') {
+          try { to = String(new URL(url, location.href)); } catch (e) {}
+        }
         if (/^https?:/.test(to)) BRIDGE.send('popup', { url: to });
         return null;
       };
