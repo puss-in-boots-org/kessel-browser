@@ -5680,6 +5680,7 @@ fn engine_args(settings: &Settings) -> String {
 }
 
 fn main() {
+    apps::claim_taskbar_id();
     tauri::Builder::default()
         // Only for Rust's open_path. The plugin's default also injects a
         // script into every page that hijacks target="_blank" and
