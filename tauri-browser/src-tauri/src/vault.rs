@@ -56,9 +56,22 @@ struct Session {
     pending_totp_secret: Option<String>,
 }
 
+// Saving a login as you sign in (passwords.rs) without typing the master
+// password each time: once you've typed it, the next SAVES_PER_UNLOCK saves
+// go through even after the vault has locked itself. Only saving: reading,
+// autofill and the Passwords page still need the vault unlocked. Kept in
+// memory only; locking the vault yourself, or quitting Kessel, ends it.
+pub const SAVES_PER_UNLOCK: u32 = 5;
+
+struct SaveGrant {
+    key: [u8; 32],
+    left: u32,
+}
+
 pub struct Vault {
     path: PathBuf,
     session: Mutex<Option<Session>>,
+    save_grant: Mutex<Option<SaveGrant>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -226,6 +239,7 @@ impl Vault {
         Vault {
             path: dir.join("vault.dat"),
             session: Mutex::new(None),
+            save_grant: Mutex::new(None),
         }
     }
 
@@ -309,6 +323,7 @@ impl Vault {
             nonce: B64.encode(&nonce),
             ciphertext: B64.encode(&ciphertext),
         });
+        *self.save_grant.lock().unwrap() = Some(SaveGrant { key, left: SAVES_PER_UNLOCK });
         *self.session.lock().unwrap() = Some(Session {
             key,
             data,
@@ -337,6 +352,7 @@ impl Vault {
             }
         }
 
+        *self.save_grant.lock().unwrap() = Some(SaveGrant { key, left: SAVES_PER_UNLOCK });
         *self.session.lock().unwrap() = Some(Session {
             key,
             data,
@@ -346,8 +362,39 @@ impl Vault {
         Ok(())
     }
 
+    // Locked by you: saving without the master password ends too.
     pub fn lock(&self) {
         *self.session.lock().unwrap() = None;
+        *self.save_grant.lock().unwrap() = None;
+    }
+
+    // Whether a login can be saved now without the master password: the
+    // vault is unlocked, or saves are left from the last time you typed it.
+    pub fn can_save(&self, timeout_minutes: u32) -> bool {
+        self.enforce_timeout(timeout_minutes);
+        self.session.lock().unwrap().is_some() || self.save_grant.lock().unwrap().as_ref().is_some_and(|g| g.left > 0)
+    }
+
+    // The vault's contents with the save grant's key, while it's locked.
+    // None (and the grant gone) if that key no longer opens it -- the
+    // master password was changed from somewhere else.
+    fn open_with_grant(&self) -> Option<Session> {
+        let mut grant = self.save_grant.lock().unwrap();
+        let key = grant.as_ref()?.key;
+        let opened = (|| {
+            let file = self.read_file()?;
+            let nonce = B64.decode(&file.nonce).ok()?;
+            let ciphertext = B64.decode(&file.ciphertext).ok()?;
+            let plaintext = decrypt(&key, &nonce, &ciphertext).ok()?;
+            serde_json::from_slice::<VaultData>(&plaintext).ok()
+        })();
+        match opened {
+            Some(data) => Some(Session { key, data, unlocked_at: now(), pending_totp_secret: None }),
+            None => {
+                *grant = None;
+                None
+            }
+        }
     }
 
     // Whether `master_password` is the vault's (asked again before
@@ -363,30 +410,57 @@ impl Vault {
 
     // A login you just used (passwords.rs): saved for `host`, or the saved
     // one for that user name updated. Ok(true) when one was updated.
+    // Each one uses up one of the saves the master password allows (see
+    // SAVES_PER_UNLOCK); with the vault locked and none left, it's refused
+    // ("vault is locked") and the offer asks for the master password.
     pub fn save_login(&self, timeout_minutes: u32, host: &str, username: &str, password: &str) -> Result<bool, String> {
         self.enforce_timeout(timeout_minutes);
+        let unlocked = self.session.lock().unwrap().is_some();
+        {
+            let mut grant = self.save_grant.lock().unwrap();
+            match grant.as_mut() {
+                Some(g) if g.left > 0 => g.left -= 1,
+                _ if unlocked => {}
+                _ => return Err("vault is locked".into()),
+            }
+        }
+        if !unlocked {
+            let mut s = self.open_with_grant().ok_or("vault is locked")?;
+            return Ok(self.save_login_into(&mut s, host, username, password));
+        }
         self.touch();
         let mut session = self.session.lock().unwrap();
         let s = session.as_mut().ok_or("vault is locked")?;
+        Ok(self.save_login_into(s, host, username, password))
+    }
+
+    fn save_login_into(&self, s: &mut Session, host: &str, username: &str, password: &str) -> bool {
         if let Some(item) = s.data.items.iter_mut().find(|i| site_matches_host(&i.site, host) && i.username == username) {
             item.password = password.to_string();
             item.updated_at = now();
             self.save_locked(s);
-            return Ok(true);
+            return true;
         }
         let id = format!("{:x}", now()) + &format!("{:x}", random_bytes(4).iter().fold(0u32, |a, &b| (a << 8) | b as u32));
         s.data.items.push(VaultItem { id, site: host.to_string(), username: username.to_string(), password: password.to_string(), notes: String::new(), updated_at: now() });
         self.save_locked(s);
-        Ok(false)
+        false
     }
 
     // What's saved for `host` with `username`: None if nothing is, else
     // whether the password is the same one.
+    // Locked, it still knows while saves are left (the grant's key opens
+    // it): a login you already saved isn't offered again.
     pub fn saved_login(&self, timeout_minutes: u32, host: &str, username: &str, password: &str) -> Option<bool> {
         self.enforce_timeout(timeout_minutes);
-        let session = self.session.lock().unwrap();
-        let s = session.as_ref()?;
-        s.data.items.iter().find(|i| site_matches_host(&i.site, host) && i.username == username).map(|i| i.password == password)
+        let find = |s: &Session| s.data.items.iter().find(|i| site_matches_host(&i.site, host) && i.username == username).map(|i| i.password == password);
+        if let Some(s) = self.session.lock().unwrap().as_ref() {
+            return find(s);
+        }
+        if !self.save_grant.lock().unwrap().as_ref().is_some_and(|g| g.left > 0) {
+            return None;
+        }
+        self.open_with_grant().as_ref().and_then(find)
     }
 
     pub fn list_items(&self, timeout_minutes: u32) -> Result<Vec<VaultItem>, String> {
@@ -598,6 +672,9 @@ impl Vault {
             ciphertext: B64.encode(&ciphertext),
         });
         s.key = new_key;
+        if let Some(g) = self.save_grant.lock().unwrap().as_mut() {
+            g.key = new_key;
+        }
         Ok(())
     }
 }
@@ -643,6 +720,35 @@ mod tests {
         let mut defaults = [0u8; 32];
         argon2::Argon2::default().hash_password_into(b"master password", b"0123456789abcdef", &mut defaults).unwrap();
         assert_eq!(pinned, defaults, "today's crate defaults are the same parameters");
+    }
+
+    #[test]
+    fn the_master_password_lets_five_saves_through_after_the_vault_locks() {
+        let dir = std::env::temp_dir().join(format!("kessel-vault-grant-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault = super::Vault::new(dir.clone());
+        vault.setup("correct horse battery").unwrap();
+        // Locked on its own (idle), not by you.
+        *vault.session.lock().unwrap() = None;
+        for n in 0..super::SAVES_PER_UNLOCK {
+            assert!(vault.can_save(15), "save {} needs no password", n + 1);
+            assert_eq!(vault.save_login(15, &format!("site{n}.test"), "me", "Pass-word-1"), Ok(false));
+        }
+        assert!(!vault.can_save(15), "the sixth asks again");
+        assert!(vault.save_login(15, "site9.test", "me", "x").is_err());
+        assert!(vault.status().unlocked == false, "saving never unlocked it");
+        // Already saved, as it is: known while locked, so not offered again.
+        vault.unlock("correct horse battery", None).unwrap();
+        *vault.session.lock().unwrap() = None;
+        assert_eq!(vault.saved_login(15, "site0.test", "me", "Pass-word-1"), Some(true));
+        assert_eq!(vault.saved_login(15, "site0.test", "me", "other"), Some(false));
+        vault.unlock("correct horse battery", None).unwrap();
+        assert_eq!(vault.list_items(15).unwrap().len(), super::SAVES_PER_UNLOCK as usize, "all of them were written");
+        // Locking it yourself ends the free saves.
+        vault.lock();
+        assert!(!vault.can_save(15));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
