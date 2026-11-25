@@ -484,6 +484,17 @@ pub(crate) fn task_action(app: tauri::AppHandle, webview: Webview, window: Strin
 
 // --- System facts, for kessel://diagnostics --------------------------------
 
+// The processor's name ("AMD Ryzen 7 7840HS ..."), or "" where Windows
+// doesn't say. Also the first-run setup's (setup.rs).
+#[cfg(windows)]
+pub(crate) fn cpu_name() -> String {
+    registry_string("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", "ProcessorNameString").unwrap_or_default()
+}
+#[cfg(not(windows))]
+pub(crate) fn cpu_name() -> String {
+    String::new()
+}
+
 #[cfg(windows)]
 fn registry_string(key: &str, value: &str) -> Option<String> {
     use windows::core::HSTRING;

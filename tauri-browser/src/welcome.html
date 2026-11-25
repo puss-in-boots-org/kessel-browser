@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-page="welcome">
+<head>
+  <meta charset="UTF-8" />
+  <title>Welcome to Kessel</title>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <style>
+    body { min-height: 100vh; overflow-x: hidden; }
+
+    /* The interface's own colours, softly, behind everything: they change
+       as you choose, so the page itself is the preview. */
+    #glow {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(48% 42% at 8% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+        radial-gradient(40% 40% at 100% 100%, color-mix(in srgb, var(--accent-2, var(--accent)) 20%, transparent), transparent 70%),
+        var(--bg);
+      transition: background var(--dur-slow) var(--ease);
+    }
+
+    .shell { max-width: 940px; margin: 0 auto; padding: 28px 28px 40px; display: flex; flex-direction: column; min-height: 100vh; }
+    header { display: flex; align-items: center; gap: 12px; }
+    header .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+    header .brand svg { color: var(--accent); }
+    header .spacer { flex: 1; }
+    .skip { background: none; border: none; color: var(--text-faint); font: inherit; font-size: 12.5px; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
+    .skip:hover { color: var(--text); background: var(--surface-hover); }
+
+    /* Progress */
+    .steps { display: flex; gap: 6px; margin: 26px 0 4px; }
+    .steps i { flex: 1; height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--text) 12%, transparent); transition: background var(--dur) var(--ease); }
+    .steps i.done { background: var(--accent); }
+    .step-label { font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; margin: 10px 0 0; }
+
+    main { flex: 1; padding: 18px 0 26px; }
+    .step { display: none; animation: fadeUp var(--dur-slow) var(--ease); }
+    .step.active { display: block; }
+    h1 { font-size: 30px; line-height: 1.15; margin: 6px 0 10px; letter-spacing: -0.01em; }
+    h2 { font-size: 22px; margin: 4px 0 6px; }
+    .lead { font-size: 14px; color: var(--text-dim); max-width: 620px; line-height: 1.55; margin: 0 0 22px; }
+    .section-title { font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); margin: 22px 0 10px; }
+
+    /* Your PC */
+    .specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 18px 0 8px; }
+    .spec { display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); min-width: 0; }
+    .spec .ico { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+    .spec b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .spec small { display: block; font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
+    .spec > div { min-width: 0; }
+
+    /* Big choices */
+    .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .choice {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      text-align: left;
+      padding: 16px 16px 15px;
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+      transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+    }
+    .choice:hover { transform: translateY(-2px); border-color: var(--text-faint); }
+    .choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .choice.selected { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+    .choice .name { font-size: 15px; font-weight: 650; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .choice .tag { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+    .choice ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+    .choice li { font-size: 12px; color: var(--text-dim); display: flex; gap: 7px; align-items: flex-start; }
+    .choice li svg { color: var(--success); flex-shrink: 0; margin-top: 1px; }
+    .pill { font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-text); }
+    .pill.soft { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+    .check { position: absolute; top: 12px; right: 12px; width: 22px; height: 22px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-text); }
+    .choice.selected .check { display: flex; }
+    .why { margin: 14px 0 0; font-size: 12.5px; color: var(--text-dim); display: flex; gap: 8px; align-items: center; }
+    .why svg { color: var(--accent); flex-shrink: 0; }
+
+    /* Style cards: the style's own colours in a little window */
+    .mini { height: 86px; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; margin-bottom: 6px; border: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+    .mini .bar { height: 26px; display: flex; align-items: center; gap: 5px; padding: 0 8px; }
+    .mini .bar i { width: 34px; height: 12px; border-radius: 4px; opacity: 0.9; }
+    .mini .bar i.on { width: 42px; }
+    .mini .bar em { flex: 1; height: 12px; border-radius: 6px; margin-left: 6px; }
+    .mini .page { flex: 1; display: flex; flex-direction: column; gap: 5px; padding: 9px 10px; }
+    .mini .page b { width: 46%; height: 6px; border-radius: 3px; }
+    .mini .page s { width: 70%; height: 4px; border-radius: 2px; opacity: 0.5; text-decoration: none; }
+    .mini .page u { margin-top: auto; align-self: flex-end; width: 36px; height: 12px; border-radius: 4px; text-decoration: none; }
+
+    /* Colours */
+    .walls { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+    .wall { padding: 0; overflow: hidden; gap: 0; border-radius: var(--radius); }
+    .wall .pic { height: 70px; background-size: cover !important; background-position: center !important; }
+    .wall .cap { padding: 8px 10px; font-size: 12px; font-weight: 600; }
+    .wall .check { top: 8px; right: 8px; }
+    .wall .pic.add { display: flex; align-items: center; justify-content: center; color: var(--text-faint); background: var(--surface-2); }
+    .desktop-choice { flex-direction: row; align-items: stretch; gap: 16px; padding: 12px; margin-bottom: 14px; width: 100%; }
+    .desktop-choice .pic { width: 168px; flex-shrink: 0; border-radius: 10px; background: var(--surface-2) center / cover no-repeat; min-height: 96px; display: flex; align-items: center; justify-content: center; color: var(--text-faint); }
+    .desktop-choice .body { display: flex; flex-direction: column; gap: 6px; justify-content: center; min-width: 0; }
+    .desktop-choice[disabled] { opacity: 0.55; cursor: default; transform: none; }
+    .swatches { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .swatches i { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); }
+    .option-line { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); margin-top: 10px; }
+    .option-line .t { font-size: 13px; font-weight: 550; }
+    .option-line .d { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+    .option-line[hidden] { display: none; }
+
+    .segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); flex-wrap: wrap; }
+    .segmented button { border: none; background: transparent; color: var(--text-dim); font: inherit; font-size: 12.5px; padding: 7px 14px; border-radius: 7px; cursor: pointer; }
+    .segmented button.active { background: var(--accent); color: var(--accent-text); }
+    .segmented button .rec { font-size: 10px; opacity: 0.8; margin-left: 4px; }
+
+    .engines { display: flex; flex-wrap: wrap; gap: 8px; }
+    .engine { padding: 9px 16px; border-radius: 999px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+    .engine:hover { border-color: var(--text-faint); }
+    .engine.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+
+    /* Done */
+    .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 6px 0 18px; }
+    .summary .spec b { white-space: normal; }
+    .done-mark { width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-text); margin-bottom: 14px; animation: popIn var(--dur-slow) var(--ease); }
+
+    footer { display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
+    footer .spacer { flex: 1; }
+    footer .hint { font-size: 12px; color: var(--text-faint); }
+    .btn.lg { padding: 10px 20px; font-size: 13.5px; border-radius: 10px; }
+
+    @media (max-width: 620px) {
+      .shell { padding: 18px 16px 28px; }
+      h1 { font-size: 24px; }
+      .desktop-choice { flex-direction: column; }
+      .desktop-choice .pic { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="glow"></div>
+  <div class="shell">
+    <header>
+      <div class="brand" id="brand"></div>
+      <div class="spacer"></div>
+      <button class="skip" id="skip">Skip setup</button>
+    </header>
+    <div class="steps" id="steps"></div>
+    <p class="step-label" id="step-label"></p>
+    <main id="main"></main>
+    <footer>
+      <button class="btn lg" id="back">Back</button>
+      <span class="hint" id="hint"></span>
+      <div class="spacer"></div>
+      <button class="btn primary lg" id="next">Next</button>
+    </footer>
+  </div>
+  <input type="file" id="own-picture" accept="image/*" hidden />
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>

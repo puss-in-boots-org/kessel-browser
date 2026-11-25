@@ -112,7 +112,8 @@ function markFocused() {
   showPreview(rows[focused]);
 }
 
-// A picture of the tab you're on in the list (taken when it was last left).
+// A picture of the tab you're on in the list (taken when it was last left;
+// a tab showing in its window right now is taken as it is).
 let previewFor = null;
 async function showPreview(row) {
   const pane = document.getElementById("preview");
@@ -124,7 +125,7 @@ async function showPreview(row) {
   }
   let picture = thumbnails.get(tab.id);
   if (picture === undefined) {
-    picture = await invoke("tab_thumbnail", { id: tab.id, fresh: false }).catch(() => null);
+    picture = await invoke("tab_thumbnail", { id: tab.id, fresh: !!tab.active }).catch(() => null);
     thumbnails.set(tab.id, picture);
   }
   if (previewFor !== tab.id) return;

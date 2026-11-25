@@ -30,6 +30,51 @@
     .nav-item:hover { background: var(--surface-hover); color: var(--text); }
     .nav-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
 
+    .nav-cat { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); padding: 16px 11px 5px; }
+    .nav-search { position: relative; display: flex; align-items: center; margin: 0 2px 6px; }
+    .nav-search svg { position: absolute; left: 10px; color: var(--text-faint); pointer-events: none; }
+    .nav-search .field { padding: 8px 30px 8px 31px; font-size: 12.5px; }
+    .nav-search .field::-webkit-search-cancel-button { display: none; }
+    .nav-search kbd { position: absolute; right: 7px; font-size: 10px; min-width: 16px; padding: 0 4px; color: var(--text-faint); }
+    .nav-search:focus-within kbd { display: none; }
+    body.searching .nav-item.active { background: none; color: var(--text-dim); font-weight: 400; }
+
+    /* Overview */
+    #panel-home { max-width: 760px; }
+    .home-hero { display: flex; align-items: center; gap: 18px; padding: 20px 22px; margin-bottom: 26px; border-radius: var(--radius-lg); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), var(--surface) 70%); }
+    .home-hero-icon { width: 46px; height: 46px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 14px; background: var(--accent); color: var(--accent-text); }
+    .home-hero-text { flex: 1; min-width: 0; }
+    .home-hero-text h2 { margin: 0 0 4px; font-size: 16px; }
+    .home-hero-text p { margin: 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+    .home-title { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-dim); margin: 26px 0 10px; }
+    #quick-card .setting-row .control { flex-wrap: wrap; justify-content: flex-end; }
+    #quick-card .segmented button { padding: 5px 11px; font-size: 12px; }
+    .home-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .home-cat { padding: 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+    .home-cat-head { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .home-cat-head b { display: block; font-size: 13px; }
+    .home-cat-head small { display: block; font-size: 11.5px; color: var(--text-faint); }
+    .home-cat-icon { width: 30px; height: 30px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+    .home-cat-links { display: flex; flex-wrap: wrap; gap: 5px; }
+    .home-cat-links a { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim); font-size: 11.5px; text-decoration: none; }
+    .home-cat-links a:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); }
+
+    /* Search results */
+    #panel-results { max-width: 700px; }
+    .result-pages { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .result-page { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; }
+    .result-page:hover { border-color: var(--accent); color: var(--accent); }
+    .result-card .k-card-title { display: flex; align-items: center; gap: 6px; padding-bottom: 6px; }
+    .result-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 18px; border: none; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+    .result-row:hover, .result-row:focus-visible { background: var(--surface-hover); outline: none; }
+    .result-row .info { flex: 1; min-width: 0; }
+    .result-row .title { font-size: 13px; font-weight: 500; }
+    .result-row .desc { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+    .result-row > svg { color: var(--text-faint); flex-shrink: 0; }
+    mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+    .search-hit { animation: searchHit 2s var(--ease); }
+    @keyframes searchHit { 0%, 35% { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: inset 3px 0 0 var(--accent); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
+
     #settings-content { flex: 1; overflow-y: auto; padding: 34px 40px 80px; }
     .panel { max-width: 640px; margin: 0 auto 64px; display: none; animation: fadeUp var(--dur-slow) var(--ease); }
     .panel.active { display: block; }
@@ -53,7 +98,11 @@
         padding: 10px;
         gap: 2px;
       }
-      #settings-nav h1 { display: none; }
+      #settings-nav h1, .nav-cat { display: none; }
+      #settings-nav { flex-direction: column; overflow-x: hidden; }
+      .nav-search { margin: 0 0 8px; }
+      #nav-items { display: flex; gap: 2px; overflow-x: auto; }
+      .home-hero { flex-wrap: wrap; }
       .nav-item { flex-shrink: 0; white-space: nowrap; }
       #settings-content { padding: 20px 18px 60px; }
     }
@@ -345,7 +394,7 @@
 <body>
   <nav id="settings-nav">
     <h1>Settings</h1>
-    <div id="nav-items"></div>
+    <div id="nav-items" role="navigation"></div>
   </nav>
   <div id="settings-content"></div>
 

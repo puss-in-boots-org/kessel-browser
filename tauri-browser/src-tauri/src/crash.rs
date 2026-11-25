@@ -235,6 +235,8 @@ pub(crate) fn started() {
 
 // Closing properly.
 pub(crate) fn clean_exit() {
+    // What's still being saved (store::write_atomic_soon) goes to disk first.
+    crate::store::flush_writes();
     if let Some(path) = marker_path() {
         let _ = std::fs::remove_file(path);
     }

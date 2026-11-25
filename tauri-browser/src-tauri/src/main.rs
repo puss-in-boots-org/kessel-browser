@@ -16,6 +16,8 @@ mod defaults;
 mod dialogs;
 mod energy;
 mod experiments;
+mod ext_dnr;
+mod ext_runtime;
 mod extensions;
 mod forms;
 mod graphics;
@@ -37,6 +39,8 @@ mod profiles;
 mod proof;
 mod saved_sessions;
 mod security;
+mod service_workers;
+mod setup;
 mod shields;
 mod sidebar;
 mod split;
@@ -162,6 +166,10 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("feeds", "feeds.html"),
     // What Shields did, your protections, what Kessel connects to by itself.
     ("privacy", "privacy.html"),
+    // The first-run setup, and again from Settings (setup.rs).
+    ("welcome", "welcome.html"),
+    // Kessel's own extension store.
+    ("store", "store.html"),
 ];
 
 // The pages Kessel starts with when it isn't bringing back your last
@@ -675,11 +683,19 @@ fn create_tab_internal(
         Some(u) => u.to_string(),
     };
 
+    // An extension's own page (its options...): the tab starts blank and
+    // goes there once its address exists in the tab (ext_runtime.rs).
+    let mut extension_page = None;
     let webview_url = if let Some(route) = internal_route(&resolved) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(&resolved);
-        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        if ext_runtime::ext_of_url(&normalized).is_some() && !private {
+            extension_page = Some(normalized);
+            WebviewUrl::External("about:blank".parse().unwrap())
+        } else {
+            WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        }
     };
 
     let (adblock_enabled, autofill_enabled) = {
@@ -753,25 +769,7 @@ fn create_tab_internal(
                             dir = dir.join(folder);
                         }
                     }
-                    let mut target = dir.join(&filename);
-                    let mut counter = 1;
-                    let stem = target
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "download".into());
-                    let ext = target
-                        .extension()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    while target.exists() {
-                        let name = if ext.is_empty() {
-                            format!("{} ({})", stem, counter)
-                        } else {
-                            format!("{} ({}).{}", stem, counter, ext)
-                        };
-                        target = dir.join(name);
-                        counter += 1;
-                    }
+                    let target = downloads::unique_path(&dir, &filename);
                     *destination = target.clone();
                     let entry = DownloadEntry {
                         id: dl_id,
@@ -808,12 +806,13 @@ fn create_tab_internal(
         });
 
     restore_for_new_page(&window);
+    // Off-screen until it's shown, but already the size it will be shown
+    // at: a page started in a 1x1 box lays itself out (and picks its
+    // pictures' sizes, its phone-or-desktop layout) for that first, and
+    // does it all again when you switch to it.
+    let size = content_bounds(&window, state.insets(win)).map(|(_, size)| size).ok().filter(|s| s.width >= 1.0 && s.height >= 1.0).unwrap_or(LogicalSize::new(1.0, 1.0));
     let webview = window
-        .add_child(
-            builder,
-            LogicalPosition::new(OFFSCREEN_X, 0.0),
-            LogicalSize::new(1.0, 1.0),
-        )
+        .add_child(builder, LogicalPosition::new(OFFSCREEN_X, 0.0), size)
         .map_err(|e| e.to_string())?;
 
     if private {
@@ -822,6 +821,13 @@ fn create_tab_internal(
     attach_shields(app, &webview, id);
     watch_page(app, &webview, id);
     keys::install(app, &webview);
+    // Kessel's own extension runtime (ext_runtime.rs) -- never in private.
+    if !private {
+        ext_runtime::attach(app, &webview, &token);
+    }
+    if let Some(page) = extension_page {
+        ext_runtime::navigate_when_ready(app, &webview, page);
+    }
     bridge::install(app, &webview, id, token);
     extensions::page_opened(app, &webview, private, account.as_deref());
     sidebar::install_page_menu(app, &webview, id);
@@ -906,11 +912,19 @@ fn side_panel_title(app: &tauri::AppHandle, kind: &str, url: &str) -> String {
 // page second, so the page stacks on top of the frame (webviews stack in
 // creation order).
 fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &str, url: &str, kind: &str) -> Result<(), String> {
+    // (An extension's page: blank until its address exists -- see
+    // create_tab_internal.)
+    let mut extension_page = None;
     let webview_url = if let Some(route) = internal_route(url) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(url);
-        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        if ext_runtime::ext_of_url(&normalized).is_some() {
+            extension_page = Some(normalized);
+            WebviewUrl::External("about:blank".parse().unwrap())
+        } else {
+            WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        }
     };
     let (window, insets, private) =
         state.win(win, |w| (w.window.clone(), w.insets, w.private)).ok_or("that window is closed")?;
@@ -975,6 +989,12 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
     watch_page(app, &page, page_id);
     keys::install(app, &page);
     keys::install(app, &frame);
+    if !private {
+        ext_runtime::attach(app, &page, &token);
+    }
+    if let Some(target) = extension_page {
+        ext_runtime::navigate_when_ready(app, &page, target);
+    }
     bridge::install(app, &page, page_id, token);
     extensions::page_opened(app, &page, private, None);
 
@@ -1252,6 +1272,7 @@ fn create_popout_internal(
     keys::install(app, &bar);
     extensions::page_opened(app, &content, false, account.as_deref());
     sidebar::install_page_menu(app, &content, id);
+    ext_runtime::attach(app, &content, &token);
     bridge::install(app, &content, id, token);
 
     let window_for_events = window.clone();
@@ -2015,7 +2036,13 @@ fn site_allowed(state: &BrowserState, host: &str) -> bool {
         .allow
         .iter()
         .map(|d| d.trim().trim_start_matches("www."))
-        .any(|d| !d.is_empty() && (host == d || host.ends_with(&format!(".{}", d))))
+        .any(|d| !d.is_empty() && is_same_or_subdomain(host, d))
+}
+
+// `host` is `domain` or one of its subdomains -- asked for every request a
+// page makes, so without building a string each time.
+fn is_same_or_subdomain(host: &str, domain: &str) -> bool {
+    host == domain || (host.len() > domain.len() && host.ends_with(domain) && host.as_bytes()[host.len() - domain.len() - 1] == b'.')
 }
 
 fn shields_up_for(state: &BrowserState, host: &str) -> bool {
@@ -2297,9 +2324,14 @@ fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
     #[cfg(windows)]
     {
         let app2 = app.clone();
+        let label = webview.label().to_string();
         let _ = webview.with_webview(move |platform| unsafe {
             if let Err(e) = install_page_watchers(&app2, &platform, id) {
                 eprintln!("couldn't watch page {}: {}", id, e.message());
+            }
+            // A PDF whose address doesn't say so (pdf.rs).
+            if let Err(e) = platform.controller().CoreWebView2().and_then(|core| pdf::watch(&app2, &core, id, label)) {
+                eprintln!("couldn't watch page {} for PDFs: {}", id, e.message());
             }
         });
     }
@@ -2836,7 +2868,7 @@ fn page_webviews(app: &tauri::AppHandle) -> Vec<Webview> {
 // Whether pages' requests need to come past Kessel at all: for Shields, or
 // to change their headers (privacy.rs).
 fn wants_requests(settings: &Settings) -> bool {
-    settings.adblock_enabled || privacy::request_plan(settings).is_some() || permissions::request_rules(&settings.features)
+    settings.adblock_enabled || privacy::request_plan(settings).is_some() || permissions::request_rules(&settings.features) || ext_runtime::dnr_on()
 }
 
 // The time zone protection: pages' own frames run in UTC (the engine's
@@ -2957,6 +2989,8 @@ unsafe fn install_shields_hooks(
         set_timezone_override(&core, true);
     }
     security::install_hooks(app, &core, id, &label)?;
+    // Service workers stuck starting (Gmail's): stopped, so the page loads.
+    service_workers::install_hooks(app, &core, &label);
     permissions::install_hooks(app, &core, id)?;
     // Sites' notifications, shown by Kessel (notifications.rs).
     notifications::install_hooks(app, &core, id);
@@ -2982,14 +3016,22 @@ unsafe fn install_shields_hooks(
             if is_internal_nav(&page_url) {
                 return Ok(());
             }
+            let st = app_req.state::<BrowserState>();
+            let page_host = page_url.host_str().unwrap_or("");
+            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
+            args.ResourceContext(&mut context)?;
+            // Everything this request needs from the settings, in one look:
+            // this runs for every request every page makes, on the thread
+            // the page is waiting on.
+            let (plan, adblock_on, site_rules) = {
+                let settings = st.store.settings.lock().unwrap();
+                (privacy::request_plan(&settings), settings.adblock_enabled, permissions::request_rules(&settings.features))
+            };
             // Global Privacy Control and Do Not Track, on every request (one
             // whose headers can't be changed still goes past Shields).
-            let plan = privacy::request_plan(&app_req.state::<BrowserState>().store.settings.lock().unwrap());
             if let Some(plan) = plan {
                 let _ = privacy::adjust_request(&request, &plan);
             }
-            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
-            args.ResourceContext(&mut context)?;
             let shields = app_req.state::<shields::Shields>();
             // The page's own document -- guard_navigation already judged it.
             if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
@@ -2997,16 +3039,16 @@ unsafe fn install_shields_hooks(
             {
                 return Ok(());
             }
-            let st = app_req.state::<BrowserState>();
             // Your site settings (permissions::CONTENT): no images on the
             // site, or nothing from other sites -- Shields or not, and never
             // the tab's own document (the page may still be the last one).
+            // Only looked into when some site has such a rule at all.
             let own_document = context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
                 && st.pages.lock().unwrap().get(&id).is_some_and(|p| p.pending_url.is_empty() || p.pending_url == uri);
-            if !own_document {
+            if site_rules && !own_document {
                 let blocked = {
                     let settings = st.store.settings.lock().unwrap();
-                    permissions::content_blocked(&settings.features, page_url.host_str().unwrap_or(""), &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
+                    permissions::content_blocked(&settings.features, page_host, &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
                 };
                 if let Some(reason) = blocked {
                     let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from(reason), &HSTRING::new())?;
@@ -3014,7 +3056,33 @@ unsafe fn install_shields_hooks(
                     return Ok(());
                 }
             }
-            if !shields_up_for(&st, page_url.host_str().unwrap_or("")) {
+            // Extensions' blocking rules (ext_runtime.rs), Shields or not.
+            if let Some(action) = ext_runtime::check_request(&app_req, &uri, page_host, request_kind(context)) {
+                let response = match action {
+                    ext_dnr::Action::Block => Some(env.CreateWebResourceResponse(None, 403, &HSTRING::from("Blocked by an extension"), &HSTRING::new())?),
+                    ext_dnr::Action::Redirect(to) => match ext_runtime::extension_file(&app_req, &to) {
+                        // One of its own files: served from its folder.
+                        Some((mime, body)) => {
+                            let stream = windows::Win32::UI::Shell::SHCreateMemStream(Some(&body));
+                            Some(env.CreateWebResourceResponse(stream.as_ref(), 200, &HSTRING::from("OK"), &HSTRING::from(format!("Content-Type: {mime}\r\nAccess-Control-Allow-Origin: *")))?)
+                        }
+                        None if to.starts_with("https://") || to.starts_with("http://") || to.starts_with("data:") => {
+                            Some(env.CreateWebResourceResponse(None, 307, &HSTRING::from("Temporary Redirect"), &HSTRING::from(format!("Location: {to}")))?)
+                        }
+                        None => None,
+                    },
+                    ext_dnr::Action::Upgrade => {
+                        let to = ext_dnr::upgraded(&uri);
+                        Some(env.CreateWebResourceResponse(None, 307, &HSTRING::from("Temporary Redirect"), &HSTRING::from(format!("Location: {to}")))?)
+                    }
+                    ext_dnr::Action::Allow => None,
+                };
+                if let Some(response) = response {
+                    args.SetResponse(&response)?;
+                    return Ok(());
+                }
+            }
+            if !adblock_on || site_allowed(&st, page_host) {
                 return Ok(());
             }
             let verdict = shields.check_request(&uri, &page, request_kind(context));
@@ -5281,7 +5349,7 @@ fn write_session(state: &BrowserState) {
     let windows: Vec<WindowSession> = state.sessions.lock().unwrap().iter().map(|(_, s)| s.clone()).filter(|s| !s.tabs.is_empty()).collect();
     let path = state.data_dir.join("session.json");
     if let Ok(s) = serde_json::to_string(&SessionFile { windows }) {
-        let _ = store::write_atomic(&path, &s);
+        store::write_atomic_soon(&path, s);
     }
 }
 
@@ -5465,6 +5533,8 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             rice_theme,
+            setup::pc_profile,
+            setup::desktop_wallpaper,
             new_tab,
             open_background_tab,
             open_singleton_tab,
@@ -5693,6 +5763,7 @@ fn main() {
             extensions::remove_extension,
             extensions::set_extension_enabled,
             extensions::set_extension_access,
+            extensions::set_extension_runtime,
             extensions::update_extensions,
             extensions::pack_extension,
             extensions::extension_theme,
@@ -5775,6 +5846,7 @@ fn main() {
             net::surfshark_disconnect,
             net::surfshark_locations,
             pdf::pdf_bytes,
+            pdf::pdf_save,
             proof::proof_languages,
             apps::app_badges,
             notifications::notify_fit,
@@ -5806,6 +5878,8 @@ fn main() {
             // How the last run ended, and safe mode -- before anything that
             // could crash again.
             let startup = crash::start(&data_dir);
+            // A brand-new profile starts on the setup (setup.rs).
+            setup::note_first_run(&data_dir);
             let store = Store::load(data_dir.clone());
             // Secure DNS, sites' own proxies, the VPN: Kessel's own network
             // layer, when they're set up -- the engine's proxy (net.rs).
@@ -5830,6 +5904,7 @@ fn main() {
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
             app.manage(accounts::Accounts::load(&data_dir, profile.local_dir.join("accounts")));
             app.manage(extensions::Extensions::load(&data_dir, &profile.local_dir));
+            app.manage(ext_runtime::Runtime::new(&profile.local_dir));
             app.manage(sidebar::Sidebar::load(&data_dir));
             app.manage(security::Security::new(&data_dir));
 
@@ -5854,6 +5929,13 @@ fn main() {
                 sessions: Mutex::new(Vec::new()),
             };
             app.manage(state);
+            // The next starts on this profile come here -- from now, not
+            // once the windows are up: a link clicked twice, or a second one
+            // while Kessel was still starting, used to find no one listening
+            // and start a whole second Kessel (two windows). What they ask
+            // for is done once setup is over (instance::serve, on the main
+            // thread), joining a window still loading (instance::add_urls).
+            instance::listen(app.handle(), &data_dir);
             app.manage(Vault::new(data_dir.clone()));
             start_shields(app.handle());
             security::start(app.handle());
@@ -5870,6 +5952,7 @@ fn main() {
             extensions::schedule_updates(app.handle());
             // Kessel's own updates.
             updater::start(app.handle());
+            ext_runtime::start(app.handle());
 
             // The windows of your last session (each with its own tabs), or
             // one window on the start page. The tabs themselves are opened by
@@ -5885,7 +5968,6 @@ fn main() {
                     let id = instance::open_app_window(app.handle(), url)?;
                     apps::give_files(id, request.files.iter().map(PathBuf::from).collect());
                 }
-                instance::listen(app.handle(), &data_dir);
                 let app_for_watchdog = app.handle().clone();
                 std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
                 return Ok(());
@@ -5906,21 +5988,22 @@ fn main() {
                 // Settings -> Search & Startup: pages to start with -- or
                 // the addresses Kessel was started with (a link from another
                 // program, a file).
-                let pages = if request.urls.is_empty() { startup_pages(&state.store.settings.lock().unwrap().features) } else { request.urls.clone() };
+                let pages = if request.urls.is_empty() { setup::startup_pages(startup_pages(&state.store.settings.lock().unwrap().features)) } else { request.urls.clone() };
                 let init = if pages.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": pages }) };
                 browser_windows::create(app.handle(), false, init)?;
             } else {
-                for session in saved {
-                    browser_windows::create(app.handle(), false, serde_json::json!({ "session": session }))?;
-                }
-                // Your tabs came back; the addresses asked for, in a window
-                // of their own.
-                if !request.urls.is_empty() {
-                    browser_windows::create(app.handle(), false, serde_json::json!({ "urls": request.urls }))?;
+                // Your tabs come back; the addresses asked for (the link
+                // that started Kessel) open in front in the last of your
+                // windows -- the one in front -- not in a second window.
+                let last = saved.len() - 1;
+                for (i, session) in saved.into_iter().enumerate() {
+                    let mut init = serde_json::json!({ "session": session });
+                    if i == last {
+                        instance::add_urls(&mut init, &request.urls);
+                    }
+                    browser_windows::create(app.handle(), false, init)?;
                 }
             }
-            // The next starts on this profile come here.
-            instance::listen(app.handle(), &data_dir);
 
             let app_for_watchdog = app.handle().clone();
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
@@ -5945,6 +6028,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shields_down_covers_a_site_and_its_subdomains_only() {
+        assert!(is_same_or_subdomain("example.com", "example.com"));
+        assert!(is_same_or_subdomain("mail.example.com", "example.com"));
+        assert!(!is_same_or_subdomain("badexample.com", "example.com"));
+        assert!(!is_same_or_subdomain("example.com.evil", "example.com"));
+        assert!(!is_same_or_subdomain("com", "example.com"));
+    }
 
     #[test]
     fn a_pages_first_seconds_need_a_real_click() {
