@@ -28,13 +28,12 @@ function setDeveloperMode(on) {
 export async function extensionsPanel(settings, { el, settingRow, switchHtml, wireSwitch }) {
   const p = el(`<div class="panel" id="panel-extensions">
     <h2>Extensions</h2>
-    <p class="sub">Extensions from the Chrome Web Store and Edge Add-ons, run by the browser engine itself. Open one's page in a store and click “Add to Kessel” in the address bar -- or add one from a file here. Their buttons are under the puzzle in the address bar.</p>
+    <p class="sub">Get extensions from the Kessel Store -- or any Chrome Web Store extension by its link, or from a file. Kessel runs them with its own extension runtime. Their buttons are under the puzzle in the address bar.</p>
 
     <div class="setting-card">
-      <div class="setting-row"><div class="info"><div class="title">Get extensions</div><div class="desc">Most Chrome extensions work. The engine doesn't run old “Manifest V2” ones any more (neither does Chrome), and extensions stay out of private windows.</div></div>
+      <div class="setting-row"><div class="info"><div class="title">Get extensions</div><div class="desc">The Kessel Store has picks that suit Kessel; paste any Chrome Web Store link there for the rest. Old “Manifest V2” extensions aren't taken (Chrome dropped them too), and extensions stay out of private windows.</div></div>
         <div class="control" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">
-          <button class="btn sm" id="ext-cws">${icon("globe", 13)}<span>Chrome Web Store</span></button>
-          <button class="btn sm" id="ext-edge">${icon("globe", 13)}<span>Edge Add-ons</span></button>
+          <button class="btn sm primary" id="ext-store">${icon("puzzle", 13)}<span>Kessel Store</span></button>
           <button class="btn sm" id="ext-file">${icon("file", 13)}<span>From a file…</span></button>
         </div>
       </div>
@@ -63,8 +62,7 @@ export async function extensionsPanel(settings, { el, settingRow, switchHtml, wi
   showDev();
 
   const open = (url) => invoke("open_url", { url, how: "tab" }).catch((err) => toast(String(err)));
-  p.querySelector("#ext-cws").addEventListener("click", () => open("https://chromewebstore.google.com/"));
-  p.querySelector("#ext-edge").addEventListener("click", () => open("https://microsoftedge.microsoft.com/addons/Microsoft-Edge-Extensions-Home"));
+  p.querySelector("#ext-store").addEventListener("click", () => invoke("open_singleton_tab", { route: "kessel://store" }).catch((err) => toast(String(err))));
   p.querySelector("#ext-update").addEventListener("click", async (e) => {
     const b = e.currentTarget;
     b.disabled = true;
@@ -153,7 +151,8 @@ export async function extensionsPanel(settings, { el, settingRow, switchHtml, wi
     if (x.error) status.push(`<span style="color:var(--danger)">Couldn't run: ${escapeHtml(x.error)}</span>`);
     if (x.flagged === "malware") status.push(`<span style="color:var(--danger)">The Chrome Web Store took it down as malware${x.enabled ? "" : ", so Kessel turned it off"}. Remove it unless you're sure.</span>`);
     if (x.flagged === "removed") status.push(`<span style="color:var(--warning)">It's no longer in its store -- it may have been taken down. It won't get updates.</span>`);
-    if (x.restart) status.push(`<span style="color:var(--warning)">Restart Kessel to finish its last change.</span>`);
+    if (x.runtime !== "kessel" && !x.theme) status.push(`<span style="color:var(--text-faint)">Runs with the Edge engine -- Details can move it to Kessel's own runtime.</span>`);
+    if (x.restart && x.runtime !== "kessel") status.push(`<span style="color:var(--warning)">Restart Kessel to finish its last change.</span>`);
     if (x.pending) status.push(`<span style="color:var(--warning)">Version ${escapeHtml(x.pending)} asks for more than this one -- <a href="#" class="ext-review">look it over</a>.</span>`);
     card.querySelector(".ext-status").innerHTML = status.join("<br>");
     card.querySelector(".ext-review")?.addEventListener("click", async (e) => {
@@ -167,8 +166,23 @@ export async function extensionsPanel(settings, { el, settingRow, switchHtml, wi
     const more = card.querySelector(".ext-more");
     const lines = permissionLines(x);
     more.append(el(`<div class="setting-row"><div class="info"><div class="title">It can</div><div class="desc">${lines.length ? lines.map(escapeHtml).join("<br>") : "Nothing that reaches your data"}</div></div></div>`));
+    if (x.source !== "folder") {
+      const rt = el(`<div class="setting-row"><div class="info"><div class="title">Runs with</div><div class="desc">Kessel's own runtime is the new home for extensions. If one misbehaves there, the Edge engine is still here as a fallback while Kessel's runtime grows -- each keeps its own copy of the extension's settings.</div></div>
+        <div class="control"><select class="field" style="width:210px"><option value="kessel">Kessel's runtime</option><option value="engine">The Edge engine (fallback)</option></select></div></div>`);
+      const sel = rt.querySelector("select");
+      sel.value = x.runtime === "kessel" ? "kessel" : "engine";
+      sel.addEventListener("change", () =>
+        invoke("set_extension_runtime", { id: x.id, runtime: sel.value })
+          .then(() => toast(sel.value === "kessel" ? `${x.name} runs in Kessel's runtime now` : `${x.name} runs with the Edge engine now`))
+          .catch((err) => {
+            toast(String(err));
+            sel.value = x.runtime === "kessel" ? "kessel" : "engine";
+          })
+      );
+      more.append(rt);
+    }
     if (x.source !== "folder" && x.hosts.length) {
-      const access = el(`<div class="setting-row"><div class="info"><div class="title">Site access</div><div class="desc">Where its scripts for pages may run -- at once. What it may fetch from sites follows once Kessel restarts.</div>
+      const access = el(`<div class="setting-row"><div class="info"><div class="title">Site access</div><div class="desc">${x.runtime === "kessel" ? "Where its scripts for pages may run -- from the next page you open." : "Where its scripts for pages may run -- at once. What it may fetch from sites follows once Kessel restarts."}</div>
         <textarea class="field ext-sites" rows="3" placeholder="One site a line: example.com" style="width:100%;margin-top:8px;resize:vertical;box-sizing:border-box" hidden></textarea></div>
         <div class="control" style="flex-direction:column;align-items:flex-end;gap:6px"><select class="field" style="width:210px">
           <option value="all">On every site it asks for</option><option value="sites">Only on sites I choose</option><option value="click">Only when I open it</option>

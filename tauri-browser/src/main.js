@@ -2899,7 +2899,7 @@ async function openMusic({ url = null, tab = null } = {}) {
   if (created) created.music = true;
 }
 
-const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks", "kessel://tasks", "kessel://diagnostics", "kessel://privacy"]);
+const SINGLETON_ROUTES = new Set(["kessel://settings", "kessel://passwords", "kessel://history", "kessel://downloads", "kessel://help", "kessel://gpu", "kessel://feeds", "kessel://bookmarks", "kessel://tasks", "kessel://diagnostics", "kessel://privacy", "kessel://store"]);
 
 async function openSingleton(route) {
   await invoke("open_singleton_tab", { route });

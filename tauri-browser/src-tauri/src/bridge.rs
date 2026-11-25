@@ -23,6 +23,7 @@
 
 use crate::keys::Source;
 use crate::BrowserState;
+use std::collections::HashMap;
 use tauri::{Manager, Webview};
 
 // 128 random bits, as hex.
@@ -78,6 +79,13 @@ unsafe fn install_handlers(
             let mut source = PWSTR::null();
             args.Source(&mut source)?;
             let page_url = webview2_com::take_pwstr(source);
+            // An extension's part (ext_runtime.rs): its answer is its own.
+            if message.kind == "ext" {
+                if let Some(answer) = crate::ext_runtime::on_message(&app_top, id, &label_top, 0, &page_url, &message.data) {
+                    sender.PostWebMessageAsJson(&HSTRING::from(answer.to_string()))?;
+                }
+                return Ok(());
+            }
             if let Some(reply) = handle(&app_top, id, &label_top, &page_url, &message, true) {
                 let json = serde_json::json!({ "kesselReply": message.request, "ok": reply }).to_string();
                 sender.PostWebMessageAsJson(&HSTRING::from(json))?;
@@ -96,16 +104,35 @@ unsafe fn install_handlers(
                 let frame = args.Frame()?;
                 let Ok(frame2) = frame.cast::<ICoreWebView2Frame2>() else { return Ok(()) };
                 let (app_frame, label_frame, token_frame) = (app.clone(), label.clone(), token.clone());
+                // A number of its own, for extensions' parts in it to be
+                // answered (see post_to_frame).
+                let number = FRAME_NUMBERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                FRAMES.with(|f| f.borrow_mut().insert((label.clone(), number), frame2.clone()));
                 let mut frame_token = 0i64;
                 frame2.add_WebMessageReceived(
-                    &FrameWebMessageReceivedEventHandler::create(Box::new(move |_, args| {
+                    &FrameWebMessageReceivedEventHandler::create(Box::new(move |sender, args| {
                         let Some(args) = args else { return Ok(()) };
                         if let Some(message) = read_message(&args, &token_frame) {
                             let mut source = PWSTR::null();
                             args.Source(&mut source)?;
                             let url = webview2_com::take_pwstr(source);
+                            if message.kind == "ext" {
+                                let answer = crate::ext_runtime::on_message(&app_frame, id, &label_frame, number, &url, &message.data);
+                                if let (Some(answer), Some(sender)) = (answer, sender.and_then(|f| f.cast::<ICoreWebView2Frame2>().ok())) {
+                                    sender.PostWebMessageAsJson(&HSTRING::from(answer.to_string()))?;
+                                }
+                                return Ok(());
+                            }
                             handle(&app_frame, id, &label_frame, &url, &message, false);
                         }
+                        Ok(())
+                    })),
+                    &mut frame_token,
+                )?;
+                let label_gone = label.clone();
+                frame.add_Destroyed(
+                    &webview2_com::FrameDestroyedEventHandler::create(Box::new(move |_, _| {
+                        FRAMES.with(|f| f.borrow_mut().remove(&(label_gone.clone(), number)));
                         Ok(())
                     })),
                     &mut frame_token,
@@ -116,6 +143,33 @@ unsafe fn install_handlers(
         )?;
     }
     Ok(())
+}
+
+// The iframes of every page webview, by (webview, number): only touched on
+// the main thread, where WebView2's events come.
+#[cfg(windows)]
+thread_local! {
+    static FRAMES: std::cell::RefCell<HashMap<(String, u32), webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Frame2>> = std::cell::RefCell::new(HashMap::new());
+}
+// Frame numbers start at 1: 0 is the page itself.
+#[cfg(windows)]
+static FRAME_NUMBERS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+
+// Posts `json` to iframe `number` of webview `label`, if it's still there.
+pub fn post_to_frame(app: &tauri::AppHandle, label: &str, number: u32, json: serde_json::Value) {
+    #[cfg(windows)]
+    {
+        let label = label.to_string();
+        let _ = app.run_on_main_thread(move || {
+            FRAMES.with(|f| {
+                if let Some(frame) = f.borrow().get(&(label, number)) {
+                    let _ = unsafe { frame.PostWebMessageAsJson(&windows::core::HSTRING::from(json.to_string())) };
+                }
+            });
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = (app, label, number, json);
 }
 
 pub struct Message {
