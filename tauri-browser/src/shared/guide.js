@@ -135,7 +135,7 @@ export const GUIDE = [
     intro: "Install sites as apps, add extensions and keep track of what you download.",
     tips: [
       ["Install a site as an app", `Menu → <b>Install as app</b>: a Start menu entry and a window of its own, with its badge, jump list and file types. <a data-open="kessel://settings/apps">Settings → Apps</a>`],
-      ["Extensions", `On an extension's page in the Chrome Web Store or Edge Add-ons, click <b>Add to Kessel</b> in the address bar. Kessel shows what it may do first, and keeps it up to date. <a data-open="kessel://settings/extensions">Settings → Extensions</a>`],
+      ["Extensions", `Open the <a data-open="kessel://store">Kessel Store</a>: picks that suit Kessel, or paste any Chrome Web Store link. Kessel shows what an extension may do first, runs it with its own extension runtime, and keeps it up to date. <a data-open="kessel://settings/extensions">Settings → Extensions</a>`],
       ["Downloads", `<kbd>Ctrl</kbd>+<kbd>J</kbd>: pause, resume, retry, search and sort. Kessel can ask where to save each file, or sort downloads into Pictures, Videos, Documents and more. <a data-open="kessel://settings/downloads">Settings → Downloads</a>`],
       ["Notifications", `Sites' notifications are Kessel's own cards, stacked per site, with a history. Allow or block them per site. <a data-open="kessel://settings/permissions">Settings → Site permissions</a>`],
     ],

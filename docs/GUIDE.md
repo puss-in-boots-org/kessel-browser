@@ -120,7 +120,7 @@ Control sound and video in any tab, and capture what's on screen.
 Install sites as apps, add extensions and keep track of what you download.
 
 - **Install a site as an app.** Menu → **Install as app**: a Start menu entry and a window of its own, with its badge, jump list and file types. Settings → Apps (`kessel://settings/apps`)
-- **Extensions.** On an extension's page in the Chrome Web Store or Edge Add-ons, click **Add to Kessel** in the address bar. Kessel shows what it may do first, and keeps it up to date. Settings → Extensions (`kessel://settings/extensions`)
+- **Extensions.** Open the **Kessel Store** (`kessel://store`, or Get more under the puzzle in the address bar): picks that suit Kessel, or paste any Chrome Web Store link in its search box. Kessel shows what an extension may do first, runs it with its own extension runtime, and keeps it up to date. Settings → Extensions (`kessel://settings/extensions`)
 - **Downloads.** <kbd>Ctrl</kbd>+<kbd>J</kbd>: pause, resume, retry, search and sort. Kessel can ask where to save each file, or sort downloads into Pictures, Videos, Documents and more. Settings → Downloads (`kessel://settings/downloads`)
 - **Notifications.** Sites' notifications are Kessel's own cards, stacked per site, with a history. Allow or block them per site. Settings → Site permissions (`kessel://settings/permissions`)
 
@@ -324,7 +324,7 @@ Everything Kessel does, and how to use it -- as in Settings → All features.
 | Sidebar sites | Tab menu → Add to sidebar, or the + on the rail. |
 | Side panel | The rail's buttons: Bookmarks, History, Reading list, Notes, Search (tabs, bookmarks, notes and history at once) and Extensions, beside the page. |
 | AI assistant | ChatGPT, Claude, Gemini, Copilot, Perplexity, Le Chat or your own in the side panel (Settings → Side panel). Right-click a page or selected text → Ask AI about this. |
-| Extensions | On an extension's page in the Chrome Web Store or Edge Add-ons: Add to Kessel in the address bar. What it may do is shown first; updates come by themselves. Settings → Extensions: turn on or off, site access, remove, developer mode. |
+| Extensions | The Kessel Store (`kessel://store`): picks that suit Kessel, or any Chrome Web Store link. Run by Kessel's own extension runtime. What it may do is shown first; updates come by themselves. Settings → Extensions: turn on or off, site access, remove, developer mode. |
 | Your own shortcuts | Settings → Keyboard & Mouse. |
 | Look | Settings → Appearance: theme, Liquid Glass, wallpaper, bookmarks bar. |
 | Help | F1: shortcuts and tips. |

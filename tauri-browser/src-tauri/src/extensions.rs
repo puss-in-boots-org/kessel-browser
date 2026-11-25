@@ -83,6 +83,10 @@ pub(crate) struct Extension {
     // marks it as such -- it's turned off, like Chrome does), "removed" (the
     // store doesn't have it any more), or "".
     pub flagged: String,
+    // Who runs it: "kessel" (Kessel's own runtime, ext_runtime.rs -- every
+    // extension added since it came) or "engine" / "" (WebView2's, as
+    // before; a developer's folder always runs there).
+    pub runtime: String,
 }
 
 impl Extension {
@@ -190,7 +194,7 @@ impl Extensions {
 // --- Manifests ---------------------------------------------------------------
 
 // A manifest's text as JSON: Chrome takes comments in it (and a BOM).
-fn parse_manifest(text: &str) -> Result<serde_json::Value, String> {
+pub(crate) fn parse_manifest(text: &str) -> Result<serde_json::Value, String> {
     let text = text.trim_start_matches('\u{feff}');
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -572,10 +576,13 @@ impl Extensions {
                 if p.from_store() {
                     ext.source = p.source.clone();
                 }
+                ext.runtime = p.runtime.clone();
             }
             None => {
                 ext.installed = now_unix();
                 ext.revision = 1;
+                // New ones run in Kessel's own runtime.
+                ext.runtime = "kessel".into();
             }
         }
         write_engine_files(&dir, &ext)?;
@@ -813,7 +820,7 @@ pub(crate) fn page_opened(app: &tauri::AppHandle, webview: &Webview, private: bo
     let first = exts.synced.lock().unwrap().insert(key.clone());
     // Only when there's a reason: something to load, or something it
     // loaded earlier that may have to go.
-    let wanted = exts.list.lock().unwrap().iter().any(|e| !e.theme);
+    let wanted = exts.list.lock().unwrap().iter().any(|e| !e.theme && !crate::ext_runtime::runs(e));
     let had = loaded(app).get(&key).is_some_and(|l| !l.is_empty());
     if !(first && (wanted || had)) {
         return;
@@ -828,6 +835,7 @@ pub(crate) fn page_opened(app: &tauri::AppHandle, webview: &Webview, private: bo
 
 // Brings every engine profile with a live page in line with the list.
 async fn sync_all(app: &tauri::AppHandle) {
+    crate::ext_runtime::refresh(app);
     let keys: Vec<String> = app.state::<Extensions>().profiles.lock().unwrap().keys().cloned().collect();
     for key in keys {
         if let Err(e) = sync(app, &key).await {
@@ -844,7 +852,8 @@ async fn sync(app: &tauri::AppHandle, key: &str) -> Result<(), String> {
     let exts = app.state::<Extensions>();
     let _one_at_a_time = exts.busy.lock().await;
     let Some(webview) = exts.profiles.lock().unwrap().get(key).cloned() else { return Ok(()) };
-    let wanted: Vec<Extension> = exts.list().into_iter().filter(|e| !e.theme).collect();
+    // (Those Kessel runs itself are the engine's to let go of.)
+    let wanted: Vec<Extension> = exts.list().into_iter().filter(|e| !e.theme && !crate::ext_runtime::runs(e)).collect();
     let installed = match engine::list(&webview).await {
         Ok(list) => list,
         Err(e) => {
@@ -923,7 +932,7 @@ async fn sync(app: &tauri::AppHandle, key: &str) -> Result<(), String> {
         }
     }
     // Gone from the list: taken away -- only ever one Kessel added.
-    let wanted_ids: HashSet<String> = exts.list().into_iter().filter(|e| !e.theme).map(|e| e.id).collect();
+    let wanted_ids: HashSet<String> = exts.list().into_iter().filter(|e| !e.theme && !crate::ext_runtime::runs(e)).map(|e| e.id).collect();
     let gone: Vec<String> = installed.iter().filter(|i| !wanted_ids.contains(&i.id) && was.contains_key(&i.id)).map(|i| i.id.clone()).collect();
     for id in gone {
         let _ = engine::remove(&webview, &id).await;
@@ -1136,6 +1145,29 @@ pub(crate) async fn set_extension_access(app: tauri::AppHandle, webview: Webview
             e.sites = changed.sites.clone();
             e.revision += 1;
             e.restart = restart;
+        })
+        .ok_or("no such extension")?;
+    sync_all(&app).await;
+    Ok(ext)
+}
+
+// Who runs extension `id`: "kessel" (Kessel's own runtime) or "engine"
+// (WebView2's, the older way). Its data in the other one stays behind.
+#[tauri::command]
+pub(crate) async fn set_extension_runtime(app: tauri::AppHandle, webview: Webview, id: String, runtime: String) -> Result<Extension, String> {
+    require_internal_page(&webview)?;
+    if !matches!(runtime.as_str(), "kessel" | "engine") {
+        return Err("unknown runtime".into());
+    }
+    let exts = app.state::<Extensions>();
+    let ext = exts.get(&id).ok_or("no such extension")?;
+    if ext.source == "folder" && runtime == "kessel" {
+        return Err("an unpacked folder runs with the engine for now -- pack it, then add the .zip".into());
+    }
+    let ext = exts
+        .update(&id, |e| {
+            e.runtime = runtime.clone();
+            e.error.clear();
         })
         .ok_or("no such extension")?;
     sync_all(&app).await;
@@ -1357,6 +1389,9 @@ pub(crate) fn name_of(app: &tauri::AppHandle, id: &str) -> Option<String> {
 }
 
 fn page_url(ext: &Extension, page: &str) -> String {
+    if crate::ext_runtime::runs(ext) {
+        return format!("{}{}", crate::ext_runtime::base_url(&ext.id), page);
+    }
     format!("chrome-extension://{}/{}", ext.id, page)
 }
 
@@ -1395,15 +1430,28 @@ pub(crate) async fn open_extension_side_panel(app: tauri::AppHandle, webview: We
 #[tauri::command]
 pub(crate) async fn open_extension_popup(app: tauri::AppHandle, webview: Webview, id: String, x: f64, y: f64) -> Result<bool, String> {
     require_internal_page(&webview)?;
-    let ext = app.state::<Extensions>().get(&id).ok_or("no such extension")?;
+    let mut ext = app.state::<Extensions>().get(&id).ok_or("no such extension")?;
+    let kessel = crate::ext_runtime::runs(&ext);
+    if kessel {
+        if let Some(p) = crate::ext_runtime::popup_override(&app, &id) {
+            ext.popup = p;
+        }
+    }
     if ext.popup.is_empty() {
-        // No popup: its options, like Chrome's button does for such.
-        if !ext.options.is_empty() {
+        // No popup: its background hears of the click (Kessel's runtime),
+        // else its options, like Chrome's button does for such.
+        if kessel {
+            let state = app.state::<BrowserState>();
+            let tab = state.window_of(&webview).and_then(|w| state.active_tab(&w));
+            crate::ext_runtime::action_clicked(&app, &id, tab);
+        } else if !ext.options.is_empty() {
             open_extension_page(app, webview, id, None).await?;
         }
         return Ok(false);
     }
-    let url: tauri::Url = page_url(&ext, &ext.popup).parse().map_err(|_| "bad extension page")?;
+    let popup_page = ext.popup.clone();
+    let url: tauri::Url = if kessel { "about:blank".parse().map_err(|_| "bad extension page")? } else { page_url(&ext, &ext.popup).parse().map_err(|_| "bad extension page")? };
+    let ext_for_page = ext.clone();
     let app2 = app.clone();
     on_main(&app, move || -> Result<bool, String> {
         let state = app2.state::<BrowserState>();
@@ -1420,7 +1468,11 @@ pub(crate) async fn open_extension_popup(app: tauri::AppHandle, webview: Webview
         let (w, h) = (360.0, 420.0);
         let builder = with_account(&app2, profile::webview(&label, WebviewUrl::External(url)), account.as_deref());
         let popup = window.add_child(builder, LogicalPosition::new((x - w).max(4.0), y + 6.0), LogicalSize::new(w, h)).map_err(|e| e.to_string())?;
-        page_opened(&app2, &popup, false, account.as_deref());
+        if kessel {
+            crate::ext_runtime::open_page_in(&app2, &popup, &ext_for_page, &popup_page);
+        } else {
+            page_opened(&app2, &popup, false, account.as_deref());
+        }
         keys::install(&app2, &popup);
         // Over the page (webviews stack by creation otherwise).
         raise_webview(&popup);

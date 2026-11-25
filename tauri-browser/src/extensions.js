@@ -84,7 +84,7 @@ async function showList() {
   }
   footerButtons([
     ["Manage", () => (invoke("open_singleton_tab", { route: "kessel://settings/extensions" }), close())],
-    ["Get more", () => (invoke("open_url", { url: "https://chromewebstore.google.com/", how: "tab" }), close())],
+    ["Get more", () => (invoke("open_singleton_tab", { route: "kessel://store" }), close())],
   ]);
 }
 

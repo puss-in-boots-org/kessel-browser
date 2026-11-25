@@ -581,8 +581,8 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 15.01 | Extension marketplace | ✅ | Chrome Web Store and Edge Add-ons: on an extension's page, "Add to Kessel" in the address bar; Settings -> Extensions links both stores |
-| 15.02 | Install extensions | ✅ | From a store (its .crx, over HTTPS; keeps its store id), from a .crx/.zip file, or unpacked from a folder. Run by WebView2 itself; Manifest V2 ones are refused (the engine no longer runs them) |
+| 15.01 | Extension marketplace | ✅ | The Kessel Store (kessel://store): picks that suit Kessel by category, search, and any Chrome Web Store extension by pasting its link; "Add to Kessel" in the address bar on a store page still works. (The store page itself is new and not yet run on Windows) |
+| 15.02 | Install extensions | ✅ | From a store (its .crx, over HTTPS; keeps its store id), from a .crx/.zip file, or unpacked from a folder. New ones run in Kessel's own extension runtime (ext_runtime.rs: content scripts, chrome.runtime/storage/i18n/tabs/windows/scripting/alarms, background page, popups, blocking rules in Kessel's filter), the Edge engine kept as a per-extension fallback; Manifest V2 ones are refused |
 | 15.03 | Uninstall extensions | ✅ | Settings -> Extensions -> Remove: its data goes with it |
 | 15.04 | Enable/disable extensions | ✅ | Settings -> Extensions, the side panel's Extensions page; takes effect at once, data kept |
 | 15.05 | Extension permissions | ✅ | What it may do, in words, before it's added and in Settings -> Extensions -> Details |
@@ -596,7 +596,7 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 | 15.13 | Extension themes | 🟡 | A Chrome theme's colours go onto the style you use (frame, toolbar, text, address bar, accent); its background pictures aren't used |
 | 15.14 | Content blockers | 🟡 | Shields is built in. Manifest V3 blockers install and run -- tried with uBlock Origin Lite from the Chrome Web Store -- but WebView2 doesn't act on their blocking rules (enabled, and matching by its own test, yet requests go through), so Shields does the blocking |
 | 15.15 | Password-manager extensions | 🟡 | Install and run like any MV3 extension (their popups from the puzzle button, content scripts fill forms) -- not tried with a real one yet; the built-in vault is Passwords |
-| 15.16 | Productivity extensions | 🟡 | Install and run like any MV3 extension -- not tried with real ones yet. The engine has no chrome.tabs model of Kessel's tabs, so ones that manage tabs can't |
+| 15.16 | Productivity extensions | 🟡 | Install and run like any MV3 extension -- not tried with real ones yet. In Kessel's runtime chrome.tabs is Kessel's own tabs (query, create, update, remove, sendMessage); tab events and context menus are still to come |
 | 15.17 | Developer extensions | 🟡 | Install and run like any MV3 extension; DevTools extensions (devtools_page) don't, as WebView2's DevTools has no panels for them |
 
 ### 16. Built-in content blocking

@@ -16,6 +16,8 @@ mod defaults;
 mod dialogs;
 mod energy;
 mod experiments;
+mod ext_dnr;
+mod ext_runtime;
 mod extensions;
 mod forms;
 mod graphics;
@@ -165,6 +167,8 @@ const INTERNAL_PAGES: &[(&str, &str)] = &[
     ("privacy", "privacy.html"),
     // The first-run setup, and again from Settings (setup.rs).
     ("welcome", "welcome.html"),
+    // Kessel's own extension store.
+    ("store", "store.html"),
 ];
 
 // The pages Kessel starts with when it isn't bringing back your last
@@ -678,11 +682,19 @@ fn create_tab_internal(
         Some(u) => u.to_string(),
     };
 
+    // An extension's own page (its options...): the tab starts blank and
+    // goes there once its address exists in the tab (ext_runtime.rs).
+    let mut extension_page = None;
     let webview_url = if let Some(route) = internal_route(&resolved) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(&resolved);
-        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        if ext_runtime::ext_of_url(&normalized).is_some() && !private {
+            extension_page = Some(normalized);
+            WebviewUrl::External("about:blank".parse().unwrap())
+        } else {
+            WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        }
     };
 
     let (adblock_enabled, autofill_enabled) = {
@@ -808,6 +820,13 @@ fn create_tab_internal(
     attach_shields(app, &webview, id);
     watch_page(app, &webview, id);
     keys::install(app, &webview);
+    // Kessel's own extension runtime (ext_runtime.rs) -- never in private.
+    if !private {
+        ext_runtime::attach(app, &webview, &token);
+    }
+    if let Some(page) = extension_page {
+        ext_runtime::navigate_when_ready(app, &webview, page);
+    }
     bridge::install(app, &webview, id, token);
     extensions::page_opened(app, &webview, private, account.as_deref());
     sidebar::install_page_menu(app, &webview, id);
@@ -892,11 +911,19 @@ fn side_panel_title(app: &tauri::AppHandle, kind: &str, url: &str) -> String {
 // page second, so the page stacks on top of the frame (webviews stack in
 // creation order).
 fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &str, url: &str, kind: &str) -> Result<(), String> {
+    // (An extension's page: blank until its address exists -- see
+    // create_tab_internal.)
+    let mut extension_page = None;
     let webview_url = if let Some(route) = internal_route(url) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(url);
-        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        if ext_runtime::ext_of_url(&normalized).is_some() {
+            extension_page = Some(normalized);
+            WebviewUrl::External("about:blank".parse().unwrap())
+        } else {
+            WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        }
     };
     let (window, insets, private) =
         state.win(win, |w| (w.window.clone(), w.insets, w.private)).ok_or("that window is closed")?;
@@ -961,6 +988,12 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
     watch_page(app, &page, page_id);
     keys::install(app, &page);
     keys::install(app, &frame);
+    if !private {
+        ext_runtime::attach(app, &page, &token);
+    }
+    if let Some(target) = extension_page {
+        ext_runtime::navigate_when_ready(app, &page, target);
+    }
     bridge::install(app, &page, page_id, token);
     extensions::page_opened(app, &page, private, None);
 
@@ -1238,6 +1271,7 @@ fn create_popout_internal(
     keys::install(app, &bar);
     extensions::page_opened(app, &content, false, account.as_deref());
     sidebar::install_page_menu(app, &content, id);
+    ext_runtime::attach(app, &content, &token);
     bridge::install(app, &content, id, token);
 
     let window_for_events = window.clone();
@@ -2833,7 +2867,7 @@ fn page_webviews(app: &tauri::AppHandle) -> Vec<Webview> {
 // Whether pages' requests need to come past Kessel at all: for Shields, or
 // to change their headers (privacy.rs).
 fn wants_requests(settings: &Settings) -> bool {
-    settings.adblock_enabled || privacy::request_plan(settings).is_some() || permissions::request_rules(&settings.features)
+    settings.adblock_enabled || privacy::request_plan(settings).is_some() || permissions::request_rules(&settings.features) || ext_runtime::dnr_on()
 }
 
 // The time zone protection: pages' own frames run in UTC (the engine's
@@ -3017,6 +3051,32 @@ unsafe fn install_shields_hooks(
                 };
                 if let Some(reason) = blocked {
                     let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from(reason), &HSTRING::new())?;
+                    args.SetResponse(&response)?;
+                    return Ok(());
+                }
+            }
+            // Extensions' blocking rules (ext_runtime.rs), Shields or not.
+            if let Some(action) = ext_runtime::check_request(&app_req, &uri, page_host, request_kind(context)) {
+                let response = match action {
+                    ext_dnr::Action::Block => Some(env.CreateWebResourceResponse(None, 403, &HSTRING::from("Blocked by an extension"), &HSTRING::new())?),
+                    ext_dnr::Action::Redirect(to) => match ext_runtime::extension_file(&app_req, &to) {
+                        // One of its own files: served from its folder.
+                        Some((mime, body)) => {
+                            let stream = windows::Win32::UI::Shell::SHCreateMemStream(Some(&body));
+                            Some(env.CreateWebResourceResponse(stream.as_ref(), 200, &HSTRING::from("OK"), &HSTRING::from(format!("Content-Type: {mime}\r\nAccess-Control-Allow-Origin: *")))?)
+                        }
+                        None if to.starts_with("https://") || to.starts_with("http://") || to.starts_with("data:") => {
+                            Some(env.CreateWebResourceResponse(None, 307, &HSTRING::from("Temporary Redirect"), &HSTRING::from(format!("Location: {to}")))?)
+                        }
+                        None => None,
+                    },
+                    ext_dnr::Action::Upgrade => {
+                        let to = ext_dnr::upgraded(&uri);
+                        Some(env.CreateWebResourceResponse(None, 307, &HSTRING::from("Temporary Redirect"), &HSTRING::from(format!("Location: {to}")))?)
+                    }
+                    ext_dnr::Action::Allow => None,
+                };
+                if let Some(response) = response {
                     args.SetResponse(&response)?;
                     return Ok(());
                 }
@@ -5700,6 +5760,7 @@ fn main() {
             extensions::remove_extension,
             extensions::set_extension_enabled,
             extensions::set_extension_access,
+            extensions::set_extension_runtime,
             extensions::update_extensions,
             extensions::pack_extension,
             extensions::extension_theme,
@@ -5831,6 +5892,7 @@ fn main() {
             app.manage(shields::Shields::new(&data_dir, &custom_blocked));
             app.manage(accounts::Accounts::load(&data_dir, profile.local_dir.join("accounts")));
             app.manage(extensions::Extensions::load(&data_dir, &profile.local_dir));
+            app.manage(ext_runtime::Runtime::new(&profile.local_dir));
             app.manage(sidebar::Sidebar::load(&data_dir));
             app.manage(security::Security::new(&data_dir));
 
@@ -5876,6 +5938,7 @@ fn main() {
             browser_lock::start(app.handle());
             tabdrag::watch_other_browsers(app.handle());
             extensions::schedule_updates(app.handle());
+            ext_runtime::start(app.handle());
 
             // The windows of your last session (each with its own tabs), or
             // one window on the start page. The tabs themselves are opened by
