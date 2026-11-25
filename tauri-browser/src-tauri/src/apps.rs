@@ -334,6 +334,25 @@ fn start_menu_programs() -> Option<PathBuf> {
     None
 }
 
+// Kessel's own taskbar id. It is the bundle identifier in tauri.conf.json,
+// which the installer also puts on Kessel's Start menu shortcut, so a pinned
+// Kessel and its running windows share one button.
+pub(crate) const KESSEL_TASKBAR_ID: &str = "com.example.kessel";
+
+// Claims Kessel's own taskbar id for this whole process, before any window
+// opens. Without it, Kessel started from an app's shortcut took that
+// shortcut's id (Windows hands it to the process it starts), and every
+// browser window after that went under the app's button with the app's
+// icon; and Windows could also pick any Start menu shortcut to kessel.exe
+// -- an app's -- for Kessel's own button. App windows still get their own
+// id per window (dress_window), which wins over the process's.
+pub(crate) fn claim_taskbar_id() {
+    #[cfg(windows)]
+    unsafe {
+        let _ = windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(&windows::core::HSTRING::from(KESSEL_TASKBAR_ID));
+    }
+}
+
 // The id Windows groups an app's windows (and its shortcut) by on the
 // taskbar: its own, not Kessel's.
 pub(crate) fn taskbar_id(id: &str) -> String {
@@ -833,6 +852,13 @@ mod tests {
             ]
         );
         assert!(scheme_ok("web+note") && scheme_ok("mailto") && !scheme_ok("web+") && !scheme_ok("https") && !scheme_ok("web+x1"));
+    }
+
+    #[test]
+    fn kessels_taskbar_id_is_its_bundle_id() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(conf["identifier"].as_str(), Some(KESSEL_TASKBAR_ID));
+        assert_ne!(taskbar_id("x"), KESSEL_TASKBAR_ID);
     }
 
     #[test]

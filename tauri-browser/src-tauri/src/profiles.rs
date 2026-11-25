@@ -177,7 +177,7 @@ pub(crate) async fn profile_shortcut(app: tauri::AppHandle, webview: Webview, na
     let path = folder.join(format!("{}.lnk", label));
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let (path2, label2) = (path.clone(), label.clone());
-    tauri::async_runtime::spawn_blocking(move || make_shortcut(&path2, &exe, &args, &label2, None, None)).await.map_err(|e| e.to_string())??;
+    tauri::async_runtime::spawn_blocking(move || make_shortcut(&path2, &exe, &args, &label2, None, Some(crate::apps::KESSEL_TASKBAR_ID))).await.map_err(|e| e.to_string())??;
     Ok(path.to_string_lossy().to_string())
 }
 
