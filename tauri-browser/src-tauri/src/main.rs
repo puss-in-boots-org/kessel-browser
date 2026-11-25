@@ -37,6 +37,7 @@ mod profiles;
 mod proof;
 mod saved_sessions;
 mod security;
+mod service_workers;
 mod setup;
 mod shields;
 mod sidebar;
@@ -755,25 +756,7 @@ fn create_tab_internal(
                             dir = dir.join(folder);
                         }
                     }
-                    let mut target = dir.join(&filename);
-                    let mut counter = 1;
-                    let stem = target
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "download".into());
-                    let ext = target
-                        .extension()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    while target.exists() {
-                        let name = if ext.is_empty() {
-                            format!("{} ({})", stem, counter)
-                        } else {
-                            format!("{} ({}).{}", stem, counter, ext)
-                        };
-                        target = dir.join(name);
-                        counter += 1;
-                    }
+                    let target = downloads::unique_path(&dir, &filename);
                     *destination = target.clone();
                     let entry = DownloadEntry {
                         id: dl_id,
@@ -810,12 +793,13 @@ fn create_tab_internal(
         });
 
     restore_for_new_page(&window);
+    // Off-screen until it's shown, but already the size it will be shown
+    // at: a page started in a 1x1 box lays itself out (and picks its
+    // pictures' sizes, its phone-or-desktop layout) for that first, and
+    // does it all again when you switch to it.
+    let size = content_bounds(&window, state.insets(win)).map(|(_, size)| size).ok().filter(|s| s.width >= 1.0 && s.height >= 1.0).unwrap_or(LogicalSize::new(1.0, 1.0));
     let webview = window
-        .add_child(
-            builder,
-            LogicalPosition::new(OFFSCREEN_X, 0.0),
-            LogicalSize::new(1.0, 1.0),
-        )
+        .add_child(builder, LogicalPosition::new(OFFSCREEN_X, 0.0), size)
         .map_err(|e| e.to_string())?;
 
     if private {
@@ -2017,7 +2001,13 @@ fn site_allowed(state: &BrowserState, host: &str) -> bool {
         .allow
         .iter()
         .map(|d| d.trim().trim_start_matches("www."))
-        .any(|d| !d.is_empty() && (host == d || host.ends_with(&format!(".{}", d))))
+        .any(|d| !d.is_empty() && is_same_or_subdomain(host, d))
+}
+
+// `host` is `domain` or one of its subdomains -- asked for every request a
+// page makes, so without building a string each time.
+fn is_same_or_subdomain(host: &str, domain: &str) -> bool {
+    host == domain || (host.len() > domain.len() && host.ends_with(domain) && host.as_bytes()[host.len() - domain.len() - 1] == b'.')
 }
 
 fn shields_up_for(state: &BrowserState, host: &str) -> bool {
@@ -2299,9 +2289,14 @@ fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
     #[cfg(windows)]
     {
         let app2 = app.clone();
+        let label = webview.label().to_string();
         let _ = webview.with_webview(move |platform| unsafe {
             if let Err(e) = install_page_watchers(&app2, &platform, id) {
                 eprintln!("couldn't watch page {}: {}", id, e.message());
+            }
+            // A PDF whose address doesn't say so (pdf.rs).
+            if let Err(e) = platform.controller().CoreWebView2().and_then(|core| pdf::watch(&app2, &core, id, label)) {
+                eprintln!("couldn't watch page {} for PDFs: {}", id, e.message());
             }
         });
     }
@@ -2959,6 +2954,8 @@ unsafe fn install_shields_hooks(
         set_timezone_override(&core, true);
     }
     security::install_hooks(app, &core, id, &label)?;
+    // Service workers stuck starting (Gmail's): stopped, so the page loads.
+    service_workers::install_hooks(app, &core, &label);
     permissions::install_hooks(app, &core, id)?;
     // Sites' notifications, shown by Kessel (notifications.rs).
     notifications::install_hooks(app, &core, id);
@@ -2984,14 +2981,22 @@ unsafe fn install_shields_hooks(
             if is_internal_nav(&page_url) {
                 return Ok(());
             }
+            let st = app_req.state::<BrowserState>();
+            let page_host = page_url.host_str().unwrap_or("");
+            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
+            args.ResourceContext(&mut context)?;
+            // Everything this request needs from the settings, in one look:
+            // this runs for every request every page makes, on the thread
+            // the page is waiting on.
+            let (plan, adblock_on, site_rules) = {
+                let settings = st.store.settings.lock().unwrap();
+                (privacy::request_plan(&settings), settings.adblock_enabled, permissions::request_rules(&settings.features))
+            };
             // Global Privacy Control and Do Not Track, on every request (one
             // whose headers can't be changed still goes past Shields).
-            let plan = privacy::request_plan(&app_req.state::<BrowserState>().store.settings.lock().unwrap());
             if let Some(plan) = plan {
                 let _ = privacy::adjust_request(&request, &plan);
             }
-            let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT::default();
-            args.ResourceContext(&mut context)?;
             let shields = app_req.state::<shields::Shields>();
             // The page's own document -- guard_navigation already judged it.
             if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
@@ -2999,16 +3004,16 @@ unsafe fn install_shields_hooks(
             {
                 return Ok(());
             }
-            let st = app_req.state::<BrowserState>();
             // Your site settings (permissions::CONTENT): no images on the
             // site, or nothing from other sites -- Shields or not, and never
             // the tab's own document (the page may still be the last one).
+            // Only looked into when some site has such a rule at all.
             let own_document = context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT
                 && st.pages.lock().unwrap().get(&id).is_some_and(|p| p.pending_url.is_empty() || p.pending_url == uri);
-            if !own_document {
+            if site_rules && !own_document {
                 let blocked = {
                     let settings = st.store.settings.lock().unwrap();
-                    permissions::content_blocked(&settings.features, page_url.host_str().unwrap_or(""), &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
+                    permissions::content_blocked(&settings.features, page_host, &uri, context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE)
                 };
                 if let Some(reason) = blocked {
                     let response = env.CreateWebResourceResponse(None, 403, &HSTRING::from(reason), &HSTRING::new())?;
@@ -3016,7 +3021,7 @@ unsafe fn install_shields_hooks(
                     return Ok(());
                 }
             }
-            if !shields_up_for(&st, page_url.host_str().unwrap_or("")) {
+            if !adblock_on || site_allowed(&st, page_host) {
                 return Ok(());
             }
             let verdict = shields.check_request(&uri, &page, request_kind(context));
@@ -5283,7 +5288,7 @@ fn write_session(state: &BrowserState) {
     let windows: Vec<WindowSession> = state.sessions.lock().unwrap().iter().map(|(_, s)| s.clone()).filter(|s| !s.tabs.is_empty()).collect();
     let path = state.data_dir.join("session.json");
     if let Ok(s) = serde_json::to_string(&SessionFile { windows }) {
-        let _ = store::write_atomic(&path, &s);
+        store::write_atomic_soon(&path, s);
     }
 }
 
@@ -5777,6 +5782,7 @@ fn main() {
             net::surfshark_disconnect,
             net::surfshark_locations,
             pdf::pdf_bytes,
+            pdf::pdf_save,
             proof::proof_languages,
             apps::app_badges,
             notifications::notify_fit,
@@ -5849,6 +5855,13 @@ fn main() {
                 sessions: Mutex::new(Vec::new()),
             };
             app.manage(state);
+            // The next starts on this profile come here -- from now, not
+            // once the windows are up: a link clicked twice, or a second one
+            // while Kessel was still starting, used to find no one listening
+            // and start a whole second Kessel (two windows). What they ask
+            // for is done once setup is over (instance::serve, on the main
+            // thread), joining a window still loading (instance::add_urls).
+            instance::listen(app.handle(), &data_dir);
             app.manage(Vault::new(data_dir.clone()));
             start_shields(app.handle());
             security::start(app.handle());
@@ -5878,7 +5891,6 @@ fn main() {
                     let id = instance::open_app_window(app.handle(), url)?;
                     apps::give_files(id, request.files.iter().map(PathBuf::from).collect());
                 }
-                instance::listen(app.handle(), &data_dir);
                 let app_for_watchdog = app.handle().clone();
                 std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
                 return Ok(());
@@ -5903,17 +5915,18 @@ fn main() {
                 let init = if pages.is_empty() { serde_json::Value::Null } else { serde_json::json!({ "urls": pages }) };
                 browser_windows::create(app.handle(), false, init)?;
             } else {
-                for session in saved {
-                    browser_windows::create(app.handle(), false, serde_json::json!({ "session": session }))?;
-                }
-                // Your tabs came back; the addresses asked for, in a window
-                // of their own.
-                if !request.urls.is_empty() {
-                    browser_windows::create(app.handle(), false, serde_json::json!({ "urls": request.urls }))?;
+                // Your tabs come back; the addresses asked for (the link
+                // that started Kessel) open in front in the last of your
+                // windows -- the one in front -- not in a second window.
+                let last = saved.len() - 1;
+                for (i, session) in saved.into_iter().enumerate() {
+                    let mut init = serde_json::json!({ "session": session });
+                    if i == last {
+                        instance::add_urls(&mut init, &request.urls);
+                    }
+                    browser_windows::create(app.handle(), false, init)?;
                 }
             }
-            // The next starts on this profile come here.
-            instance::listen(app.handle(), &data_dir);
 
             let app_for_watchdog = app.handle().clone();
             std::thread::spawn(move || toolbar_watchdog(app_for_watchdog));
@@ -5938,6 +5951,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shields_down_covers_a_site_and_its_subdomains_only() {
+        assert!(is_same_or_subdomain("example.com", "example.com"));
+        assert!(is_same_or_subdomain("mail.example.com", "example.com"));
+        assert!(!is_same_or_subdomain("badexample.com", "example.com"));
+        assert!(!is_same_or_subdomain("example.com.evil", "example.com"));
+        assert!(!is_same_or_subdomain("com", "example.com"));
+    }
 
     #[test]
     fn a_pages_first_seconds_need_a_real_click() {
