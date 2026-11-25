@@ -41,8 +41,23 @@ fn folder_for(filename: &str) -> &'static str {
     }
 }
 
-fn ask_every_time(app: &tauri::AppHandle) -> bool {
+pub(crate) fn ask_every_time(app: &tauri::AppHandle) -> bool {
     app.state::<BrowserState>().store.settings.lock().unwrap().features.get("download_ask").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+// `filename` in `dir`, or "name (1).ext", "name (2).ext"... if that's taken.
+pub fn unique_path(dir: &std::path::Path, filename: &str) -> std::path::PathBuf {
+    let first = dir.join(filename);
+    let stem = first.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "download".into());
+    let ext = first.extension().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let mut target = first;
+    let mut counter = 1;
+    while target.exists() {
+        let name = if ext.is_empty() { format!("{} ({})", stem, counter) } else { format!("{} ({}).{}", stem, counter, ext) };
+        target = dir.join(name);
+        counter += 1;
+    }
+    target
 }
 
 // The entry in Kessel's download list that's saving to `path`.

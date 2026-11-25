@@ -666,14 +666,14 @@ Progress counts done and 🧪 rows, half of each 🟡 row, and leaves ⏭️ row
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| 19.01 | PDF viewer | ✅ | Kessel's own PDF viewer (PDF.js, pdf.rs) -- or the engine's, in Settings -> Page tools |
+| 19.01 | PDF viewer | ✅ | Kessel's own PDF viewer (PDF.js, pdf.rs) -- or the engine's, in Settings -> Page tools. A PDF whose address doesn't end in .pdf goes there too, once its server says it's a PDF |
 | 19.02 | PDF search | 🌐 | In the PDF viewer's toolbar |
 | 19.03 | PDF zoom | 🌐 | In the PDF viewer's toolbar |
 | 19.04 | PDF page navigation | 🌐 | In the PDF viewer's toolbar |
 | 19.05 | PDF thumbnails | ✅ | The viewer's sidebar: a thumbnail of each page |
 | 19.06 | PDF printing | 🌐 | In the PDF viewer's toolbar |
-| 19.07 | PDF download | 🌐 | In the PDF viewer's toolbar |
-| 19.08 | PDF save | 🌐 | In the PDF viewer's toolbar |
+| 19.07 | PDF download | ✅ | The viewer's Save: a web PDF goes into your downloads folder (and Kessel's downloads list); Save as… (Ctrl+Shift+S) asks where. Kessel writes the file itself (pdf.rs, pdf_save) -- the engine's blob: download didn't save |
+| 19.08 | PDF save | ✅ | Save (Ctrl+S) keeps what you added in the PDF; a PDF from this computer is saved back into its own file, like Edge. Leaving with unsaved changes asks first |
 | 19.09 | PDF rotation | 🌐 | In the PDF viewer's toolbar |
 | 19.10 | PDF text selection | 🌐 | Comes with the engine (WebView2, Chromium) |
 | 19.11 | PDF copying | 🌐 | Comes with the engine (WebView2, Chromium) |

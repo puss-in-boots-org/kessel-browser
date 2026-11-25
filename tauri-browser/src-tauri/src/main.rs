@@ -753,25 +753,7 @@ fn create_tab_internal(
                             dir = dir.join(folder);
                         }
                     }
-                    let mut target = dir.join(&filename);
-                    let mut counter = 1;
-                    let stem = target
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_else(|| "download".into());
-                    let ext = target
-                        .extension()
-                        .map(|s| s.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    while target.exists() {
-                        let name = if ext.is_empty() {
-                            format!("{} ({})", stem, counter)
-                        } else {
-                            format!("{} ({}).{}", stem, counter, ext)
-                        };
-                        target = dir.join(name);
-                        counter += 1;
-                    }
+                    let target = downloads::unique_path(&dir, &filename);
                     *destination = target.clone();
                     let entry = DownloadEntry {
                         id: dl_id,
@@ -2304,9 +2286,14 @@ fn watch_page(app: &tauri::AppHandle, webview: &Webview, id: u32) {
     #[cfg(windows)]
     {
         let app2 = app.clone();
+        let label = webview.label().to_string();
         let _ = webview.with_webview(move |platform| unsafe {
             if let Err(e) = install_page_watchers(&app2, &platform, id) {
                 eprintln!("couldn't watch page {}: {}", id, e.message());
+            }
+            // A PDF whose address doesn't say so (pdf.rs).
+            if let Err(e) = platform.controller().CoreWebView2().and_then(|core| pdf::watch(&app2, &core, id, label)) {
+                eprintln!("couldn't watch page {} for PDFs: {}", id, e.message());
             }
         });
     }
@@ -5790,6 +5777,7 @@ fn main() {
             net::surfshark_disconnect,
             net::surfshark_locations,
             pdf::pdf_bytes,
+            pdf::pdf_save,
             proof::proof_languages,
             apps::app_badges,
             notifications::notify_fit,
