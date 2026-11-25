@@ -678,11 +678,19 @@ fn create_tab_internal(
         Some(u) => u.to_string(),
     };
 
+    // An extension's own page (its options...): the tab starts blank and
+    // goes there once its address exists in the tab (ext_runtime.rs).
+    let mut extension_page = None;
     let webview_url = if let Some(route) = internal_route(&resolved) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(&resolved);
-        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        if ext_runtime::ext_of_url(&normalized).is_some() && !private {
+            extension_page = Some(normalized);
+            WebviewUrl::External("about:blank".parse().unwrap())
+        } else {
+            WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        }
     };
 
     let (adblock_enabled, autofill_enabled) = {
@@ -829,6 +837,9 @@ fn create_tab_internal(
     if !private {
         ext_runtime::attach(app, &webview, &token);
     }
+    if let Some(page) = extension_page {
+        ext_runtime::navigate_when_ready(app, &webview, page);
+    }
     bridge::install(app, &webview, id, token);
     extensions::page_opened(app, &webview, private, account.as_deref());
     sidebar::install_page_menu(app, &webview, id);
@@ -913,11 +924,19 @@ fn side_panel_title(app: &tauri::AppHandle, kind: &str, url: &str) -> String {
 // page second, so the page stacks on top of the frame (webviews stack in
 // creation order).
 fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &str, url: &str, kind: &str) -> Result<(), String> {
+    // (An extension's page: blank until its address exists -- see
+    // create_tab_internal.)
+    let mut extension_page = None;
     let webview_url = if let Some(route) = internal_route(url) {
         WebviewUrl::App(route.into())
     } else {
         let normalized = normalize_url(url);
-        WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        if ext_runtime::ext_of_url(&normalized).is_some() {
+            extension_page = Some(normalized);
+            WebviewUrl::External("about:blank".parse().unwrap())
+        } else {
+            WebviewUrl::External(tauri::Url::parse(&normalized).map_err(|e| e.to_string())?)
+        }
     };
     let (window, insets, private) =
         state.win(win, |w| (w.window.clone(), w.insets, w.private)).ok_or("that window is closed")?;
@@ -984,6 +1003,9 @@ fn open_side_panel_webviews(app: &tauri::AppHandle, state: &BrowserState, win: &
     keys::install(app, &frame);
     if !private {
         ext_runtime::attach(app, &page, &token);
+    }
+    if let Some(target) = extension_page {
+        ext_runtime::navigate_when_ready(app, &page, target);
     }
     bridge::install(app, &page, page_id, token);
     extensions::page_opened(app, &page, private, None);

@@ -563,7 +563,7 @@ fn start_background(app: &tauri::AppHandle, ext: &Extension, why: (String, Optio
 
 // Sends `webview` to `url` once its mappings are in (they go in on the
 // main thread, after this).
-fn navigate_when_ready(app: &tauri::AppHandle, webview: &Webview, url: String) {
+pub(crate) fn navigate_when_ready(app: &tauri::AppHandle, webview: &Webview, url: String) {
     #[cfg(windows)]
     {
         let w = webview.clone();
