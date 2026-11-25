@@ -4845,40 +4845,6 @@ fn vault_list_items(state: tauri::State<BrowserState>, vault: tauri::State<Vault
     vault.list_items(vault_timeout(&state))
 }
 
-#[derive(serde::Serialize, Clone)]
-struct AutofillCredential {
-    username: String,
-    password: String,
-}
-
-// `webview` is injected by Tauri from whichever webview actually issued
-// this call -- NOT a value the calling page can supply or fake, unlike a
-// plain string argument would be. Reading the real page host from
-// `webview.url()` server-side is what stops a malicious/lookalike page
-// from asking for credentials belonging to a domain it merely claims to
-// be. Returns None (not an error) whenever there's simply nothing to
-// offer -- vault locked, no saved match, autofill turned off -- since none
-// of those are exceptional from a page's point of view.
-#[tauri::command]
-async fn vault_autofill_match(app: tauri::AppHandle, webview: Webview) -> Option<AutofillCredential> {
-    let app2 = app.clone();
-    on_main(&app, move || {
-        let state = app2.state::<BrowserState>();
-        if !state.store.settings.lock().unwrap().vault_autofill_enabled {
-            return None;
-        }
-        let host = webview.url().ok()?.host_str()?.to_string();
-        let timeout = vault_timeout(&state);
-        let vault = app2.state::<Vault>();
-        vault
-            .find_for_host(timeout, &host)
-            .map(|item| AutofillCredential { username: item.username, password: item.password })
-    })
-    .await
-    .ok()
-    .flatten()
-}
-
 #[tauri::command]
 fn vault_add_item(
     state: tauri::State<BrowserState>,
@@ -5586,7 +5552,6 @@ fn main() {
             vault_unlock,
             vault_lock,
             vault_list_items,
-            vault_autofill_match,
             vault_add_item,
             vault_update_item,
             vault_delete_item,

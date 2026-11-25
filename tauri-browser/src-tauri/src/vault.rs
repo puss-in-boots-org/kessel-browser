@@ -113,11 +113,19 @@ fn site_matches_host(site: &str, host: &str) -> bool {
     site_host == host || host.ends_with(&format!(".{}", site_host))
 }
 
+// Argon2id, m=19MiB, t=2, p=1 -- reasonable for an interactive desktop
+// unlock without making the UI feel sluggish. Spelled out rather than the
+// crate's defaults: the file doesn't record them, so if a newer argon2
+// changed its defaults, every vault made before would stop opening ("wrong
+// master password"). The browser lock (browser_lock.rs) uses these too.
+pub(crate) fn argon2() -> Argon2<'static> {
+    let params = argon2::Params::new(19 * 1024, 2, 1, Some(32)).expect("valid argon2 parameters");
+    Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params)
+}
+
 fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
     let mut key = [0u8; 32];
-    // Defaults are Argon2id, m=19MiB, t=2, p=1 -- reasonable for an
-    // interactive desktop unlock without making the UI feel sluggish.
-    Argon2::default()
+    argon2()
         .hash_password_into(password.as_bytes(), salt, &mut key)
         .expect("argon2 key derivation failed");
     key
@@ -230,7 +238,9 @@ impl Vault {
 
     fn write_file(&self, file: &VaultFile) {
         if let Ok(s) = serde_json::to_string_pretty(file) {
-            let _ = crate::store::write_atomic(&self.path, &s);
+            // Its backup is this one too: one under an old master
+            // password must not stay behind (store.rs).
+            let _ = crate::store::write_atomic_secret(&self.path, &s);
         }
     }
 
@@ -619,6 +629,21 @@ pub fn generate_password(length: usize, use_upper: bool, use_numbers: bool, use_
 #[cfg(test)]
 mod tests {
     use super::site_matches_host;
+
+    #[test]
+    fn the_key_derivation_stays_what_existing_vaults_were_made_with() {
+        // The crate's defaults when vaults were first made; a change here
+        // would lock everyone out of their passwords.
+        let mut pinned = [0u8; 32];
+        super::argon2().hash_password_into(b"master password", b"0123456789abcdef", &mut pinned).unwrap();
+        let mut original = [0u8; 32];
+        let params = argon2::Params::new(19 * 1024, 2, 1, Some(32)).unwrap();
+        argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params).hash_password_into(b"master password", b"0123456789abcdef", &mut original).unwrap();
+        assert_eq!(pinned, original);
+        let mut defaults = [0u8; 32];
+        argon2::Argon2::default().hash_password_into(b"master password", b"0123456789abcdef", &mut defaults).unwrap();
+        assert_eq!(pinned, defaults, "today's crate defaults are the same parameters");
+    }
 
     #[test]
     fn a_login_goes_to_its_site_and_subdomains_only() {
